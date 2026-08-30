@@ -1,0 +1,26 @@
+{
+  "name": "charts-showcase",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A trading screen for looking at one symbol closely — the library's features assembled for real",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "oxlint src",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@finchart/core": "workspace:*",
+    "@finchart/dom": "workspace:*",
+    "@finchart/indicators": "workspace:*",
+    "@finchart/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@finchart/tsconfig": "workspace:*",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

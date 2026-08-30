@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@finchart dogfooding — trading screen</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font: 14px/1.5 system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: var(--page, #f8fafc);
+        color: var(--ink, #0f172a);
+      }
+      #toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      button, select {
+        font: inherit;
+        padding: 4px 10px;
+        border: 1px solid #94a3b8;
+        border-radius: 6px;
+        background: var(--button, #fff);
+        color: inherit;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] { background: #3b82f6; color: #fff; }
+      #chart {
+        width: 100%;
+        height: 520px;
+        border: 1px solid var(--edge, #cbd5e1);
+        border-radius: 8px;
+        cursor: crosshair;
+      }
+      #status { margin-top: 8px; color: #64748b; font-size: 13px; }
+
+      /* The dark theme — only CSS variables are swapped. The core reads them every frame. */
+      body.dark {
+        --page: #0b1220;
+        --ink: #e2e8f0;
+        --button: #1e293b;
+        --edge: #334155;
+      }
+      /* The dark --chart-* values are consolidated in src/theme.css — what is
+         swapped here is only the page chrome (--page, --ink and friends). */
+    </style>
+  </head>
+  <body>
+    <nav style="display: flex; gap: 16px; font-size: 14px; margin-bottom: 12px">
+      <a href="/cases.html">Case gallery</a>
+      <a href="/">React wrapper</a>
+      <b>Trading screen (dogfooding)</b>
+      <a href="/bench.html">Bench</a>
+    </nav>
+    <div id="toolbar"></div>
+    <div id="chart"></div>
+    <p id="status"></p>
+    <script type="module" src="/src/trading.ts"></script>
+  </body>
+</html>

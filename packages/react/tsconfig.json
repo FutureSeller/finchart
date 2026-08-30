@@ -1,0 +1,24 @@
+/**
+ * **Build only.** Type checking is `tsconfig.test.json`'s job.
+ *
+ * This file used to do both, and with `**\/*.test.tsx` as its only exclude it
+ * left two holes: (1) fixtures in `__tests__/` **shipped** as
+ * `dist/__tests__/`, and (2) `type-check` **never looked at** ten test files.
+ * Which mattered, because CI's `react18` job says "types come first — where 18
+ * and 19 diverge is in types like RefObject" and runs this as that step. vitest
+ * only transpiles, so nobody was looking at those types at all.
+ *
+ * The same shape as the other four (core, dom, indicators, tools).
+ */
+{
+  "extends": "@finchart/tsconfig/react.json",
+  "compilerOptions": {
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["dist", "**/__tests__/**", "vitest.config.ts"]
+}

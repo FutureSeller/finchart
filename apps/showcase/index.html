@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BTC/KRW — @finchart showcase</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="header">
+        <div id="symbol-block">
+          <span id="symbol">BTC/KRW</span>
+          <span id="price">—</span>
+          <span id="change">—</span>
+          <span id="ohlc"></span>
+        </div>
+        <div id="controls">
+          <div id="chart-types" role="group" aria-label="Chart type"></div>
+          <span class="divider" aria-hidden="true"></span>
+          <div id="timeframes" role="group" aria-label="Timeframe"></div>
+          <span class="divider" aria-hidden="true"></span>
+          <div id="indicators" role="group" aria-label="Indicators"></div>
+          <span class="divider" aria-hidden="true"></span>
+          <div id="layouts" role="group" aria-label="Layout"></div>
+          <span class="divider" aria-hidden="true"></span>
+          <div id="actions"></div>
+        </div>
+      </header>
+      <aside id="rail" role="toolbar" aria-label="Drawing tools" aria-orientation="vertical"></aside>
+      <main id="stage">
+        <div id="charts" data-layout="1"></div>
+      </main>
+      <footer id="statusbar">
+        <span id="live"><span class="dot" aria-hidden="true"></span>Live</span>
+        <span id="status"></span>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

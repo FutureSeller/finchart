@@ -1,0 +1,47 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+.DS_Store
+*.log
+*.tsbuildinfo
+.tmp
+
+# Symlinks into .tmp (the local-only dev repository), for local convenience.
+# The leading `/` anchors to the root — without it, a subdirectory of the same
+# name is hidden anywhere in the tree (`docs` once hid all of `apps/docs`).
+/.claude
+/.githooks
+/docs
+/scripts
+
+# Share the skills, leave personal settings out
+.claude/settings.local.json
+
+# Environment files — turbo.json expects .env* as a globalDependency
+.env
+.env.*
+!.env.example
+
+# Running tsc without --noEmit piles these up next to the source. Vite resolves
+# them ahead of .ts, so tests quietly run old code. This ignore rule is the only
+# thing holding that off — the scripts/check-no-stray-emit.mjs an older comment
+# pointed at never existed.
+packages/*/src/**/*.js
+packages/*/src/**/*.jsx
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.map
+apps/*/src/**/*.js
+apps/*/src/**/*.jsx
+apps/*/src/**/*.d.ts
+apps/*/src/**/*.map
+
+# playwright
+e2e/test-results/
+e2e/playwright-report/
+
+# vitepress
+**/.vitepress/cache/
+
+# typedoc — apps/docs/typedoc.json regenerates this on every build and dev script
+apps/docs/api/

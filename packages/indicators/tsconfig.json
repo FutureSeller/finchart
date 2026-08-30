@@ -1,0 +1,14 @@
+{
+  "extends": "@finchart/tsconfig/base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "tsBuildInfoFile": "./.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["dist", "**/__tests__/**", "vitest.config.ts"]
+}

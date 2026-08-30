@@ -1,0 +1,79 @@
+{
+  "name": "@finchart/react",
+  "version": "0.0.1",
+  "description": "React components for @finchart/core — composable chart, pane, series and decoration components over the same headless engine.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist/**",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "dev": "tsdown src/index.ts --format esm --dts --watch",
+    "lint": "oxlint src",
+    "type-check": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest --watch",
+    "clean": "rm -rf dist .turbo .tsbuildinfo",
+    "size": "size-limit",
+    "check:publish": "publint && attw --pack . --ignore-rules cjs-resolves-to-esm"
+  },
+  "peerDependencies": {
+    "@finchart/core": "workspace:^",
+    "@finchart/dom": "workspace:^",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
+    "@finchart/core": "workspace:*",
+    "@finchart/dom": "workspace:*",
+    "@finchart/tsconfig": "workspace:*",
+    "@size-limit/preset-small-lib": "catalog:",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/ui": "catalog:",
+    "jsdom": "catalog:",
+    "publint": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "size-limit": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "chart",
+    "financial",
+    "candlestick",
+    "react",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/finchart/finchart.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/finchart/finchart/tree/main/packages/react",
+  "bugs": "https://github.com/finchart/finchart/issues",
+  "type": "module"
+}

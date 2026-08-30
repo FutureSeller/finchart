@@ -1,0 +1,43 @@
+{
+  "name": "charts-library",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A financial charting library in TypeScript",
+  "license": "MIT",
+  "packageManager": "pnpm@11.0.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "gate": "scripts/gate.sh",
+    "dev": "turbo run dev --parallel --no-cache",
+    "build": "turbo run build",
+    "build:watch": "turbo run build --watch",
+    "test": "turbo run test",
+    "test:watch": "turbo run test -- --watch",
+    "test:coverage": "turbo run test -- --coverage",
+    "lint": "turbo run lint && { test -d scripts && oxlint scripts || true; }",
+    "format": "oxlint --format json .",
+    "format:check": "oxlint --format json .",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules pnpm-lock.yaml",
+    "size": "turbo run size",
+    "changeset": "changeset",
+    "version": "changeset version && pnpm install --lockfile-only",
+    "release": "pnpm build && changeset publish",
+    "check:publish": "turbo run check:publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.0",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/ui": "catalog:",
+    "oxlint": "^1.76.0",
+    "tsdown": "catalog:",
+    "turbo": "^2.10.10",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

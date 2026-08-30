@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>@finchart render bench</title>
+    <style>
+      body { font: 13px/1.5 ui-monospace, monospace; margin: 16px; }
+      #stage { width: 1200px; height: 600px; }
+      pre { white-space: pre; }
+    </style>
+  </head>
+  <body>
+    <nav style="display: flex; gap: 16px; font-size: 14px; margin-bottom: 12px">
+      <a href="/cases.html">Case gallery</a>
+      <a href="/">React wrapper</a>
+      <a href="/trading.html">Trading screen (dogfooding)</a>
+      <b>Bench</b>
+    </nav>
+    <div id="stage"></div>
+    <pre id="out">running…</pre>
+    <script type="module" src="/src/bench.ts"></script>
+  </body>
+</html>

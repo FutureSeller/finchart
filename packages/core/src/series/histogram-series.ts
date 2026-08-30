@@ -1,0 +1,145 @@
+import { DataError, describe, requireObject } from "../primitives";
+import { isGap } from "../data";
+import type { BaseDataPoint, CoordinateAccessor, Range } from "../data";
+import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
+import { noStyle, resolveStyle } from "../render";
+import { styleSpec } from "../render/style-spec";
+import { slotWidth } from "./slot";
+import type { Series, SeriesContext } from "./types";
+import { screenXAt } from "./types";
+
+/**
+ * A single bar. `LineDataPoint` passes straight through — `color` is
+ * optional.
+ *
+ * Why a point can carry its own color: it's the convention that a volume
+ * bar wears its candle's up/down color. Up or down is a fact about the
+ * data, not a style, and only whoever produces the point knows that
+ * fact.
+ */
+export interface HistogramPoint extends BaseDataPoint {
+  y: number | null;
+  color?: string;
+}
+
+export interface HistogramSeriesStyle {
+  color: string;
+  /** Bar width as a fraction of slot width (0–1). */
+  barRatio: number;
+}
+
+/** The CSS variables a histogram owns. */
+export const HISTOGRAM_STYLE_SPEC = /* @__PURE__ */ styleSpec({
+  color: { css: "--chart-histogram", fallback: "#94a3b8" },
+  barRatio: { css: "--chart-histogram-bar-ratio", fallback: 0.6, range: [0, 1] },
+}) satisfies StyleSpec<HistogramSeriesStyle>;
+
+export type HistogramSeriesStyleOverrides = StyleOverridesOf<
+  typeof HISTOGRAM_STYLE_SPEC
+>;
+
+/** When there's neither a variable nor an override. */
+export const DEFAULT_HISTOGRAM_STYLE: HistogramSeriesStyle = /* @__PURE__ */ resolveStyle(
+  HISTOGRAM_STYLE_SPEC,
+  noStyle,
+);
+
+export interface HistogramSeriesOptions {
+  /** The value bars grow from. Default 0 — the natural spot for volume and a MACD histogram. */
+  baseline?: number;
+  style?: HistogramSeriesStyleOverrides;
+}
+
+class HistogramAccessor implements CoordinateAccessor<HistogramPoint> {
+  getX(point: HistogramPoint): number {
+    return point.x;
+  }
+  getY(point: HistogramPoint): number | null {
+    return point.y;
+  }
+
+  /** The same rule as line — `null` is a gap, any other non-finite value is rejected. */
+  assertFinite(point: HistogramPoint, index: number): void {
+    const y = point.y;
+    if (isGap(y) || Number.isFinite(y)) return;
+    throw new DataError(
+      `data y must be a finite number or null (gap), but index ${index} is ${describe(y)}`,
+    );
+  }
+}
+
+export class HistogramSeries implements Series<HistogramPoint> {
+  readonly coordinates = new HistogramAccessor();
+  private readonly baseline: number;
+  private readonly overrides: HistogramSeriesStyleOverrides;
+
+  constructor(options: HistogramSeriesOptions = {}) {
+    this.baseline = options.baseline ?? 0;
+    this.overrides = options.style ?? {};
+  }
+
+  /**
+   * A bar grows from the baseline — the baseline occupies value space
+   * too. This is why a volume pane starts at 0: the extent includes 0,
+   * so autoscale never pushes the floor below it.
+   */
+  valueExtent(data: HistogramPoint[]): Range | null {
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const point of data) {
+      if (isGap(point.y)) continue;
+      if (point.y < min) min = point.y;
+      if (point.y > max) max = point.y;
+    }
+
+    if (min === Infinity) return null;
+
+    return {
+      min: Math.min(min, this.baseline),
+      max: Math.max(max, this.baseline),
+    };
+  }
+
+  draw(target: DrawTarget, context: SeriesContext<HistogramPoint>): void {
+    const { data, yScale } = context;
+    if (data.length === 0) return;
+
+    const style = resolveStyle(HISTOGRAM_STYLE_SPEC, context.readStyle, this.overrides);
+    const barWidth = Math.max(
+      slotWidth(data, context.x, context.places, context.fullData) * style.barRatio,
+      1,
+    );
+    const baseY = yScale.scale(this.baseline);
+    const pixelX = screenXAt(context, this.coordinates);
+
+    for (let i = 0; i < data.length; i++) {
+      const point = data[i];
+      if (isGap(point.y)) continue;
+
+      const x = pixelX(i, point);
+      const valueY = yScale.scale(point.y);
+      const top = Math.min(valueY, baseY);
+      // Even a zero-value bar sitting on the baseline shows at least one pixel — the same rule as a candle's body.
+      const height = Math.max(Math.abs(valueY - baseY), 1);
+
+      target.drawShape({
+        shape: "rect",
+        x: x - barWidth / 2,
+        y: top,
+        width: barWidth,
+        height,
+        fill: point.color ?? style.color,
+      });
+    }
+  }
+
+}
+
+export function histogramSeries(
+  options?: HistogramSeriesOptions,
+): HistogramSeries {
+  // Prevents a bad type from passing through quietly and drawing with defaults.
+  if (options !== undefined) requireObject(options, "histogramSeries(options)");
+  return new HistogramSeries(options);
+}

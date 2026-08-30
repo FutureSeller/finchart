@@ -1,0 +1,36 @@
+{
+  "name": "charts-examples",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Charts library examples",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "oxlint src",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "size": "size-limit"
+  },
+  "dependencies": {
+    "@finchart/core": "workspace:*",
+    "@finchart/dom": "workspace:*",
+    "@finchart/indicators": "workspace:*",
+    "@finchart/react": "workspace:*",
+    "@finchart/tools": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@finchart/tsconfig": "workspace:*",
+    "@size-limit/preset-small-lib": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "size-limit": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

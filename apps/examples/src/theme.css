@@ -1,0 +1,24 @@
+/**
+ * The dark palette, in one place — cases.html and trading.html each kept a
+ * hand-copied second version of it. The core reads CSS variables every frame,
+ * so a class toggle plus one requestRender() is the whole change of clothes;
+ * the recipe is in the theming guide.
+ *
+ * Both selectors live in one file because the id of the stage differs per page
+ * (#stage in the gallery, #chart on the trading screen) — the selector that
+ * doesn't apply simply never matches.
+ */
+body.dark #stage,
+body.dark #chart {
+  --chart-grid: #1e293b;
+  --chart-pane-divider: #334155;
+  --chart-label: #94a3b8;
+  --chart-crosshair: #475569;
+  --chart-candle-up: #22c55e;
+  --chart-candle-down: #f87171;
+  --chart-tooltip-back: rgba(226, 232, 240, 0.92);
+  --chart-tooltip: #0f172a;
+  --chart-legend: #cbd5e1;
+  --chart-watermark: rgba(148, 163, 184, 0.1);
+  --chart-drawing: #818cf8;
+}

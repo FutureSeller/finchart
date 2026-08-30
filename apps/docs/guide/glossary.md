@@ -1,0 +1,591 @@
+---
+description: "The vocabulary: plot, pane, series, decoration, plugin, scale, viewport, decimation, and how each differs from the one next to it."
+---
+
+# Glossary
+
+Just the words this project uses, and what they mean. Every entry also says
+**who owns it, what unit it is in, and where it lives in the code** — the
+moment the same word starts meaning two things, coordinate bugs appear
+quietly.
+
+---
+
+## Coordinates
+
+### Domain
+
+A value interval `[min, max]` expressed in **data units**. "January–March
+2024", "price 120–180". Independent of screen size.
+
+pan/zoom moves the x domain; the y domain is fitted to the value range the
+series occupy.
+
+```ts
+scale.getDomain() // [120, 180]
+```
+
+### Range
+
+An interval `[start, end]` expressed in **screen pixels**. Where the domain
+actually gets drawn.
+
+Reversed ranges (`start > end`) are allowed. Screen y grows downward, so a
+value axis has to be set to `[bottom, top]` for larger values to sit higher.
+**The scale holds that inversion** — that is how the chart and the axis see
+the same coordinates.
+
+```ts
+yScale.setRange(area.bottom, area.top) // [460, 32]
+```
+
+> **Domain is data, range is pixels.** The one place in these docs where
+> "range" means anything other than pixels is the `Range { min, max }` type
+> (see *value range* below).
+
+### Scale
+
+A one-way mapping between domain and range. `scale(value)` is data → pixels,
+`invert(px)` is pixels → data.
+
+The domain keeps changing under pan/zoom, so it is a **mutable object**.
+Implementations: `LinearScale`, `LogScale` (`scale/`).
+
+### X mapping (`XMapping`)
+
+**Where a data x lands on screen.** Everything series and decorations know
+about x. The scale sits underneath doing domain↔pixels only; whether the
+domain is time or bar index is the mapping's call.
+
+- `continuousX` — the default. The domain *is* x, so an empty interval is
+  empty space on screen too.
+- `barIndexX` — bar-index coordinates. A bar is one slot from its neighbor
+  regardless of the x gap, so weekends and market closures never open up as
+  blank space. Prepending history extends into **negative indices** — existing
+  bars keep their index, so the window you were looking at stays put.
+
+The domain is the mapping's own space, but **everything that goes out is x** —
+events, crosshair, viewport, tick labels.
+
+### View state (`ChartState`)
+
+Everything the user built with pan, zoom, and drag, as one value —
+`{ xDomain, panes: [{ flex, autoScale, valueDomain?, invert? }] }`
+
+Not data, not series composition, not style, not cursor position (input echo).
+Read it with `getState()`, listen with `stateChange`, feed it back with
+`applyState()` — the core is a mirror, and the controlled shape is assembled
+by the React wrapper.
+
+### Viewport
+
+One value carrying both the **data interval the screen is looking at and the
+canvas size**.
+
+```ts
+{ startX, endX, width, height }
+```
+
+`startX`/`endX` are **data x**; `width`/`height` are CSS pixels. The data
+manager takes this and decides which interval to slice and how many points to
+keep. It is x under bar-index coordinates too — Plot runs the domain (the
+index) back through the mapping before handing it over. When the screen is a
+different space from x, the coordinate decimation buckets by (`screenXOf`)
+rides along with it.
+
+### Plot area (`PlotArea`)
+
+The actual drawing rectangle with padding taken off,
+`{ left, right, top, bottom }`. Screen coordinates (px).
+
+Built by `plotAreaOf(size, padding)` (`primitives/geometry.ts`).
+
+### Slice
+
+A horizontal cut of the plot area, one per pane. Each pane takes its slice
+through `setArea` and updates **only the range** of its value axis (the domain
+is left alone).
+
+### Padding
+
+The margin between the canvas edge and the plot area. Where axis labels sit.
+
+### CSS pixels / device pixels
+
+One CSS px is not one physical pixel. Retina paints 1 CSS px as 2×2 device
+pixels. That multiplier is the **DPR** (`devicePixelRatio`).
+
+**Every coordinate the code handles is in CSS pixels.** Device pixels show up
+in exactly one place — `canvas.width`/`height` (the backing store) — and the
+context transform carries the scale factor by itself.
+
+---
+
+## Data
+
+### Data point
+
+The smallest unit that has an `x` (`BaseDataPoint`). `x` is
+`number | string | Date`.
+
+| Type | Value field | Used by |
+|---|---|---|
+| `LineDataPoint` | `y` | line, area, baseline |
+| `OHLC` | `open`/`high`/`low`/`close`(`volume?`) | candles, OHLC bars |
+| `HistogramPoint` | `y`(`color?`) | histogram (volume, MACD) |
+
+`y` is `number | null` — `null` is *whitespace* (below).
+`HistogramPoint.color` is per-point because up-or-down is not styling but **a
+fact about the data**, and the only side that knows that fact is the side
+making the point.
+
+### Source data / visible data
+
+- **Source data** is **the entire array one registration holds**
+  (`addSeries({ data })` or `handle.setData`). It belongs to the registration,
+  not to the chart, so it can differ per series — that is what lets BTC and
+  ETH be drawn on one chart. **It must ascend in x** — slicing is a binary
+  search, and breaking that raises a `DataError`.
+- **Visible data** is what comes out after slicing by viewport and running
+  decimation.
+
+A derived series' `derive` receives the **source data**. It has to, or
+indicators that look backward — a moving average — would break off at the left
+edge of the screen.
+
+### Accessor (`CoordinateAccessor`)
+
+How the layout numbers get pulled out of a point. `getX(point)`, `getY(point)`.
+
+For the same `OHLC`, measuring the x range needs `x` while placing y needs
+`close`. The extraction rule is kept separate from the point type
+(`data/accessors.ts`).
+
+### Decimation
+
+**Thinning points out** when there are more of them than the screen is wide.
+Stops the waste of stacking several points into one pixel.
+
+| Strategy | How | |
+|---|---|---|
+| `M4Decimation` | four per pixel column — first, last, min, max | **default** |
+| `OhlcAggregation` | merges candles instead of picking among them | `candleSeries()` brings it along |
+| `LttbDecimation` | keeps points with the largest triangle area, preserving shape | |
+| `SimpleDecimation` | skips at a fixed stride | |
+
+**Strategies that keep one point per bucket (`SimpleDecimation`,
+`LttbDecimation`) lose
+the extremes**
+— with an up-spike and a down-spike in the same bucket, one of them has to go.
+That is why the default is `M4Decimation`.
+
+### Aggregation
+
+Where decimation **picks** some of the source points, aggregation **merges**
+several into one. Candles are the side that needs this — pick one bar and the
+highs and lows of the rest disappear, so five 1-minute bars fold into one
+5-minute bar as `open=first, high=max, low=min, close=last`.
+
+### Tier
+
+Data prebuilt by halving, level after level. Panning while zoomed out then
+scans one tier instead of the whole window. Turned on with the `tiered`
+option, and **off by default** — it costs up to twice the memory and is thrown
+away every time the data changes.
+
+### Value range (`Range`)
+
+A `{ min, max }` pair. Neither domain nor pixels — **just an interval**. The x
+range (`getXRange`) and a series' value range (`valueExtent`) both use this
+type.
+
+### valueExtent
+
+The interval a series **occupies on the y axis**. A line is a single point, so
+`min === max`; a candle occupies `low`–`high`. One number cannot say that,
+hence `Range`.
+
+A pane's `valueExtent` is the **union** of the series it holds. **`null` when
+there is nothing to measure** — return `{0,0}` there and a series whose data
+has not arrived yet drags the value axis down to 0.
+
+### Whitespace
+
+`y: null`. **The slot is there and the value is not.**
+
+Different from dropping the point outright — drop it and the x's close up, so
+**the line strides across that interval.** An indicator's warmup (the first 19
+of an MA(20)) and a bar only one series has are the same thing.
+
+Three places know it together: the line breaks there, `valueExtent` does not
+count it, and decimation does not swallow it.
+
+**x cannot be empty.** A point you cannot place cannot even be drawn as a
+hole, so a parse failure is thrown as a `DataError`.
+
+### Computed node (`computation`) / source (`Source`)
+
+A **source** is a one-method contract: `read(): T[]`. The place where "where
+the points come from" gets passed **as a value** — a series handle is a
+source, and so is a branch of a computed node.
+
+A **computed node** takes input sources and emits **several branches**. When
+one calculation feeds several drawings — MACD — the calculation runs once. You
+build it with the free function `computation({ inputs, calc })`, and it is not
+registered on the chart.
+
+**It pulls.** When you read a branch, if the identity of the input arrays is
+unchanged it hands back the previous result — there is no subscription to
+wire, and a branch nobody draws merely keeps its value ready.
+
+`derive` remains as sugar for the one-input, one-output case.
+
+### Fit
+
+Refitting the domain to the data. `fitDomains()`, `fitValueDomain()`.
+
+**Only three things fit x** — the first data arrival, imperative
+`handle.setData`, and `fitDomains()`. Incremental adds
+(`handle.prepend`/`append`) do not fit, and neither does a declarative `data`
+update: otherwise the view would zoom out the more history you loaded, and a
+series mounted later would jerk your window out to the union.
+
+---
+
+## What gets drawn
+
+### Series
+
+Knows only **what shape to draw the data in**. Two responsibilities, no more.
+
+```ts
+valueExtent(data): Range   // how much y it occupies
+draw(renderer, context)    // how it draws
+```
+
+Two optional properties on top (`decimation`, `coordinates`) — this is where
+"the side that knows the point type states the policy" lives.
+
+Grid, axes, pan/zoom, and layers belong to Plot, so a series knows nothing of
+them. Six built-in implementations:
+`LineSeries`·`CandleSeries`·`HistogramSeries`·`AreaSeries`·`BaselineSeries`·
+`BarSeries` (`series/`).
+
+### Derived series
+
+A series that draws values computed from the source data. Indicators —
+moving average, RSI.
+
+```ts
+pane.addSeries({ series, derive: (source) => points, coordinates })
+```
+
+The result is **cached against the source array's reference**. Without the
+cache it recomputes on every render.
+
+The point types of the source and of the derived result are **sealed inside
+the registration.** The pane does not know those types and only calls what the
+registration can do (`valueExtent`, `draw`). That is why `getSeries()` hands
+back a `SeriesId` (= `unknown`) — all you do with it outside is `===`, so that
+is all you get.
+
+**That is why a pane has no point-type parameter.** BTC (OHLC) and ETH (line)
+sit side by side in one pane. The only place a type is needed is where data
+goes in and comes out, and that stays on the handle `addSeries` returned.
+
+### Decoration
+
+**Something drawn on the chart that is not a representation of data.**
+Crosshair lines, the current-price line, span shading, watermarks, the grid.
+
+One criterion separates it from `Series` — **it does not take part in
+value-axis fitting.** Register a target-price line as a series and its
+`valueExtent` pulls y along until the price goes flat.
+
+```ts
+pane.addDecoration(d, { zIndex })   // things that need y
+plot.addDecoration(d, { zIndex })   // things that use the whole chart
+```
+
+Stacking order is settled by `zIndex` alone. Series draw at `SERIES_Z` (= 0)
+and decorations slot in before or after — `BELOW_SERIES` (−1000, where the
+grid goes) and `ABOVE_SERIES` (1000, **where you land if you omit it**) are
+the two named slots. Within the same z it is registration order.
+
+### Extension
+
+**The umbrella term for everything mounted onto the chart** — it covers the
+plugins you plug into `use()` (crosshair, tooltip, legend, syncX,
+paneMaximize, drawing tools, indicators) and the decoration factories you plug
+into `addDecoration` (priceLine, markers, span, watermark) — "extensions come
+wrapped." All they consume is the capability interfaces and the plugin
+contract.
+
+Where it lives does not decide what it is — core built-in extensions sit in
+`core/src/extensions/`, external ones in `@finchart/tools` and
+`@finchart/indicators`, but they stand on the same contract. The only
+difference is whether they ship by default. **The one thing that is not an
+extension is what the chart installs itself** — by that test the chart owns
+exactly one: the grid (`plot/grid.ts`).
+
+Plugin, extension, and package are not competing categories but **three
+different axes** — the same crosshair is a plugin (form), a built-in extension
+(relationship), and shipped with core (distribution). A new extension's place
+is settled by three questions.
+
+| Word | Axis | The question | Opposite |
+|---|---|---|---|
+| plugin | form | how does it install and dispose | decoration factory |
+| extension | relationship | is it a part of the chart, or mounted on it | a part of the chart |
+| package | distribution | does it install alongside core | built into core |
+
+The built-in/external test is **"will this feature keep gaining neighbors?"** —
+a growing list (17+ indicators, 12+ drawings) goes in its own package; a
+one-off that closes over the chart's own vocabulary (crosshair, current-price
+line, sync) goes built in.
+
+### Plugin
+
+**Of the two forms an extension takes, the one with install and dispose.**
+`Plugin<Host, Api>` is a **function** that takes a host and returns an API with
+a dispose, and it plugs into `plot.use()`. Build it with
+`pluginApi(api, dispose)` — merge with a spread and the `disposed` accessor
+gets copied as a value and freezes at false forever.
+
+The test that separates them: **anything with input, event subscriptions, or
+something to dispose is a plugin** (crosshair, tooltip, legend, syncX,
+paneMaximize, drawingTools, `attach*` indicators); **anything that only draws
+is a decoration factory** (priceLine, markers, span, watermark — plug into
+`addDecoration` and get a remove back).
+
+A plugin asks for its host not as the whole `Plot` but as **the intersection
+of the capabilities it needs** — `DecorationHost & RenderRequester`. Function
+parameters are contravariant, so a plugin that asks for less takes a host that
+gives more, as is.
+
+### Pane
+
+**A bundle of series sharing one value axis.** The unit that lets this library
+treat overlaying and separate regions as the same concept.
+
+- Put them in the same pane → **they overlay** (later one on top)
+- Put them in different panes → **they draw in regions split top to bottom**
+
+**Plot owns x, Pane owns y.** pan/zoom only touches x, so however many panes
+there are, they move together on their own.
+
+`plot.mainPane` is always there. Make no pane of your own and every series
+lands in it.
+
+### Plot
+
+**The chart itself.** It owns the canvas, the layers, the x axis, interaction,
+and the pane list; data and series get swapped in and out underneath. What you
+mounted on it (the interval you are looking at, overlay DOM) survives the swap
+→ [plot-contract.md](plot-contract.md)
+
+### Axis
+
+Reads a scale's domain and range and **computes the list of ticks**. It does
+not draw.
+
+Tick density **comes from pixels.** It picks from 1·2·5 × 10ⁿ so the spacing
+stays readable (80px horizontally, 40px vertically). That is why a short pane
+thins its ticks out on its own.
+
+### Tick
+
+`{ value, position, label }` — data value, pixel position, display string.
+
+### Grid line (`GridLine`)
+
+The guide line drawn at a tick's position. It comes out of **the same
+computation** as the tick. Compute them separately and they drift apart
+eventually.
+
+### Divider
+
+A DOM handle sitting between panes. Drag it to change heights. It is DOM
+rather than canvas so the browser owns the cursor shape and the hit area, and
+so the handle you are dragging does not vanish when the canvas redraws.
+
+### xDomainChange
+
+The event announcing that **the x interval you are looking at has changed.**
+It fires on pan, zoom, and fit — and only when the value actually differs.
+
+```ts
+{ startX, endX, dataRange }
+```
+
+`dataRange` is the x range of the data the chart holds (the union across
+series), so you can measure how close to the edge you are from the payload
+alone. Incremental adds do not touch the domain, so they are silent — that is
+why prepending history inside the handler does not recurse.
+
+### Crosshair
+
+The event that reports the cursor position **translated into meaning.** It
+does not hand over bare coordinates.
+
+```ts
+{ position, x, pane, value }
+```
+
+`x` is the same regardless of pane (there is only one x axis); `value` is read
+through **the scale of the pane the cursor is over.** Over the padding, `pane`
+and `value` are `null`.
+
+---
+
+## Layers and rendering
+
+### Layers (`ChartLayers`)
+
+Two layers stacked inside the container.
+
+| Layer | What it is | What it holds |
+|---|---|---|
+| **Data canvas** | `<canvas>` | series, grid |
+| **Overlay** | `<div>` | axis labels, dividers, annotations |
+
+The overlay lets pointer events through by default. Redrawing the canvas
+leaves the overlay DOM alive.
+
+### Draw target (`DrawTarget`)
+
+Three primitives — `drawLine`/`drawShape`/`drawText`. **Everything a series
+knows about the renderer.**
+
+Because it asks for this and not a concrete renderer, a series has no idea how
+commands stack up or when they get replayed. The grid asks for just one of
+them, `drawLine` (`GridTarget`).
+
+The fourth slot, `drawCustom?`, is **optional and belongs to extensions** —
+it is the door a third party puts its own primitives through, so the three
+stay as they are and all new drawing goes here. Always call it through the
+free function `drawCustom(target, draw)`: on a surface without that method,
+optional chaining slides into **silently drawing nothing.**
+
+### Renderer (`Renderer` / `CanvasRenderer`)
+
+`DrawTarget` plus `clear()` and `commit()`. **Everything Plot knows.** It
+deals in frame boundaries, so it stays invisible to series.
+
+`CanvasRenderer` is the default implementation, and **it does not draw the
+moment it is called.** Inspection windows like `getCommands()` belong to the
+implementation, not to the contract.
+
+### Command (`DrawCommand`)
+
+The record of stacked-up draw calls — `drawLine`·`drawShape`·`drawText`·
+`custom`, plus `clip`, which only the side handing out regions uses. At
+`commit()` they replay onto the 2D context in order, after a `clearRect`.
+
+A **tagged union** discriminated on `type`. The replay `switch` is
+exhaustiveness-checked, so adding a command breaks the compile.
+
+- `clear()` **throws away the stacked commands** — it does not clear the screen.
+- The screen actually clears at `commit()`.
+
+So partial state never reaches the screen, and you can test "what did it mean
+to draw" without a 2D context.
+
+### Scheduler (`RenderScheduler`)
+
+Decides **when to draw.** Plot only announces "this needs redrawing" and knows
+nothing of the timing.
+
+Request again while one is already scheduled and nothing happens —
+**coalescing is the scheduler's job**, so requests within the same frame become
+one drawing.
+
+| Implementation | When |
+|---|---|
+| `frameScheduler` | once on the next frame (the preset default) |
+| `immediateScheduler` | the moment it is requested |
+| `manualScheduler` | when a test calls `flush()` |
+
+State still changes synchronously. The only thing deferred is painting the
+canvas.
+
+---
+
+## Layout
+
+| Term | Meaning |
+|---|---|
+| `flex` | A pane's height ratio. Relative, so the ratio survives a window resize |
+| `minHeight` | The floor on a pane's height (px). Default 40 |
+| `paneGap` | The gap between panes (px) |
+| `valuePadding` | Headroom ratio above and below the value domain. Default 0.1 |
+
+A pane that hits its floor is pinned and the rest re-divide what is left. If
+the floors sum past the whole, everything shrinks proportionally
+(`plot/layout.ts`).
+
+---
+
+## Interaction
+
+| Term | Meaning |
+|---|---|
+| **pan** | Slides the x domain sideways. Drag right to see the earlier interval |
+| **zoom** | Widens or narrows the x domain while holding one point fixed |
+| `InteractionTarget` | The side that **applies** an interaction. Plot implements it |
+| `InteractionHandler` | The side that **turns input into interaction intent.** `PointerInteractions` |
+
+The pixel entry points (`panByPixels`, `zoomAtPixel`) live on Plot because
+converting pixels↔domain needs the scale, and only Plot knows it. Let the
+handler know the scale and the input layer takes on the coordinate system too.
+
+---
+
+## What gets thrown
+
+**The dividing line is not "where did it come from" but "is there anything the
+consumer can do".** Put the uncatchable in the same type as the catchable and
+a `catch` meant to swallow a data error quietly swallows programmer bugs too.
+
+| What | When | What the consumer can do |
+|---|---|---|
+| `DataError` | A **value** from outside broke the contract — x ordering, x parsing, where a hole sits | **Catch it.** Server responses really do come back wrong at runtime |
+| `ContractError` | The call site used the **API** against its contract — an undeletable pane, a non-positive zoom factor, a duplicate series id, a registration that does not own its data | Nothing. It is a bug; the code has to be fixed |
+| `RenderError` | The **wiring** does not line up, so it cannot draw — DOM labels on headless layers, a canvas renderer on a surface with no context, a screenshot of a chart with no pixels | Nothing. The combination of collaborators has to be fixed |
+
+The same renderer splits two ways: plugging it into a surface with no context
+is **wiring**; asking it to draw a line from a single point is **a call.**
+
+## The grammar of names
+
+Public API names follow three rules — `attach` or no `attach`, a noun or
+`create*`, a value or a function. From those alone you can infer what a name
+returns and where it plugs in. The full rules and their exceptions are in
+[reference/naming.md](/reference/naming).
+
+## Easily-confused pairs
+
+| A | B | What separates them |
+|---|---|---|
+| `DataError` | `ContractError` | the value is wrong / the way you called it is wrong |
+| `ContractError` | `RenderError` | fix the call site / fix the wiring |
+| domain | range | **data units / pixels** |
+| the `Range` type | a scale's range | just an interval / an interval of screen pixels |
+| viewport | plot area | the visible **data interval** (+ canvas size) / the **pixel rectangle** with padding taken off |
+| Scale | Axis | **converting** value↔pixel / **computing** ticks |
+| Series | Pane | one **representation** / a **bundle** sharing a value axis |
+| Pane | Plot | owns y and the series / owns x, the canvas, interaction |
+| `handle.setData` | `handle.append` | a new dataset (fits) / appending to the same dataset (does not fit) |
+| handle (`SeriesHandle`) | `syncSeries` | owns the data / owns the list |
+| `clear()` | `commit()` | discard the commands / clear the screen and replay |
+| `scheduleRender()` | `render()` | schedule it / draw it now |
+| `DrawTarget` | `Renderer` | what a series sees / what Plot sees |
+| Series | Decoration | occupies the value axis / does not |
+| Decoration | extension | one contract (drawing) / the umbrella term (plugins, decoration factories) |
+| `data.width` | `canvas.width` | CSS pixels / device pixels |
+| `flex` | `minHeight` | ratio / floor |
+
+## Related
+
+- [PRINCIPLES.md](https://github.com/finchart/finchart/blob/main/PRINCIPLES.md) — the principles (referenced by name)
+- [plot-contract.md](plot-contract.md) — which method touches what

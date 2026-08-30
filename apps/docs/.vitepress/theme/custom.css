@@ -1,0 +1,12 @@
+/**
+ * VitePress's default hero .text is sized for a short headline
+ * (max-width 576px, font-size 56px), which pushes our line onto three rows.
+ * Release the width and shrink the size so it fits on one.
+ */
+.VPHero .text {
+  max-width: none !important;
+  font-size: 32px !important;
+  line-height: 1.4 !important;
+  margin-top: 16px !important;
+}
+

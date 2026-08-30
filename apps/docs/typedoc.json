@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "../../packages/core",
+    "../../packages/dom",
+    "../../packages/react",
+    "../../packages/indicators",
+    "../../packages/tools"
+  ],
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "readme": "none",
+  "sidebar": {
+    "collapsed": false
+  }
+}

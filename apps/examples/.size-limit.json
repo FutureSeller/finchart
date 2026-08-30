@@ -1,0 +1,81 @@
+[
+  {
+    "name": "the quick start — one candlestick chart, core + dom · 25 KB gzip (23918B measured)",
+    "path": [
+      "../../packages/core/dist/index.mjs",
+      "../../packages/dom/dist/index.mjs"
+    ],
+    "import": {
+      "../../packages/core/dist/index.mjs": "{ candleSeries }",
+      "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps }"
+    },
+    "limit": "25 KB",
+    "gzip": true
+  },
+  {
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 28 KB gzip (27336B measured)",
+    "path": [
+      "../../packages/core/dist/index.mjs",
+      "../../packages/dom/dist/index.mjs"
+    ],
+    "import": {
+      "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
+      "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }"
+    },
+    "limit": "28 KB",
+    "gzip": true
+  },
+  {
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 32 KB gzip (31166B measured)",
+    "path": [
+      "../../packages/core/dist/index.mjs",
+      "../../packages/dom/dist/index.mjs",
+      "../../packages/indicators/dist/index.mjs"
+    ],
+    "import": {
+      "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
+      "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }",
+      "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }"
+    },
+    "limit": "32 KB",
+    "gzip": true
+  },
+  {
+    "name": "+ every drawing tool · 36 KB gzip (35481B measured)",
+    "path": [
+      "../../packages/core/dist/index.mjs",
+      "../../packages/dom/dist/index.mjs",
+      "../../packages/indicators/dist/index.mjs",
+      "../../packages/tools/dist/index.mjs"
+    ],
+    "import": {
+      "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
+      "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }",
+      "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
+      "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
+    },
+    "limit": "36 KB",
+    "gzip": true
+  },
+  {
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 37 KB gzip (36135B measured)",
+    "path": [
+      "../../packages/react/dist/index.mjs",
+      "../../packages/dom/dist/index.mjs",
+      "../../packages/indicators/dist/index.mjs",
+      "../../packages/tools/dist/index.mjs"
+    ],
+    "import": {
+      "../../packages/react/dist/index.mjs": "{ ChartContainer, ChartData, ChartPane, ChartCandles, ChartSeries, XAxis, YAxis, Crosshair, Legend, Tooltip }",
+      "../../packages/dom/dist/index.mjs": "{ browserDeps }",
+      "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
+      "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
+    },
+    "limit": "37 KB",
+    "ignore": [
+      "react",
+      "react-dom"
+    ],
+    "gzip": true
+  }
+]

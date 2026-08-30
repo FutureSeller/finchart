@@ -1,0 +1,13 @@
+{
+  "name": "charts-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The real-canvas smoke test — real Chromium asserting on real pixels in the examples app",
+  "scripts": {
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "playwright": "^1.58.2"
+  }
+}

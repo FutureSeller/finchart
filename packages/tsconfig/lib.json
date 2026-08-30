@@ -1,0 +1,10 @@
+{
+  "extends": "./base.json",
+  "display": "Library",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
+}

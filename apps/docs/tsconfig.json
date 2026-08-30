@@ -1,0 +1,11 @@
+{
+  "extends": "@finchart/tsconfig/base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": []
+  },
+  "include": [".vitepress/**/*.ts", "snippets/**/*.ts", "snippets/**/*.tsx"],
+  "exclude": ["dist"]
+}
