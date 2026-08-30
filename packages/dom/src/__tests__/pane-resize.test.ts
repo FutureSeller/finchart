@@ -119,6 +119,31 @@ describe("dragging a divider", () => {
     expect(document.listeners.get("pointerup") ?? []).toHaveLength(0);
   });
 
+  it("should keep dragging after a second pointerdown restarts the gesture", () => {
+    // A second pointer landing on the handle mid-drag restarts the gesture.
+    // The restart must release the old gesture BEFORE arming the new one —
+    // releasing after leaves the fresh gesture with its state swept away.
+    const { plot, layers } = setup({}, 1);
+    const [divider] = dividers(layers.overlay);
+    const document = divider.ownerDocument;
+    const down = (clientY: number) =>
+      divider.dispatch("pointerdown", {
+        clientY,
+        stopPropagation: () => undefined,
+        preventDefault: () => undefined,
+      });
+
+    down(100);
+    down(120); // restart mid-drag
+
+    expect("data-dragging" in divider.attributes).toBe(true);
+
+    const before = heightOf(plot.mainPane);
+    document.dispatch("pointermove", { clientY: 140 });
+
+    expect(heightOf(plot.mainPane)).not.toBe(before);
+  });
+
   it("should grow the upper pane and shrink the lower one", () => {
     const { plot, layers, added } = setup({}, 1);
     const before = heightOf(plot.mainPane);

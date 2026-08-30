@@ -25,7 +25,7 @@ export const observeDevicePixelRatio =
     let query: MediaQueryList | null = null;
     let stopped = false;
 
-    const listen = (): void => {
+    const relisten = (): void => {
       if (stopped) return;
 
       /**
@@ -53,11 +53,11 @@ export const observeDevicePixelRatio =
        * during the notification and miss a ratio that changes again right
        * away.
        */
-      listen();
+      relisten();
       onChange();
     };
 
-    listen();
+    relisten();
 
     return () => {
       stopped = true;

@@ -26,4 +26,6 @@ export type {
   PaneMaximizeApi,
   PaneMaximizeOptions,
 } from "./pane-maximize";
+export { conflated } from "./conflate";
+export type { ConflatableHandle, ConflatedFeed, ConflatedOptions } from "./conflate";
 export { syncCrosshair, syncX } from "./sync";

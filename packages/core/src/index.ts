@@ -242,6 +242,7 @@ export {
   crosshair,
   crosshairLine,
   markers,
+  conflated,
   paneMaximize,
   priceLine,
   span,
@@ -251,6 +252,9 @@ export {
   watermark,
 } from "./extensions";
 export type {
+  ConflatableHandle,
+  ConflatedFeed,
+  ConflatedOptions,
   CrosshairLine,
   CrosshairLineOptions,
   Marker,

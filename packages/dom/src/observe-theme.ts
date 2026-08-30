@@ -60,7 +60,6 @@ export function observeTheme(
 
   const attributeFilter = [...(options.attributes ?? DEFAULT_ATTRIBUTES)];
   const scope = createScope();
-  let stopped = false;
 
   /**
    * Events that arrive after the caller unsubscribed are discarded —
@@ -69,7 +68,7 @@ export function observeTheme(
    * hazard `observeDevicePixelRatio` guards).
    */
   const fire = (): void => {
-    if (!stopped) onChange();
+    if (!scope.disposed) onChange();
   };
 
   if (typeof view.matchMedia === "function") {
@@ -89,8 +88,5 @@ export function observeTheme(
     scope.add(() => observer.disconnect());
   }
 
-  return () => {
-    stopped = true;
-    scope.dispose();
-  };
+  return () => scope.dispose();
 }

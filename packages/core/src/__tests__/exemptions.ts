@@ -124,6 +124,7 @@ export const EXEMPT: Record<string, Exemption> = {
   // Scheduler — time, not coordinates. A bad value shows up on the first
   // frame.
   // Not "no amplifier" — there is simply no door to measure. Keep the tag honest.
+  conflated: { tag: "assembly", note: "takes a handle and callbacks — no numeric slot; the points flowing through push() are accepted by updateLast's own gate" },
   createScope: { tag: "constant", note: "takes no argument — the door is add(), which takes only a callback (no numeric slot)" },
   validateSeriesData: { tag: "safe", note: "the validator itself — reporting bad values as issues is its output, never a throw" },
   frameScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback). The old reason (no amplifier) was empty, since there was no door to measure" },
@@ -248,6 +249,7 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
   seriesSpec: { tag: "delegated", note: "assembly vocabulary — builds a registration spec. The value is checked again at the data door" },
   computation: { tag: "delegated", note: "assembly vocabulary — a computation node. Its output passes through the data door again" },
   teardown: { tag: "assembly", note: "assembly vocabulary — a bundle of cleanup functions" },
+  conflated: { tag: "assembly", note: "assembly vocabulary — wires a handle to a schedule; data shape is judged by updateLast at delivery" },
   createScope: { tag: "constant", note: "takes no argument — resource lifetimes, not data; add() takes only a callback" },
   validateSeriesData: { tag: "safe", note: "the validator itself — a payload of any shape comes back as issues, never a throw" },
   frameScheduler: { tag: "assembly", note: "assembly vocabulary — a scheduler factory" },

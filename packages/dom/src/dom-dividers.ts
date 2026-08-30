@@ -51,15 +51,7 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
   }
 
   function attach(element: HTMLElement, index: number): void {
-    let lastY: number | null = null;
     let drag: Scope | null = null;
-
-    const move = (event: PointerEvent): void => {
-      if (lastY === null) return;
-
-      onDrag(index, event.clientY - lastY);
-      lastY = event.clientY;
-    };
 
     const end = (): void => {
       drag?.dispose();
@@ -71,6 +63,11 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       event.stopPropagation();
       event.preventDefault();
 
+      // A second pointer landing mid-drag restarts the gesture. Release
+      // BEFORE acquiring anything new — releasing after would sweep the
+      // fresh gesture's state right back out.
+      end();
+
       /**
        * The pointer often strays off the 7px handle mid-drag — `:hover`
        * styling flickers every time that happens. Capture keeps events (and
@@ -81,17 +78,18 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       element.setPointerCapture?.(event.pointerId);
       element.setAttribute("data-dragging", "");
 
-      lastY = event.clientY;
-      // A second pointer landing mid-drag restarts the gesture — the old
-      // one is released first so the two never stack.
-      end();
+      // Gesture state lives in the gesture — once the drag scope removes
+      // `move`, nothing can read a stale baseline.
+      let lastY = event.clientY;
+      const move = (moveEvent: PointerEvent): void => {
+        onDrag(index, moveEvent.clientY - lastY);
+        lastY = moveEvent.clientY;
+      };
+
       drag = scope.child();
       // Registered first, so it runs last: listeners come off, then the
-      // state resets — a mid-drag destroy() walks the same path as release.
-      drag.add(() => {
-        lastY = null;
-        element.removeAttribute("data-dragging");
-      });
+      // attribute resets — a mid-drag destroy() walks the same path as release.
+      drag.add(() => element.removeAttribute("data-dragging"));
       listen(drag, document, "pointermove", move);
       listen(drag, document, "pointerup", end);
       listen(drag, document, "pointercancel", end);

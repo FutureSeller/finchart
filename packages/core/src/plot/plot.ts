@@ -2370,13 +2370,22 @@ export class Plot
      * **Safe to call twice** — the same rule this repo requires of every
      * lifecycle primitive (`PluginApi.dispose`: *"must be safe to call more
      * than once"*). Without it, the cleanup steps below would hit resources
-     * already released a second time — the panes, the plugins and the
-     * scheduler below all qualify, and any
+     * already released a second time — the panes, the plugins and
+     * the scheduler below all qualify, and any
      * error there rides the `throwable` at the bottom out **through the
      * unmount path.** React StrictMode's double effect run is exactly that
      * route.
      */
     if (this.destroyed) return;
+
+    /**
+     * Two teardown mechanisms live here, split by one rule: the scope owns
+     * resources whose whole ordering contract is "reverse of acquisition"
+     * (the constructor's collaborators). Anything whose order or reporting
+     * shape is a contract of its own — the scheduler first, notifications
+     * cut before plugins, plugins before panes, pane detach returning its
+     * failures — stays an explicit phase below.
+     */
 
     // Keep an already-scheduled render from touching layers that have already been torn down.
     this.destroyed = true;
