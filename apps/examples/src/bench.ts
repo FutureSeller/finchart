@@ -21,7 +21,7 @@
  * other processes and are not caught here.
  */
 import { browserDeps, createDomLayers, PlotBuilder } from "@finchart/dom";
-import { barIndexX, candleSeries, computation, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type CrosshairLine, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
+import { barIndexX, candleSeries, computation, conflated, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, manualScheduler, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type ConflatedFeed, type CrosshairLine, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
 import { tooltip } from "@finchart/dom";
 import { smaFold, type SmaState } from "@finchart/indicators";
 import { drawingTools } from "@finchart/tools";
@@ -960,9 +960,92 @@ interface Pair {
   variant: Scenario;
 }
 
+/**
+ * The tick-burst pair: an active symbol delivers more ticks between two
+ * frames than the chart draws. The baseline pays `updateLast` (a full-array
+ * copy plus the seam checks) per tick; `conflated` folds the burst to one
+ * delivery per frame. Delivery is driven by a manual scheduler flushed
+ * inside the step — this harness loop is synchronous, so the extension's
+ * default rAF clock would never fire in here.
+ */
+function tickBurstPair(points: number, ticksPerFrame: number): Pair {
+  const chart = (register: (plot: Plot, data: OHLC[]) => void): Build => {
+    return (host, createRenderer) => {
+      const plot = PlotBuilder.create<OHLC>(
+        browserDeps({ createScheduler: inertScheduler, createRenderer }),
+      )
+        .setSize(WIDTH, HEIGHT)
+        .build(host);
+      const crosshair = crosshairLine();
+      plot.addDecoration(crosshair);
+      register(plot, candles(points));
+      return { plot, crosshair, handles: [] };
+    };
+  };
+
+  const tickOf = (previous: OHLC, frame: number): OHLC => ({
+    ...previous,
+    close: previous.close * (1 + ((frame % 7) - 3) * 0.001),
+  });
+
+  let raw: SeriesHandle<OHLC> | null = null;
+  let rawLast: OHLC | null = null;
+  let feed: ConflatedFeed<OHLC> | null = null;
+  let feedFlush: (() => void) | null = null;
+  let feedLast: OHLC | null = null;
+
+  return {
+    question: `A tick burst, ${points.toLocaleString("en")} points × ${ticksPerFrame}/frame: updateLast per tick against conflated`,
+    baseline: {
+      name: "per tick",
+      build: chart((plot, data) => {
+        rawLast = data[data.length - 1];
+        raw = plot.mainPane.addSeries({ series: candleSeries(), data });
+      }),
+      step: (_subject, frame) => {
+        if (!raw || !rawLast) throw new Error("build has to run first");
+        let bar = rawLast;
+        for (let t = 0; t < ticksPerFrame; t++) {
+          bar = tickOf(bar, frame * ticksPerFrame + t);
+          raw.updateLast(bar);
+        }
+        rawLast = bar;
+      },
+    },
+    variant: {
+      name: "conflated",
+      build: chart((plot, data) => {
+        feedLast = data[data.length - 1];
+        const handle = plot.mainPane.addSeries({ series: candleSeries(), data });
+        const manual = manualScheduler();
+        feed = conflated(handle, { schedule: manual });
+        feedFlush = () => manual.created[0].flush();
+      }),
+      step: (_subject, frame) => {
+        if (!feed || !feedFlush || !feedLast) {
+          throw new Error("build has to run first");
+        }
+        let bar = feedLast;
+        for (let t = 0; t < ticksPerFrame; t++) {
+          bar = tickOf(bar, frame * ticksPerFrame + t);
+          feed.push(bar);
+        }
+        feedLast = bar;
+        // The frame boundary: what a rAF tick would do in production.
+        feedFlush();
+      },
+      dispose: () => feed?.dispose(),
+    },
+  };
+}
+
 const pairs: Pair[] = [
   liveTickPair(100_000),
   liveTickPair(10_000),
+  // The headline case and the honesty case — the second is where conflation
+  // buys nothing, which is why it stays an opt-in door and not a default.
+  tickBurstPair(100_000, 50),
+  tickBurstPair(10_000, 10),
   {
     question: "What does auto-scaling add to a pan?",
     baseline: {
