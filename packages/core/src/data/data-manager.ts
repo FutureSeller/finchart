@@ -6,6 +6,7 @@ import {
 } from "../primitives";
 import { isGap } from "./accessors";
 import { lowerBoundBy, upperBoundBy } from "./search";
+import { scanSeriesData } from "./validate";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
@@ -310,51 +311,17 @@ export class SimpleDataManager<
   }
 
   /**
-   * Checks the last point too — on the incremental paths (`append`,
-   * `prepend`) the assumption that a `.map()` makes everything uniform can
-   * break. Checks for gaps in the same pass — a separate pass would walk
-   * the array twice on every derived tick.
+   * Every full-chunk rule (shape, readable y, finite x, per-accessor
+   * values, gaps, order) lives in `scanSeriesData` — shared with the
+   * public `validateSeriesData`, so "validator said null" and "ingestion
+   * accepted" cannot drift apart. Throw mode: the first violation throws
+   * `DataError`, nothing allocated on the way.
    *
    * The return value is "does this chunk have a gap." For a `gapless`
    * accessor, `getY` isn't read at all.
    */
   private assertChunkSorted(points: readonly T[]): boolean {
-    const watchGaps = this.coordinates.gapless !== true;
-    let sawGap = false;
-
-    requireDataPoint(points[0], 0, "data");
-    this.assertReadableValue(points[0], 0);
-    if (watchGaps && isGap(this.coordinates.getY(points[0]))) sawGap = true;
-    /**
-     * Shape before value — if `requireDataPoint` doesn't check the last
-     * point first, one `null` at the end of the array blows up inside the
-     * accessor as a raw `TypeError`.
-     */
-    const last = points.length - 1;
-    if (last > 0) {
-      requireDataPoint(points[last], last, "data");
-      this.assertReadableValue(points[last], last);
-    }
-    this.coordinates.assertFinite?.(points[0], 0);
-    let previous = assertFiniteX(this.coordinates.getX(points[0]), 0);
-    for (let i = 1; i < points.length; i++) {
-      // Shape first — this used to be where a single `null` element blew
-      // up as a TypeError inside the accessor. **No extra read, since this is the same loop.**
-      requireDataPoint(points[i], i, "data");
-      const current = assertFiniteX(this.coordinates.getX(points[i]), i);
-      this.coordinates.assertFinite?.(points[i], i);
-      if (watchGaps && !sawGap && isGap(this.coordinates.getY(points[i]))) {
-        sawGap = true;
-      }
-      if (current < previous) {
-        throw new DataError(
-          `data must be sorted by x, but index ${i} (${current}) comes before index ${i - 1} (${previous})`,
-        );
-      }
-      previous = current;
-    }
-
-    return sawGap;
+    return scanSeriesData(points, this.coordinates, null);
   }
 
   /**

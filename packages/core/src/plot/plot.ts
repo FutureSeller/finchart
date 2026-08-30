@@ -18,8 +18,10 @@ import {
   describe,
   runAll,
   throwable,
+  createScope,
   type PlotArea,
   type Point,
+  type Scope,
 } from "../primitives";
 import type { BaseDataPoint, Range, Viewport } from "../data";
 import {
@@ -126,6 +128,15 @@ export interface PlotOptions {
   config: PlotConfig;
   /** Initial size of the layers. Changed afterward with `setViewport`. */
   size: ViewportDimensions;
+  /**
+   * A parent lifetime to live under. When the given scope is disposed, this
+   * chart is destroyed with it — a page-level scope can own several charts
+   * and their sibling subscriptions, and one `dispose()` walks out of all
+   * of it. Destroying the chart yourself first is fine (the parent then has
+   * nothing left to do), and a chart mounted into an already-disposed scope
+   * is destroyed on the spot rather than living unowned.
+   */
+  scope?: Scope;
 }
 
 /**
@@ -505,10 +516,13 @@ export class Plot
    * in `plugin.ts`
    */
   private readonly plugins: PluginApi[] = [];
-  /** Stops observing the container. Absent if wiring didn't wire it up. */
-  private readonly unobserveSize?: () => void;
-  /** Stops observing resolution scale. Same as above. */
-  private readonly unobserveResolution?: () => void;
+  /**
+   * Owns the release of everything the constructor acquires (layers,
+   * renderer surface, labels, dividers, input, observers). Each acquiring
+   * line registers its release right below itself, so `destroy()` carries
+   * no checklist to forget a line from.
+   */
+  private readonly scope = createScope();
   private destroyed = false;
 
   private readonly deps: PlotDeps;
@@ -577,12 +591,20 @@ export class Plot
       this.render(),
     );
     this.layers = deps.createLayers(size.width, size.height);
+    this.scope.add(() => this.layers.destroy());
     this.renderer = deps.createRenderer(this.layers.data);
+    // Not a release — the last frame is erased so a still-mounted canvas
+    // doesn't keep showing a dead chart. Runs before layers go (reverse order).
+    this.scope.add(() => {
+      this.renderer.clear();
+      this.renderer.commit();
+    });
     this.axisLabels =
       deps.createAxisLabels?.({
         overlay: this.layers.overlay,
         target: this.renderer,
       }) ?? null;
+    this.scope.add(() => this.axisLabels?.destroy());
     // Give it the same surface as the renderer — the place that measures
     // and the place that draws must be the same engine.
     this.measurer = deps.createTextMeasurer?.(this.layers.data) ?? null;
@@ -590,6 +612,7 @@ export class Plot
       deps.createDividers?.(this.layers.overlay, (index, dy) =>
         this.resizeBetween(index, dy),
       ) ?? null;
+    this.scope.add(() => this.dividers?.destroy());
 
     this.x = (deps.createXMapping ?? continuousX)(deps.xScale);
     this.xViewport = new XViewport({
@@ -640,9 +663,11 @@ export class Plot
     // assembly bound the element up front (the browserDeps recipe). Headless
     // wiring doesn't supply these collaborators.
     this.deps.interactions?.connect(this);
-    this.unobserveSize = this.deps.observeSize?.((width, height) =>
+    this.scope.add(() => this.deps.interactions?.disconnect());
+    const unobserveSize = this.deps.observeSize?.((width, height) =>
       this.followContainer(width, height),
     );
+    if (unobserveSize) this.scope.add(unobserveSize);
     /**
      * Redraw when the scale changes — **that's all.**
      *
@@ -652,9 +677,18 @@ export class Plot
      * itself. All this does is trigger that, so leaving it unwired
      * behaves exactly as before.
      */
-    this.unobserveResolution = this.deps.observeResolution?.(() =>
+    const unobserveResolution = this.deps.observeResolution?.(() =>
       this.scheduleRender(),
     );
+    if (unobserveResolution) this.scope.add(unobserveResolution);
+
+    /**
+     * Last, once every acquisition above has succeeded — the parent must
+     * never hold a teardown for a chart that failed to finish being born.
+     * `destroy()` is idempotent, so the consumer destroying the chart
+     * early leaves the parent's entry a no-op, not a double free.
+     */
+    options.scope?.add(() => this.destroy());
   }
 
   /**
@@ -2336,8 +2370,8 @@ export class Plot
      * **Safe to call twice** — the same rule this repo requires of every
      * lifecycle primitive (`PluginApi.dispose`: *"must be safe to call more
      * than once"*). Without it, the cleanup steps below would hit resources
-     * already released a second time — `unobserveSize`,
-     * `interactions.disconnect`, `layers.destroy` all qualify, and any
+     * already released a second time — the panes, the plugins and the
+     * scheduler below all qualify, and any
      * error there rides the `throwable` at the bottom out **through the
      * unmount path.** React StrictMode's double effect run is exactly that
      * route.
@@ -2360,7 +2394,7 @@ export class Plot
     /**
      * **Goes all the way through even if one step throws.** There used to
      * be no guard, so if one plugin's dispose threw, the plugins after it,
-     * `unobserveSize`, and `layers.destroy` never ran — a spot where the
+     * the size observer, and `layers.destroy` never ran — a spot where the
      * canvas and the `ResizeObserver` leaked outright. Cleanup should be
      * "finish everything, then report."
      *
@@ -2396,19 +2430,22 @@ export class Plot
     const panes = this.paneList.slice();
     for (const pane of panes) failures.push(...pane.detach());
 
-    attempt(() => this.unobserveSize?.());
-    attempt(() => this.unobserveResolution?.());
-    attempt(() => this.deps.interactions?.disconnect());
-    attempt(() => {
-      this.renderer.clear();
-      this.renderer.commit();
-    });
     for (const dispose of this.unwatch.values()) attempt(dispose);
     this.unwatch.clear();
 
-    attempt(() => this.axisLabels?.destroy());
-    attempt(() => this.dividers?.destroy());
-    attempt(() => this.layers.destroy());
+    /**
+     * Everything the constructor acquired comes back out through the scope
+     * — observers, input, dividers, labels, the canvas erase, layers, in
+     * reverse acquisition order. The acquiring line registered its own
+     * release, so nothing here can fall out of step with the constructor.
+     * Its failures fold flat into the same report as everything above.
+     */
+    try {
+      this.scope.dispose();
+    } catch (error) {
+      if (error instanceof AggregateError) failures.push(...error.errors);
+      else failures.push(error);
+    }
 
     // Every resource has been released. What failed, if anything, is reported after.
     if (failures.length > 0) throw throwable(failures, "cleaning up Plot failed");

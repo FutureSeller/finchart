@@ -617,6 +617,7 @@ describe("Z1 — the shape axis", () => {
     const SAFE_ARG: Record<string, { index: number; rest: () => unknown[] }> = {
       // Two names that made the promise back in the regex days but sat outside the probe.
       isGap: { index: 0, rest: () => [] },
+      validateSeriesData: { index: 0, rest: () => [] },
       tailDelta: { index: 0, rest: () => [[]] },
       applyColor: { index: 2, rest: () => [rejectingColor(), "fillStyle"] },
       applyFont: { index: 1, rest: () => [rejectingFont(), undefined, "11px sans-serif"] },

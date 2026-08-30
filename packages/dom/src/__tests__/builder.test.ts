@@ -6,7 +6,7 @@ import {
   filledCircles,
   strokedPaths,
 } from "./fakes";
-import { candleSeries, lineSeries, DEFAULT_LINE_STYLE } from "@finchart/core";
+import { candleSeries, createScope, lineSeries, DEFAULT_LINE_STYLE } from "@finchart/core";
 import { PlotBuilder } from "../builder";
 import { testBrowserDeps } from "./fakes";
 import { DEFAULT_PLOT_STYLE } from "@finchart/core";
@@ -22,6 +22,23 @@ function withFakeLayers<D extends { createLayers: unknown }>(deps: D) {
 }
 
 describe("PlotBuilder", () => {
+  it("should hand the chart to a parent scope via setScope", () => {
+    const { deps, factory } = withFakeLayers(testBrowserDeps());
+    const page = createScope();
+
+    const plot = PlotBuilder.create(deps, lineSeries())
+      .addDataPoints(series)
+      .setScope(page)
+      .build(fakeContainer());
+
+    page.dispose();
+
+    // The parent's dispose is the chart's destroy — same door as
+    // PlotOptions.scope, reached without leaving the builder.
+    expect(factory.created[0].destroyed).toBe(true);
+    expect(() => plot.destroy()).not.toThrow();
+  });
+
   it("should build a plot from deps and a series", () => {
     const { deps } = withFakeLayers(testBrowserDeps());
 

@@ -1,3 +1,5 @@
+import { createScope } from "@finchart/core";
+import { listen } from "./listen";
 /**
  * Calls back when the CSS behind `--chart-*` may have changed, so the
  * consumer can ask for a repaint.
@@ -57,7 +59,7 @@ export function observeTheme(
   if (!view) return () => {};
 
   const attributeFilter = [...(options.attributes ?? DEFAULT_ATTRIBUTES)];
-  const stops: (() => void)[] = [];
+  const scope = createScope();
   let stopped = false;
 
   /**
@@ -72,8 +74,7 @@ export function observeTheme(
 
   if (typeof view.matchMedia === "function") {
     const query = view.matchMedia("(prefers-color-scheme: dark)");
-    query.addEventListener("change", fire);
-    stops.push(() => query.removeEventListener("change", fire));
+    listen(scope, query, "change", fire);
   }
 
   if (typeof view.MutationObserver === "function") {
@@ -85,11 +86,11 @@ export function observeTheme(
     ) {
       observer.observe(node, { attributes: true, attributeFilter });
     }
-    stops.push(() => observer.disconnect());
+    scope.add(() => observer.disconnect());
   }
 
   return () => {
     stopped = true;
-    for (const stop of stops) stop();
+    scope.dispose();
   };
 }

@@ -2,7 +2,10 @@ import type {
   InteractionHandler,
   InteractionTarget,
   Point,
+  Scope,
 } from "@finchart/core";
+import { createScope } from "@finchart/core";
+import { listen } from "./listen";
 
 export interface PointerInteractionsOptions {
   pan?: boolean;
@@ -102,6 +105,10 @@ export class PointerInteractions implements InteractionHandler {
    * to keep listening on document."
    */
   private readonly stackPointers = new Set<number>();
+  /** Owns everything connect() attaches. `null` means not connected. */
+  private connection: Scope | null = null;
+  /** Owns the document listeners of the drag in flight. One per gesture. */
+  private dragScope: Scope | null = null;
   private readonly options: Required<PointerInteractionsOptions>;
 
   constructor(
@@ -124,15 +131,17 @@ export class PointerInteractions implements InteractionHandler {
 
     this.target = target;
     const { element } = this;
+    const scope = createScope();
+    this.connection = scope;
 
     // Keeps touch drags from being consumed by page scroll.
     element.style.touchAction = "none";
-    element.addEventListener("pointerdown", this.onPointerDown);
-    element.addEventListener("pointermove", this.onHover);
-    element.addEventListener("wheel", this.onWheel, { passive: false });
-    element.addEventListener("dblclick", this.onDoubleClick);
-    element.addEventListener("click", this.onClick);
-    element.addEventListener("contextmenu", this.onContextMenu);
+    listen(scope, element, "pointerdown", this.onPointerDown);
+    listen(scope, element, "pointermove", this.onHover);
+    listen(scope, element, "wheel", this.onWheel, { passive: false });
+    listen(scope, element, "dblclick", this.onDoubleClick);
+    listen(scope, element, "click", this.onClick);
+    listen(scope, element, "contextmenu", this.onContextMenu);
 
     /**
      * The listener and focus attach regardless of the `keyboard` option —
@@ -154,20 +163,17 @@ export class PointerInteractions implements InteractionHandler {
      * `.d.ts`, so from here on it can only change additively.
      */
     if (!element.hasAttribute("tabindex")) element.tabIndex = 0;
-    element.addEventListener("keydown", this.onKeyDown);
+    listen(scope, element, "keydown", this.onKeyDown);
+
+    // Registered last, so it runs first on dispose: a drag or inertia still
+    // in flight stops before the element listeners come off — the same
+    // order disconnect always kept.
+    scope.add(() => this.endDrag());
   }
 
   disconnect(): void {
-    this.endDrag();
-
-    this.element.removeEventListener("pointerdown", this.onPointerDown);
-    this.element.removeEventListener("pointermove", this.onHover);
-    this.element.removeEventListener("wheel", this.onWheel);
-    this.element.removeEventListener("dblclick", this.onDoubleClick);
-    this.element.removeEventListener("click", this.onClick);
-    this.element.removeEventListener("contextmenu", this.onContextMenu);
-    this.element.removeEventListener("keydown", this.onKeyDown);
-
+    this.connection?.dispose();
+    this.connection = null;
     this.target = null;
   }
 
@@ -239,10 +245,16 @@ export class PointerInteractions implements InteractionHandler {
   };
 
   private listenForDrag(): void {
+    if (this.dragScope || !this.connection) return;
+
+    const scope = this.connection.child();
     const document = this.element.ownerDocument;
-    document?.addEventListener("pointermove", this.onDragMove);
-    document?.addEventListener("pointerup", this.onDragEnd);
-    document?.addEventListener("pointercancel", this.onDragEnd);
+    if (document) {
+      listen(scope, document, "pointermove", this.onDragMove);
+      listen(scope, document, "pointerup", this.onDragEnd);
+      listen(scope, document, "pointercancel", this.onDragEnd);
+    }
+    this.dragScope = scope;
   }
 
   private onDragMove = (event: PointerEvent): void => {
@@ -409,10 +421,8 @@ export class PointerInteractions implements InteractionHandler {
   private stopDragListening(): void {
     if (this.panPointers.size > 0 || this.stackPointers.size > 0) return;
 
-    const document = this.element.ownerDocument;
-    document?.removeEventListener("pointermove", this.onDragMove);
-    document?.removeEventListener("pointerup", this.onDragEnd);
-    document?.removeEventListener("pointercancel", this.onDragEnd);
+    this.dragScope?.dispose();
+    this.dragScope = null;
   }
 
   private endDrag(): void {

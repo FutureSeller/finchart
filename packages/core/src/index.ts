@@ -39,14 +39,15 @@
 export type { StyleVarName } from "./style-var-names";
 
 // ---- primitives: geometry and errors ----
-export { ContractError, DataError, RenderError } from "./primitives";
-export type { Padding, Point, PlotArea } from "./primitives";
+export { ContractError, DataError, RenderError, createScope } from "./primitives";
+export type { Disposer, Padding, Point, PlotArea, Scope } from "./primitives";
 
 // ---- data: points, accessors, decimation, computed nodes ----
 export {
   computation,
   defaultCoordinates,
   isGap,
+  validateSeriesData,
   LineDataAccessor,
   LttbDecimation,
   M4Decimation,
@@ -70,6 +71,8 @@ export type {
   LineDataPoint,
   OHLC,
   Range,
+  SeriesDataIssue,
+  SeriesDataIssueCode,
   Source,
   TailChange,
   Viewport,

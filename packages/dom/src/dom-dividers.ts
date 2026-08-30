@@ -1,4 +1,6 @@
-import type { DividerFactory } from "@finchart/core";
+import type { DividerFactory, Scope } from "@finchart/core";
+import { createScope } from "@finchart/core";
+import { listen } from "./listen";
 import { requireOverlayElement } from "./overlay-element";
 
 /** Thick enough to grab, thin enough not to obscure the pane. */
@@ -25,16 +27,18 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
   root.style.pointerEvents = "none";
   overlay.appendChild(root);
 
+  /**
+   * Owns everything acquired here. Drags in progress live in child scopes —
+   * move/end are attached to document, so removing the handle alone
+   * wouldn't tear them down; if destroy() happens mid-drag (SPA routing, a
+   * React unmount), the child closing with the parent is what keeps onDrag
+   * from firing into a dead plot.
+   */
+  const scope = createScope();
+  scope.add(() => root.remove());
+
   /** Reuses dividers once created — recreating them on every render would swap the handle out mid-drag. */
   const pool: HTMLElement[] = [];
-
-  /**
-   * For cleaning up drags in progress. move/end are attached to document,
-   * so removing the handle alone doesn't tear them down — if destroy()
-   * happens mid-drag (SPA routing, a React unmount), onDrag would keep
-   * firing into a dead plot.
-   */
-  const activeDrags = new Set<() => void>();
 
   function handle(): HTMLElement {
     const element = document.createElement("div");
@@ -48,25 +52,21 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
 
   function attach(element: HTMLElement, index: number): void {
     let lastY: number | null = null;
+    let drag: Scope | null = null;
 
-    const move = (event: Event): void => {
+    const move = (event: PointerEvent): void => {
       if (lastY === null) return;
 
-      const { clientY } = event as PointerEvent;
-      onDrag(index, clientY - lastY);
-      lastY = clientY;
+      onDrag(index, event.clientY - lastY);
+      lastY = event.clientY;
     };
 
     const end = (): void => {
-      lastY = null;
-      activeDrags.delete(end);
-      element.removeAttribute("data-dragging");
-      document.removeEventListener("pointermove", move);
-      document.removeEventListener("pointerup", end);
-      document.removeEventListener("pointercancel", end);
+      drag?.dispose();
+      drag = null;
     };
 
-    element.addEventListener("pointerdown", (event: PointerEvent) => {
+    listen(scope, element, "pointerdown", (event: PointerEvent) => {
       // Without stopping this, the container's pan handler gets dragged along too.
       event.stopPropagation();
       event.preventDefault();
@@ -82,10 +82,19 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       element.setAttribute("data-dragging", "");
 
       lastY = event.clientY;
-      activeDrags.add(end);
-      document.addEventListener("pointermove", move);
-      document.addEventListener("pointerup", end);
-      document.addEventListener("pointercancel", end);
+      // A second pointer landing mid-drag restarts the gesture — the old
+      // one is released first so the two never stack.
+      end();
+      drag = scope.child();
+      // Registered first, so it runs last: listeners come off, then the
+      // state resets — a mid-drag destroy() walks the same path as release.
+      drag.add(() => {
+        lastY = null;
+        element.removeAttribute("data-dragging");
+      });
+      listen(drag, document, "pointermove", move);
+      listen(drag, document, "pointerup", end);
+      listen(drag, document, "pointercancel", end);
     });
   }
 
@@ -112,9 +121,7 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
     },
 
     destroy() {
-      // A Set is safe to self-delete from during iteration — end() removes itself.
-      for (const end of activeDrags) end();
-      root.remove();
+      scope.dispose();
     },
   };
 };

@@ -62,6 +62,97 @@ const move = (clientX: number) =>
 const up = () =>
   document.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
 
+/**
+ * Counts what is attached right now — the "stops responding" guards can stay
+ * green while a listener leaks (a leaked handler that early-returns responds
+ * to nothing), so hygiene is asserted by count, not by behavior. Returns the
+ * still-attached types so a failure names the leak.
+ */
+function trackListeners(target: EventTarget) {
+  const live = new Map<string, Set<EventListenerOrEventListenerObject>>();
+  const realAdd = target.addEventListener.bind(target);
+  const realRemove = target.removeEventListener.bind(target);
+
+  vi.spyOn(target, "addEventListener").mockImplementation(
+    (type, listener, options) => {
+      realAdd(type, listener, options);
+      if (!listener) return;
+      const set =
+        live.get(type) ?? new Set<EventListenerOrEventListenerObject>();
+      set.add(listener);
+      live.set(type, set);
+    },
+  );
+  vi.spyOn(target, "removeEventListener").mockImplementation(
+    (type, listener, options) => {
+      realRemove(type, listener, options);
+      if (!listener) return;
+      live.get(type)?.delete(listener);
+    },
+  );
+
+  return () =>
+    [...live.entries()]
+      .filter(([, set]) => set.size > 0)
+      .map(([type, set]) => `${type}\u00d7${set.size}`);
+}
+
+describe("listener hygiene", () => {
+  it("should leave zero listeners on element and document after disconnect", () => {
+    const leakedOnElement = trackListeners(element);
+    const leakedOnDocument = trackListeners(document);
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    // Disconnect lands mid-drag on purpose — the document listeners a drag
+    // attaches are the ones most easily left behind.
+    down(100);
+    move(120);
+    interactions.disconnect();
+
+    expect(leakedOnElement()).toEqual([]);
+    expect(leakedOnDocument()).toEqual([]);
+  });
+
+  it("should release the document once the gesture ends", () => {
+    const leaked = trackListeners(document);
+    new PointerInteractions(element).connect(target.target);
+
+    down(100);
+    move(120);
+    up();
+
+    expect(leaked()).toEqual([]);
+  });
+
+  it("should drag again after a mid-drag reconnect", () => {
+    // React StrictMode's double effect run lands exactly here: unmount
+    // arrives mid-gesture, then the chart mounts again. The second life
+    // must get its own document listeners — a drag-scope handle left
+    // pointing at the disposed gesture would swallow every drag after.
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+    down(100);
+    interactions.disconnect();
+
+    interactions.connect(target.target);
+    down(100);
+    move(140);
+
+    expect(target.pixelPans).toEqual([40]);
+  });
+
+  it("should not stack listeners across repeated connects", () => {
+    const leakedOnElement = trackListeners(element);
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+    interactions.connect(target.target);
+    interactions.disconnect();
+
+    expect(leakedOnElement()).toEqual([]);
+  });
+});
+
 describe("PointerInteractions drag", () => {
   it("should pan by the pointer delta while dragging", () => {
     new PointerInteractions(element).connect(target.target);

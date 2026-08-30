@@ -36,5 +36,7 @@ export {
   M4Decimation,
   SimpleDecimation,
 } from "./decimation";
+export { validateSeriesData } from "./validate";
+export type { SeriesDataIssue, SeriesDataIssueCode } from "./validate";
 export { SimpleDataManager } from "./data-manager";
 export type { SimpleDataManagerOptions } from "./data-manager";

@@ -3,6 +3,7 @@ import type {
   LineStyle,
   PlotConfig,
   PlotDeps,
+  Scope,
   Series,
   ViewportDimensions,
 } from "@finchart/core";
@@ -17,6 +18,7 @@ export class PlotBuilder<T extends BaseDataPoint> {
     showGrid: true,
   };
   private size: ViewportDimensions = { width: 400, height: 300 };
+  private scope?: Scope;
 
   private constructor(
     private deps: PlotDeps | BrowserDeps,
@@ -103,6 +105,18 @@ export class PlotBuilder<T extends BaseDataPoint> {
   }
 
   /**
+   * A parent lifetime to live under — disposing the scope destroys the
+   * chart. The builder-path twin of `PlotOptions.scope`: a page-level scope
+   * can own several charts plus their sibling subscriptions (theme
+   * observation, sync links, sockets), and one `dispose()` walks out of all
+   * of it. Destroying the chart yourself first leaves the parent a no-op.
+   */
+  setScope(scope: Scope): this {
+    this.scope = scope;
+    return this;
+  }
+
+  /**
    * Builds the chart.
    *
    * Series and data go in as a single registration — the registration owns
@@ -141,6 +155,7 @@ export class PlotBuilder<T extends BaseDataPoint> {
       deps,
       config: this.config,
       size: this.size,
+      scope: this.scope,
     });
 
     if (this.series) {
