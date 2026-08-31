@@ -538,6 +538,8 @@ export class Plot
    * `toDomain`/`fromDomain`
    */
   private readonly x: XMapping;
+  /** Made once from `deps.xScale()` — this Plot's own, never the wiring's. */
+  private readonly xScale: Scale;
   /** How many times the x index has been recounted → `Viewport.xEpoch` (the key to the slot cache). */
   private xEpoch = 0;
 
@@ -614,9 +616,10 @@ export class Plot
       ) ?? null;
     this.scope.add(() => this.dividers?.destroy());
 
-    this.x = (deps.createXMapping ?? continuousX)(deps.xScale);
+    this.xScale = deps.xScale();
+    this.x = (deps.createXMapping ?? continuousX)(this.xScale);
     this.xViewport = new XViewport({
-      scale: deps.xScale,
+      scale: this.xScale,
       x: this.x,
       dataRange: () => this.dataRange,
       // A reader function, not a value — changed via applyOptions.
@@ -644,7 +647,7 @@ export class Plot
       },
     });
     const main = new Pane(
-      deps.mainPaneYScale,
+      deps.mainPaneYScale(),
       deps.createDataManager,
       {},
       () => this.config.axis?.y,
@@ -1343,7 +1346,7 @@ export class Plot
               area.bottom > area.top && y >= area.top && y <= area.bottom,
           ) ?? null,
         zoomAroundCenter: (factor) => {
-          const [min, max] = this.deps.xScale.getDomain();
+          const [min, max] = this.xScale.getDomain();
           this.zoom(factor, (min + max) / 2);
         },
         requestRender: () => this.scheduleRender(),
@@ -1803,7 +1806,7 @@ export class Plot
       panes: this.paneList,
       gap: this.config.paneGap ?? 0,
       axis: this.config.axis ?? {},
-      xScale: this.deps.xScale,
+      xScale: this.xScale,
       x: this.x,
       labels: this.axisLabels !== null,
       // Measurement uses the font the DOM label actually draws with — the
@@ -1932,7 +1935,7 @@ export class Plot
     // The domain is the mapping's own space, but slicing is done with x —
     // the index is a monotonic function of x, so converting a range back to
     // an x range leaves the manager's binary search intact.
-    const [startDomain, endDomain] = this.deps.xScale.getDomain();
+    const [startDomain, endDomain] = this.xScale.getDomain();
     const { width, height } = this.viewport;
     const viewport: Viewport = {
       startX: this.x.fromDomain(startDomain),

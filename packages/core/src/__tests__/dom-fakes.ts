@@ -12,6 +12,7 @@ import type { Point } from "../primitives";
 import { createPlotDeps, type PlotDepsOptions } from "../plot/presets";
 import { frameScheduler } from "../plot/scheduler";
 import type { PlotDeps } from "../plot/types";
+import { LinearScale, type Scale } from "../scale";
 import {
   createCanvasRenderer,
   createCanvasTextMeasurer,
@@ -389,6 +390,32 @@ export function testBrowserDeps(options: PlotDepsOptions = {}): PlotDeps {
     createTextMeasurer:
       options.createTextMeasurer ?? createCanvasTextMeasurer,
   });
+}
+
+/**
+ * `testBrowserDeps` plus the very scales its Plot will be handed. The
+ * x viewport in mapping space (bar index, not data x) has no public
+ * window, so a test that wants to read or drive it holds the scale
+ * itself. **For one Plot** — mount a second from the same `deps` and the
+ * two share an axis, which is exactly what the factory contract exists
+ * to prevent (see deps-reuse.test).
+ */
+export function testBrowserDepsWithScales(options: PlotDepsOptions = {}): {
+  deps: PlotDeps;
+  xScale: Scale;
+  yScale: Scale;
+} {
+  const xScale = new LinearScale();
+  const yScale = new LinearScale();
+  return {
+    deps: testBrowserDeps({
+      ...options,
+      xScale: () => xScale,
+      mainPaneYScale: () => yScale,
+    }),
+    xScale,
+    yScale,
+  };
 }
 
 /**

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";
 import { candleSeries, lineSeries } from "../../series";
 import { seriesSpec } from "../pane";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 
 const ramp = (from: number, to: number, y: (x: number) => number): LineDataPoint[] =>
@@ -15,13 +15,13 @@ const ramp = (from: number, to: number, y: (x: number) => number): LineDataPoint
 
 /** A stage mounted with no series. Used by tests that attach registrations by hand. */
 function bare() {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot } = mountPlot<LineDataPoint>({
     deps,
     config: { ...defaultConfig, showGrid: false },
   });
 
-  return { plot, deps };
+  return { plot, xScale, yScale };
 }
 
 describe("different data per series", () => {
@@ -42,7 +42,7 @@ describe("different data per series", () => {
   });
 
   it("should span the union of every series on the x axis", () => {
-    const { plot, deps } = bare();
+    const { plot, xScale } = bare();
 
     plot.mainPane.addSeries({ series: lineSeries(), data: ramp(0, 10, () => 1) });
     plot.mainPane.addSeries({
@@ -51,11 +51,11 @@ describe("different data per series", () => {
     });
     plot.fitDomains();
 
-    expect(deps.xScale.getDomain()).toEqual([0, 109]);
+    expect(xScale.getDomain()).toEqual([0, 109]);
   });
 
   it("should keep the other series when one is disposed", () => {
-    const { plot, deps } = bare();
+    const { plot, xScale } = bare();
 
     plot.mainPane.addSeries({ series: lineSeries(), data: ramp(0, 10, () => 1) });
     const late = plot.mainPane.addSeries({
@@ -66,7 +66,7 @@ describe("different data per series", () => {
     late.dispose();
     plot.fitDomains();
 
-    expect(deps.xScale.getDomain()).toEqual([0, 9]);
+    expect(xScale.getDomain()).toEqual([0, 9]);
   });
 
   /** The reason valueExtent's type opened up to Range | null — if a series with no data yet returned {0,0}, the union would get dragged down to 0, squashing candles against the bottom of the screen. */
@@ -88,74 +88,74 @@ describe("different data per series", () => {
 describe("refit rules", () => {
   /** Registers with data, then moves the window. */
   function panned() {
-    const { plot, deps } = bare();
+    const { plot, xScale } = bare();
     const handle = plot.mainPane.addSeries({
       series: lineSeries(),
       data: ramp(0, 100, (x) => x),
     });
 
     plot.pan(-20);
-    return { plot, deps, handle, viewing: deps.xScale.getDomain() };
+    return { plot, xScale, handle, viewing: xScale.getDomain() };
   }
 
   it("should fit the first data that arrives", () => {
-    const { plot, deps } = bare();
+    const { plot, xScale } = bare();
 
     // Up to that point the x domain is the scale's default — nothing is in place yet.
-    expect(deps.xScale.getDomain()).toEqual([0, 1]);
+    expect(xScale.getDomain()).toEqual([0, 1]);
 
     plot.mainPane.addSeries({
       series: lineSeries(),
       data: ramp(10, 20, () => 1),
     });
 
-    expect(deps.xScale.getDomain()).toEqual([10, 19]);
+    expect(xScale.getDomain()).toEqual([10, 19]);
   });
 
   it("should refit on the imperative setData", () => {
-    const { deps, handle } = panned();
+    const { xScale, handle } = panned();
 
     handle.setData(ramp(-50, 100, (x) => x));
 
     // A new dataset, so it snaps back to showing everything
-    expect(deps.xScale.getDomain()).toEqual([-50, 99]);
+    expect(xScale.getDomain()).toEqual([-50, 99]);
   });
 
   /** The declarative path never refits — if the window jumped to the union, the user would lose their place. */
   it("should not refit when a spec brings new data", () => {
-    const { plot, deps } = bare();
+    const { plot, xScale } = bare();
     const series = lineSeries();
     const spec = (data: LineDataPoint[]) =>
       seriesSpec<LineDataPoint>({ id: "a", series, data });
 
     plot.mainPane.syncSeries([spec(ramp(0, 100, (x) => x))]);
     plot.pan(-20);
-    const viewing = deps.xScale.getDomain();
+    const viewing = xScale.getDomain();
 
     // A new array with history prepended. This is exactly what infinite scroll does.
     plot.mainPane.syncSeries([spec(ramp(-50, 100, (x) => x))]);
 
-    expect(deps.xScale.getDomain()).toEqual(viewing);
+    expect(xScale.getDomain()).toEqual(viewing);
   });
 
   it("should not refit when a later series joins", () => {
-    const { plot, deps, viewing } = panned();
+    const { plot, xScale, viewing } = panned();
 
     plot.mainPane.addSeries({
       series: lineSeries(),
       data: ramp(500, 600, () => 1),
     });
 
-    expect(deps.xScale.getDomain()).toEqual(viewing);
+    expect(xScale.getDomain()).toEqual(viewing);
   });
 
   it("should refit on an explicit fitDomains", () => {
-    const { plot, deps, handle } = panned();
+    const { plot, xScale, handle } = panned();
     handle.prepend(ramp(-50, 0, (x) => x));
 
     plot.fitDomains();
 
-    expect(deps.xScale.getDomain()).toEqual([-50, 99]);
+    expect(xScale.getDomain()).toEqual([-50, 99]);
   });
 });
 
@@ -165,7 +165,7 @@ describe("refit rules", () => {
  */
 describe("series with different point types in one pane", () => {
   it("should hold candles and lines side by side", () => {
-    const { plot, deps } = bare();
+    const { plot, xScale } = bare();
 
     const btc = plot.mainPane.addSeries({
       series: candleSeries(),
@@ -188,8 +188,8 @@ describe("series with different point types in one pane", () => {
     expect(plot.mainPane.valueExtent()).toEqual({ min: 2_000, max: 42_000 });
 
     // ETH being attached later doesn't jump the window — the refit rules still apply.
-    expect(deps.xScale.getDomain()).toEqual([0, 1]);
+    expect(xScale.getDomain()).toEqual([0, 1]);
     plot.fitDomains();
-    expect(deps.xScale.getDomain()).toEqual([0, 4]);
+    expect(xScale.getDomain()).toEqual([0, 4]);
   });
 });

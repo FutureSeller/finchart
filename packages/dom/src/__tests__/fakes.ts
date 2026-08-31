@@ -9,7 +9,9 @@ import type {
   LayersFactory,
   PlotDeps,
   Point,
+  Scale,
 } from "@finchart/core";
+import { LinearScale } from "@finchart/core";
 import { browserDeps, type BrowserDepsOptions } from "../browser-deps";
 
 export interface ContextCall {
@@ -326,6 +328,29 @@ export function fakeContainer(): HTMLElement {
  */
 export function testBrowserDeps(options: BrowserDepsOptions = {}): PlotDeps {
   return browserDeps(options)(fakeContainer());
+}
+
+/**
+ * `testBrowserDeps` plus the very scales its Plot will be handed, for a
+ * test that reads the axes directly. **For one Plot** — a second mounted
+ * from the same `deps` would share them.
+ */
+export function testBrowserDepsWithScales(options: BrowserDepsOptions = {}): {
+  deps: PlotDeps;
+  xScale: Scale;
+  yScale: Scale;
+} {
+  const xScale = new LinearScale();
+  const yScale = new LinearScale();
+  return {
+    deps: testBrowserDeps({
+      ...options,
+      xScale: () => xScale,
+      mainPaneYScale: () => yScale,
+    }),
+    xScale,
+    yScale,
+  };
 }
 
 /** Views it back as a FakeElement so a test can dispatch events on it. */

@@ -22,7 +22,7 @@ const ramp: LineDataPoint[] = Array.from({ length: 100 }, (_, i) => ({
 /** Inject xScale to set the visible range exactly — zoom can't hit a precise range. */
 function mount(options?: { autoScale?: boolean }) {
   const xScale = new LinearScale();
-  const { plot, handle } = mountPlot({ deps: testBrowserDeps({ xScale }), series: lineSeries(), config: defaultConfig });
+  const { plot, handle } = mountPlot({ deps: testBrowserDeps({ xScale: () => xScale }), series: lineSeries(), config: defaultConfig });
   if (options) plot.mainPane.applyOptions(options);
 
   /** setData resets the domain to the full range, so call it after loading data. */

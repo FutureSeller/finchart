@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FakeElement } from "./fakes";
 import type { LineDataPoint } from "@finchart/core";
 import { lineSeries } from "@finchart/core";
-import { testBrowserDeps } from "./fakes";
+import { testBrowserDepsWithScales } from "./fakes";
 import { defaultConfig, defaultSize, mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -18,7 +18,7 @@ function dividers(overlay: unknown): FakeElement[] {
 }
 
 function setup(config = {}, panes = 1) {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot, handle, layers } = mountPlot({ deps, series: lineSeries(), config: {
     ...defaultConfig,
     // Only dividers are under test here — with labels off, the axis slice is 0, so padding is the boundary.
@@ -33,7 +33,7 @@ function setup(config = {}, panes = 1) {
     return pane;
   });
 
-  return { plot, handle, deps, layers, added };
+  return { plot, handle, xScale, yScale, layers, added };
 }
 
 /** Drags a divider by dy pixels. */
@@ -209,21 +209,21 @@ describe("dragging a divider", () => {
   });
 
   it("should not move the value domain", () => {
-    const { deps, layers } = setup({}, 1);
-    const before = deps.mainPaneYScale.getDomain();
+    const { yScale, layers } = setup({}, 1);
+    const before = yScale.getDomain();
 
     drag(dividers(layers.overlay)[0], 50);
 
-    expect(deps.mainPaneYScale.getDomain()).toEqual(before);
+    expect(yScale.getDomain()).toEqual(before);
   });
 
   it("should not pan the chart", () => {
-    const { deps, layers } = setup({}, 1);
-    const before = deps.xScale.getDomain();
+    const { xScale, layers } = setup({}, 1);
+    const before = xScale.getDomain();
 
     drag(dividers(layers.overlay)[0], 50);
 
-    expect(deps.xScale.getDomain()).toEqual(before);
+    expect(xScale.getDomain()).toEqual(before);
   });
 
   it("should stop the pointer reaching the pan handler", () => {
