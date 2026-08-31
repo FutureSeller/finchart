@@ -4,7 +4,7 @@ import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import { Plot } from "../plot";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
-import { manualScheduler } from "../scheduler";
+import { manualScheduler } from "../../render";
 import { defaultConfig, defaultSize } from "./helpers";
 
 const data: LineDataPoint[] = [

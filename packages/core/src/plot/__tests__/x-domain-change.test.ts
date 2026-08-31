@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import type { XDomainChangePayload } from "../plot";
+import type { XDomainChangePayload } from "../events";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 

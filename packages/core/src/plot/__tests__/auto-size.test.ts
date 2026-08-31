@@ -13,7 +13,7 @@ import {
   type FakeLayers,
 } from "../../__tests__/dom-fakes";
 import { Plot } from "../plot";
-import type { SchedulerFactory } from "../scheduler";
+import type { SchedulerFactory } from "../../render";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize } from "./helpers";
 

@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { lineSeries } from "../../series";
 import { ContractError } from "../../primitives";
-import { teardown, type Plugin } from "../plugin";
+import { teardown, type Plugin } from "../../primitives";
 import type {
   DataProbe,
   PaneDecorationHost,

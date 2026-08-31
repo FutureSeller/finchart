@@ -21,7 +21,7 @@ import type {
 import type { Scale, XMappingFactory } from "../scale";
 import { LinearScale } from "../scale";
 import type { DividerFactory } from "./dividers";
-import type { SchedulerFactory } from "./scheduler";
+import type { SchedulerFactory } from "../render";
 import type { PlotDeps } from "./types";
 
 /**

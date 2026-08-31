@@ -1,6 +1,6 @@
 import type { BaseDataPoint } from "../data";
-import type { SeriesHandle } from "../plot/pane";
-import { frameScheduler, type SchedulerFactory } from "../plot/scheduler";
+import type { SeriesHandle } from "../plot/series-handle";
+import { frameScheduler, type SchedulerFactory } from "../render";
 
 /**
  * What the feed needs from a series — `updateLast` to deliver, `attached`

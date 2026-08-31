@@ -11,6 +11,8 @@ export {
 } from "./labels";
 export { createCanvasAxisLabels } from "./canvas-labels";
 export { timeTicks } from "./time-ticks";
+export { DEFAULT_X_FORMAT, DEFAULT_Y_FORMAT } from "./format";
+export type { ValueFormat } from "./format";
 export { priceFormat } from "./price-format";
 export type { PriceFormatOptions } from "./price-format";
 export type { TimeTicksOptions } from "./time-ticks";

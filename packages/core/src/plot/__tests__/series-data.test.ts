@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";
 import { candleSeries, lineSeries } from "../../series";
-import { seriesSpec } from "../pane";
+import { seriesSpec } from "../../registration";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 

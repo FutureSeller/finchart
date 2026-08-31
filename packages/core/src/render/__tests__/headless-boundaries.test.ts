@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { frameScheduler } from "../../plot";
+import { frameScheduler } from "../../render";
 import { CanvasRenderer } from "../canvas-renderer";
 import { createCanvasTextMeasurer } from "../text-measurer";
 import type { Canvas2DContext, TextMetricsLike } from "../types";

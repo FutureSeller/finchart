@@ -5,7 +5,7 @@ import {
 } from "../../__tests__/dom-fakes";
 import type { BaseDataPoint } from "../../data";
 import type { Series } from "../../series";
-import type { SeriesHandle } from "../pane";
+import type { SeriesHandle } from "../series-handle";
 import { Plot } from "../plot";
 import type { PlotConfig, PlotDeps } from "../types";
 

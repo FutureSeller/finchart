@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DataView, LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
-import { seriesSpec } from "../pane";
+import { seriesSpec } from "../../registration";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 

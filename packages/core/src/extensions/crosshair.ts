@@ -16,7 +16,7 @@ import {
   pluginApi,
   type ConfigurablePluginApi,
   type Plugin,
-} from "../plot/plugin";
+} from "../primitives";
 
 export interface CrosshairLineOptions {
   /** The vertical line. Defaults to true. */

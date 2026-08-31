@@ -28,5 +28,5 @@ export type {
   PlotModelDepsOptions,
   PlotModelOptions,
   SeriesHandle,
-  SeriesRegistration,
 } from "./plot";
+export type { SeriesRegistration } from "./registration";

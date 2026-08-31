@@ -1,8 +1,8 @@
 import { asFinite, asIndex } from "../primitives";
 import type { PaneApi } from "../plot/pane";
 import type { InputHost, PaneHost, PlotEventSource } from "../plot/capabilities";
-import type { Plugin, PluginApi } from "../plot/plugin";
-import { pluginApi } from "../plot/plugin";
+import type { Plugin, PluginApi } from "../primitives";
+import { pluginApi } from "../primitives";
 
 /**
  * Collapses every pane but one — via `flex: 0`. This doesn't invent a

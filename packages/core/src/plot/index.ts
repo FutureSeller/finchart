@@ -1,15 +1,18 @@
 export { Plot } from "./plot";
 export { gridDecoration } from "./grid";
 export type { GridSettings } from "./grid";
+export type { PlotOptions } from "./plot";
+export type { ViewportDimensions } from "./config";
 export type {
   CrosshairPayload,
   PlotEvents,
-  PlotOptions,
-  ViewportDimensions,
   XDomainChangePayload,
-} from "./plot";
+} from "./events";
 export type { ChartState, PaneState } from "./state";
-export { PANE_OPTION_DEFAULTS } from "./pane";
+export { PANE_OPTION_DEFAULTS } from "./pane-options";
+export type { PaneOptions } from "./pane-options";
+export type { SeriesHandle } from "./series-handle";
+export type { SeriesSample } from "./series-list";
 export type {
   DividerBoundary,
   DividerFactory,
@@ -24,14 +27,6 @@ export type {
   PlotDecorationContext,
 } from "./decoration";
 export { ABOVE_SERIES, BELOW_SERIES, SERIES_Z } from "./decoration";
-export { emitter } from "./emitter";
-export type { Emitter, Observable } from "./emitter";
-export { pluginApi, teardown } from "./plugin";
-export type {
-  ConfigurablePluginApi,
-  Plugin,
-  PluginApi,
-} from "./plugin";
 export type {
   CursorHost,
   DataProbe,
@@ -52,22 +47,8 @@ export type {
   ViewportControl,
   XCoordinates,
 } from "./capabilities";
-export { Pane, seriesSpec } from "./pane";
-export type {
-  PaneApi,
-  PaneChange,
-  PaneDrawContext,
-  PaneOptions,
-  SeriesHandle,
-  SeriesSample,
-  SeriesSpec,
-} from "./pane";
-export type {
-  Entry,
-  SeriesId,
-  SeriesRegistration,
-  TypedEntry,
-} from "./entry";
+export { Pane } from "./pane";
+export type { PaneApi, PaneChange, PaneDrawContext } from "./pane";
 export {
   distributeHeights,
   FALLBACK_X_AXIS_HEIGHT,
@@ -85,16 +66,6 @@ export type {
 export { DEFAULT_PADDING } from "./style";
 export { createPlotDeps } from "./presets";
 export type { PlotDepsOptions } from "./presets";
-export {
-  frameScheduler,
-  immediateScheduler,
-  manualScheduler,
-} from "./scheduler";
-export type {
-  ManualScheduler,
-  RenderScheduler,
-  SchedulerFactory,
-} from "./scheduler";
 export { DEFAULT_PLOT_STYLE } from "./style";
 export type { PlotStyle } from "./style";
 export type {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OHLC } from "../../data";
-import { manualScheduler } from "../../plot/scheduler";
+import { manualScheduler } from "../../render";
 import { conflated } from "../conflate";
 
 /** A handle that records updateLast calls — the only surface the feed touches. */
