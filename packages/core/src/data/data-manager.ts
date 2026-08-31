@@ -179,6 +179,12 @@ export class SimpleDataManager<
    * data even after throwing `DataError`, and the next pan would rebuild
    * the y domain from that value — a chart drawing its axis from data it
    * just declared rejected.
+   *
+   * The array is copied so the caller's later `push` doesn't land here;
+   * the points are kept as given. Every point is read from then on
+   * (sorting check, binary search, tiers), so a point edited after the
+   * handoff is a chart that silently disagrees with its own index — the
+   * caller's contract is that a handed-over point isn't edited.
    */
   setData(data: T[]): void {
     const next = [...data];
