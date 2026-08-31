@@ -25,7 +25,7 @@ import type { Frame, PaneTicks } from "./frame";
 import type { AxisSlices } from "./layout";
 import type { Pane } from "./pane";
 import { PLOT_STYLE_SPEC } from "./style";
-import type { PlotConfig } from "./types";
+import type { ResolvedPlotConfig } from "./types";
 
 /**
  * What the chart lends the painter — built once with the chart and shared
@@ -55,7 +55,7 @@ export interface PaintStage {
  */
 export function paintFrame(
   stage: PaintStage,
-  config: PlotConfig,
+  config: ResolvedPlotConfig,
   frame: Frame,
   viewport: Viewport,
   readStyle: StyleReader,
@@ -232,7 +232,7 @@ function collectAxisBadges(
  */
 function drawAxisLabels(
   stage: PaintStage,
-  config: PlotConfig,
+  config: ResolvedPlotConfig,
   ticks: { x: Tick[]; y: PaneTicks[] },
   slices: AxisSlices,
   readStyle: StyleReader,
@@ -240,7 +240,7 @@ function drawAxisLabels(
 ): void {
   if (!stage.axisLabels) return;
 
-  const showX = config.axis?.x?.showLabels ?? true;
+  const showX = config.axis.x.showLabels;
   const yTicks = ticks.y
     .filter((group) => group.showLabels)
     .flatMap((group) => group.ticks);
@@ -272,13 +272,13 @@ function drawAxisLabels(
  */
 function drawPaneBoundaries(
   stage: PaintStage,
-  config: PlotConfig,
+  config: ResolvedPlotConfig,
   readStyle: StyleReader,
 ): void {
   const { panes, renderer } = stage;
   if (panes.length < 2) return;
 
-  const gap = config.paneGap ?? 0;
+  const gap = config.paneGap;
   const style = resolveStyle(PLOT_STYLE_SPEC, readStyle).paneDivider;
 
   for (const pane of panes.slice(0, -1)) {
@@ -294,13 +294,13 @@ function drawPaneBoundaries(
 }
 
 /** A divider sits in the middle of the gap between panes. */
-function drawDividers(stage: PaintStage, config: PlotConfig): void {
+function drawDividers(stage: PaintStage, config: ResolvedPlotConfig): void {
   const { dividers, panes } = stage;
   if (!dividers) return;
 
-  const gap = config.paneGap ?? 0;
+  const gap = config.paneGap;
 
-  if (config.resizablePanes === false || panes.length < 2) {
+  if (!config.resizablePanes || panes.length < 2) {
     dividers.clear();
     return;
   }

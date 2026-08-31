@@ -14,7 +14,6 @@ import { describe, expect, it } from "vitest";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import type { PlotConfig } from "../types";
 import { mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -24,7 +23,7 @@ const data: LineDataPoint[] = [
 ];
 
 /** Fresh nested objects every time, so a mutation here can only leak through aliasing. */
-const ownConfig = (): PlotConfig => ({
+const ownConfig = () => ({
   padding: { top: 20, right: 20, bottom: 20, left: 20 },
   showGrid: true,
   axis: { x: { showLabels: true }, y: { showLabels: true } },

@@ -11,7 +11,12 @@ import {
   type AxisSlices,
 } from "./layout";
 import type { Pane } from "./pane";
-import type { AxisOptions, XAxisOptions, YAxisOptions } from "./types";
+import type {
+  AxisOptions,
+  ResolvedPlotConfig,
+  ResolvedXAxisOptions,
+  ResolvedYAxisOptions,
+} from "./types";
 
 /**
  * Rounds a measured width up to this unit and uses that as the axis width.
@@ -61,7 +66,7 @@ export interface FrameInput {
   panes: readonly Pane[];
   /** Gap between panes (px). */
   gap: number;
-  axis: { x?: XAxisOptions; y?: YAxisOptions };
+  axis: ResolvedPlotConfig["axis"];
   xScale: Scale;
   x: XMapping;
   /**
@@ -203,7 +208,7 @@ export function layoutFrame(input: FrameInput): Frame | null {
    * calculation and the label drawing read the same flag, so a single
    * change fixes both.
    */
-  const y = yTicks(panes, axis.y ?? {}).map((group, index) =>
+  const y = yTicks(panes, axis.y).map((group, index) =>
     collapsed.has(index)
       ? { ...group, showLabels: false, collapsed: true }
       : group,
@@ -218,7 +223,7 @@ export function layoutFrame(input: FrameInput): Frame | null {
   const slices = sliceAxes(area, {
     yWidth,
     xHeight,
-    ySide: axis.y?.position,
+    ySide: axis.y.position,
   });
   const paneSlices = sliceAreas(slices.data, heights, gap);
 
@@ -239,7 +244,7 @@ export function layoutFrame(input: FrameInput): Frame | null {
   xScale.setRange(slices.data.left, slices.data.right);
 
   // 6) x ticks — can only be counted once the range is settled.
-  return { slices, ticks: { x: xTicks(xScale, x, axis.x ?? {}), y } };
+  return { slices, ticks: { x: xTicks(xScale, x, axis.x), y } };
 }
 
 /**
@@ -248,8 +253,8 @@ export function layoutFrame(input: FrameInput): Frame | null {
  * `size` is given.
  */
 function xAxisHeight({ area, axis, labels, measure }: FrameInput): number {
-  const options: XAxisOptions = axis.x ?? {};
-  if (!labels || !(options.showLabels ?? true)) return 0;
+  const options = axis.x;
+  if (!labels || !options.showLabels) return 0;
 
   /**
    * **Clamped before it's used, not after.** `sliceAxes` clamps too, but
@@ -287,7 +292,7 @@ function yAxisWidth(
   { area, axis, measure }: FrameInput,
   shown: readonly PaneTicks[],
 ): number {
-  const options: YAxisOptions = axis.y ?? {};
+  const options = axis.y;
 
   // **A consumer-given size is clamped to leave the data area's 1px
   // share** — the counterpart to `xAxisHeight`. Leaving this only to
@@ -328,7 +333,7 @@ function widestLabel(
 function strategyTicks(
   scale: Scale,
   options: AxisOptions,
-  defaultSpacing: number,
+  minTickSpacing: number,
   space: { xOf(value: number): number; domainOf(value: number): number },
 ): Tick[] | null {
   if (!options.ticks) return null;
@@ -341,7 +346,7 @@ function strategyTicks(
       min,
       max,
       span: Math.abs(to - from),
-      minTickSpacing: options.minTickSpacing ?? defaultSpacing,
+      minTickSpacing,
       xOf: space.xOf,
       domainOf: space.domainOf,
     })
@@ -400,11 +405,15 @@ const IDENTITY_SPACE = {
  * labels each computed their own, they'd eventually drift apart. x gets
  * one set, shared by every pane; y is computed separately per pane.
  */
-function xTicks(xScale: Scale, x: XMapping, options: XAxisOptions): Tick[] {
+function xTicks(
+  xScale: Scale,
+  x: XMapping,
+  options: ResolvedXAxisOptions,
+): Tick[] {
   // A strategy, if present, takes over both placement and labeling. The
   // default arithmetic and `format` aren't used — mixing them halfway
   // would leave nobody sure who owns the label.
-  const strategy = strategyTicks(xScale, options, 80, {
+  const strategy = strategyTicks(xScale, options, options.minTickSpacing, {
     xOf: (value) => x.fromDomain(value),
     domainOf: (value) => x.toDomain(value),
   });
@@ -435,7 +444,10 @@ function xTicks(xScale: Scale, x: XMapping, options: XAxisOptions): Tick[] {
  * chart-wide default.** A strategy is also read here — this is where a
  * log axis's 1/2/5 multiples or percentage ticks go.
  */
-function yTicks(panes: readonly Pane[], defaults: YAxisOptions): PaneTicks[] {
+function yTicks(
+  panes: readonly Pane[],
+  defaults: ResolvedYAxisOptions,
+): PaneTicks[] {
   return panes.map((pane) => {
     /**
      * **Anything omitted falls back to the chart.** A plain spread would
@@ -443,14 +455,14 @@ function yTicks(panes: readonly Pane[], defaults: YAxisOptions): PaneTicks[] {
      * ticks would then show the default formatting while the badge shows
      * the chart's, splitting digit counts on the same axis.
      */
-    const options: YAxisOptions = { ...defaults, ...definedOnly(pane.axis) };
+    const options = { ...defaults, ...definedOnly(pane.axis) };
 
     return {
       pane,
-      showLabels: options.showLabels ?? true,
+      showLabels: options.showLabels,
       collapsed: false,
       ticks:
-        strategyTicks(pane.yScale, options, 40, IDENTITY_SPACE) ??
+        strategyTicks(pane.yScale, options, options.minTickSpacing, IDENTITY_SPACE) ??
         new Axis(pane.yScale, "vertical", {
           format: options.format,
           minTickSpacing: options.minTickSpacing,

@@ -9,10 +9,15 @@ import { expandFor } from "./range";
  * onto a captured value would go stale.
  */
 export interface XViewportOptions {
-  rightOffset?: number;
+  rightOffset: number;
+  /**
+   * These two stay optional — a computed default: the coordinate system's
+   * `barSpacingDefaults` fills them at the single read site (`clampSpan`),
+   * and `0` carries the meaning "no limit in that direction".
+   */
   minBarSpacing?: number;
   maxBarSpacing?: number;
-  shiftVisibleRangeOnNewBar?: boolean;
+  shiftVisibleRangeOnNewBar: boolean;
 }
 
 export interface XViewportDeps {
@@ -135,7 +140,7 @@ export class XViewport {
      * range is a programmatic call and must not fail — if padding can't be
      * given, it shows the whole range without padding instead.
      */
-    const offset = this.deps.options().rightOffset ?? 0;
+    const offset = this.deps.options().rightOffset;
     const domainMin = this.deps.x.toDomain(min);
     const domainMax = this.deps.x.toDomain(max) + offset;
 
@@ -181,7 +186,7 @@ export class XViewport {
      * distance is shifted. Doesn't shift at all if we're already looking
      * deep into the future (`max ≥ target`).
      */
-    const offset = this.deps.options().rightOffset ?? 0;
+    const offset = this.deps.options().rightOffset;
     const target = this.deps.x.toDomain(range.max) + offset;
     if (max >= target) return;
 
@@ -209,7 +214,7 @@ export class XViewport {
     }
 
     const [min, max] = this.deps.scale.getDomain();
-    const offset = this.deps.options().rightOffset ?? 0;
+    const offset = this.deps.options().rightOffset;
     const newMax = this.deps.x.toDomain(range.max) + offset;
     this.setDomain(newMax - (max - min), newMax);
   }

@@ -73,6 +73,9 @@ export type {
   PlotConfig,
   PlotDeps,
   PlotOptionsPatch,
+  ResolvedPlotConfig,
+  ResolvedXAxisOptions,
+  ResolvedYAxisOptions,
   XAxisOptions,
   YAxisOptions,
 } from "./types";
