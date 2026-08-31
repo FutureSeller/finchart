@@ -32,7 +32,7 @@ const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * regardless of which interface declared it.
  */
 const INHERITED: Record<string, string> = {
-  PluginApi: "../../core/src/plot/plugin.ts",
+  PluginApi: "../../core/src/primitives/plugin.ts",
 };
 
 /** Pulls member names out of an interface body -- good enough for our declarations, which don't nest. */

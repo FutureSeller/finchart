@@ -1,13 +1,15 @@
 /** A collection of regression checks for bugs review caught by actually measuring. */
 import { describe, expect, it, vi } from "vitest";
-import { createPlotModel, frameScheduler, pluginApi } from "../index";
+import { createPlotModel } from "../index";
+import { frameScheduler } from "../../render";
+import { pluginApi } from "../../primitives";
 import {
   addDecoration,
   emptyDecorations,
   forEachAboveSeries,
 } from "../decoration";
 import { lineSeries } from "../../series";
-import { seriesSpec } from "../pane";
+import { seriesSpec } from "../../registration";
 import { priceFormat } from "../../axis/price-format";
 
 const DATA = [

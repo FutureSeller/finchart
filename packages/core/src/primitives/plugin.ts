@@ -1,4 +1,5 @@
-import { ContractError, describe } from "../primitives";
+import { ContractError } from "./errors";
+import { describe } from "./guards";
 
 /**
  * Wraps an extension into one unit. Instead of the user hand-assembling and

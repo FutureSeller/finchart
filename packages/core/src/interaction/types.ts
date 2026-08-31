@@ -64,3 +64,20 @@ export interface InteractionHandler {
   handleZoom(factor: number, center: number): void;
   handleCrosshair(position: Point): void;
 }
+
+/**
+ * What a keyboard contestant holds after registering with the chart
+ * (`FocusAreaHost.claimFocusArea`).
+ */
+export interface FocusClaim {
+  /**
+   * Whether this point is claimed by some other contestant, **not this
+   * one.** A spot nobody contests (an axis, margin, or a pane with no
+   * toolbox) is `false`. **Never throws here even if someone else's
+   * `areaOf` throws or returns garbage** — that extension is simply
+   * treated as not contesting.
+   */
+  contestedAt(point: Point): boolean;
+  /** Safe to call twice. */
+  release(): void;
+}

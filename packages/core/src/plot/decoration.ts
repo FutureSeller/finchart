@@ -8,7 +8,7 @@ import type { AxisBadge, Tick } from "../axis";
 import type { PlotArea } from "../primitives";
 import type { StyleReader, DrawTarget } from "../render";
 import type { Scale, XMapping } from "../scale";
-import type { ValueFormat } from "./format";
+import type { ValueFormat } from "../axis";
 import type { PaneApi } from "./pane";
 
 /**
@@ -227,4 +227,32 @@ export function forEachAboveSeries<D>(
     if (entry.zIndex >= SERIES_Z) visit(entry.decoration);
     if (list[at] !== entry) at--;
   }
+}
+
+/**
+ * Mounts a decoration and hands back an **idempotent** remover — the
+ * unsubscribe-function convention across this repo (`Pane.subscribe`,
+ * `Plot.on`, `FocusClaim.release`, `claimCursor` all carry their own flag).
+ *
+ * `changed` runs once on mount and once on the first removal. The inner
+ * `remove` is idempotent on its own, but the notification sits outside it,
+ * so an effect cleanup running twice used to give every subscriber a
+ * phantom frame.
+ */
+export function mountDecoration<D>(
+  list: DecorationList<D>,
+  decoration: D,
+  options: DecorationOptions,
+  changed: () => void,
+): () => void {
+  const remove = addDecoration(list, decoration, options);
+  changed();
+
+  let off = false;
+  return () => {
+    if (off) return;
+    off = true;
+    remove();
+    changed();
+  };
 }

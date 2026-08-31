@@ -19,7 +19,7 @@
  * payload gets built when nobody's listening.
  */
 
-import { runAll, throwable } from "../primitives";
+import { runAll, throwable } from "./errors";
 
 /** The listen-only side of a value stream. This is the face extensions expose on their API. */
 export interface Observable<T> {
@@ -38,7 +38,8 @@ export interface Emitter<T> extends Observable<T> {
   readonly size: number;
 }
 
-export function emitter<T>(): Emitter<T> {
+/** `who` names the failing side in the thrown message — "a subscriber" unless the owner says otherwise. */
+export function emitter<T>(who = "a subscriber"): Emitter<T> {
   const listeners: ((value: T) => void)[] = [];
 
   return {
@@ -62,7 +63,7 @@ export function emitter<T>(): Emitter<T> {
        * that subscribes mid-emit isn't called this round.
        */
       const failures = runAll(listeners.slice(), (listener) => listener(value));
-      if (failures) throw throwable(failures, "a subscriber threw");
+      if (failures) throw throwable(failures, `${who} threw`);
     },
 
     get size() {

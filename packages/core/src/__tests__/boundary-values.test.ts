@@ -274,7 +274,7 @@ describe("chokepoint 2 — Plot options' numeric doors", () => {
   it("should account for every declared numeric option", () => {
     const dir = dirname(fileURLToPath(import.meta.url));
     const types = readFileSync(resolve(dir, "../plot/types.ts"), "utf8");
-    const paneSource = readFileSync(resolve(dir, "../plot/pane.ts"), "utf8");
+    const paneSource = readFileSync(resolve(dir, "../plot/pane-options.ts"), "utf8");
 
     const declared = [
       ...declaredNumberFields(types, "PlotOptionsPatch"),

@@ -9,7 +9,7 @@ import { ContractError } from "../../primitives";
 import { lineSeries } from "../../series";
 import { crosshair } from "../../extensions/crosshair";
 import { paneMaximize } from "../../extensions/pane-maximize";
-import { pluginApi, teardown, type Plugin, type PluginApi } from "../plugin";
+import { pluginApi, teardown, type Plugin, type PluginApi } from "../../primitives";
 import type {
   DecorationHost,
   InputHost,

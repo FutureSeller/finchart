@@ -67,7 +67,7 @@ export const CODE_LOCKS: readonly {
   },
   { file: "packages/tools/README.md", contains: MOUNT_LINE, compiledIn: COPIES },
   { file: "packages/core/src/plot/pane.ts", contains: MOUNT_LINE, compiledIn: COPIES },
-  { file: "packages/core/src/plot/emitter.ts", contains: MOUNT_LINE, compiledIn: COPIES },
+  { file: "packages/core/src/primitives/emitter.ts", contains: MOUNT_LINE, compiledIn: COPIES },
   { file: "apps/docs/guide/interaction.md", contains: MOUNT_LINE, compiledIn: COPIES },
   // The stage-layer example uses `pane.use` -- a different shape, not
   // the same line.

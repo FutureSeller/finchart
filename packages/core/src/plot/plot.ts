@@ -1,13 +1,6 @@
+import { labelFont, type AxisLabelRenderer } from "../axis";
 import {
-  labelFont,
-  type AxisBadge,
-  type AxisLabelRenderer,
-  type Tick,
-} from "../axis";
-import {
-  contains,
   ContractError,
-  definedOnly,
   plotAreaOf,
   RenderError,
   requireFinite,
@@ -15,8 +8,6 @@ import {
   requireNonNegative,
   requireObject,
   requirePoint,
-  describe,
-  runAll,
   throwable,
   createScope,
   type PlotArea,
@@ -32,7 +23,6 @@ import {
   type InteractionTarget,
 } from "../interaction";
 import {
-  resolveStyle,
   type ChartLayers,
   type StyleReader,
   type Renderer,
@@ -56,44 +46,35 @@ import type {
   ViewportControl,
   XCoordinates,
 } from "./capabilities";
-import type {
-  DecorationOptions,
-  PlotDecoration,
-  PlotDecorationContext,
-} from "./decoration";
-import {
-  addDecoration,
-  BELOW_SERIES,
-  emptyDecorations,
-  forEachAboveSeries,
-  forEachBelowSeries,
-} from "./decoration";
+import type { DecorationOptions, PlotDecoration } from "./decoration";
+import { BELOW_SERIES, emptyDecorations, mountDecoration } from "./decoration";
 import { gridDecoration } from "./grid";
-import type { DividerRenderer } from "./dividers";
-import { DEFAULT_X_FORMAT } from "./format";
-import { layoutFrame, type Frame, type PaneTicks } from "./frame";
-import type { AxisSlices } from "./layout";
-import type { SeriesId, SeriesRegistration } from "./entry";
+import { clampDividerDrag, type DividerRenderer } from "./dividers";
 import {
-  Pane,
-  type PaneApi,
-  type PaneChange,
-  type PaneOptions,
-  type SeriesHandle,
-} from "./pane";
-import { install } from "./plugin";
-import type { Plugin, PluginApi } from "./plugin";
-import { unionOf } from "./range";
-import { immediateScheduler, type RenderScheduler } from "./scheduler";
-import { PLOT_STYLE_SPEC } from "./style";
+  checkPlotNumbers,
+  checkViewportSize,
+  copyConfig,
+  mergeOptions,
+  type ViewportDimensions,
+} from "./config";
+import { cursorClaims, type CursorClaims, focusClaims } from "../interaction";
+import { eventChannel } from "../primitives";
+import type { CrosshairPayload, PlotEvents } from "./events";
+import { DEFAULT_X_FORMAT } from "../axis";
+import { layoutFrame, type Frame } from "./frame";
+import type { AxisSlices } from "./layout";
+import type { SeriesId, SeriesRegistration } from "../registration";
+import type { PaneApi, PaneChange } from "./pane";
+import type { PaneOptions } from "./pane-options";
+import type { SeriesHandle } from "./series-handle";
+import { PaneStack } from "./panes";
+import { paintFrame, type PaintStage } from "./painter";
+import { install } from "../primitives";
+import type { Plugin, PluginApi } from "../primitives";
+import { immediateScheduler, type RenderScheduler } from "../render";
 import { applyPaneState, matchPaneState, paneStateOf, type ChartState } from "./state";
 import { XViewport } from "./x-viewport";
 import type { PlotConfig, PlotDeps, PlotOptionsPatch } from "./types";
-
-export interface ViewportDimensions {
-  width: number;
-  height: number;
-}
 
 /**
  * What it takes to stand up a `Plot`.
@@ -140,235 +121,6 @@ export interface PlotOptions {
 }
 
 /**
- * Where on the chart the cursor is pointing.
- *
- * x is shared by every pane, but the value differs per pane, so you need to
- * know which pane the cursor is over before a tooltip can show the right
- * number.
- */
-export interface CrosshairPayload {
-  /** Screen coordinates. */
-  position: Point;
-  /**
-   * The **data x** under the cursor. Same regardless of pane.
-   *
-   * Even in bar-index coordinates this is x, not an index — what a
-   * subscriber (a tooltip) should show is time, not a bar number. Between
-   * bars this is a linear interpolation between the neighboring bars' x.
-   */
-  x: number;
-  /** The pane the cursor is over. null if it's over padding or a pane gap. */
-  pane: PaneApi | null;
-  /** That pane's value. null if pane is null. */
-  value: number | null;
-}
-
-/**
- * The visible x range changed.
- *
- * The y domain isn't reported — that follows the series, it isn't something
- * the user moved.
- */
-export interface XDomainChangePayload {
-  /**
-   * The range currently visible, **in data x**. Not an index even in
-   * bar-index coordinates — it has to share units with `dataRange` so a
-   * subscriber can measure "how close to the end."
-   */
-  startX: number;
-  endX: number;
-  /**
-   * The x range of the data held. The reference for measuring closeness to
-   * the end. null if there's no data.
-   */
-  dataRange: Range | null;
-}
-
-export interface PlotEvents {
-  /**
-   * A piece of view state (`ChartState`) changed. The payload is the whole
-   * new snapshot — rather than growing one event per piece, it's collected
-   * into one. Whatever's mirroring it (URL persistence, undo, chart sync)
-   * wants the whole thing anyway.
-   *
-   * **Synchronous** — state changes synchronously. During a drag
-   * it fires on every pointermove, so if persisting is expensive, the
-   * listener should debounce it.
-   *
-   * Doesn't fire on data changes (append/prepend) — data isn't state.
-   */
-  stateChange: ChartState;
-  /**
-   * A frame finished drawing. **No payload.**
-   *
-   * It used to carry `{ dataPoints }`, but that value was **the source's
-   * visible point count**, so it didn't count what derived series drew —
-   * stacking on four indicators gave the same number. Fixing it would mean
-   * the drawing path counts, and the only place that wants the count is
-   * benchmarks — **and a benchmark can count more accurately by wrapping the
-   * renderer** (the commands actually issued). The core has no reason to
-   * count every frame.
-   */
-  render: Record<string, never>;
-  crosshair: CrosshairPayload;
-  /** Click set — the payload is the same shape as crosshair. */
-  click: CrosshairPayload;
-  dblclick: CrosshairPayload;
-  contextmenu: CrosshairPayload;
-  xDomainChange: XDomainChangePayload;
-}
-
-type EventName = keyof PlotEvents;
-type EventHandler<E extends EventName> = (payload: PlotEvents[E]) => void;
-
-/**
- * A store that doesn't lose the pairing between event name and payload.
- *
- * A single `Map<EventName, ...>` would make the value type the union of
- * every payload, so the compiler couldn't catch "a crosshair handler where
- * render belongs." Keeping a separate array per name keeps the pairing in
- * the type.
- *
- * It's an array because the same function can be registered twice — then
- * there are two unsubscribe functions, and each removes one. A `Set` would
- * let both point at the same entry, so removing one would remove both.
- */
-type ListenerStore = {
-  [E in EventName]?: EventHandler<E>[];
-};
-
-/**
- * The door for the chart's size (zero trust).
- *
- * `setViewport` guards with `requireNonNegative`, but **the constructor
- * didn't.** The conformance table's (`boundary-values.test.ts`)
- * `GUARDED.Plot` **declared** that *"the constructor becomes dimensions and
- * a domain,"* which made that omission false on its own terms.
- *
- * Why this spot stings more under zero trust: **`width` comes out of layout
- * arithmetic.** A container width minus a sidebar going negative mid-transition
- * isn't a programmer mistake, it's an ordinary frame. And `@finchart/react`
- * sends dimensions through **the constructor at mount, `setViewport`
- * afterward** (`use-chart.ts`), so with only one of the two guarded, **the
- * same value behaves differently depending on when it arrives.**
- *
- * **Negative is rejected; zero is not** — the note inside the function says
- * why zero has to stay legal. `setViewport` ignores degenerate dimensions (it
- * skips the render), but there the values come from `ResizeObserver`, whereas
- * here the consumer is standing a chart up for the first time.
- */
-function checkViewportSize(size: ViewportDimensions): void {
-  if (typeof size !== "object" || size === null) {
-    throw new ContractError(
-      `size must be a { width, height } object, got ${size === null ? "null" : typeof size}`,
-    );
-  }
-  /**
-   * **Zero is not rejected.**
-   *
-   * An earlier version of this guard wrote it as `requirePositive`, then
-   * reverted that. `setViewport` uses `requireNonNegative` and accepts 0; if
-   * only the constructor threw, **"the same value behaves differently depending on
-   * when it arrives"** — the very reason this door was opened — would still
-   * hold, and one side would get worse: with `<Chart width={measured}>`, the
-   * first paint, a `display: none` tab, or an unresolved flex all leave
-   * `measured === 0`, and then **mounting dies with a ContractError.**
-   * Yesterday an empty chart drew and recovered on the next resize.
-   *
-   * The same rule that governs `zoomSpeed` applies here unchanged —
-   * *"a guard on a value with no meaning is free whenever you add it, a
-   * guard on a value that has meaning is only free before release."*
-   * `width: 0` has a meaning today: **"layout hasn't happened yet."**
-   * Negative has no meaning, so it stays rejected.
-   */
-  requireNonNegative(size.width, "size width");
-  requireNonNegative(size.height, "size height");
-}
-
-/**
- * The numeric door for the chart's options, closed the rest of the way after
- * `checkPaneNumbers` guarded only the pane side.
- *
- * That left **only one of the two sibling option objects covered**, and the
- * conformance table marked `Plot` as covered — true for `setViewport` but
- * false for `applyOptions`. The exact same shape as the sibling-field accident caught
- * in `state.ts` recurred here, inside the machinery meant to catch it.
- *
- * The amplifier each field is wired to:
- *
- * - `padding`, `paneGap` — **amplifies.** These are terms in layout
- *   arithmetic, so `NaN` propagates all the way to canvas dimensions.
- * - `rightOffset` — **delays.** It sits in config until the next refit
- *   (`fitDomains`, or first data), becomes a domain, and blows up there with
- *   `ContractError: domain max ...`. Since the error comes from the scale,
- *   **the consumer has no way to know a settings-panel slider is what killed
- *   data loading.**
- * - `minBarSpacing`, `maxBarSpacing` — **delays.** `x-viewport.ts:354-355`
- *   writes `minBarSpacing ? …`, so `NaN` is swallowed as falsy and **silently
- *   becomes "no limit."** Worse for not throwing — the consumer never learns
- *   why the zoom limit they set isn't taking effect.
- *
- * **Only finiteness is checked.** Rejecting negatives has no basis yet —
- * that would break something that currently works, so it waits for a real
- * consumer to force the call.
- */
-function checkPlotNumbers(options: PlotOptionsPatch): void {
-  const { padding, paneGap, rightOffset, minBarSpacing, maxBarSpacing, axis } =
-    options;
-
-  if (padding) {
-    for (const side of ["top", "right", "bottom", "left"] as const) {
-      const value = padding[side];
-      if (value !== undefined) requireFinite(value, `padding ${side}`);
-    }
-  }
-  // A negative gap has no meaning and is harmful — `distributeHeights` hands
-  // out vertical space that doesn't exist, so panes overlap (measured: 800×600,
-  // 2 panes, `paneGap: -200` produces a 200px overlap), and the boundary line
-  // and drag handle land somewhere that's the edge of neither pane. Rejecting
-  // a meaningless negative here is the same line drawn for `flex`,
-  // `minHeight`, and `valuePadding`.
-  if (paneGap !== undefined) requireNonNegative(paneGap, "paneGap");
-  if (rightOffset !== undefined) requireFinite(rightOffset, "rightOffset");
-  if (minBarSpacing !== undefined) {
-    requireFinite(minBarSpacing, "minBarSpacing");
-  }
-  if (maxBarSpacing !== undefined) {
-    requireFinite(maxBarSpacing, "maxBarSpacing");
-  }
-
-  /**
-   * **A nested spot is a door too.**
-   *
-   * That guard only checked the flat five — because the review reported
-   * five symptoms, **not because the type happens to have five numeric
-   * fields.** `axis.y.size` sits in `this.config` and becomes axis width
-   * during layout, which is exactly "delayed," and at `Infinity` the data
-   * area gets squeezed to zero width, so **commands drop to zero** — no
-   * throw, the chart just goes permanently blank. The path there is one
-   * documented prop: `<YAxis size={n} />` in `@finchart/react` (`axes.tsx`).
-   *
-   * `style.grid.width` is **deliberately not checked** — canvas ignores
-   * `lineWidth` on the shape it's drawing a metaphor for, by spec, so there's
-   * no amplifier. That judgment is recorded, with its reason, in
-   * `boundary-values.test.ts`'s `EXEMPT_DOORS`, and any new numeric field not
-   * listed there is caught by the test.
-   */
-  for (const [side, options] of [
-    ["x", axis?.x],
-    ["y", axis?.y],
-  ] as const) {
-    if (!options) continue;
-    if (options.size !== undefined) {
-      requireFinite(options.size, `axis ${side} size`);
-    }
-    if (options.minTickSpacing !== undefined) {
-      requireFinite(options.minTickSpacing, `axis ${side} minTickSpacing`);
-    }
-  }
-}
-
-/**
  * The chart. Owns the layers, scales, grid, and interaction.
  *
  * Data representation belongs to `Series`, swapped out with `setSeries`.
@@ -381,105 +133,6 @@ function checkPlotNumbers(options: PlotOptionsPatch): void {
  * chart lend out" (see `capabilities.ts`). The compiler keeps the pairing
  * honest.
  */
-interface FocusEntry {
-  readonly areaOf: () => PlotArea | null;
-}
-
-/**
- * Reads someone else's `areaOf` **safely**.
- *
- * Three things are absorbed here — all three measured in the wild:
- *
- * - **It throws**: a defect in someone else's extension blew up right where
- *   this calls `contestedAt`, killing the entire drawing-tools keyboard
- *   path. Treated as unable to contest.
- * - **Wrong shape**: `claimFocusArea` only checked that its argument was a
- *   function and nobody looked at the return value. The exact raw
- *   `TypeError` that was eliminated from the five coordinate doors
- *   showed up again, **in a neighbor's hands.**
- * - **Degenerate area**: a zero-width vertical line (`x == left == right`)
- *   contests its entire x — it's the only line where `x >= left && x <=
- *   right` is true. (An earlier line of reasoning here — *"`EMPTY_AREA` lets
- *   (0,0) through"* — was false: `containsFocus`'s bottom edge is exclusive,
- *   so it never passed through to begin with. That was corrected.) Both
- *   siblings (`insideArea` in `tools.ts`, and `hit.ts`) already had this
- *   guard — only this third copy was missing it.
- */
-function focusAreaOf(entry: FocusEntry): PlotArea | null {
-  let area: unknown;
-  try {
-    area = entry.areaOf();
-  } catch {
-    return null;
-  }
-  if (typeof area !== "object" || area === null) return null;
-  const left = Reflect.get(area, "left");
-  const right = Reflect.get(area, "right");
-  const top = Reflect.get(area, "top");
-  const bottom = Reflect.get(area, "bottom");
-  if (
-    typeof left !== "number" ||
-    typeof right !== "number" ||
-    typeof top !== "number" ||
-    typeof bottom !== "number" ||
-    !Number.isFinite(left) ||
-    !Number.isFinite(right) ||
-    !Number.isFinite(top) ||
-    !Number.isFinite(bottom)
-  ) {
-    return null;
-  }
-  // A degenerate area contests nothing.
-  if (right <= left || bottom <= top) return null;
-  return { left, right, top, bottom };
-}
-
-/**
- * **The bottom edge doesn't count** — panes sit flush against each other
- * vertically, so including both ends would make the 1px boundary line
- * **belong to both panes**, with the winner decided by registration order
- * (measured: `main {8,302}`, `ind {302,596}`, both claiming `y=302`). A
- * verdict that claims to be exclusive can't have a
- * point that isn't.
- *
- * `contains`, used for hit testing, is left alone — there, including both
- * ends is correct (`geometry.ts`: *"on the boundary counts as inside — every
- * hit test follows this rule"*).
- */
-function containsFocus(area: PlotArea, point: Point): boolean {
-  return (
-    point.x >= area.left &&
-    point.x <= area.right &&
-    point.y >= area.top &&
-    point.y < area.bottom
-  );
-}
-
-/**
- * A config with no object shared with its source. Used at both doors that
- * cross the ownership line — taking one in (constructor) and handing one
- * out (`getOptions`) — so neither side can reach the chart's internals
- * through a nested object it still holds. There are only three nested
- * spots (padding, axis, style), so they're copied by hand — structured
- * cloning (`structuredClone`) throws on fields holding functions, like
- * `format` and `ticks`.
- */
-function copyConfig(config: PlotConfig): PlotConfig {
-  const { padding, axis, style } = config;
-  const copy: PlotConfig = { ...config, padding: { ...padding } };
-
-  if (axis) {
-    copy.axis = {};
-    if (axis.x) copy.axis.x = { ...axis.x };
-    if (axis.y) copy.axis.y = { ...axis.y };
-  }
-  if (style) {
-    copy.style = style.grid ? { grid: { ...style.grid } } : {};
-  }
-
-  return copy;
-}
-
 export class Plot
   implements
     InteractionTarget,
@@ -502,7 +155,8 @@ export class Plot
     FocusAreaHost,
     PluginHost<Plot>
 {
-  private listeners: ListenerStore = {};
+  /** What the chart announces → `events.ts`. Cleared first on destroy. */
+  private readonly events = eventChannel<PlotEvents>();
   private readonly scheduler: RenderScheduler;
   private readonly layers: ChartLayers;
   private readonly renderer: Renderer;
@@ -512,8 +166,6 @@ export class Plot
   private readonly measurer: TextMeasurer | null;
   /** null unless supplied. Pane heights are then set by flex alone. */
   private readonly dividers: DividerRenderer | null;
-
-  private readonly paneList: Pane[] = [];
 
   /**
    * The default pane that holds series. Always exists.
@@ -525,11 +177,14 @@ export class Plot
    * (`setArea`, `draw`, …) belongs to the chart → `PaneApi`
    */
   get mainPane(): PaneApi {
-    return this.paneList[0];
+    return this.paneStack.main;
   }
 
-  /** Per-pane unsubscribe functions. Run when a pane is removed or destroyed. */
-  private readonly unwatch = new Map<PaneApi, () => void>();
+  /**
+   * The pane list and its two doors. The main pane is born there; the
+   * decision a pane change triggers stays here (`onPaneChange`) → `panes.ts`
+   */
+  private readonly paneStack: PaneStack;
   private readonly decorations = emptyDecorations<PlotDecoration>();
 
   /**
@@ -580,6 +235,13 @@ export class Plot
    */
   private readonly xViewport: XViewport;
 
+  /**
+   * What the painter is lent — built once, after the collaborators above
+   * exist. The pane list and `decorations` go in as the live references, so
+   * no frame has to rebuild this → `painter.ts`
+   */
+  private readonly stage: PaintStage;
+
   private config: PlotConfig;
 
   constructor(options: PlotOptions) {
@@ -621,6 +283,9 @@ export class Plot
     );
     this.layers = deps.createLayers(size.width, size.height);
     this.scope.add(() => this.layers.destroy());
+    // Read through `this.layers` on each transition rather than detaching
+    // `setCursor` — a layer written as a class keeps its receiver that way.
+    this.cursor = cursorClaims((cursor) => this.layers.setCursor?.(cursor));
     this.renderer = deps.createRenderer(this.layers.data);
     // Not a release — the last frame is erased so a still-mounted canvas
     // doesn't keep showing a dead chart. Runs before layers go (reverse order).
@@ -645,6 +310,21 @@ export class Plot
 
     this.xScale = deps.xScale();
     this.x = (deps.createXMapping ?? continuousX)(this.xScale);
+    this.paneStack = new PaneStack(deps.mainPaneYScale(), {
+      createDataManager: deps.createDataManager,
+      yAxisOptions: () => this.config.axis?.y,
+      onCreate: (pane) => this.addGrid(pane),
+      onChange: (change) => this.onPaneChange(change),
+    });
+    this.stage = {
+      renderer: this.renderer,
+      axisLabels: this.axisLabels,
+      dividers: this.dividers,
+      decorations: this.decorations,
+      panes: this.paneStack.list,
+      x: this.x,
+      formatX: this.formatX,
+    };
     this.xViewport = new XViewport({
       scale: this.xScale,
       x: this.x,
@@ -664,8 +344,8 @@ export class Plot
          * frame). On a high-polling-rate trackpad this fires more
          * often than frames do.
          */
-        if (!this.listeners.xDomainChange?.length) return;
-        this.emit("xDomainChange", {
+        if (!this.events.has("xDomainChange")) return;
+        this.events.emit("xDomainChange", {
           ...visible,
           // Series decide "empty means null" themselves — Plot doesn't
           // second-guess it.
@@ -673,16 +353,6 @@ export class Plot
         });
       },
     });
-    const main = new Pane(
-      deps.mainPaneYScale(),
-      deps.createDataManager,
-      {},
-      () => this.config.axis?.y,
-      (key) => this.assertPaneStateKeyAvailable(key),
-    );
-    this.addGrid(main);
-    this.watch(main);
-    this.paneList.push(main);
 
     // The chart always starts empty — series only arrive through addSeries
     // (see PlotOptions). When the first data arrives, onPaneChange fits x,
@@ -733,14 +403,7 @@ export class Plot
    * only doors that change the list are `addPane` and `removePane`.
    */
   get panes(): readonly PaneApi[] {
-    return [...this.paneList];
-  }
-
-  /** State keys are semantic identities, so duplicates would make restoration ambiguous. */
-  private assertPaneStateKeyAvailable(key: string): void {
-    if (this.paneList.some((pane) => pane.stateKey === key)) {
-      throw new ContractError(`Duplicate pane stateKey: "${key}"`);
-    }
+    return [...this.paneStack.list];
   }
 
   /**
@@ -806,17 +469,10 @@ export class Plot
     decoration: PlotDecoration,
     options: DecorationOptions = {},
   ): () => void {
-    const remove = addDecoration(this.decorations, decoration, options);
-    this.scheduleRender();
-
-    // Removal is idempotent — the same convention as `Pane.addDecoration`.
-    let off = false;
-    return () => {
-      if (off) return;
-      off = true;
-      remove();
-      this.scheduleRender();
-    };
+    // Removal is idempotent — the same door `Pane.addDecoration` uses.
+    return mountDecoration(this.decorations, decoration, options, () =>
+      this.scheduleRender(),
+    );
   }
 
   /**
@@ -828,21 +484,6 @@ export class Plot
    */
   requestRender(): void {
     this.scheduleRender();
-  }
-
-  /**
-   * Starts listening for a pane's changes. The unsubscribe function is held
-   * onto and used when the pane is removed.
-   *
-   * Subscribing starts only after assembly because hooking it up during
-   * construction would run a not-yet-ready render just from mounting the
-   * first series.
-   */
-  private watch(pane: Pane): void {
-    this.unwatch.set(
-      pane,
-      pane.subscribe((change) => this.onPaneChange(change)),
-    );
   }
 
   /**
@@ -914,7 +555,7 @@ export class Plot
    */
   private rebuildX(): void {
     if (!this.x.rebuild) return;
-    this.x.rebuild(this.paneList.flatMap((pane) => pane.xValuesPerSeries()));
+    this.x.rebuild(this.paneStack.xValuesPerSeries());
     // Place is derived from the index, so it goes stale on rebuild — the
     // invalidation key for the place cache.
     this.xEpoch += 1;
@@ -935,9 +576,9 @@ export class Plot
     /**
      * **No standing up a pane in a graveyard.**
      * `Pane.detached` is the same door raised for `use`, and it prevents the
-     * same leak — a pane created here goes into `paneList`, and `watch`
-     * stores its subscription in `unwatch`, but `destroy()` has already
-     * cleared that map and **won't run again.** That pane's `detached` is
+     * same leak — a pane created here goes into the stack with its
+     * subscription, but `destroy()` has already torn the stack down and
+     * **won't run again.** That pane's `detached` is
      * false, so `pane.use(plugin)` works, and nobody ever calls that
      * extension's `dispose`.
      *
@@ -951,17 +592,7 @@ export class Plot
       throw new ContractError("cannot add a pane to a destroyed Plot");
     }
 
-    const pane = new Pane(
-      options.yScale ?? new LinearScale(),
-      this.deps.createDataManager,
-      options,
-      () => this.config.axis?.y,
-      (key) => this.assertPaneStateKeyAvailable(key),
-    );
-
-    this.addGrid(pane);
-    this.paneList.push(pane);
-    this.watch(pane);
+    const pane = this.paneStack.add(options.yScale ?? new LinearScale(), options);
     // The state's panes array grew by one — keyed panes match semantically
     // and legacy panes by index, so a shape change is state too.
     this.emitStateChange();
@@ -973,45 +604,12 @@ export class Plot
   /** mainPane always survives — otherwise series would have nowhere to go. */
   removePane(pane: PaneApi): void {
     requireObject(pane, "removePane(pane)");
-    if (pane === this.mainPane) {
-      throw new ContractError("mainPane cannot be removed");
-    }
 
-    const at = (): number =>
-      this.paneList.findIndex((candidate) => candidate === pane);
+    // Extensions are cleaned up first and removal finishes even if one of
+    // them throws — and survives one of them removing a neighbor → `PaneStack.remove`
+    const failures = this.paneStack.remove(pane);
+    if (failures === null) return;
 
-    const target = this.paneList.find((candidate) => candidate === pane);
-    if (!target) return;
-
-    /**
-     * **Clean up its attached extensions first.** Skipping this leaves
-     * decorations and input consumers still hanging off a pane whose
-     * toolbox has fallen away — nowhere on screen, but still in the list.
-     *
-     * Failures are collected and pane removal still finishes — a pane left
-     * half-attached because one extension threw would be worse.
-     */
-    const failures = target.detach();
-
-    /**
-     * **The index is looked up again after cleanup finishes.** The
-     * `detach()` above runs someone else's code synchronously (an
-     * extension's `dispose`), and that code **can call `removePane` again**
-     * — MACD removing its own pane is exactly that shape (`disposeOwned` in
-     * `indicators`), and `destroy()`, 80 lines below, guards against the
-     * same risk by copying the list first.
-     *
-     * Using the index captured earlier would, once the inner removal has
-     * pulled the array up from underneath, **remove the wrong pane.**
-     * Measured: in `[main, a, b]`, if b's extension removes a, `splice(2,1)`
-     * hits nothing and b stays in the list — its subscription is already
-     * gone and `detached` is true, but layout keeps giving it space and
-     * rendering keeps drawing it.
-     */
-    const index = at();
-    if (index !== -1) this.paneList.splice(index, 1);
-    this.unwatch.get(pane)?.();
-    this.unwatch.delete(pane);
     // Unsubscribing happened first, so the pane side won't report in —
     // recount directly.
     this.rebuildX();
@@ -1144,7 +742,7 @@ export class Plot
     // An explicit refit also refits a manual value range — "make everything
     // visible" is the request. This is where it diverges from the path data
     // changes take (fitValueDomain).
-    for (const pane of this.paneList) {
+    for (const pane of this.paneStack.list) {
       pane.fitValueDomain();
     }
     this.scheduleRender();
@@ -1197,49 +795,10 @@ export class Plot
     // the destructuring below under someone else's name.
     requireObject(options, "applyOptions(options)");
     checkPlotNumbers(options);
-    const { padding, axis, style, ...flat } = options;
 
-    /**
-     * **An explicit `undefined` means "not given"** — `setViewport` (50
-     * lines below) already answers this question for its own options, but
-     * this sibling was still left as a spread. A spread
-     * treats `undefined` as a value too, erasing a config that was actually
-     * set.
-     *
-     * And this door's consumers call it exactly that way — a wrapper's
-     * optional prop arrives as `undefined` when not given. Measured:
-     * `applyOptions({ showGrid: props.showGrid })` with no prop makes
-     * `config.showGrid` `undefined`, and `gridDecoration`'s `if (!show)
-     * return` turns the grid off **permanently.**
-     * `shiftVisibleRangeOnNewBar: undefined` silently kills following
-     * real-time, and `paneGap: undefined` slides past `?? 0` and silently
-     * kills a gap the user set. `checkPlotNumbers` sits entirely behind
-     * `!== undefined` checks, so none of this is caught there.
-     *
-     * **`padding` is the same door** — `PlotOptionsPatch.padding` states
-     * itself that *"only the given sides change,"* and the spread didn't
-     * keep that promise. And amplification is fastest here:
-     * `applyOptions({padding:{left:props.x}})` with no prop makes
-     * `plotAreaOf` produce `left: undefined`, and `sliceAxes` propagates
-     * `NaN`, throwing `ContractError: range start must be a finite number,
-     * got NaN` **inside this very call.**
-     *
-     * `axis` is **deliberately excluded.** There, an explicit `undefined`
-     * has meaning — `<XAxis />` passing along a prop it wasn't given *is*
-     * "revert to the default" (`axes.tsx`), and that's the only way to
-     * clear it.
-     */
-    this.config = {
-      ...this.config,
-      ...definedOnly(flat),
-      padding: { ...this.config.padding, ...definedOnly(padding) },
-      axis: {
-        x: { ...this.config.axis?.x, ...axis?.x },
-        y: { ...this.config.axis?.y, ...axis?.y },
-      },
-      // style is replaced wholesale → PlotOptionsPatch.style
-      style: style ? { grid: style.grid } : this.config.style,
-    };
+    // Which fields merge and which replace, and why an explicit `undefined`
+    // is "not given" everywhere but `axis` → `mergeOptions` in `config.ts`
+    this.config = mergeOptions(this.config, options);
 
     this.scheduleRender();
   }
@@ -1293,30 +852,11 @@ export class Plot
   }
 
   /** Returns an unsubscribe function. Safe to call twice. */
-  on<E extends EventName>(event: E, handler: EventHandler<E>): () => void {
-    // The store type pairs name with payload, but TS narrows push on an
-    // array indexed by a generic key to never. This one line is where that
-    // narrowing limitation is contained — the store type already guarantees
-    // the pairing is actually correct.
-    const handlers = (this.listeners[event] ??= []) as EventHandler<E>[];
-    handlers.push(handler);
-    let off = false;
-
-    return () => {
-      /**
-       * **The flag protects both of these at once.** The same function can
-       * be registered twice (then there are two unsubscribe functions too
-       * → `ListenerStore`), and an unsubscribe function must be safe to
-       * call twice. Without the flag these two promises break each other —
-       * calling the first unsubscribe twice would have `indexOf` **find the
-       * remaining registration instead** and remove both. It only looked
-       * safe when each registration used a distinct closure.
-       */
-      if (off) return;
-      off = true;
-      const index = handlers.indexOf(handler);
-      if (index !== -1) handlers.splice(index, 1);
-    };
+  on<E extends keyof PlotEvents>(
+    event: E,
+    handler: (payload: PlotEvents[E]) => void,
+  ): () => void {
+    return this.events.on(event, handler);
   }
 
   // --- InteractionTarget ---
@@ -1350,13 +890,7 @@ export class Plot
          */
         slices: () =>
           this.config.axisDrag === false ? null : this.lastSlices,
-        paneAt: (y) =>
-          this.paneList.find(
-            // A collapsed pane (zero height) doesn't contest — same rule as
-            // `focusAreaOf`.
-            ({ area }) =>
-              area.bottom > area.top && y >= area.top && y <= area.bottom,
-          ) ?? null,
+        paneAt: (y) => this.paneStack.atY(y),
         zoomAroundCenter: (factor) => {
           const [min, max] = this.xScale.getDomain();
           this.zoom(factor, (min + max) / 2);
@@ -1384,44 +918,18 @@ export class Plot
     return this.inputRouter.add(consumer, options);
   }
 
-  /** Cursor claims — erased by entry identity, not value (two claims can share a shape). */
-  private readonly cursorClaims: { cursor: string }[] = [];
-  /** Extensions contesting the keyboard — `claimFocusArea` fills this, `release` removes from it. */
-  private readonly focusClaims: FocusEntry[] = [];
-  /** The last value applied to the layer — the DOM is only touched when the top of the stack changes. */
-  private appliedCursor: string | null = null;
+  /** Who gets to say what shape the pointer is — built once the layers exist. */
+  private readonly cursor: CursorClaims;
+  /** Extensions contesting the keyboard. */
+  private readonly focus = focusClaims();
 
   /**
    * Claims a cursor shape — this is where a tool's drag, drawing, or axis
-   * hover goes.
-   *
-   * **The later claim wins.** A drag naturally lands on top of a hover, and
-   * releasing it falls back to whatever's underneath (the same direction as
-   * the input stack's "later registration goes first"). A consumer that
-   * changes shape mid-drag must **push the new one before releasing the
-   * old** so the top of the stack never flickers in between.
-   *
-   * Values are plain CSS `cursor` vocabulary — not re-typed as a union.
-   * A headless layer has no cursor to show, so claims still stack, there's
-   * just no screen. Release is idempotent.
+   * hover goes. The later claim wins and release falls back to whatever's
+   * underneath → `cursor-claims.ts`
    */
   claimCursor(cursor: string): () => void {
-    const claim = { cursor };
-    this.cursorClaims.push(claim);
-    this.syncCursor();
-    return () => {
-      const index = this.cursorClaims.indexOf(claim);
-      if (index === -1) return;
-      this.cursorClaims.splice(index, 1);
-      this.syncCursor();
-    };
-  }
-
-  private syncCursor(): void {
-    const top = this.cursorClaims.at(-1)?.cursor ?? null;
-    if (top === this.appliedCursor) return;
-    this.appliedCursor = top;
-    this.layers.setCursor?.(top);
+    return this.cursor.claim(cursor);
   }
 
   /**
@@ -1485,7 +993,7 @@ export class Plot
    * nothing to read.
    */
   crosshair(position: Point): void {
-    this.emit("crosshair", this.pointPayload(position, "crosshair(position)"));
+    this.events.emit("crosshair", this.pointPayload(position, "crosshair(position)"));
   }
 
   /**
@@ -1513,15 +1021,15 @@ export class Plot
 
   /** Click set — the same echo as crosshair, with the same payload shape. */
   click(position: Point): void {
-    this.emit("click", this.pointPayload(position, "click(position)"));
+    this.events.emit("click", this.pointPayload(position, "click(position)"));
   }
 
   doubleClick(position: Point): void {
-    this.emit("dblclick", this.pointPayload(position, "doubleClick(position)"));
+    this.events.emit("dblclick", this.pointPayload(position, "doubleClick(position)"));
   }
 
   contextMenu(position: Point): void {
-    this.emit("contextmenu", this.pointPayload(position, "contextMenu(position)"));
+    this.events.emit("contextmenu", this.pointPayload(position, "contextMenu(position)"));
   }
 
   /**
@@ -1534,7 +1042,7 @@ export class Plot
    */
   private pointPayload(position: Point, door: string): CrosshairPayload {
     const point = requirePoint(position, door);
-    const pane = this.paneAt(point);
+    const pane = this.paneStack.at(point);
     return {
       position: point,
       x: this.x.fromPixel(position.x),
@@ -1543,66 +1051,14 @@ export class Plot
     };
   }
 
-  private paneAt(point: Point): PaneApi | null {
-    return (
-      this.paneList.find(
-        // A degenerate area contests nothing (same rule as `focusAreaOf`).
-        // Without this, the moment the cursor
-        // touches a collapsed pane's zero-height boundary, that pane wins,
-        // and the tooltip reads a value from **an invisible pane's scale.**
-        // The `EMPTY_AREA` before the first render produced a phantom hit
-        // at (0,0) through this same door.
-        ({ area }) =>
-          area.right > area.left &&
-          area.bottom > area.top &&
-          contains(area, point),
-      ) ?? null
-    );
-  }
-
   /**
    * `FocusAreaHost` — the door that separates *"the cursor went to
    * **someone contesting the keyboard**"* from *"it went to no one."*
-   *
-   * An earlier version asked here *"is there anyone with an area."* That let
-   * a claimant with no interest in the keyboard — a legend, a watermark —
-   * kill the toolbox's Delete key (a release blocker).
-   * Registering is now itself the declaration *"I contest the keyboard
-   * too."*
+   * Registering is itself the declaration *"I contest the keyboard too"*
+   * → `focus-claims.ts`
    */
   claimFocusArea(areaOf: () => PlotArea | null): FocusClaim {
-    if (typeof areaOf !== "function") {
-      throw new ContractError(
-        `claimFocusArea(areaOf) must be a function — asked fresh every time since the area changes on resize, got ${describe(areaOf)}`,
-      );
-    }
-
-    const claim: FocusEntry = { areaOf };
-    this.focusClaims.push(claim);
-
-    return {
-      contestedAt: (point) => {
-        const at = requirePoint(point, "contestedAt(point)");
-        /**
-         * **Doesn't use `some`'s short-circuit.** Short-circuiting would
-         * mean an earlier claimant returning true skips calling a later
-         * `areaOf`, so **whether it throws would depend on registration
-         * order.** Everyone is asked so the verdict
-         * never depends on order.
-         */
-        let contested = false;
-        for (const other of this.focusClaims) {
-          if (other === claim) continue;
-          const area = focusAreaOf(other);
-          if (area !== null && containsFocus(area, at)) contested = true;
-        }
-        return contested;
-      },
-      release: () => {
-        const index = this.focusClaims.indexOf(claim);
-        if (index !== -1) this.focusClaims.splice(index, 1);
-      },
-    };
+    return this.focus.claim(areaOf);
   }
 
   // --- state ---
@@ -1622,7 +1078,7 @@ export class Plot
   getState(): ChartState {
     return {
       xDomain: this.xViewport.visibleRange(),
-      panes: this.paneList.map(paneStateOf),
+      panes: this.paneStack.list.map(paneStateOf),
     };
   }
 
@@ -1636,8 +1092,8 @@ export class Plot
       this.stateChangedWhileApplying = true;
       return;
     }
-    if (!this.listeners.stateChange?.length) return;
-    this.emit("stateChange", this.getState());
+    if (!this.events.has("stateChange")) return;
+    this.events.emit("stateChange", this.getState());
   }
 
   /** Coalesces notifications while changing several pieces at once → coalesceState */
@@ -1666,7 +1122,7 @@ export class Plot
      * The emit used to sit **outside** the try/finally, so if `run()` threw
      * partway through, the exception skipped that line. Both consumers are
      * partial-write loops — `applyState`'s `panes.forEach` and divider
-     * drag's `paneList.forEach` — so the panes already applied stay applied
+     * drag's per-pane loop — so the panes already applied stay applied
      * while the mirror hears nothing at all. Not late, **never**: the next
      * `coalesceState` resets the flag to false.
      *
@@ -1761,7 +1217,7 @@ export class Plot
 
     const paneChanges = state.panes === undefined
       ? []
-      : matchPaneState(this.paneList, state.panes);
+      : matchPaneState(this.paneStack.list, state.panes);
 
     this.coalesceState(() => {
       // If there's no data yet, the window holds it as pending and consumes
@@ -1786,7 +1242,7 @@ export class Plot
    * needed.
    */
   private get dataRange(): Range | null {
-    return unionOf(this.paneList.map((pane) => pane.xRange()));
+    return this.paneStack.xRange();
   }
 
   /**
@@ -1798,7 +1254,7 @@ export class Plot
    * it's on, the value domain isn't state — it's derived.**
    */
   private trackVisibleValues(viewport: Viewport): void {
-    for (const pane of this.paneList) {
+    for (const pane of this.paneStack.list) {
       if (pane.autoScale) pane.fitValueDomain(viewport);
     }
   }
@@ -1815,7 +1271,7 @@ export class Plot
     const { measurer } = this;
     const frame = layoutFrame({
       area: this.area,
-      panes: this.paneList,
+      panes: this.paneStack.list,
       gap: this.config.paneGap ?? 0,
       axis: this.config.axis ?? {},
       xScale: this.xScale,
@@ -1940,7 +1396,7 @@ export class Plot
       this.dividers?.clear();
       this.axisLabels?.clear();
       this.renderer.commit();
-      this.emit("render", {});
+      this.events.emit("render", {});
       return;
     }
 
@@ -2016,256 +1472,14 @@ export class Plot
     if (frame === null) {
       this.axisLabels?.clear();
       this.renderer.commit();
-      this.emit("render", {});
+      this.events.emit("render", {});
       return;
     }
 
-    const { slices, ticks } = frame;
-    this.drawDividers();
-
-    /**
-     * Plot decorations wrap the pane loop.
-     *
-     * "Plot-owned things sit outside, pane-owned things sit close to the
-     * data" isn't a rule set separately — it's a consequence of this
-     * nesting.
-     */
-    const decorationContext: PlotDecorationContext = {
-      // The draw area after the axes have taken their space — decorations
-      // don't cover the axis slices.
-      area: slices.data,
-      x: this.x,
-      panes: this.paneList,
-      ticks: { x: ticks.x },
-      readStyle,
-      formatX: this.formatX,
-    };
-
-    /**
-     * **The boundary of the drawing is set right here.** Neither series nor
-     * decorations know where they end — it's right for whoever handed out
-     * the space to do the clipping → `Renderer.clip`
-     *
-     * Without it, it actually leaks. If a manual value range is narrower
-     * than the data, a line stretches hundreds of pixels past the pane, and
-     * with two panes, the lower one covers the upper one. This was only
-     * invisible under the default wiring, where the value axis follows the
-     * data.
-     *
-     * Plot decorations get the whole data area; pane decorations and series
-     * get that pane's slice. The axis slice belongs to neither — what
-     * mounts there isn't drawn, it's described (`AxisBadge`).
-     */
-    this.renderer.clip?.(slices.data);
-
-    forEachBelowSeries(this.decorations, (decoration) =>
-      decoration.draw(this.renderer, decorationContext),
-    );
-
-    this.paneList.forEach((pane, index) => {
-      /**
-       * **The ticks were baked from the pane list as it stood at layout
-       * time.** The plot decoration running just above is someone else's
-       * code, and it holds `PaneHost` (`addPane`, `removePane`) — if one of
-       * those `draw` calls grows the list, the pairing here is thrown off
-       * — `ticks.y[index]` becomes `undefined`, throwing a `TypeError`
-       * inside an rAF callback, and the next frame does the same, so **the
-       * chart dies permanently.** A pane that arrives late this frame is
-       * drawn next frame instead.
-       */
-      const group = ticks.y[index];
-      if (!group) return;
-
-      this.renderer.clip?.(pane.area);
-      pane.draw(this.renderer, {
-        viewport,
-        x: this.x,
-        readStyle,
-        ticks: { x: ticks.x, y: group.ticks },
-        formatX: this.formatX,
-      });
-    });
-
-    this.renderer.clip?.(slices.data);
-    this.drawPaneBoundaries(readStyle);
-    forEachAboveSeries(this.decorations, (decoration) =>
-      decoration.draw(this.renderer, decorationContext),
-    );
-
-    // Labels mount on the axis slice, so the clip boundary is released before handing off.
-    this.renderer.clip?.(null);
-
-    /**
-     * Labels come after the drawing. The DOM path doesn't care about order
-     * (it's a different layer), but on the canvas path, command order is
-     * stacking order, so a series spilling into the axis space must not
-     * cover the labels. It just has to happen before commit — labels are
-     * commands in this frame too.
-     */
-    this.drawAxisLabels(
-      ticks,
-      slices,
-      readStyle,
-      this.collectAxisBadges(decorationContext, slices, ticks),
-    );
+    paintFrame(this.stage, this.config, frame, viewport, readStyle);
 
     this.renderer.commit();
-    this.emit("render", {});
-  }
-
-  /**
-   * Labels mount on the overlay, not the canvas, so they survive a redraw.
-   *
-   * Each pane's scale already produces y-tick position in absolute
-   * coordinates, so merging them and passing them straight through lands
-   * each one inside its own pane.
-   */
-  /**
-   * Collects what decorations described for mounting on the axis, in z
-   * order — later is on top.
-   *
-   * Drops badges for an axis with no space (labels off, or no collaborator
-   * to render them). Drawing outside the axis slice would cover data, and
-   * that isn't a badge, that's an intrusion.
-   *
-   * Pane decorations are asked too. The pane context is built from the same
-   * material as the draw call.
-   */
-  private collectAxisBadges(
-    context: PlotDecorationContext,
-    slices: AxisSlices,
-    ticks: { x: Tick[]; y: PaneTicks[] },
-  ): AxisBadge[] {
-    if (!this.axisLabels) return [];
-
-    const badges: AxisBadge[] = [];
-    const keep = (badge: AxisBadge): void => {
-      if (badge.axis === "x" ? slices.x : slices.y) badges.push(badge);
-    };
-
-    for (const { decoration } of this.decorations) {
-      for (const badge of decoration.axisBadges?.(context) ?? []) keep(badge);
-    }
-
-    this.paneList.forEach((pane, index) => {
-      /**
-       * **A pane that mounts no labels mounts no badges either.**
-       *
-       * The tick side is already filtered by `drawAxisLabels` via
-       * `showLabels`. The badge side had no such door, so badges from a
-       * collapsed pane (`{flex:0, minHeight:0}`) were collected as-is —
-       * that pane's range is a **1px fake** laid down by
-       * `floorAtOnePixel`, so every one of its badges piled into a 1px band
-       * and got stamped right on top of a still-visible pane's price
-       * labels. This is the other half of what was fixed on the
-       * tick side.
-       *
-       * **What's checked is `collapsed`, not `showLabels`.** It was first
-       * written as the latter, but that made a
-       * **normal setting** — *"clean axis, badges only"*
-       * (`axis: {showLabels: false}`) — **make the price badge disappear
-       * too,** and that's a common shape for a trading screen, where a
-       * neighboring pane has labels on and the axis strip is perfectly
-       * intact. The only pane with no space is a collapsed one.
-       */
-      // Checked for the same reason as the draw loop — a decoration can add a pane.
-      const group = ticks.y[index];
-      if (!group || group.collapsed) return;
-
-      const paneContext = {
-        area: pane.area,
-        x: this.x,
-        readStyle: context.readStyle,
-        pane,
-        yScale: pane.yScale,
-        ticks: { x: ticks.x, y: group.ticks },
-        formatX: this.formatX,
-        formatY: pane.formatValue,
-      };
-      for (const badge of pane.collectAxisBadges(paneContext)) keep(badge);
-    });
-
-    return badges;
-  }
-
-  private drawAxisLabels(
-    ticks: { x: Tick[]; y: PaneTicks[] },
-    slices: AxisSlices,
-    readStyle: StyleReader,
-    badges: AxisBadge[],
-  ): void {
-    if (!this.axisLabels) return;
-
-    const showX = this.config.axis?.x?.showLabels ?? true;
-    const yTicks = ticks.y
-      .filter((group) => group.showLabels)
-      .flatMap((group) => group.ticks);
-
-    if (!showX && yTicks.length === 0) {
-      this.axisLabels.clear();
-      return;
-    }
-
-    this.axisLabels.render({
-      x: showX ? ticks.x : [],
-      y: yTicks,
-      badges,
-      // x labels sit below the bottom pane.
-      area: { ...slices.data, bottom: this.bottomPane.area.bottom },
-      axes: { x: slices.x, y: slices.y },
-      readStyle,
-    });
-  }
-
-  private get bottomPane(): Pane {
-    return this.paneList[this.paneList.length - 1];
-  }
-
-  /**
-   * Draws pane boundary lines on the canvas — the divider handle (DOM) is a
-   * transparent hit area, so this line is the entire visible boundary.
-   * Because it's a drawing, it appears the same way in a headless chart and
-   * in screenshots, and it's drawn regardless of whether resizing is
-   * allowed (perceiving a boundary and being able to drag it are separate
-   * facts).
-   */
-  private drawPaneBoundaries(readStyle: StyleReader): void {
-    if (this.paneList.length < 2) return;
-
-    const gap = this.config.paneGap ?? 0;
-    const style = resolveStyle(PLOT_STYLE_SPEC, readStyle).paneDivider;
-
-    for (const pane of this.paneList.slice(0, -1)) {
-      const y = pane.area.bottom + gap / 2;
-      this.renderer.drawLine(
-        [
-          { x: pane.area.left, y },
-          { x: pane.area.right, y },
-        ],
-        style,
-      );
-    }
-  }
-
-  /** A divider sits in the middle of the gap between panes. */
-  private drawDividers(): void {
-    if (!this.dividers) return;
-
-    const gap = this.config.paneGap ?? 0;
-
-    if (this.config.resizablePanes === false || this.paneList.length < 2) {
-      this.dividers.clear();
-      return;
-    }
-
-    this.dividers.render(
-      this.paneList.slice(0, -1).map((pane, index) => ({
-        index,
-        y: pane.area.bottom + gap / 2,
-        left: pane.area.left,
-        right: pane.area.right,
-      })),
-    );
+    this.events.emit("render", {});
   }
 
   /**
@@ -2289,79 +1503,36 @@ export class Plot
    * by `coalesceState`.
    */
   private resizeBetween(index: number, dy: number): void {
-    const upper = this.paneList[index];
-    const lower = this.paneList[index + 1];
+    const panes = this.paneStack.list;
+    const upper = panes[index];
+    const lower = panes[index + 1];
     if (!upper || !lower) return;
 
-    const heights = this.paneList.map(
+    const heights = panes.map(
       (pane) => pane.area.bottom - pane.area.top,
     );
     const upperHeight = heights[index];
     const lowerHeight = heights[index + 1];
 
-    /**
-     * Clamps the movement between both sides' minHeight.
-     *
-     * **Both limits are wrapped at 0** — the same clause
-     * `XViewport.clampPan` uses at pan boundaries, for the same reason:
-     * *"if already past the boundary, only block the direction that makes
-     * it worse."* Before wrapping, a limit's sign could flip. If the
-     * container is shorter than the sum of minHeights,
-     * `distributeHeights` shrinks proportionally all the way to the floor
-     * (the `space <= floorSum` branch), so both panes ending up smaller
-     * than their own minimum is produced by **ordinary input.**
-     *
-     * Measured: with two panes of minHeight 40 sitting at 32px each, the
-     * lower limit is `-(32-40) = +8`, the upper limit is `min(dy, -8) = -8`
-     * → `max(8, -8) = 8`, **regardless of dy.** Drag up by 1px and the
-     * boundary moves 8px down, shrinking the lower pane to 24px — the
-     * opposite of the gesture, and it violates the very minimum it was
-     * meant to protect even further.
-     */
-    const grow = Math.max(0, lowerHeight - lower.minHeight); // room to shrink the lower pane
-    const shrink = Math.min(0, upper.minHeight - upperHeight); // room to shrink the upper pane
-    const delta = Math.min(Math.max(dy, shrink), grow);
+    // Clamped between both sides' minHeight, and 0 when a squeezed pair can't
+    // move in that direction → `clampDividerDrag`
+    const delta = clampDividerDrag(
+      dy,
+      { height: upperHeight, minHeight: upper.minHeight },
+      { height: lowerHeight, minHeight: lower.minHeight },
+    );
     if (delta === 0) return;
 
     heights[index] = upperHeight + delta;
     heights[index + 1] = lowerHeight - delta;
 
     this.coalesceState(() => {
-      this.paneList.forEach((pane, slot) => {
+      panes.forEach((pane, slot) => {
         pane.applyOptions({ flex: heights[slot] });
       });
     });
 
     this.scheduleRender();
-  }
-
-  /**
-   * Iterates over this round's subscriber list **copied first.**
-   *
-   * If a handler calls its own unsubscribe function, the original array
-   * shrinks, and iterating it directly would shift indices and **skip the
-   * next subscriber.** That's exactly effect cleanup's shape, so it gets
-   * silently swallowed. Anything subscribed mid-iteration isn't called this
-   * round either — otherwise a handler could grow the list on itself
-   * indefinitely.
-   */
-  private emit<E extends EventName>(event: E, payload: PlotEvents[E]): void {
-    const handlers = this.listeners[event];
-    if (!handlers) return;
-
-    /**
-     * **If one subscriber throws, the rest are still called.**
-     *
-     * This is generally an event-bus concern, but here it's a plugin-system
-     * one — `crosshair` alone is split between the crosshair, tooltip, and
-     * legend, so if the tooltip's format function throws, the crosshair
-     * would stop. Someone else's extension must not be able to kill mine.
-     *
-     * Still, it doesn't **swallow** anything (*"explicit error handling"*)
-     * — everyone is called, then the failures are collected and thrown.
-     */
-    const failures = runAll(handlers.slice(), (handler) => handler(payload));
-    if (failures) throw throwable(failures, `"${event}" subscriber threw`);
   }
 
   destroy(): void {
@@ -2397,7 +1568,7 @@ export class Plot
      * landing on a React tree mid-unmount, and the consumer has no way to
      * trace where it came from.
      */
-    this.listeners = {};
+    this.events.clear();
 
     /**
      * **Goes all the way through even if one step throws.** There used to
@@ -2430,16 +1601,11 @@ export class Plot
      * Extensions attached to a pane are held by the pane — once the chart
      * is gone, so are they.
      *
-     * **The list is copied first.** An extension's cleanup can call
-     * `removePane` (MACD removing its own pane is exactly that shape), and
-     * if it does, the original shrinks from underneath, skipping the next
-     * pane entirely — that pane's extensions are never cleaned up.
+     * The stack walks a copy, because an extension's cleanup can call
+     * `removePane` (MACD removing its own pane is exactly that shape) →
+     * `PaneStack.detachAll`
      */
-    const panes = this.paneList.slice();
-    for (const pane of panes) failures.push(...pane.detach());
-
-    for (const dispose of this.unwatch.values()) attempt(dispose);
-    this.unwatch.clear();
+    failures.push(...this.paneStack.detachAll());
 
     /**
      * Everything the constructor acquired comes back out through the scope

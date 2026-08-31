@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import { crosshair } from "../../extensions/crosshair";
-import { emitter } from "../emitter";
+import { emitter } from "../../primitives";
 import { createPlotModel } from "../model";
 
 const data: LineDataPoint[] = [

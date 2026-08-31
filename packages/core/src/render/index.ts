@@ -59,3 +59,5 @@ export type {
   StyleVar,
 } from "./style-spec";
 export type { ResolutionObserver, SizeObserver } from "./size";
+export { frameScheduler, immediateScheduler, manualScheduler } from "./scheduler";
+export type { ManualScheduler, RenderScheduler, SchedulerFactory } from "./scheduler";

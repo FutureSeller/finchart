@@ -18,7 +18,10 @@ const ALLOWED_DEPENDENCIES: Record<string, readonly string[]> = {
   // A series only knows how to draw itself — grid, axis, and interaction
   // belong to Plot, and a series knows nothing about them.
   series: ["primitives", "data", "scale", "render"],
-  plot: ["primitives", "data", "scale", "render", "axis", "interaction", "series"],
+  // A registration closes a series over its own data manager — the bridge
+  // between the two, and it knows nothing about panes or the stage.
+  registration: ["primitives", "data", "scale", "render", "series"],
+  plot: ["primitives", "data", "scale", "render", "axis", "interaction", "series", "registration"],
   // Built-in extensions aren't a component of the stage — they're a layer
   // **above** it. They consume only capability and plugin contracts, on the
   // same footing as tools and indicators. Since plot's allowlist doesn't

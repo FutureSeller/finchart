@@ -3,7 +3,7 @@
  * not a part of the chart itself.
  *
  * Everything living here consumes only capability interfaces
- * (`plot/capabilities`) and the plugin contract (`plot/plugin`) — the same
+ * (`plot/capabilities`) and the plugin contract (`primitives/plugin`) — the same
  * standing as `@finchart/tools` and `@finchart/indicators`. They live
  * inside core purely because they ship by default, not because of the
  * distribution unit. Grid is the only decoration the chart installs

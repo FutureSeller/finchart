@@ -282,21 +282,16 @@ export {
   createPlotModel,
   DEFAULT_PADDING,
   DEFAULT_PLOT_STYLE,
-  emitter,
-  frameScheduler,
-  immediateScheduler,
-  manualScheduler,
   PANE_OPTION_DEFAULTS,
   Plot,
-  pluginApi,
   SERIES_Z,
-  seriesSpec,
-  teardown,
 } from "./plot";
+export { seriesSpec } from "./registration";
+export { emitter, pluginApi, teardown } from "./primitives";
+export { frameScheduler, immediateScheduler, manualScheduler } from "./render";
 export type {
   AxisOptions,
   ChartState,
-  ConfigurablePluginApi,
   CrosshairPayload,
   DataProbe,
   CursorHost,
@@ -306,13 +301,9 @@ export type {
   DividerBoundary,
   DividerFactory,
   DividerRenderer,
-  Emitter,
   FocusAreaHost,
-  FocusClaim,
   FormatSource,
   InputHost,
-  ManualScheduler,
-  Observable,
   OverlayHost,
   PaneApi as Pane,
   PaneChange,
@@ -336,18 +327,11 @@ export type {
   PlotOptions,
   PlotOptionsPatch,
   PlotStyle,
-  Plugin,
-  PluginApi,
   PluginHost,
   RenderRequester,
-  RenderScheduler,
-  SchedulerFactory,
   SeriesHandle,
   SeriesHost,
-  SeriesId,
-  SeriesRegistration,
   SeriesSample,
-  SeriesSpec,
   ValueCoordinates,
   ValueFormatSource,
   ViewportControl,
@@ -357,3 +341,13 @@ export type {
   XDomainChangePayload,
   YAxisOptions,
 } from "./plot";
+export type {
+  ConfigurablePluginApi,
+  Emitter,
+  Observable,
+  Plugin,
+  PluginApi,
+} from "./primitives";
+export type { ManualScheduler, RenderScheduler, SchedulerFactory } from "./render";
+export type { FocusClaim } from "./interaction";
+export type { SeriesId, SeriesRegistration, SeriesSpec } from "./registration";

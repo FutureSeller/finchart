@@ -94,3 +94,60 @@ describe("pane divider line", () => {
     expect(strokedPaths(layers.context)).toHaveLength(1);
   });
 });
+
+describe("pane divider handles", () => {
+  /** A divider renderer that only records what the frame asked of it. */
+  function recordingDividers() {
+    const calls: string[] = [];
+    const read: StyleReader = () => "";
+    const deps = testBrowserDeps({
+      createStyleReader: () => read,
+      createDividers: () => ({
+        render: (boundaries) => {
+          calls.push(`render:${boundaries.length}`);
+        },
+        clear: () => {
+          calls.push("clear");
+        },
+        destroy: () => undefined,
+      }),
+    });
+    return { deps, calls };
+  }
+
+  function mountWith(config: object) {
+    const { deps, calls } = recordingDividers();
+    const { plot } = mountPlot({
+      deps,
+      series: silentSeries(),
+      data,
+      config: { ...defaultConfig, showGrid: false, ...config },
+    });
+    plot.addPane().addSeries({ series: silentSeries(), data });
+    calls.length = 0;
+    plot.render();
+    return { plot, calls };
+  }
+
+  it("should place one handle between two panes", () => {
+    const { calls } = mountWith({});
+    expect(calls).toEqual(["render:1"]);
+  });
+
+  it("should clear the handles when panes are not resizable", () => {
+    // The line stays (the test above); the handle is what goes.
+    const { calls } = mountWith({ resizablePanes: false });
+    expect(calls).toEqual(["clear"]);
+  });
+
+  it("should take the handles down when the option is turned off later", () => {
+    const { plot, calls } = mountWith({});
+    calls.length = 0;
+    plot.applyOptions({ resizablePanes: false });
+    plot.render();
+    // applyOptions may already have drawn a frame — what matters is that no
+    // frame after the change put a handle up, and at least one took them down.
+    expect(calls).toContain("clear");
+    expect(calls.some((call) => call.startsWith("render"))).toBe(false);
+  });
+});

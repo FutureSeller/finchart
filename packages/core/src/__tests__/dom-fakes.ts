@@ -10,7 +10,7 @@ import {
 } from "../axis";
 import type { Point } from "../primitives";
 import { createPlotDeps, type PlotDepsOptions } from "../plot/presets";
-import { frameScheduler } from "../plot/scheduler";
+import { frameScheduler } from "../render";
 import type { PlotDeps } from "../plot/types";
 import { LinearScale, type Scale } from "../scale";
 import {

@@ -12,7 +12,7 @@ import type {
   TextMeasurerFactory,
 } from "../render";
 import type { DividerFactory } from "./dividers";
-import type { SchedulerFactory } from "./scheduler";
+import type { SchedulerFactory } from "../render";
 import type { Scale, XMappingFactory } from "../scale";
 import type { TickStrategy } from "../axis";
 

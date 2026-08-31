@@ -9,7 +9,7 @@ import type { DataView, LineDataPoint, OHLC } from "../../data";
 import { LineDataAccessor } from "../../data";
 import { candleSeries } from "../../series";
 import { lineSeries } from "../../series/line-series";
-import { type SeriesSpec, seriesSpec } from "../pane";
+import { type SeriesSpec, seriesSpec } from "../../registration";
 
 const ma = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((c) => ({ x: c.x, y: c.close }));
@@ -70,7 +70,7 @@ export const mixed: SeriesSpec<OHLC>[] = [price, lineOnly];
 // ── registration type: three branches, so an invalid combination cannot be written (2026-08-09) ──
 
 import type { Source } from "../../data";
-import type { SeriesRegistration } from "../entry";
+import type { SeriesRegistration } from "../../registration";
 
 declare const candles: OHLC[];
 declare const points: LineDataPoint[];

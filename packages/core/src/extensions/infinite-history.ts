@@ -1,7 +1,7 @@
 import type { BaseDataPoint } from "../data";
 import { ContractError, DataError } from "../primitives";
 import type { PlotEventSource, XCoordinates } from "../plot/capabilities";
-import { emitter, type Observable } from "../plot/emitter";
+import { emitter, type Observable } from "../primitives";
 import type { Plot } from "../plot/plot";
 
 /**

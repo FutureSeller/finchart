@@ -21,7 +21,7 @@
 
 import type { BaseDataPoint, Range } from "../data";
 import type { InputConsumer, InputConsumerOptions } from "../interaction";
-import type { Point, PlotArea } from "../primitives";
+import type { PlotArea } from "../primitives";
 import type { Scale } from "../scale";
 import type { Series } from "../series";
 import type {
@@ -29,10 +29,18 @@ import type {
   PaneDecoration,
   PlotDecoration,
 } from "./decoration";
-import type { SeriesRegistration } from "./entry";
-import type { PaneApi, PaneOptions, SeriesHandle, SeriesSample } from "./pane";
-import type { PlotEvents } from "./plot";
-import type { Plugin, PluginApi } from "./plugin";
+import type { FocusClaim } from "../interaction";
+import type { Plugin, PluginApi } from "../primitives";
+import type { SeriesRegistration } from "../registration";
+import type { PaneApi } from "./pane";
+import type { PaneOptions } from "./pane-options";
+import type { SeriesHandle } from "./series-handle";
+import type { SeriesSample } from "./series-list";
+import type { PlotEvents } from "./events";
+
+// The claim type lives with the input stack; it stays reachable from here
+// because `FocusAreaHost` is the door that hands one out.
+export type { FocusClaim };
 
 /**
  * Can ask for a redraw.
@@ -221,19 +229,6 @@ export interface FocusAreaHost {
    * — "not contesting right now" (disarmed, hidden, collapsed).
    */
   claimFocusArea(areaOf: () => PlotArea | null): FocusClaim;
-}
-
-export interface FocusClaim {
-  /**
-   * Whether this point is claimed by some other contestant, **not this
-   * one.** A spot nobody contests (an axis, margin, or a pane with no
-   * toolbox) is `false`. **Never throws here even if someone else's
-   * `areaOf` throws or returns garbage** — that extension is simply
-   * treated as not contesting.
-   */
-  contestedAt(point: Point): boolean;
-  /** Safe to call twice. */
-  release(): void;
 }
 
 /**

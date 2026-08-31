@@ -5,7 +5,7 @@
  * the branch point, frameScheduler takes the window (view) as an argument.
  */
 import { describe, expect, it, vi } from "vitest";
-import { frameScheduler } from "../scheduler";
+import { frameScheduler } from "../../render";
 
 /** A window whose rAF you flush by hand. */
 function fakeFrames() {

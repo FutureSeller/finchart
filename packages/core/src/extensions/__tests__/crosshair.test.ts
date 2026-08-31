@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import type { CrosshairPayload } from "../../plot/plot";
+import type { CrosshairPayload } from "../../plot";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "../../plot/__tests__/helpers";
 
