@@ -11,6 +11,7 @@ import type {
   BaseDataPoint,
   CoordinateAccessor,
   DataManager,
+  DataView,
   DecimationStrategy,
   Range,
   Viewport,
@@ -167,7 +168,7 @@ export class SimpleDataManager<
    */
   private gapFree = true;
 
-  read(): T[] {
+  read(): DataView<T> {
     return this.data;
   }
 
@@ -427,7 +428,7 @@ export class SimpleDataManager<
    * only thing that drifts is decimal points at bucket boundaries, and the
    * next pan or zoom washes it out immediately.
    */
-  getVisibleData(viewport: Viewport): T[] {
+  getVisibleData(viewport: Viewport): DataView<T> {
     if (this.data.length === 0) return [];
 
     const cached = this.cached;

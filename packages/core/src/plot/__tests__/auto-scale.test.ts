@@ -7,7 +7,7 @@
  * and those points must then be clipped to the visible range.
  */
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint } from "../../data";
+import type { DataView, LineDataPoint } from "../../data";
 import { LinearScale } from "../../scale";
 import { lineSeries } from "../../series";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
@@ -90,7 +90,7 @@ describe("value axis autoscale", () => {
     plot.mainPane.addSeries({
       series: lineSeries(),
       data: ramp,
-      derive: (source: LineDataPoint[]) =>
+      derive: (source: DataView<LineDataPoint>) =>
         source.map((point) => ({ x: point.x, y: point.y === null ? null : point.y / 2 })),
     });
 
@@ -111,7 +111,7 @@ describe("value axis autoscale", () => {
     plot.mainPane.addSeries({
       series: lineSeries(),
       data: ramp,
-      derive: (source: LineDataPoint[]) =>
+      derive: (source: DataView<LineDataPoint>) =>
         source.map((point) => ({ x: point.x, y: point.y === null ? null : point.y / 2 })),
     });
 
@@ -131,7 +131,7 @@ describe("value axis autoscale", () => {
     lower.addSeries({
       series: lineSeries(),
       data: ramp,
-      derive: (source: LineDataPoint[]) =>
+      derive: (source: DataView<LineDataPoint>) =>
         source.map((point) => ({ x: point.x, y: point.y === null ? null : point.y * 100 })),
     });
 

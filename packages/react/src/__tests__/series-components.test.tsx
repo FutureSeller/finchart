@@ -6,7 +6,7 @@
  * it actually get drawn**, and does adding one more layer still **preserve
  * JSX order and the derive cache**.
  */
-import type { DrawCommand, LineDataPoint, OHLC, Plot } from '@finchart/core';
+import type { DataView, DrawCommand, LineDataPoint, OHLC, Plot } from '@finchart/core';
 import { OHLCAccessor } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
@@ -78,7 +78,7 @@ const rects = (commands: readonly DrawCommand[]) =>
 
 const MA_COLOR = '#7c3aed';
 
-const closes = (source: OHLC[]): LineDataPoint[] =>
+const closes = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((candle) => ({ x: candle.x, y: candle.close }));
 
 describe('<ChartCandles>', () => {
@@ -192,7 +192,7 @@ describe('<ChartLine>', () => {
     const { deps, ref, plot } = setup();
     let calls = 0;
 
-    const derive = (source: OHLC[]) => {
+    const derive = (source: DataView<OHLC>) => {
       calls += 1;
       return closes(source);
     };

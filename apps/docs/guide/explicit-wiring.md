@@ -14,11 +14,11 @@ scenario `pnpm size` measures on every CI run — minified, gzipped, with every
 
 | What you build | Download, gzipped |
 | --- | ---: |
-| The quick start — one candlestick chart | 25.5 KB |
-| ...plus a volume pane, axes, crosshair, legend and tooltip | 29 KB |
-| ...plus four indicators (MA, MACD, RSI, Bollinger) | 33 KB |
-| ...plus every drawing tool | 37.5 KB |
-| The same screen through `@finchart/react` | 38 KB |
+| The quick start — one candlestick chart | 26.5 KB |
+| ...plus a volume pane, axes, crosshair, legend and tooltip | 30 KB |
+| ...plus four indicators (MA, MACD, RSI, Bollinger) | 34.5 KB |
+| ...plus every drawing tool | 38.5 KB |
+| The same screen through `@finchart/react` | 39.5 KB |
 
 <!-- bundle-budgets:end -->
 

@@ -21,7 +21,7 @@
  * other processes and are not caught here.
  */
 import { browserDeps, createDomLayers, PlotBuilder } from "@finchart/dom";
-import { barIndexX, candleSeries, computation, conflated, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, manualScheduler, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type ConflatedFeed, type CrosshairLine, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
+import { barIndexX, candleSeries, computation, conflated, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, manualScheduler, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type ConflatedFeed, type CrosshairLine, type DataView, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
 import { tooltip } from "@finchart/dom";
 import { smaFold, type SmaState } from "@finchart/indicators";
 import { drawingTools } from "@finchart/tools";
@@ -254,7 +254,7 @@ interface ChartOptions {
  * times. Hang a `derive` on each branch and this function runs once per
  * branch; a computation node runs it once and shares the result.
  */
-function macdWays(source: OHLC[]): {
+function macdWays(source: DataView<OHLC>): {
   macd: LineDataPoint[];
   signal: LineDataPoint[];
   histogram: LineDataPoint[];
@@ -299,17 +299,17 @@ function macdWays(source: OHLC[]): {
  * so it never steps on that boundary.
  */
 function smaSeries(window: number): {
-  derive: (source: OHLC[]) => LineDataPoint[];
+  derive: (source: DataView<OHLC>) => LineDataPoint[];
   deriveLast: (
-    previous: readonly LineDataPoint[],
-    source: readonly OHLC[],
+    previous: DataView<LineDataPoint>,
+    source: DataView<OHLC>,
     change: { kind: "append" | "replace"; count: number },
   ) => LineDataPoint[];
   deriveFirst: {
     lookback: number;
     head: (
-      previous: readonly LineDataPoint[],
-      source: readonly OHLC[],
+      previous: DataView<LineDataPoint>,
+      source: DataView<OHLC>,
       change: { kind: "prepend"; count: number },
     ) => LineDataPoint[];
   };
@@ -318,7 +318,7 @@ function smaSeries(window: number): {
   let atEnd: SmaState | null = null;
   const tail = smaFold(window);
 
-  const derive = (source: OHLC[]): LineDataPoint[] => {
+  const derive = (source: DataView<OHLC>): LineDataPoint[] => {
     const fold = smaFold(window);
     const out: LineDataPoint[] = [];
     for (let i = 0; i < source.length; i++) {
@@ -331,8 +331,8 @@ function smaSeries(window: number): {
   };
 
   const deriveLast = (
-    _previous: readonly LineDataPoint[],
-    source: readonly OHLC[],
+    _previous: DataView<LineDataPoint>,
+    source: DataView<OHLC>,
     change: { kind: "append" | "replace"; count: number },
   ): LineDataPoint[] => {
     const count = change.kind === "replace" ? 1 : change.count;
@@ -361,8 +361,8 @@ function smaSeries(window: number): {
   const deriveFirst = {
     lookback: 0,
     head: (
-      _previous: readonly LineDataPoint[],
-      source: readonly OHLC[],
+      _previous: DataView<LineDataPoint>,
+      source: DataView<OHLC>,
       change: { kind: "prepend"; count: number },
     ): LineDataPoint[] => {
       const fold = smaFold(window);
@@ -440,7 +440,7 @@ function candleChart(options: ChartOptions): Build {
             lower.addSeries({
               series: lineSeries(style),
               data,
-              derive: (source: OHLC[]) => macdWays(source)[way],
+              derive: (source: DataView<OHLC>) => macdWays(source)[way],
             }),
           );
         }

@@ -53,8 +53,17 @@ export type DataPoint = LineDataPoint | OHLC;
  * array reference — that comparison is the only basis for deciding whether
  * to recompute or re-feed.
  */
+/**
+ * A borrowed view of chart-owned points.
+ *
+ * Array identity stays stable until the source changes, because computations
+ * use it as their inexpensive change signal. It is therefore not a
+ * collection callers may edit: copy before reshaping it.
+ */
+export type DataView<T extends BaseDataPoint = BaseDataPoint> = readonly Readonly<T>[];
+
 export interface Source<T extends BaseDataPoint = BaseDataPoint> {
-  read(): T[];
+  read(): DataView<T>;
 }
 
 /** Pulls display x/y coordinates out of a point. */
@@ -186,7 +195,8 @@ export interface Viewport {
  * nothing to carry), and drawing asks the mapping directly.
  */
 export interface VisiblePlaced<T extends BaseDataPoint = BaseDataPoint> {
-  points: T[];
+  /** The same borrowed point view as `DataManager.getVisibleData`. */
+  points: DataView<T>;
   places: number[] | null;
 }
 
@@ -243,14 +253,14 @@ export interface Range {
 
 export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
   /**
-   * The whole history, right now. A live array — don't mutate it (mutating
-   * it doesn't produce a new reference, which breaks the `Source`
+   * The whole history, right now. A live borrowed view — don't mutate it
+   * (mutation doesn't produce a new reference, which breaks the `Source`
    * contract).
    *
    * This gate is what makes history singly owned — if another place held
    * the same history separately, an update could land on only one of them.
    */
-  read(): T[];
+  read(): DataView<T>;
 
   /**
    * Must be x-ascending. Repeated x values in a row are fine.
@@ -294,7 +304,7 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
    * it (second-to-last). If empty, it becomes the first point.
    */
   replaceLast(point: T): void;
-  getVisibleData(viewport: Viewport): T[];
+  getVisibleData(viewport: Viewport): DataView<T>;
   /**
    * `getVisibleData` plus places. This gate is optional and additive — if
    * absent, drawing finds places itself (slower but still correct). The

@@ -20,6 +20,8 @@ pnpm add @finchart/core
   happen, and it never enters your bundle.
 
 ```ts
+import { createPlotModel, lineSeries } from "@finchart/core/headless";
+
 // Turn showGrid off — otherwise the grid is drawLine too, so the first
 // command you get back is a grid line, not your series.
 const model = createPlotModel({
@@ -29,6 +31,18 @@ const model = createPlotModel({
 });
 const [line] = model.commands().filter((c) => c.type === "drawLine");
 ```
+
+## Choose an import lane
+
+- `@finchart/core` — application-facing chart, data, and built-in series APIs.
+- `@finchart/core/headless` — the compact model-and-series entry for SSR,
+  workers, and command snapshot tests.
+- `@finchart/core/authoring` — custom `Series`, `SeriesSpec`, render, and
+  plugin contracts. It is for library/extension authors, not ordinary chart
+  setup.
+
+All three are explicit entry points; the root remains supported for existing
+applications.
 
 ## Support matrix
 

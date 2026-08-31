@@ -5,7 +5,7 @@
  * computation. References are values, not string ids.
  */
 import { describe, expect, it } from "vitest";
-import { computation, type LineDataPoint, type OHLC } from "../../data";
+import { computation, type DataView, type LineDataPoint, type OHLC } from "../../data";
 import { candleSeries, lineSeries } from "../../series";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -20,7 +20,7 @@ const candles = (count: number): OHLC[] =>
   }));
 
 /** Produces three branches from candles. The shape of MACD. */
-const threeWays = (source: OHLC[]) => ({
+const threeWays = (source: DataView<OHLC>) => ({
   fast: source.map((c) => ({ x: c.x, y: c.close })),
   slow: source.map((c) => ({ x: c.x, y: c.close / 2 })),
   histogram: source.map((c) => ({ x: c.x, y: c.close / 4 })),
@@ -47,7 +47,7 @@ describe("computation", () => {
     });
     const node = computation({
       inputs: [price],
-      calc: (source: OHLC[]) => {
+      calc: (source: DataView<OHLC>) => {
         runs += 1;
         return threeWays(source);
       },
@@ -74,7 +74,7 @@ describe("computation", () => {
     });
     const node = computation({
       inputs: [price],
-      calc: (source: OHLC[]) => {
+      calc: (source: DataView<OHLC>) => {
         runs += 1;
         return threeWays(source);
       },
@@ -143,7 +143,7 @@ describe("computation", () => {
     const first = computation({ inputs: [price], calc: threeWays });
     const second = computation({
       inputs: [first.out.fast],
-      calc: (points: LineDataPoint[]) => ({
+      calc: (points: DataView<LineDataPoint>) => ({
         doubled: points.map((p) => ({ x: p.x, y: (p.y ?? 0) * 2 })),
       }),
     });
@@ -171,7 +171,7 @@ describe("computation", () => {
 
     const node = computation({
       inputs: [price, other],
-      calc: (first: OHLC[], second: OHLC[]) => ({
+      calc: (first: DataView<OHLC>, second: DataView<OHLC>) => ({
         merged: [{ x: 0, y: first.length + second.length }] as LineDataPoint[],
       }),
     });

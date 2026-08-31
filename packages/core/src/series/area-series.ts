@@ -2,6 +2,7 @@ import { isGap, LineDataAccessor } from "../data";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   LineDataPoint,
   Range,
 } from "../data";
@@ -70,7 +71,7 @@ export class AreaSeries<T extends BaseDataPoint = LineDataPoint>
     this.overrides = options.style ?? {};
   }
 
-  valueExtent(data: T[]): Range | null {
+  valueExtent(data: DataView<T>): Range | null {
     let min = Infinity;
     let max = -Infinity;
 

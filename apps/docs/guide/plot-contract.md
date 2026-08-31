@@ -225,15 +225,17 @@ and they draw over each other, with the later one on top.
 - There are two ways to mount a series. `addSeries` is the imperative
   registration that **hands back a handle** (`dispose` is safe to call twice),
   and `syncSeries` **takes the whole list as an array.** Mix the two and
-  `syncSeries` wins — it owns the list.
+  the later call throws a `ContractError` before it detaches anything. To move
+  from an imperative list to `syncSeries`, call `clearSeries()` first; to empty
+  a declarative list and return to imperative control, call `syncSeries([])`.
   **The roles split: `syncSeries` owns the list, the handle owns the data.**
 - **The five write doors on a detached handle** (`setData`, `prepend`, `append`,
   `updateLast`, `swapSeries`) throw a `ContractError`. Letting them pass quietly
   moved the chart for real — `setData`'s refit **re-fitted the x window against
   the remaining series** and the pan you had set jumped. Two doors detach a
-  handle: a `dispose()` you called yourself, and eviction by the `syncSeries`
-  that owns the list. The latter is **a removal you never called**, so you ask
-  with `handle.attached` — `read()`, `xRange` and `dispose()` are safe after
+  handle: a `dispose()` you called yourself, or imperative `setSeries()`
+  replacing it. The latter is **a removal you never called**, so you ask with
+  `handle.attached` — `read()`, `xRange` and `dispose()` are safe after
   detaching. Even an empty array (`append([])`) throws on a detached handle.
 
   ```ts
@@ -548,7 +550,7 @@ plot.on("xDomainChange", async ({ startX, dataRange }) => {
 `getState()` / `stateChange` / `applyState(partial)` are one set.
 
 ```ts
-const state = plot.getState();     // { xDomain, panes: [{flex, autoScale, valueDomain?, invert?}] }
+const state = plot.getState();     // { xDomain, panes: [{stateKey?, flex, autoScale, valueDomain?, invert?}] }
 plot.applyState({ xDomain });      // only the pieces you pass land — the makings of partial control
 ```
 
@@ -559,6 +561,10 @@ plot.applyState({ xDomain });      // only the pieces you pass land — the maki
 - During a drag it arrives on every pointermove. If saving is expensive, the
   listener defers it.
 - React assembles the same thing with `<ChartContainer state onStateChange>`.
+- Dynamic panes should carry a semantic `stateKey` (`<ChartPane stateKey="rsi">`
+  or `plot.addPane({ stateKey: "rsi" })`). Keyed slices restore by that name,
+  so inserting a volume pane cannot put an RSI range on it. Snapshots with no
+  keys still use the old index pairing.
 
 ### crosshair
 

@@ -16,6 +16,8 @@ import { PaneProvider, useChartApi } from './chart-context';
  * this.
  */
 export interface ChartPaneProps {
+  /** Stable identity for restored pane state. Change the React `key` to change it. */
+  stateKey?: string;
   /** The share of leftover vertical space this takes. Defaults to 1. */
   flex?: number;
   /** Won't shrink below this (px). Defaults to 40. */
@@ -40,6 +42,7 @@ export function ChartPane({
   flex = PANE_OPTION_DEFAULTS.flex,
   minHeight = PANE_OPTION_DEFAULTS.minHeight,
   valuePadding = PANE_OPTION_DEFAULTS.valuePadding,
+  stateKey,
   children,
 }: ChartPaneProps) {
   const api = useChartApi('ChartPane');
@@ -54,7 +57,13 @@ export function ChartPane({
    * the initial options landing late — sending the restored `flex` back
    * to the mount default.
    */
-  const initialOptions = useRef({ flex, minHeight, valuePadding });
+  const initialStateKey = useRef(stateKey);
+  if (initialStateKey.current !== stateKey) {
+    throw new Error(
+      '<ChartPane stateKey> is identity and cannot change after mount; change the React key to replace the pane.',
+    );
+  }
+  const initialOptions = useRef({ flex, minHeight, valuePadding, stateKey });
 
   useEffect(() => {
     const acquired = api.acquirePane(initialOptions.current);

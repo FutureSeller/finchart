@@ -1,5 +1,6 @@
 import type { Range } from "../data";
-import type { Pane } from "./pane";
+import { ContractError, requireObject } from "../primitives";
+import type { Pane, PaneApi } from "./pane";
 /**
  * State slice for one pane → `ChartState.panes`
  *
@@ -8,6 +9,8 @@ import type { Pane } from "./pane";
  * carry.
  */
 export interface PaneState {
+  /** Semantic pane identity. Omitted only for legacy index-based snapshots. */
+  stateKey?: string;
   /** Ratio for sharing the remaining vertical space. Changes when the divider is dragged. */
   flex: number;
   /** Whether the value axis tracks the visible range. */
@@ -40,12 +43,17 @@ export interface ChartState {
    * the user made.
    */
   xDomain: Range | null;
-  /** Stacking order from the top. Identity is the index — same order as `Plot.panes`. */
+  /**
+   * Stacking order from the top. A `stateKey` follows its matching pane even
+   * when dynamic pane structure changes; snapshots with no keys retain the
+   * legacy index pairing.
+   */
   panes: PaneState[];
 }
 /** Reads a pane's public fields into a state slice. Used when Plot builds a snapshot. */
 export function paneStateOf(pane: Pane): PaneState {
   const slice: PaneState = { flex: pane.flex, autoScale: pane.autoScale };
+  if (pane.stateKey !== null) slice.stateKey = pane.stateKey;
   // Inversion is only carried when it's not the default — keeps serialized output from silently growing.
   if (pane.invert) slice.invert = true;
   if (!pane.autoScale) {
@@ -53,4 +61,66 @@ export function paneStateOf(pane: Pane): PaneState {
     slice.valueDomain = { min, max };
   }
   return slice;
+}
+
+/** Applies one already-matched slice. Plot owns matching; Pane keeps its existing state-door semantics. */
+export function applyPaneState(pane: PaneApi, slice: PaneState): void {
+  pane.applyOptions({
+    flex: slice.flex,
+    autoScale: slice.autoScale,
+    invert: slice.invert ?? false,
+  });
+  if (!slice.autoScale && slice.valueDomain) {
+    pane.setValueDomain(slice.valueDomain.min, slice.valueDomain.max);
+  }
+}
+
+/**
+ * Pairs saved state with live panes without making ordering a semantic
+ * identity. In keyed mode an unkeyed legacy slice may only reach an unkeyed
+ * pane at the same position — it never falls through to a differently named
+ * pane.
+ */
+export function matchPaneState(
+  panes: readonly PaneApi[],
+  slices: readonly PaneState[],
+): readonly { pane: PaneApi; slice: PaneState }[] {
+  if (!Array.isArray(slices)) {
+    throw new ContractError("applyState({ panes }) must be an array");
+  }
+
+  const seen = new Set<string>();
+  for (const slice of slices) {
+    requireObject(slice, "applyState({ panes }) slice");
+    if (slice.stateKey === undefined) continue;
+    if (typeof slice.stateKey !== "string" || slice.stateKey.trim().length === 0) {
+      throw new ContractError("applyState pane stateKey must be a non-empty string");
+    }
+    if (seen.has(slice.stateKey)) {
+      throw new ContractError(`Duplicate pane stateKey: "${slice.stateKey}"`);
+    }
+    seen.add(slice.stateKey);
+  }
+
+  const keyed = slices.some((slice) => slice.stateKey !== undefined) ||
+    panes.some((pane) => pane.stateKey !== null);
+  if (!keyed) {
+    return slices.flatMap((slice, index) => {
+      const pane = panes[index];
+      return pane ? [{ pane, slice }] : [];
+    });
+  }
+
+  const byKey = new Map<string, PaneApi>();
+  for (const pane of panes) {
+    if (pane.stateKey !== null) byKey.set(pane.stateKey, pane);
+  }
+  return slices.flatMap((slice, index) => {
+    if (slice.stateKey !== undefined) {
+      const pane = byKey.get(slice.stateKey);
+      return pane ? [{ pane, slice }] : [];
+    }
+    const pane = panes[index];
+    return pane?.stateKey === null ? [{ pane, slice }] : [];
+  });
 }

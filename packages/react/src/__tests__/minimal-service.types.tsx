@@ -11,7 +11,7 @@
  * at it.)
  */
 
-import type { LineDataPoint, OHLC } from '@finchart/core';
+import type { DataView, LineDataPoint, OHLC } from '@finchart/core';
 import { histogramSeries, timeTicks, type HistogramPoint } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import {
@@ -45,7 +45,7 @@ declare const volume: HistogramPoint[];
  * (the comment on `LineDataPoint.y` cites exactly this case as null's
  * reason for existing).
  */
-const sma20 = (source: OHLC[]): LineDataPoint[] =>
+const sma20 = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((bar, i) => ({
     x: bar.x,
     y:

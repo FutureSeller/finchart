@@ -2,6 +2,7 @@ import type { PlotArea } from "../primitives";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   DecimationPolicy,
   Range,
 } from "../data";
@@ -10,7 +11,8 @@ import type { Scale, XMapping } from "../scale";
 
 /** The stage information Plot hands a series when it draws. */
 export interface SeriesContext<T extends BaseDataPoint = BaseDataPoint> {
-  data: T[];
+  /** Borrowed points for this frame. Neither the array nor its points are writable. */
+  data: DataView<T>;
   /**
    * Where a point's x lands on screen. Not a `Scale` — a series has no
    * reason to know whether the domain is time or a bar index; ask, and
@@ -42,7 +44,7 @@ export interface SeriesContext<T extends BaseDataPoint = BaseDataPoint> {
    * level when the viewport has no neighbor left at all (panning past
    * the end of the data) — drawing itself still only looks at `data`.
    */
-  fullData?: readonly T[];
+  fullData?: DataView<T>;
 }
 
 /**
@@ -83,7 +85,7 @@ export interface Series<T extends BaseDataPoint = BaseDataPoint> {
    * would let a series whose data hasn't arrived yet drag the value axis
    * down to 0.
    */
-  valueExtent(data: T[]): Range | null;
+  valueExtent(data: DataView<T>): Range | null;
 
   draw(target: DrawTarget, context: SeriesContext<T>): void;
 

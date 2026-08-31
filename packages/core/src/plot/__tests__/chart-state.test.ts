@@ -246,6 +246,62 @@ describe("applyState", () => {
     expect(seen).toHaveLength(0);
     expect(plot.getState().xDomain).toEqual({ min: 0, max: 100 });
   });
+
+  it("should restore keyed panes by meaning after dynamic panes shift their positions", () => {
+    const { plot } = mounted();
+    plot.mainPane.applyOptions({ stateKey: "price", flex: 3, autoScale: false });
+    plot.mainPane.setValueDomain(10, 90);
+    const rsi = plot.addPane({ stateKey: "rsi", flex: 2, autoScale: false });
+    rsi.setValueDomain(20, 80);
+    const saved = plot.getState();
+
+    const target = mounted();
+    target.plot.mainPane.applyOptions({ stateKey: "price" });
+    const volume = target.plot.addPane({ stateKey: "volume", flex: 7 });
+    const targetRsi = target.plot.addPane({ stateKey: "rsi", flex: 1 });
+
+    target.plot.applyState(saved);
+
+    expect(target.plot.getState().panes).toEqual([
+      { stateKey: "price", flex: 3, autoScale: false, valueDomain: { min: 10, max: 90 } },
+      { stateKey: "volume", flex: 7, autoScale: true },
+      { stateKey: "rsi", flex: 2, autoScale: false, valueDomain: { min: 20, max: 80 } },
+    ]);
+    expect(volume.flex).toBe(7);
+    expect(targetRsi.flex).toBe(2);
+  });
+
+  it("should never apply an unkeyed legacy slice to a keyed pane", () => {
+    const { plot } = mounted();
+    plot.mainPane.applyOptions({ stateKey: "price", flex: 1 });
+    const rsi = plot.addPane({ stateKey: "rsi", flex: 1 });
+
+    plot.applyState({
+      panes: [
+        { flex: 9, autoScale: true },
+        { stateKey: "rsi", flex: 4, autoScale: true },
+      ],
+    });
+
+    expect(plot.mainPane.flex).toBe(1);
+    expect(rsi.flex).toBe(4);
+  });
+
+  it("should reject duplicate or rewritten state keys", () => {
+    const { plot } = mounted();
+    plot.mainPane.applyOptions({ stateKey: "price" });
+
+    expect(() => plot.addPane({ stateKey: "price" })).toThrow(/Duplicate pane stateKey/);
+    expect(() => plot.mainPane.applyOptions({ stateKey: "other" })).toThrow(/cannot be changed/);
+    expect(() =>
+      plot.applyState({
+        panes: [
+          { stateKey: "rsi", flex: 1, autoScale: true },
+          { stateKey: "rsi", flex: 1, autoScale: true },
+        ],
+      }),
+    ).toThrow(/Duplicate pane stateKey/);
+  });
 });
 
 describe("setValueDomain", () => {

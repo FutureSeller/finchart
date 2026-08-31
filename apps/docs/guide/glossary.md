@@ -225,7 +225,7 @@ hole, so a parse failure is thrown as a `DataError`.
 
 ### Computed node (`computation`) / source (`Source`)
 
-A **source** is a one-method contract: `read(): T[]`. The place where "where
+A **source** is a one-method contract: `read(): DataView<T>`. The place where "where
 the points come from" gets passed **as a value** — a series handle is a
 source, and so is a branch of a computed node.
 

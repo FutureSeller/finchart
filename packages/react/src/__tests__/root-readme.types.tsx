@@ -17,7 +17,7 @@
  * at it.)
  */
 
-import type { LineDataPoint, OHLC } from '@finchart/core';
+import type { DataView, LineDataPoint, OHLC } from '@finchart/core';
 import { candleSeries, lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { useMemo } from 'react';
@@ -28,7 +28,7 @@ import { ChartContainer, ChartPane, ChartSeries, XAxis, YAxis } from '../compone
  * demonstrates — omitting a point makes the line span across the gap
  * — that is `null`'s whole reason for existing on `LineDataPoint.y`.
  */
-const movingAverage20 = (source: OHLC[]): LineDataPoint[] =>
+const movingAverage20 = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((bar, i) => ({
     x: bar.x,
     y:

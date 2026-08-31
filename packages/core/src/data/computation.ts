@@ -1,7 +1,7 @@
 import { ContractError, describe } from "../primitives";
 import { headDelta, type HeadChange } from "./head-delta";
 import { tailDelta, type TailChange } from "./tail-delta";
-import type { BaseDataPoint, Source } from "./types";
+import type { BaseDataPoint, DataView, Source } from "./types";
 
 /**
  * A computation that runs once and produces several branches. MACD isn't
@@ -22,11 +22,11 @@ export interface Computation<TOut extends Record<string, BaseDataPoint[]>> {
 
 /** A tuple turning input sources into their point arrays. `calc` receives them in this order. */
 type ReadOf<TIn extends readonly Source<BaseDataPoint>[]> = {
-  [K in keyof TIn]: TIn[K] extends Source<infer T> ? T[] : never;
+  [K in keyof TIn]: TIn[K] extends Source<infer T> ? DataView<T> : never;
 };
 
 export interface ComputationSpec<
-  TIn extends readonly Source<BaseDataPoint>[],
+  TIn extends readonly Source<any>[],
   TOut extends Record<string, BaseDataPoint[]>,
 > {
   /**
@@ -124,7 +124,7 @@ export interface ComputationSpec<
  * with its value computed and unused.
  */
 export function computation<
-  const TIn extends readonly Source<BaseDataPoint>[],
+  const TIn extends readonly Source<any>[],
   TOut extends Record<string, BaseDataPoint[]>,
 >({ inputs, calc, calcLast, calcFirst, headLookback }: ComputationSpec<TIn, TOut>): Computation<TOut> {
   // Validation lives in one place here — validating separately per
@@ -153,7 +153,7 @@ export function computation<
     }
   });
 
-  let fed: BaseDataPoint[][] | null = null;
+  let fed: DataView<BaseDataPoint>[] | null = null;
   let result: TOut;
 
   /**
@@ -309,8 +309,8 @@ export function computation<
 }
 
 function sameInputs(
-  previous: BaseDataPoint[][],
-  next: BaseDataPoint[][],
+  previous: readonly DataView<BaseDataPoint>[],
+  next: readonly DataView<BaseDataPoint>[],
 ): boolean {
   if (previous.length !== next.length) return false;
   return previous.every((value, index) => value === next[index]);
