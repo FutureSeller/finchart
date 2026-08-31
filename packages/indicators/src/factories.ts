@@ -7,6 +7,7 @@ import type {
 } from "@finchart/core";
 import { computation } from "@finchart/core";
 import {
+  decayHorizon,
   ema,
   highest,
   lowest,
@@ -141,6 +142,19 @@ export function movingAverage<T extends BaseDataPoint>(
       // Reuses the front of the previous array — so downstream sees the same tail verdict.
       return { ma: previous.ma.slice(0, keep).concat(tail) };
     },
+
+    /**
+     * A landing corrects the window's warmup for an sma and the decay
+     * horizon for an ema — past that horizon the restarted fold agrees
+     * with the old values to below the landing bound. `headLookback`'s
+     * generic interpreter does the rest (prefix rerun, tail reuse); the
+     * tail checkpoints stay untouched — the tail's own fold path didn't
+     * move.
+     */
+    headLookback:
+      options.type === "ema"
+        ? decayHorizon(2 / (options.period + 1))
+        : options.period - 1,
   });
 }
 
@@ -287,6 +301,14 @@ export function macd<T extends BaseDataPoint>(
         histogram: previous.histogram.slice(0, keep).concat(histogramTail),
       };
     },
+
+    /**
+     * A landing's corrected zone stacks the chained memories: the slow
+     * EMA's horizon to settle the macd line, plus the signal EMA's
+     * horizon on top of that settled line.
+     */
+    headLookback:
+      decayHorizon(2 / (slow + 1)) + decayHorizon(2 / (signalPeriod + 1)),
   });
 }
 
@@ -340,6 +362,8 @@ export function bollingerBands<T extends BaseDataPoint>(
 
   return computation({
     inputs: [source],
+    /** The window's warmup — sma and stddev share it. */
+    headLookback: period - 1,
     calc: (data) => {
       const values = valuesOf(data, value);
       const middle = sma(values, period);
@@ -404,6 +428,8 @@ export function rsi<T extends BaseDataPoint>(
 
   return computation({
     inputs: [source],
+    /** Wilder smoothing's decay horizon, plus one bar for the diff. */
+    headLookback: decayHorizon(1 / period) + 1,
     calc: (data) => {
       const values = valuesOf(data, value);
 
@@ -465,6 +491,8 @@ export function atr(source: Source<OHLC>, options: AtrOptions = {}): Atr {
 
   return computation({
     inputs: [source],
+    /** Wilder smoothing's decay horizon, plus one bar for the true range. */
+    headLookback: decayHorizon(1 / period) + 1,
     calc: (data) => ({ atr: points(data, rma(trueRanges(data), period)) }),
   });
 }
@@ -497,6 +525,8 @@ export function adx(source: Source<OHLC>, options: AdxOptions = {}): Adx {
 
   return computation({
     inputs: [source],
+    /** Two chained Wilder smoothings (DI, then ADX), plus one bar for the DM diff. */
+    headLookback: decayHorizon(1 / period) * 2 + 1,
     calc: (data) => {
       const plusDm: (number | null)[] = new Array(data.length).fill(null);
       const minusDm: (number | null)[] = new Array(data.length).fill(null);
@@ -854,6 +884,8 @@ export function stochastic(
 
   return computation({
     inputs: [source],
+    /** The %K window plus both smoothing windows stacked on it. */
+    headLookback: period - 1 + (smooth - 1) + (signal - 1),
     calc: (data) => {
       const highestHigh = highest(
         data.map((candle) => candle.high),
@@ -902,6 +934,8 @@ export function cci(source: Source<OHLC>, options: CciOptions = {}): Cci {
 
   return computation({
     inputs: [source],
+    /** One window — the mean and its deviation read the same one. */
+    headLookback: period - 1,
     calc: (data) => {
       const typical = data.map(
         (candle) => (candle.high + candle.low + candle.close) / 3,
@@ -947,6 +981,8 @@ export function williamsR(
 
   return computation({
     inputs: [source],
+    /** The high/low window's warmup. */
+    headLookback: period - 1,
     calc: (data) => {
       const highs = highest(data.map((candle) => candle.high), period);
       const lows = lowest(data.map((candle) => candle.low), period);
@@ -995,6 +1031,8 @@ export function donchianChannels(
 
   return computation({
     inputs: [source],
+    /** The channel window's warmup. */
+    headLookback: period - 1,
     calc: (data) => {
       const upper = highest(data.map((candle) => candle.high), period);
       const lower = lowest(data.map((candle) => candle.low), period);
@@ -1060,6 +1098,8 @@ export function keltnerChannels(
 
   return computation({
     inputs: [source],
+    /** The wider of the two parallel memories (EMA middle, Wilder ATR width), plus one bar for the true range. */
+    headLookback: Math.max(decayHorizon(2 / (period + 1)), decayHorizon(1 / atrPeriod)) + 1,
     calc: (data) => {
       const middle = ema(data.map((candle) => candle.close), period);
       const width = rma(trueRanges(data), atrPeriod);

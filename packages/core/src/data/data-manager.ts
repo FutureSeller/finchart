@@ -1,4 +1,4 @@
-import {
+import { ContractError,
   DataError,
   describe,
   requireDataPoint,
@@ -65,6 +65,13 @@ export interface SimpleDataManagerOptions<T extends BaseDataPoint> {
    */
   pointsPerPixel?: number;
   /**
+   * Dev-time full re-validation on `adoptHeadRetainingTail`. Production
+   * needs only validate the new head because the retained suffix is this
+   * manager's own previously accepted data; this option also catches illegal
+   * mutation of that retained data during development and dogfooding.
+   */
+  verifyAdoptions?: boolean;
+  /**
    * Whether to stack tiers halved successively. **Off by default.**
    *
    * Turning it on makes panning while zoomed out cost the budget size
@@ -88,6 +95,7 @@ export class SimpleDataManager<
   private readonly coordinates: CoordinateAccessor<T>;
   private readonly maxPoints: number;
   private readonly pointsPerPixel: number;
+  private readonly verifyAdoptions: boolean;
   /**
    * The previous frame's answer and the question that produced it.
    *
@@ -140,6 +148,7 @@ export class SimpleDataManager<
     }
     this.maxPoints = options.maxPoints ?? Number.POSITIVE_INFINITY;
     this.pointsPerPixel = options.pointsPerPixel ?? 4;
+    this.verifyAdoptions = options.verifyAdoptions ?? false;
     this.tiered = options.tiered ?? false;
   }
 
@@ -335,6 +344,64 @@ export class SimpleDataManager<
    * checking the last point) actually drifted apart and left a hole in the
    * incremental path.
    */
+  /**
+   * The landing door — see the `DataManager` contract. The caller supplies
+   * only the changed head; the retained body is selected from this manager's
+   * own accepted array. That makes narrowed validation a structural fact,
+   * not a promise that a fresh re-derived body happens to be safe.
+   */
+  adoptHeadRetainingTail(head: T[], retainedFrom: number): void {
+    if (head.length === 0) {
+      throw new ContractError(
+        "adoptHeadRetainingTail(head, retainedFrom): head must not be empty",
+      );
+    }
+    if (
+      !Number.isInteger(retainedFrom) ||
+      retainedFrom < 0 ||
+      retainedFrom >= this.data.length
+    ) {
+      throw new ContractError(
+        `adoptHeadRetainingTail(head, retainedFrom): retainedFrom must be within [0, ${this.data.length}), got ${describe(retainedFrom)}`,
+      );
+    }
+
+    const retained = this.data.length - retainedFrom;
+    const adopted = new Array<T>(head.length + retained);
+    for (let i = 0; i < head.length; i++) adopted[i] = head[i];
+    for (let i = 0; i < retained; i++) adopted[head.length + i] = this.data[retainedFrom + i];
+
+    if (this.verifyAdoptions) {
+      this.gapFree = !this.assertSorted(adopted);
+    } else {
+      const headHasGap = this.assertChunkSorted(head);
+      const headLastX = this.coordinates.getX(head[head.length - 1]);
+      const tailFirstX = this.coordinates.getX(this.data[retainedFrom]);
+      if (tailFirstX < headLastX) {
+        throw new DataError(
+          `adopted head must continue before retained x=${tailFirstX}, got ${describe(headLastX)}`,
+        );
+      }
+      if (this.gapFree) this.gapFree = !headHasGap;
+    }
+    this.data = adopted;
+    this.afterIncrement();
+  }
+
+  /**
+   * Compatibility for managers built against the earlier caller-owned
+   * landing shape. It deliberately takes the normal full-validation route:
+   * only `adoptHeadRetainingTail` can prove where its suffix came from.
+   */
+  adoptHeadGrown(next: T[], grownBy: number): void {
+    if (!Number.isInteger(grownBy) || grownBy <= 0 || grownBy > next.length) {
+      throw new ContractError(
+        `adoptHeadGrown(next, grownBy): grownBy must be within (0, ${next.length}], got ${describe(grownBy)}`,
+      );
+    }
+    this.setData(next);
+  }
+
   private assertSorted(data: readonly T[]): boolean {
     // `=== 0`, not `< 2` — even a single-element array needs its shape and
     // finiteness checked (there's just nothing to sort).

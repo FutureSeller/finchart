@@ -170,6 +170,7 @@ export default defineConfig({
             { text: "Volume Profile", link: "/examples/volume-profile" },
             { text: "Own-Pane Indicators — MACD · ADX · OBV", link: "/examples/own-panes" },
             { text: "Real-Time Ticks", link: "/examples/realtime" },
+            { text: "Infinite History", link: "/examples/infinite-history" },
             { text: "Drawing Tools", link: "/examples/drawing" },
             { text: "Bar-Index Coordinates", link: "/examples/bar-index" },
             { text: "Two Synced Charts — syncX", link: "/examples/sync-x" },

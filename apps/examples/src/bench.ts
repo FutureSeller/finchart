@@ -305,6 +305,14 @@ function smaSeries(window: number): {
     source: readonly OHLC[],
     change: { kind: "append" | "replace"; count: number },
   ) => LineDataPoint[];
+  deriveFirst: {
+    lookback: number;
+    head: (
+      previous: readonly LineDataPoint[],
+      source: readonly OHLC[],
+      change: { kind: "prepend"; count: number },
+    ) => LineDataPoint[];
+  };
 } {
   let beforeLast: SmaState | null = null;
   let atEnd: SmaState | null = null;
@@ -342,7 +350,33 @@ function smaSeries(window: number): {
     return out;
   };
 
-  return { derive, deriveLast };
+  /**
+   * A landing's head. Warmup nulls are dropped (see `derive`), so the old
+   * head outputs never change on a prepend — the output is 1:1 with the
+   * source *shifted by the warmup*, and `lookback` is 0: `count` source
+   * points landing means exactly `count` outputs landing (count − w + 1
+   * from the new points once their window fills, plus w − 1 at the old
+   * source's former warmup, which only now has a full window behind it).
+   */
+  const deriveFirst = {
+    lookback: 0,
+    head: (
+      _previous: readonly LineDataPoint[],
+      source: readonly OHLC[],
+      change: { kind: "prepend"; count: number },
+    ): LineDataPoint[] => {
+      const fold = smaFold(window);
+      const upto = Math.min(change.count + window - 1, source.length);
+      const out: LineDataPoint[] = [];
+      for (let i = 0; i < upto; i++) {
+        const y = fold.step(source[i].close);
+        if (y !== null) out.push({ x: source[i].x, y });
+      }
+      return out;
+    },
+  };
+
+  return { derive, deriveLast, deriveFirst };
 }
 
 /** One ordinary chart — candles plus a few moving averages. */
@@ -1039,6 +1073,22 @@ function tickBurstPair(points: number, ticksPerFrame: number): Pair {
   };
 }
 
+/** Wraps a build so the chart starts zoomed to the trailing `fraction` of its fitted domain. */
+function zoomedTo(build: Build, fraction: number): Build {
+  return (host, createRenderer) => {
+    const subject = build(host, createRenderer);
+    const domain = subject.plot.getState().xDomain;
+    if (domain) {
+      subject.plot.setVisibleRange(
+        domain.max - (domain.max - domain.min) * fraction,
+        domain.max,
+      );
+    }
+    subject.plot.render();
+    return subject;
+  };
+}
+
 const pairs: Pair[] = [
   liveTickPair(100_000),
   liveTickPair(10_000),
@@ -1046,6 +1096,48 @@ const pairs: Pair[] = [
   // buys nothing, which is why it stays an opt-in door and not a default.
   tickBurstPair(100_000, 50),
   tickBurstPair(10_000, 10),
+  {
+    /**
+     * The landing cost behind infiniteHistory's page-size advice: a
+     * derivation has no increment path, so every prepend recomputes it
+     * wholesale — the landing pays O(held), multiplied by the derivation
+     * count, not O(page). The ratio here is that multiplier.
+     */
+    question:
+      "A history page landing, 100k candles +500/frame: candles alone against 4 SMA derivations",
+    baseline: {
+      name: "candles only",
+      build: candleChart({ points: 100_000 }),
+      step: prependChunk(),
+    },
+    variant: {
+      name: "4 SMA derivations",
+      build: candleChart({ points: 100_000, indicators: 4 }),
+      step: prependChunk(),
+    },
+  },
+  {
+    /**
+     * The same landing at the view infinite scroll actually happens in —
+     * zoomed to a screenful. Fit-all pays an unrelated bill on top (every
+     * visible point re-decimates per landing), so the pair above answers
+     * "how bad can it get" and this one answers "what does the user
+     * scrolling history feel" — the frame-hitch ledger row is judged on
+     * this one.
+     */
+    question:
+      "A history page landing at a 500-bar view, 100k candles +500/frame: candles alone against 4 SMA derivations",
+    baseline: {
+      name: "candles only (zoomed)",
+      build: zoomedTo(candleChart({ points: 100_000 }), 500 / 100_000),
+      step: prependChunk(),
+    },
+    variant: {
+      name: "4 SMA derivations (zoomed)",
+      build: zoomedTo(candleChart({ points: 100_000, indicators: 4 }), 500 / 100_000),
+      step: prependChunk(),
+    },
+  },
   {
     question: "What does auto-scaling add to a pan?",
     baseline: {

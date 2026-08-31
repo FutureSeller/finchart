@@ -81,6 +81,8 @@ keeps the pairing honest.
 | `legend` | `OverlayHost & PaneHost & PlotEventSource` |
 | `tooltip` | `OverlayHost & PlotEventSource & FormatSource` |
 | `syncX` (both) | `PlotEventSource & ViewportControl` |
+| `infiniteHistory` | `PlotEventSource & XCoordinates & Pick<Plot, "getState">` |
+| `conflated` | `Pick<SeriesHandle, "updateLast" \| "attached">` — a handle wrapper, not a plugin |
 | `@finchart/indicators` | `PaneHost` (most take the narrower `SeriesHost`) |
 | `@finchart/tools` | on the pane side `PaneDecorationHost & ValueCoordinates & DataProbe`, the chart optionally — `RenderRequester & InputHost & XCoordinates & CursorHost & FocusAreaHost` |
 

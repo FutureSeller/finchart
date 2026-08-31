@@ -208,6 +208,9 @@ function mergeSortedUnique(
   return out;
 }
 
+const firstOrNaN = (source: readonly number[]): number =>
+  source.length > 0 ? source[0] : Number.NaN;
+
 /**
  * Converts x into a bar index before handing it to the scale. This is the
  * coordinate system financial charts want.
@@ -239,6 +242,14 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
   /** The source arrays from the last rebuild — the identity key for the tail fast path. */
   let lastSources: readonly (readonly number[])[] | null = null;
   let lastLengths: number[] = [];
+  /**
+   * Each source's first value at the last rebuild. Identity plus length
+   * says a shared array *grew*; only the front value says on which end —
+   * without it, a front-grown array whose shifted region repeats the old
+   * maximum passes the tail test's shape and the prepended bar dedupes
+   * into nothing.
+   */
+  let lastFirsts: number[] = [];
 
   /** The first place within `[from, to)` at or past `x` (lower bound). */
   const searchBetween = (x: number, from: number, to: number): number => {
@@ -413,15 +424,66 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
        * current maximum (global order isn't purely a tail append).
        */
       if (lastSources !== null && sources.length === lastSources.length) {
+        const heads: number[] = [];
         const tails: number[] = [];
+        /** The rightmost old front among head-grown sources — where the merge region ends. */
+        let headBound = Number.NEGATIVE_INFINITY;
         let fastPath = true;
-        for (let i = 0; i < sources.length; i++) {
+        for (let i = 0; i < sources.length && fastPath; i++) {
           const source = sources[i];
-          if (source !== lastSources[i] || source.length < lastLengths[i]) {
+          const previousLength = lastLengths[i];
+          if (source !== lastSources[i] || source.length < previousLength) {
             fastPath = false;
             break;
           }
-          for (let at = lastLengths[i]; at < source.length; at++) {
+          const grown = source.length - previousLength;
+          if (grown === 0) {
+            // Untouched by length — but the same identity with a moved
+            // front means an in-place rewrite. Not this path's business.
+            if (previousLength > 0 && source[0] !== lastFirsts[i]) {
+              fastPath = false;
+            }
+            continue;
+          }
+
+          /**
+           * **Which end grew is decided by the front value, and the head
+           * is decided first.** A front-grown array still satisfies the
+           * tail test's shape whenever the old maximum repeats into the
+           * shifted region — the "new tail" then dedupes into nothing and
+           * the prepended bar silently vanishes from the index. Growth
+           * from empty stays on the tail side, where the origin gets
+           * established. When both readings hold (a duplicate-run front),
+           * this path can't tell — the full walk can.
+           */
+          const frontKept = previousLength === 0 || source[0] === lastFirsts[i];
+          const frontShifted =
+            previousLength > 0 && source[grown] === lastFirsts[i];
+          if (frontKept === frontShifted) {
+            fastPath = false;
+            break;
+          }
+
+          if (frontShifted) {
+            if (anchor === null) {
+              fastPath = false;
+              break;
+            }
+            // The seam contract upstream caps a landed head at its own
+            // source's old front — anything past it is not a landing.
+            if (lastFirsts[i] > headBound) headBound = lastFirsts[i];
+            for (let at = 0; at < grown; at++) {
+              const value = source[at];
+              if (value > lastFirsts[i]) {
+                fastPath = false;
+                break;
+              }
+              heads.push(value);
+            }
+            continue;
+          }
+
+          for (let at = previousLength; at < source.length; at++) {
             const value = source[at];
             if (xs.length > 0 && value < xs[xs.length - 1]) {
               fastPath = false;
@@ -429,10 +491,38 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
             }
             tails.push(value);
           }
-          if (!fastPath) break;
         }
 
         if (fastPath) {
+          if (heads.length > 0) {
+            /**
+             * Heads land per handle, so a later source's head can overlap
+             * the front an earlier landing just widened — the merge runs
+             * against the whole front region up to the rightmost old
+             * front (`headBound`), never against `xs[0]` alone. Beyond
+             * that region nothing can change: the seam contract upstream
+             * caps every landed head at its own source's old front.
+            */
+            heads.sort((a, b) => a - b);
+            const end = searchFrom(headBound);
+            // Include the suffix boundary in the shared merge, then remove it
+            // from the mutable prefix so an equal x is kept exactly once.
+            const boundary = xs[end];
+            const merged = mergeSortedUnique([heads, xs.slice(0, end + 1)]).filter(
+              (value) => value !== boundary,
+            );
+            const inserted = merged.length - end;
+            if (inserted !== 0 || merged.some((value, at) => xs[at] !== value)) {
+              xs = merged.concat(xs.slice(end));
+              /**
+               * The bars already indexed keep their indices — the same
+               * promise the full walk keeps through the anchor, paid here
+               * as arithmetic: every existing rank moved right by the
+               * inserted count, so the base moves left by it.
+               */
+              base -= inserted;
+            }
+          }
           if (tails.length > 0) {
             tails.sort((a, b) => a - b);
             for (const value of tails) {
@@ -455,6 +545,7 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
           }
           for (let i = 0; i < sources.length; i++) {
             lastLengths[i] = sources[i].length;
+            lastFirsts[i] = firstOrNaN(sources[i]);
           }
           return;
         }
@@ -463,6 +554,7 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
       probe?.onFullRebuild?.();
       lastSources = sources.slice();
       lastLengths = sources.map((source) => source.length);
+      lastFirsts = sources.map(firstOrNaN);
       // Each registration is already sorted — this relies on
       // that fact.
       xs = mergeSortedUnique(sources);

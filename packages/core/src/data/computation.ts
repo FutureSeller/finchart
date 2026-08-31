@@ -1,4 +1,5 @@
 import { ContractError, describe } from "../primitives";
+import { headDelta, type HeadChange } from "./head-delta";
 import { tailDelta, type TailChange } from "./tail-delta";
 import type { BaseDataPoint, Source } from "./types";
 
@@ -62,6 +63,42 @@ export interface ComputationSpec<
     inputs: ReadOf<TIn>,
     changes: readonly TailChange[],
   ) => TOut | null;
+
+  /**
+   * The head increment — a history page landing on this node's inputs.
+   * Only called when every input's change reads as a prepend (or
+   * nothing); `null` falls back to a full computation, and that fallback
+   * is also the door's own safety valve — a kernel that can't vouch for
+   * its resume point (a recursion whose seed moved) answers null instead
+   * of guessing.
+   *
+   * Build each branch by computing the new head (plus whatever old head
+   * positions the landing corrects) and **reusing the previous array's
+   * tail beyond that** (`slice`/`concat`) — the reused identities are how
+   * this branch's consumers classify the landing in turn.
+   */
+  calcFirst?: (
+    previous: TOut,
+    inputs: ReadOf<TIn>,
+    changes: readonly ({ kind: "none" } | HeadChange)[],
+  ) => TOut | null;
+
+  /**
+   * The declarative head door — for the common case, where `calc` emits
+   * one output per input position, left to right. Declare how far back a
+   * landing corrects (a window's warmup, a recursion's decay horizon) and
+   * the node lands pages by itself: it re-runs `calc` on the prefix
+   * (`count + headLookback` positions — a landing's resume point is the
+   * beginning of time, so no checkpoint is needed) and reuses each
+   * branch's tail as is.
+   *
+   * The 1:1 assumption is checked at runtime, per branch, per landing —
+   * a branch whose prefix output isn't position-aligned makes the door
+   * decline and the full path answer, which is always correct. A door
+   * that needs a different head shape writes `calcFirst` instead; the two
+   * are one way each, so declaring both is refused.
+   */
+  headLookback?: number | (() => number);
 }
 
 /**
@@ -89,7 +126,7 @@ export interface ComputationSpec<
 export function computation<
   const TIn extends readonly Source<BaseDataPoint>[],
   TOut extends Record<string, BaseDataPoint[]>,
->({ inputs, calc, calcLast }: ComputationSpec<TIn, TOut>): Computation<TOut> {
+>({ inputs, calc, calcLast, calcFirst, headLookback }: ComputationSpec<TIn, TOut>): Computation<TOut> {
   // Validation lives in one place here — validating separately per
   // indicator factory would leak bad input as an error with an exposed
   // internal name like "Cannot read properties of null (reading 'read')",
@@ -103,6 +140,11 @@ export function computation<
       `computation(inputs) must be an array, got ${describe(inputs)}`,
     );
   }
+  if (calcFirst !== undefined && headLookback !== undefined) {
+    throw new ContractError(
+      "computation: declare calcFirst or headLookback, not both — one door per direction",
+    );
+  }
   inputs.forEach((input, i) => {
     if (typeof input !== "object" || input === null || typeof input.read !== "function") {
       throw new ContractError(
@@ -113,6 +155,61 @@ export function computation<
 
   let fed: BaseDataPoint[][] | null = null;
   let result: TOut;
+
+  /**
+   * `headLookback`'s interpreter. Declines (null → full path) whenever
+   * the declaration's assumptions don't hold on this landing: inputs that
+   * landed different counts can't be sliced in step, and a branch whose
+   * prefix output isn't 1:1 with positions has a head of the wrong
+   * length. Declining is always correct — it just costs the full route.
+   */
+  const declaredDoor = (
+    previous: TOut,
+    values: ReadOf<TIn>,
+    changes: readonly ({ kind: "none" } | HeadChange)[],
+  ): TOut | null => {
+    let count = -1;
+    for (const change of changes) {
+      if (change.kind !== "prepend") return null;
+      if (count === -1) count = change.count;
+      else if (change.count !== count) return null;
+    }
+    if (count <= 0) return null;
+
+    const look = typeof headLookback === "function" ? headLookback() : headLookback;
+    if (look === undefined || !Number.isInteger(look) || look < 0) return null;
+
+    const upto = count + look;
+    const expected = Math.min(upto, values[0]?.length ?? 0);
+    if (expected < count) return null;
+    // Every sliced prefix must be the same length — with inputs of
+    // unequal history there is no single position axis to be 1:1 with.
+    for (const value of values) {
+      if (Math.min(upto, value.length) !== expected) return null;
+    }
+    const sliced = values.map((value) => value.slice(0, expected));
+    const heads = calc(...(sliced as ReadOf<TIn>));
+
+    const next = {} as TOut;
+    for (const key of Object.keys(previous) as (keyof TOut)[]) {
+      const tail = previous[key];
+      const head = heads[key];
+      /**
+       * 1:1 is enforced, not inferred: exactly one output per prefix
+       * position, no more and no less. Inferring the corrected zone from
+       * whatever length came back would let a non-position-aligned calc
+       * stitch a corrupted hybrid into the node whenever its length
+       * happened to land in range — the same self-fulfilling-contract
+       * trap the declared lookback exists to close.
+       */
+      if (!Array.isArray(head) || !Array.isArray(tail)) return null;
+      if (head.length !== expected) return null;
+      const corrected = expected - count;
+      if (corrected > tail.length) return null;
+      next[key] = head.concat(tail.slice(corrected)) as TOut[keyof TOut];
+    }
+    return next;
+  };
 
   const run = (): TOut => {
     const values = inputs.map((input) => input.read());
@@ -152,6 +249,34 @@ export function computation<
       }
       if (tailOnly) {
         const next = calcLast(result, values as ReadOf<TIn>, changes);
+        if (next !== null) {
+          fed = values;
+          result = next;
+          return result;
+        }
+      }
+    }
+
+    // The head gate mirrors the tail gate — including the commit-order
+    // rule: `fed` only advances after the computation succeeds.
+    const landPage = calcFirst ?? (headLookback !== undefined ? declaredDoor : null);
+    if (landPage && fed !== null) {
+      const previous = fed;
+      const changes: ({ kind: "none" } | HeadChange)[] = [];
+      let headOnly = true;
+      for (let i = 0; i < values.length; i++) {
+        const change: { kind: "none" } | HeadChange | null =
+          values[i] === previous[i]
+            ? { kind: "none" }
+            : headDelta(previous[i], values[i]);
+        if (change === null) {
+          headOnly = false;
+          break;
+        }
+        changes.push(change);
+      }
+      if (headOnly) {
+        const next = landPage(result, values as ReadOf<TIn>, changes);
         if (next !== null) {
           fed = values;
           result = next;

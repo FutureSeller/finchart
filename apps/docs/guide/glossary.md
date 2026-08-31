@@ -423,6 +423,38 @@ series), so you can measure how close to the edge you are from the payload
 alone. Incremental adds do not touch the domain, so they are silent — that is
 why prepending history inside the handler does not recurse.
 
+### Infinite history (`infiniteHistory`)
+
+**The past-loading door** — `infiniteHistory(plot, sink, fetch, { from })`
+watches `xDomainChange` and asks your `fetch` for the page of points before
+its cursor whenever the view nears (prefetch, on a leftward gesture) or
+passes (gap fill, chaining until covered) the left edge of what is loaded.
+You own two functions — the page before a given x, and where a landed page
+goes — plus the cursor's origin `from` (the first x you already hold; the
+loader cannot guess it, since a chart-wide range is a union across series
+and a derivation's own range is shorter than its source). An empty page
+means the end of history.
+
+The loader defends its cursor: points at or after `before` are trimmed off
+quietly (inclusive end bounds are the norm for exchange REST APIs — left
+alone, the boundary bar would silently double), a non-empty page trimmed to
+nothing throws instead of reading as the end, and an out-of-order page
+terminates the loader. Its `status()` / `statusChanges` pair reports
+`idle | loading | done | terminated`. Also answers to: infinite scroll,
+load more, backfill.
+
+### Conflation (`conflated`)
+
+**The tick-burst door** — `conflated(handle)` folds the ticks that arrive
+between two frames into one `updateLast` per frame, holding only the latest
+state per bar (last-wins; bring a `merge` for partial-update feeds). Fifty
+ticks a frame stop costing fifty full-array copies for a picture that only
+shows the last one — measured, a 100k-point chart under 50 ticks/frame went
+from 16.9 to 3.8 ms/frame. A bar boundary is never folded across: the old
+bar's final state is delivered immediately. It is an opt-in wrapper around a
+published handle, same standing as `syncX` — below ~10k points at modest
+tick rates the win is noise, which is why it is a door and not a default.
+
 ### Crosshair
 
 The event that reports the cursor position **translated into meaning.** It

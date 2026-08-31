@@ -1,6 +1,6 @@
 import { browserDeps } from "@finchart/dom";
-import type { CrosshairPayload, HistogramPoint, LineDataPoint, OHLC, Plot, XDomainChangePayload } from "@finchart/core";
-import { OHLCAccessor, barIndexX, histogramSeries, timeTicks } from "@finchart/core";
+import type { CrosshairPayload, HistogramPoint, LineDataPoint, OHLC, Plot } from "@finchart/core";
+import { OHLCAccessor, barIndexX, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
 import {
   ChartCandles,
   ChartContainer,
@@ -17,7 +17,7 @@ import {
   useChartPlot,
 } from "@finchart/react";
 import { drawingTools } from "@finchart/tools";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Bar number → trading day. **Weekends are skipped** — every five bars leave a
@@ -155,6 +155,18 @@ const MOM_PERIOD = 10;
 
 const PAGE = 40;
 const INITIAL_FROM = -60;
+
+/**
+ * The page of candles before a data x — what `infiniteHistory` calls. `before`
+ * is always an existing bar's x (the loader's cursor is a delivered point), so
+ * folding the day number back to a bar index is exact arithmetic; a real
+ * consumer would pass the timestamp to its API instead.
+ */
+function pastPage(before: number): OHLC[] {
+  const week = Math.floor(before / 7);
+  const end = week * 5 + (before - week * 7); // day → bar, weekends fold away
+  return candlesIn(end - PAGE, end);
+}
 const HEIGHT = 460;
 
 type Mode = "line" | "candle";
@@ -181,7 +193,7 @@ function ChartSetup({
    * The continuous coordinate system has no default zoom-out limit — the core
    * doesn't know what one unit of domain means. This demo does: x is a trading
    * day. Without a limit, zooming out in this mode is unbounded, and so is the
-   * target `loadPast` tries to fill. Bar-index mode is left alone so the
+   * gap the history loader tries to fill. Bar-index mode is left alone so the
    * mapping's own default (min 0.5) is what you see.
    */
   useEffect(() => {
@@ -207,6 +219,40 @@ function ChartSetup({
 
     return () => tools.dispose();
   }, [plot, drawings]);
+
+  return null;
+}
+
+/**
+ * The infinite scroll, as the React recipe: the sink is a setState prepend
+ * (declarative `data` doesn't refit, so the window you're looking at stays
+ * put), the fetch is above, and the loader owns the cursor, the pixel
+ * threshold, in-flight dedup, and the refit/fit-all guard — everything the
+ * 60-line hand-rolled listener that used to live here did by hand, plus the
+ * chaining it documented but skipped ("hand over one page and the rest of
+ * the gap stays empty until the next gesture").
+ *
+ * It lives inside the container for the same reason `ChartSetup` does: on
+ * the coordinate-system toggle (a `key` remount), `useChartPlot` hands the
+ * chart of the moment, and the effect re-winds the loader against it. The
+ * seed is read through a ref at wind time — the loader owns the cursor from
+ * there, so the effect must not re-run when a landing changes `firstX`.
+ */
+function ChartHistory({
+  firstX,
+  onPage,
+}: {
+  firstX: number;
+  onPage: (older: OHLC[]) => void;
+}) {
+  const plot = useChartPlot();
+  const seed = useRef(firstX);
+  seed.current = firstX;
+
+  useEffect(() => {
+    const loader = infiniteHistory(plot, onPage, pastPage, { from: seed.current });
+    return () => loader.dispose();
+  }, [plot, onPage]);
 
   return null;
 }
@@ -246,56 +292,12 @@ export function App() {
 
   const plotRef = useRef<Plot | null>(null);
 
-  /** Where the next fetch starts. The event's `dataRange` only catches up once the state has landed. */
-  const frontier = useRef(INITIAL_FROM);
-
-  /**
-   * Fetches more history as the visible range nears the left edge. It listens
-   * through a prop rather than `plotRef.current.on`, because when the
-   * coordinate-system toggle remounts the chart, a subscription made in an
-   * outer effect can be left hanging on the destroyed plot. A prop is
-   * re-attached where the plot is created.
-   */
-  const loadPast = ({ startX, endX, dataRange }: XDomainChangePayload) => {
-    if (!dataRange) return;
-
-    /**
-     * The first refit and "Fit all" are not "the user went looking at the
-     * past" — the window is fitted to all the data, so startX sits right on
-     * the data's start. Zooming out is different: startX is left of the data's
-     * start (you can see the empty past), and it must not trip this guard. An
-     * earlier version filtered on `endX >= dataRange.max` alone, so zooming
-     * out at the latest range fetched nothing and left the left side blank.
-     */
-    if (startX >= dataRange.min && endX >= dataRange.max) return;
-
-    /**
-     * Fills half a screen-width ahead. The unit is x (trading days) — `PAGE`
-     * counts bars, so it drifts by the weekend gaps (40 bars = 56 days).
-     */
-    const targetX = startX - (endX - startX) / 2;
-    if (dataRange.min <= targetX) return;
-
-    /**
-     * Prepends as many pages as it takes to reach the target. A prepend
-     * doesn't touch the domain, so the event doesn't fire again — hand over
-     * one page and the rest of the gap stays empty until the next gesture.
-     * Against a real server you would run the same test again where the
-     * response lands.
-     */
-    const to = frontier.current;
-    let from = to;
-    let requested = 0;
-    while (tradingDayOf(from) > targetX) {
-      from -= PAGE;
-      requested += 1;
-    }
-    frontier.current = from;
-
-    setCandles((prev) => [...candlesIn(from, to), ...prev]);
-    setLoaded((n) => n + (to - from));
-    setPages((n) => n + requested);
-  };
+  /** Where a landed page goes — the counters are the demo's own readouts. */
+  const onPage = useCallback((older: OHLC[]) => {
+    setCandles((prev) => [...older, ...prev]);
+    setLoaded((n) => n + older.length);
+    setPages((n) => n + 1);
+  }, []);
 
   return (
     <main style={{ fontFamily: "system-ui", padding: 24 }}>
@@ -379,7 +381,6 @@ export function App() {
         paneGap={16}
         plotRef={plotRef}
         onCrosshair={setCursor}
-        onXDomainChange={loadPast}
         style={
           {
             // No width — autoSize follows the container.
@@ -399,6 +400,7 @@ export function App() {
         }
       >
         <ChartSetup barIndex={barIndex} drawings={drawings} />
+        <ChartHistory firstX={candles[0].x} onPage={onPage} />
         <XAxis ticks={xTimeTicks} />
 
         {/* The crosshair is a decoration, so it sits outside the panes — it crosses both */}

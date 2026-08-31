@@ -271,6 +271,24 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
   /** Prepends past data to the front. Checking rules mirror `append`. */
   prepend(points: T[]): void;
   /**
+   * Replaces the head and retains this manager's previously accepted tail
+   * starting at `retainedFrom`. This is the narrow landing door for a
+   * declared incremental derivation: the manager, not its caller, owns the
+   * unvalidated suffix, so only `head` and its seam need a new check.
+   *
+   * Optional — a manager without it simply keeps declared derivations on
+   * the full `setData` route.
+   */
+  adoptHeadRetainingTail?(head: T[], retainedFrom: number): void;
+  /**
+   * @deprecated Legacy caller-owned landing door. Its arguments are still
+   * `next` and `grownBy`; implementations may adopt `next` wholesale. New
+   * entry paths never use it because that shape cannot prove a retained body
+   * came from this manager. Implement `adoptHeadRetainingTail` for the
+   * narrowed path instead.
+   */
+  adoptHeadGrown?(next: T[], grownBy: number): void;
+  /**
    * Swaps out the last point — the tick of a bar in progress.
    * `DataError` if the new point's x is less than the x of the point before
    * it (second-to-last). If empty, it becomes the first point.

@@ -19,6 +19,7 @@ on the left. Each page shows the live demo alongside the real source.
 - [Renko — throw away time, keep only price](/examples/renko)
 - [Own-pane indicators — MACD · ADX · OBV](/examples/own-panes)
 - [Real-time ticks](/examples/realtime)
+- [Infinite history](/examples/infinite-history)
 - [Drawing tools](/examples/drawing)
 - [Bar-index coordinates](/examples/bar-index)
 - [Two charts in sync — syncX](/examples/sync-x)
