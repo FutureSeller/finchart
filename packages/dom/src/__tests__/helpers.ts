@@ -12,7 +12,10 @@ import {
   type FakeLayers,
 } from "./fakes";
 
-export const defaultConfig: PlotConfig = {
+// Required-but-widened: tests read `defaultConfig.padding.top`, and the
+// loose config contract alone can't promise padding is there.
+export const defaultConfig: PlotConfig &
+  Required<Pick<PlotConfig, "padding" | "showGrid">> = {
   padding: { top: 20, right: 20, bottom: 20, left: 20 },
   showGrid: true,
 };

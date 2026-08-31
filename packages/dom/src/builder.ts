@@ -7,16 +7,14 @@ import type {
   Series,
   ViewportDimensions,
 } from "@finchart/core";
-import { ContractError, DEFAULT_PADDING, Plot } from "@finchart/core";
+import { ContractError, Plot } from "@finchart/core";
 import type { BrowserDeps } from "./browser-deps";
 import { isElementLike } from "./overlay-element";
 
 export class PlotBuilder<T extends BaseDataPoint> {
   private data: T[] = [];
-  private config: PlotConfig = {
-    padding: DEFAULT_PADDING,
-    showGrid: true,
-  };
+  /** Sparse on purpose — the core door fills every static default. */
+  private config: PlotConfig = {};
   private size: ViewportDimensions = { width: 400, height: 300 };
   private scope?: Scope;
 

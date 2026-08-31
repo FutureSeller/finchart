@@ -1,4 +1,4 @@
-import { definedOnly, requireObject } from "../primitives";
+import { requireObject } from "../primitives";
 import { createCanvasAxisLabels } from "../axis";
 import type { BaseDataPoint } from "../data";
 import type { DrawCommand } from "../render";
@@ -8,7 +8,6 @@ import type { SeriesRegistration } from "../registration";
 import { Plot } from "./plot";
 import type { ViewportDimensions } from "./config";
 import { createPlotDeps, type PlotDepsOptions } from "./presets";
-import { DEFAULT_PADDING } from "./style";
 import type { PlotConfig } from "./types";
 
 /**
@@ -34,7 +33,7 @@ export interface PlotModelOptions<T extends BaseDataPoint = BaseDataPoint> {
   /** One series + data registration. To add more later, use `model.plot.mainPane.addSeries`. */
   series?: SeriesRegistration<T> | Series<T> | null;
   /** Overrides the default only for the fields given here. */
-  config?: Partial<PlotConfig>;
+  config?: PlotConfig;
   /** Swaps in a different scale, mapping, data policy, text measurer, labels, or style resolution. */
   deps?: PlotModelDepsOptions;
 }
@@ -92,18 +91,9 @@ export function createPlotModel<T extends BaseDataPoint = BaseDataPoint>(
 
   const plot = new Plot({
     deps,
-    /**
-     * **An explicit `undefined` means "not given"** — the headless door
-     * honors the same rule `Plot.applyOptions` sets. A plain spread would
-     * pass an optional prop through as `undefined`, wiping out
-     * `DEFAULT_PADDING` and causing a `TypeError` on the next
-     * `padding.left` access.
-     */
-    config: {
-      padding: DEFAULT_PADDING,
-      showGrid: true,
-      ...definedOnly(options.config ?? {}),
-    },
+    // Defaults are the core door's job (`resolveConfig`) — this hands the
+    // config through untouched, the explicit-undefined rule included.
+    config: options.config,
     size: options.size,
   });
 

@@ -9,7 +9,10 @@ import type { SeriesHandle } from "../series-handle";
 import { Plot } from "../plot";
 import type { PlotConfig, PlotDeps } from "../types";
 
-export const defaultConfig: PlotConfig = {
+// Required-but-widened: tests read `defaultConfig.padding.left` and flip
+// `showGrid`, and the loose config contract alone can't promise either.
+export const defaultConfig: PlotConfig &
+  Required<Pick<PlotConfig, "padding" | "showGrid">> = {
   padding: { top: 20, right: 20, bottom: 20, left: 20 },
   showGrid: true,
 };

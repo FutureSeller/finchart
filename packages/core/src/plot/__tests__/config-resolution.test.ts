@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
+import { PLOT_CONFIG_DEFAULTS } from "../config";
 import { createPlotModel } from "../model";
 import type { PlotConfig } from "../types";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -129,5 +130,16 @@ describe("axis patch: explicit undefined reverts to the default", () => {
     model.plot.applyOptions({ axis: { x: { showLabels: undefined } } });
     model.plot.render();
     expect(model.plot.mainPane.area.bottom).toBe(shown);
+  });
+});
+
+describe("the door resolves the whole table", () => {
+  it("hands back every static default filled on a minimal chart", () => {
+    const model = createPlotModel({
+      size,
+      series: { series: lineSeries(), data: points() },
+    });
+
+    expect(model.plot.getOptions()).toEqual(PLOT_CONFIG_DEFAULTS);
   });
 });

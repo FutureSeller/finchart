@@ -55,6 +55,7 @@ import {
   checkViewportSize,
   copyConfig,
   mergeOptions,
+  resolveConfig,
   type ViewportDimensions,
 } from "./config";
 import { cursorClaims, type CursorClaims, focusClaims } from "../interaction";
@@ -74,7 +75,12 @@ import type { Plugin, PluginApi } from "../primitives";
 import { immediateScheduler, type RenderScheduler } from "../render";
 import { applyPaneState, matchPaneState, paneStateOf, type ChartState } from "./state";
 import { XViewport } from "./x-viewport";
-import type { PlotConfig, PlotDeps, PlotOptionsPatch } from "./types";
+import type {
+  PlotConfig,
+  PlotDeps,
+  PlotOptionsPatch,
+  ResolvedPlotConfig,
+} from "./types";
 
 /**
  * What it takes to stand up a `Plot`.
@@ -106,7 +112,8 @@ export interface PlotOptions {
    * types out of the core contract is half of what makes headless headless.
    */
   deps: PlotDeps;
-  config: PlotConfig;
+  /** May be left out — every static default is filled at this door (`resolveConfig`). */
+  config?: PlotConfig;
   /** Initial size of the layers. Changed afterward with `setViewport`. */
   size: ViewportDimensions;
   /**
@@ -242,7 +249,7 @@ export class Plot
    */
   private readonly stage: PaintStage;
 
-  private config: PlotConfig;
+  private config: ResolvedPlotConfig;
 
   constructor(options: PlotOptions) {
     // The options object **itself** is a door too — `checkViewportSize`
@@ -250,10 +257,13 @@ export class Plot
     // "Cannot destructure property 'deps'". Destructuring happened before
     // the check below, so the internal name leaked straight through.
     requireObject(options, "Plot(options)");
-    const { deps, config, size } = options;
-    // Say so here if the required trio is missing — `checkPlotNumbers(config)`
-    // destructures first, so `{}` alone produced a raw TypeError.
+    const { deps, size } = options;
+    // Say so here if a required collaborator is missing — `checkPlotNumbers`
+    // destructures first, so `{}` alone produced a raw TypeError. `config`
+    // may be left out entirely (every static default is filled at this
+    // door), but a given one must be an object — `null` stays an error.
     requireObject(deps, "Plot({ deps })");
+    const config = options.config === undefined ? {} : options.config;
     requireObject(config, "Plot({ config })");
 
     // Both the constructor and applyOptions pass through this — only one
@@ -274,8 +284,12 @@ export class Plot
      * is the one door for changes. **Nested objects included** — `padding`
      * is read on every layout, so a shallow copy let `config.padding.left =
      * 0` after mounting move the plot area with no render scheduled.
+     *
+     * Resolution rides on the same pass — every static default is filled
+     * here, exactly once, so read sites downstream take values instead of
+     * re-deciding defaults locally (`resolveConfig`).
      */
-    this.config = copyConfig(config);
+    this.config = resolveConfig(config);
     this.viewportSize = { width: size.width, height: size.height };
 
     this.scheduler = (deps.createScheduler ?? immediateScheduler)(() =>
@@ -312,7 +326,7 @@ export class Plot
     this.x = (deps.createXMapping ?? continuousX)(this.xScale);
     this.paneStack = new PaneStack(deps.mainPaneYScale(), {
       createDataManager: deps.createDataManager,
-      yAxisOptions: () => this.config.axis?.y,
+      yAxisOptions: () => this.config.axis.y,
       onCreate: (pane) => this.addGrid(pane),
       onChange: (change) => this.onPaneChange(change),
     });
@@ -648,7 +662,7 @@ export class Plot
    * gets carried as a function into the context.
    */
   formatX = (value: number): string => {
-    const format = this.config.axis?.x?.format;
+    const format = this.config.axis.x.format;
     return format ? format(value) : DEFAULT_X_FORMAT(value);
   };
 
@@ -810,7 +824,7 @@ export class Plot
    * When this was a shallow copy, `getOptions().padding.left = 0` mutated
    * the internals directly.
    */
-  getOptions(): PlotConfig {
+  getOptions(): ResolvedPlotConfig {
     return copyConfig(this.config);
   }
 
@@ -889,7 +903,7 @@ export class Plot
          * neither a grab nor a cursor claim ever happens.
          */
         slices: () =>
-          this.config.axisDrag === false ? null : this.lastSlices,
+          this.config.axisDrag ? this.lastSlices : null,
         paneAt: (y) => this.paneStack.atY(y),
         zoomAroundCenter: (factor) => {
           const [min, max] = this.xScale.getDomain();
@@ -1272,8 +1286,8 @@ export class Plot
     const frame = layoutFrame({
       area: this.area,
       panes: this.paneStack.list,
-      gap: this.config.paneGap ?? 0,
-      axis: this.config.axis ?? {},
+      gap: this.config.paneGap,
+      axis: this.config.axis,
       xScale: this.xScale,
       x: this.x,
       labels: this.axisLabels !== null,

@@ -5,13 +5,23 @@
  * `undefined` means not given" rule and the numeric guards used to be
  * checkable only by standing up a whole chart and reading the plot area.
  */
+import { MIN_TICK_SPACING } from "../axis";
 import {
   ContractError,
   definedOnly,
   requireFinite,
   requireNonNegative,
 } from "../primitives";
-import type { PlotConfig, PlotOptionsPatch } from "./types";
+import { DEFAULT_PADDING } from "./style";
+import type {
+  PlotConfig,
+  PlotOptionsPatch,
+  ResolvedPlotConfig,
+  ResolvedXAxisOptions,
+  ResolvedYAxisOptions,
+  XAxisOptions,
+  YAxisOptions,
+} from "./types";
 
 export interface ViewportDimensions {
   width: number;
@@ -158,20 +168,86 @@ export function checkPlotNumbers(options: PlotOptionsPatch): void {
  * cloning (`structuredClone`) throws on fields holding functions, like
  * `format` and `ticks`.
  */
-export function copyConfig(config: PlotConfig): PlotConfig {
-  const { padding, axis, style } = config;
-  const copy: PlotConfig = { ...config, padding: { ...padding } };
+export function copyConfig(config: ResolvedPlotConfig): ResolvedPlotConfig {
+  const { axis, style } = config;
 
-  if (axis) {
-    copy.axis = {};
-    if (axis.x) copy.axis.x = { ...axis.x };
-    if (axis.y) copy.axis.y = { ...axis.y };
-  }
-  if (style) {
-    copy.style = style.grid ? { grid: { ...style.grid } } : {};
-  }
+  return {
+    ...config,
+    padding: { ...config.padding },
+    axis: { x: { ...axis.x }, y: { ...axis.y } },
+    style: style.grid ? { grid: { ...style.grid } } : {},
+  };
+}
 
-  return copy;
+/**
+ * The one table every static default comes from. A default that lived at
+ * its read site got copied (`paneGap ?? 0` three times over) and drifted
+ * (the tick-spacing constants re-typed as bare literals elsewhere) — with
+ * both doors resolving against this table, a second copy of a default has
+ * no place to live. `minBarSpacing`/`maxBarSpacing` are absent on purpose
+ * — see `ResolvedPlotConfig`.
+ */
+export const PLOT_CONFIG_DEFAULTS: ResolvedPlotConfig = {
+  padding: DEFAULT_PADDING,
+  showGrid: true,
+  paneGap: 0,
+  shiftVisibleRangeOnNewBar: false,
+  resizablePanes: true,
+  axisDrag: true,
+  rightOffset: 0,
+  axis: {
+    x: { showLabels: true, minTickSpacing: MIN_TICK_SPACING.horizontal },
+    y: {
+      showLabels: true,
+      minTickSpacing: MIN_TICK_SPACING.vertical,
+      position: "left",
+    },
+  },
+  style: {},
+};
+
+function resolveAxisX(given: XAxisOptions | undefined): ResolvedXAxisOptions {
+  const defaults = PLOT_CONFIG_DEFAULTS.axis.x;
+  return {
+    ...given,
+    showLabels: given?.showLabels ?? defaults.showLabels,
+    minTickSpacing: given?.minTickSpacing ?? defaults.minTickSpacing,
+  };
+}
+
+function resolveAxisY(given: YAxisOptions | undefined): ResolvedYAxisOptions {
+  const defaults = PLOT_CONFIG_DEFAULTS.axis.y;
+  return {
+    ...given,
+    showLabels: given?.showLabels ?? defaults.showLabels,
+    minTickSpacing: given?.minTickSpacing ?? defaults.minTickSpacing,
+    position: given?.position ?? defaults.position,
+  };
+}
+
+/**
+ * The constructor's half of resolution: ownership (nothing shared with the
+ * caller — fresh nested objects throughout) and every static default
+ * filled, in one pass. An explicit `undefined` means "not given" here too;
+ * at this door there is nothing to revert, so it lands on the default
+ * either way.
+ */
+export function resolveConfig(config: PlotConfig): ResolvedPlotConfig {
+  const defaults = PLOT_CONFIG_DEFAULTS;
+  const { padding, axis, style, ...flat } = config;
+
+  return {
+    showGrid: defaults.showGrid,
+    paneGap: defaults.paneGap,
+    shiftVisibleRangeOnNewBar: defaults.shiftVisibleRangeOnNewBar,
+    resizablePanes: defaults.resizablePanes,
+    axisDrag: defaults.axisDrag,
+    rightOffset: defaults.rightOffset,
+    ...definedOnly(flat),
+    padding: { ...defaults.padding, ...definedOnly(padding) },
+    axis: { x: resolveAxisX(axis?.x), y: resolveAxisY(axis?.y) },
+    style: style?.grid ? { grid: { ...style.grid } } : {},
+  };
 }
 
 /**
@@ -197,14 +273,16 @@ export function copyConfig(config: PlotConfig): PlotConfig {
  *
  * `axis` is **deliberately excluded.** There, an explicit `undefined` has
  * meaning — `<XAxis />` passing along a prop it wasn't given *is* "revert to
- * the default" (`axes.tsx`), and that's the only way to clear it.
+ * the default" (`axes.tsx`), and that's the only way to clear it. And since
+ * the door resolves what it hands back, a cleared field that has a default
+ * comes out as that default's value, not as a hole for a read site to fill.
  *
  * `style` is replaced wholesale → `PlotOptionsPatch.style`.
  */
 export function mergeOptions(
-  current: PlotConfig,
+  current: ResolvedPlotConfig,
   patch: PlotOptionsPatch,
-): PlotConfig {
+): ResolvedPlotConfig {
   const { padding, axis, style, ...flat } = patch;
 
   return {
@@ -212,8 +290,8 @@ export function mergeOptions(
     ...definedOnly(flat),
     padding: { ...current.padding, ...definedOnly(padding) },
     axis: {
-      x: { ...current.axis?.x, ...axis?.x },
-      y: { ...current.axis?.y, ...axis?.y },
+      x: resolveAxisX({ ...current.axis.x, ...axis?.x }),
+      y: resolveAxisY({ ...current.axis.y, ...axis?.y }),
     },
     style: style ? { grid: style.grid } : current.style,
   };

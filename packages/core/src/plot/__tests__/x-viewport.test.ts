@@ -6,7 +6,7 @@ import { barIndexX, continuousX, LinearScale } from "../../scale";
 import { XViewport, type XViewportOptions } from "../x-viewport";
 
 function setup(
-  options: XViewportOptions = {},
+  options: Partial<XViewportOptions> = {},
   mapping: "continuous" | "barIndex" = "continuous",
 ) {
   const scale = new LinearScale();
@@ -20,7 +20,11 @@ function setup(
     scale,
     x,
     dataRange: () => data,
-    options: () => options,
+    options: () => ({
+      rightOffset: 0,
+      shiftVisibleRangeOnNewBar: false,
+      ...options,
+    }),
     onChange: (visible) => changes.push(visible),
   });
 
@@ -410,7 +414,7 @@ describe("notifications", () => {
       scale: new LinearScale(),
       x: continuousX(new LinearScale()),
       dataRange: () => null,
-      options: () => ({}),
+      options: () => ({ rightOffset: 0, shiftVisibleRangeOnNewBar: false }),
       onChange,
     });
 

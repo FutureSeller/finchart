@@ -1,4 +1,4 @@
-export { Axis, autoTickStep } from "./axis";
+export { Axis, autoTickStep, MIN_TICK_SPACING } from "./axis";
 export { drawGrid } from "./grid";
 export type { GridOptions, GridTarget } from "./grid";
 export {

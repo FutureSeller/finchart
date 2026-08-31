@@ -5,7 +5,9 @@ import type { DataManagerFactory } from "../../data";
 import { M4Decimation, SimpleDataManager } from "../../data";
 import type { PlotArea } from "../../primitives";
 import { barIndexX, continuousX, LinearScale } from "../../scale";
+import { resolveConfig } from "../config";
 import { layoutFrame, type FrameInput, type FrameMeasure } from "../frame";
+import type { PlotConfig } from "../types";
 import { FALLBACK_X_AXIS_HEIGHT, FALLBACK_Y_AXIS_WIDTH } from "../layout";
 import { Pane } from "../pane";
 
@@ -32,6 +34,9 @@ function panes(count: number, domains: [number, number][] = []): Pane[] {
   });
 }
 
+/** `FrameInput.axis` is the resolved shape — built through the real door, so fixtures stay sparse. */
+const ax = (axis: PlotConfig["axis"] = {}) => resolveConfig({ axis }).axis;
+
 function frame(overrides: Partial<FrameInput> = {}) {
   const xScale = new LinearScale();
   xScale.setDomain(0, 100);
@@ -40,7 +45,7 @@ function frame(overrides: Partial<FrameInput> = {}) {
     area: AREA,
     panes: panes(1),
     gap: 0,
-    axis: {},
+    axis: ax(),
     xScale,
     x: continuousX(xScale),
     labels: true,
@@ -67,7 +72,7 @@ describe("when an axis takes up room and when it does not", () => {
   });
 
   it("should drop the x slice when x labels are off", () => {
-    const { slices } = frame({ axis: { x: { showLabels: false } } });
+    const { slices } = frame({ axis: ax({ x: { showLabels: false } }) });
 
     expect(slices.x).toBeNull();
     expect(slices.data.bottom).toBe(AREA.bottom);
@@ -76,7 +81,7 @@ describe("when an axis takes up room and when it does not", () => {
   });
 
   it("should drop the y slice when every pane hides its labels", () => {
-    const { slices } = frame({ axis: { y: { showLabels: false } } });
+    const { slices } = frame({ axis: ax({ y: { showLabels: false } }) });
 
     expect(slices.y).toBeNull();
     expect(slices.data.left).toBe(AREA.left);
@@ -120,7 +125,7 @@ describe("axis size", () => {
 
     const { slices } = frame({
       measure,
-      axis: { x: { size: 30 }, y: { size: 64 } },
+      axis: ax({ x: { size: 30 }, y: { size: 64 } }),
     });
 
     expect(slices.x!.bottom - slices.x!.top).toBe(30);
@@ -136,7 +141,7 @@ describe("axis size", () => {
   });
 
   it("should put the y axis on the right when asked", () => {
-    const { slices } = frame({ axis: { y: { position: "right" } } });
+    const { slices } = frame({ axis: ax({ y: { position: "right" } }) });
 
     expect(slices.data.left).toBe(AREA.left);
     expect(slices.y!.left).toBe(slices.data.right);
@@ -192,7 +197,7 @@ describe("ticks", () => {
 
   it("should let a tick strategy own placement and labels", () => {
     const { ticks } = frame({
-      axis: { x: { ticks: { ticks: () => [{ value: 42, label: "forty-two" }] } } },
+      axis: ax({ x: { ticks: { ticks: () => [{ value: 42, label: "forty-two" }] } } }),
     });
 
     expect(ticks.x).toHaveLength(1);
@@ -212,7 +217,7 @@ describe("ticks", () => {
     const { ticks } = frame({
       xScale,
       x,
-      axis: { x: { format: (value) => { seen.push(value); return `x${value}`; } } },
+      axis: ax({ x: { format: (value) => { seen.push(value); return `x${value}`; } } }),
     });
 
     expect(ticks.x.length).toBeGreaterThan(0);
@@ -247,7 +252,7 @@ describe("y-axis tick strategy", () => {
   it("should let a strategy own the value axis ticks", () => {
     const { ticks } = frame({
       panes: panes(1, [[0, 100]]),
-      axis: { y: { ticks: fixed([[25, "low"], [75, "high"]]) } },
+      axis: ax({ y: { ticks: fixed([[25, "low"], [75, "high"]]) } }),
     });
 
     expect(ticks.y[0].ticks.map((t) => t.label)).toEqual(["low", "high"]);
@@ -257,7 +262,7 @@ describe("y-axis tick strategy", () => {
     const list = panes(1, [[0, 100]]);
     const { ticks } = frame({
       panes: list,
-      axis: { y: { ticks: fixed([[50, "mid"]]) } },
+      axis: ax({ y: { ticks: fixed([[50, "mid"]]) } }),
     });
 
     // The axis fills in position from the scale — the strategy doesn't know about pixels.
@@ -270,7 +275,7 @@ describe("y-axis tick strategy", () => {
 
     const { ticks } = frame({
       panes: list,
-      axis: { y: { ticks: fixed([[50, "stage default"]]) } },
+      axis: ax({ y: { ticks: fixed([[50, "stage default"]]) } }),
     });
 
     expect(ticks.y[0].ticks.map((t) => t.label)).toEqual(["stage default"]);
@@ -288,9 +293,9 @@ describe("y-axis tick strategy", () => {
   it("should ignore format when a strategy is present", () => {
     const { ticks } = frame({
       panes: panes(1, [[0, 100]]),
-      axis: {
+      axis: ax({
         y: { ticks: fixed([[50, "strategy"]]), format: () => "format" },
-      },
+      }),
     });
 
     expect(ticks.y[0].ticks[0].label).toBe("strategy");
@@ -320,7 +325,7 @@ describe("sizes that cannot be drawn", () => {
       area: box(width, height),
       panes: panes(1),
       gap: 0,
-      axis: {},
+      axis: ax(),
       xScale,
       x: continuousX(xScale),
       labels: true,
@@ -363,7 +368,7 @@ describe("sizes that cannot be drawn", () => {
       area: box(3, 3),
       panes: panes(1),
       gap: 0,
-      axis: {},
+      axis: ax(),
       xScale,
       x: continuousX(xScale),
       labels: true,
@@ -389,7 +394,7 @@ describe("sizes that cannot be drawn", () => {
       area: box(800, 600),
       panes: [main, collapsed],
       gap: 0,
-      axis: {},
+      axis: ax(),
       xScale,
       x: continuousX(xScale),
       labels: true,
@@ -426,7 +431,7 @@ describe("sizes that cannot be drawn", () => {
         area: box(800, 600),
         panes: [main, other],
         gap: 0,
-        axis: {},
+        axis: ax(),
         xScale,
         x: continuousX(xScale),
         labels: true,
@@ -453,7 +458,7 @@ describe("sizes that cannot be drawn", () => {
       area: box(800, 600),
       panes: [only],
       gap: 0,
-      axis: {},
+      axis: ax(),
       xScale: xScale2,
       x: continuousX(xScale2),
       labels: true,
@@ -477,7 +482,7 @@ describe("sizes that cannot be drawn", () => {
       area: box(800, 3),
       panes: panes(2),
       gap: 0,
-      axis: {},
+      axis: ax(),
       xScale,
       x: continuousX(xScale),
       labels: true,

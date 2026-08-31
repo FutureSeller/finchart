@@ -65,8 +65,10 @@ export interface YAxisOptions extends AxisOptions {
 }
 
 export interface PlotConfig {
-  padding: Padding;
-  showGrid: boolean;
+  /** Outer margin. `DEFAULT_PADDING` if omitted. */
+  padding?: Padding;
+  /** Whether grid lines are drawn. On if omitted. */
+  showGrid?: boolean;
   /** Gap between panes (px). Defaults to 0 if omitted. */
   paneGap?: number;
   /**
@@ -112,6 +114,50 @@ export interface PlotConfig {
   axis?: { x?: XAxisOptions; y?: YAxisOptions };
   /** Overrides the CSS variable / default only for the fields given here. */
   style?: { grid?: Partial<LineStyle> };
+}
+
+/**
+ * The config after the door's resolution — every field with a static
+ * default is present, so a read site takes the value as-is instead of
+ * re-deciding a default locally. (The local version got copied — the same
+ * `?? 0` in three files — and drifted; one table at the door makes a
+ * second copy of a default impossible to express.)
+ *
+ * Consumers write the loose `PlotConfig`; the constructor / `applyOptions`
+ * doors are the only producers of this shape, and `getOptions` hands it
+ * back — what you get from a chart is always fully resolved.
+ *
+ * `minBarSpacing`/`maxBarSpacing` stay optional — their default belongs to
+ * the coordinate system (`XMapping.barSpacingDefaults`), `0` carries the
+ * meaning "no limit in that direction", and the single read site
+ * (`x-viewport.ts`) is where that computed default applies.
+ */
+export interface ResolvedPlotConfig extends PlotConfig {
+  padding: Padding;
+  showGrid: boolean;
+  paneGap: number;
+  shiftVisibleRangeOnNewBar: boolean;
+  resizablePanes: boolean;
+  axisDrag: boolean;
+  rightOffset: number;
+  axis: { x: ResolvedXAxisOptions; y: ResolvedYAxisOptions };
+  style: { grid?: Partial<LineStyle> };
+}
+
+/**
+ * `format`, `ticks`, and `size` stay optional in the resolved shape —
+ * there their absence is a behavior (default arithmetic, measuring),
+ * not a default value.
+ */
+export interface ResolvedXAxisOptions extends XAxisOptions {
+  showLabels: boolean;
+  minTickSpacing: number;
+}
+
+export interface ResolvedYAxisOptions extends YAxisOptions {
+  showLabels: boolean;
+  minTickSpacing: number;
+  position: "left" | "right";
 }
 
 /**
