@@ -3,6 +3,7 @@ export type {
   CoordinateAccessor,
   DataManager,
   DataManagerFactory,
+  DataView,
   DataPoint,
   DecimationFactory,
   DecimationStrategy,

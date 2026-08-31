@@ -11,7 +11,7 @@
  *    deriveKey means the derive doesn't rerun. This is the basis for not
  *    requiring `useMemo`.
  */
-import type { LineDataPoint, Plot, PlotDeps, Series } from '@finchart/core';
+import type { DataView, LineDataPoint, Plot, PlotDeps, Series } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
 import {
@@ -43,7 +43,7 @@ function fakeSeries(name: string, log: string[]): Series<LineDataPoint> {
 
 /** A derive that counts how many times it ran. */
 function countingDerive(calls: { n: number }) {
-  return (source: LineDataPoint[]): LineDataPoint[] => {
+  return (source: DataView<LineDataPoint>): LineDataPoint[] => {
     calls.n += 1;
     return source.map((point) => ({
       x: point.x,
@@ -83,6 +83,21 @@ function drawOrder(plot: Plot, log: string[]): string[] {
 const mount = (ui: ReactElement) => render(ui);
 
 describe('<ChartSeries> order', () => {
+  it('should make React-declared series reject a later imperative insertion', () => {
+    const { deps, ref, plot } = setup();
+    const log: string[] = [];
+    mount(
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartSeries series={fakeSeries('declared', log)} />
+      </ChartContainer>,
+    );
+
+    expect(() => plot().mainPane.addSeries({ series: fakeSeries('imperative', log), data })).toThrow(
+      /owned by syncSeries/,
+    );
+    expect(drawOrder(plot(), log)).toEqual(['declared']);
+  });
+
   it('should draw siblings in JSX order', () => {
     const { deps, ref, plot } = setup();
     const log: string[] = [];
@@ -265,7 +280,7 @@ describe('<ChartSeries> derive cache', () => {
   it('should draw the newest series object after a re-render', () => {
     const { deps, ref, plot } = setup();
     const log: string[] = [];
-    const derive = (source: LineDataPoint[]) => source;
+    const derive = (source: DataView<LineDataPoint>) => [...source];
 
     const view = (name: string) => (
       <ChartContainer deps={deps} data={data} plotRef={ref}>

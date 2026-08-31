@@ -1,4 +1,4 @@
-import type { LineDataPoint, Plot, Series } from '@finchart/core';
+import type { DataView, LineDataPoint, Plot, Series } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
@@ -245,7 +245,7 @@ describe('axes', () => {
 describe('derive through the composition API', () => {
   it('should draw what derive returned', () => {
     const { deps, ref, plot } = setup();
-    const seen: LineDataPoint[][] = [];
+    const seen: DataView<LineDataPoint>[] = [];
     const spySeries: Series<LineDataPoint> = {
       valueExtent: () => ({ min: 0, max: 100 }),
       draw: (_renderer, context) => seen.push(context.data),
@@ -411,5 +411,39 @@ describe('state restoration', () => {
     // Changing a prop is a new instruction — restoration doesn't reapply once the pane count is unchanged.
     rerender(ui(7));
     expect(plot().panes[0].flex).toBe(7);
+  });
+
+  it('should pass stateKey through so inserted panes do not receive another pane\'s state', () => {
+    const { deps, ref, plot } = setup();
+
+    mount(
+      <ChartContainer
+        deps={deps}
+        data={data}
+        plotRef={ref}
+        state={{
+          panes: [
+            { stateKey: 'price', flex: 2, autoScale: true },
+            { stateKey: 'rsi', flex: 4, autoScale: true },
+          ],
+        }}
+      >
+        <ChartPane stateKey="price" flex={1}>
+          <ChartSeries series={price} />
+        </ChartPane>
+        <ChartPane stateKey="volume" flex={7}>
+          <ChartSeries series={indicator} />
+        </ChartPane>
+        <ChartPane stateKey="rsi" flex={1}>
+          <ChartSeries series={indicator} />
+        </ChartPane>
+      </ChartContainer>,
+    );
+
+    expect(plot().panes.map((pane) => [pane.stateKey, pane.flex])).toEqual([
+      ['price', 2],
+      ['volume', 7],
+      ['rsi', 4],
+    ]);
   });
 });

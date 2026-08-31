@@ -285,7 +285,7 @@ describe("a detached handle cannot move the stage", () => {
     expect(() => handle.updateLast({ x: 9, y: 9 })).toThrow(ContractError);
   });
 
-  it("the same holds for a handle evicted by syncSeries", () => {
+  it("the same holds for a handle replaced by setSeries", () => {
     const { plot } = mount();
     const extra = plot.mainPane.addSeries({
       series: lineSeries(),
@@ -293,8 +293,8 @@ describe("a detached handle cannot move the stage", () => {
     });
     expect(extra.read()).toHaveLength(1);
 
-    // Owns the whole list — what addSeries attached gets pushed out here.
-    plot.mainPane.syncSeries([]);
+    // Imperative replacement owns the same list and detaches the old handle.
+    plot.mainPane.setSeries(lineSeries());
 
     expect(() => extra.append([{ x: 1, y: 2 }])).toThrow(ContractError);
   });
@@ -319,7 +319,7 @@ describe("a detached handle cannot move the stage", () => {
     }).not.toThrow();
   });
 
-  it("an evicted handle's attached is false too — a way to confirm a removal you never called", () => {
+  it("a replaced handle's attached is false too — a way to confirm a removal you never called", () => {
     const { plot } = mount();
     const extra = plot.mainPane.addSeries({
       series: lineSeries(),
@@ -327,7 +327,7 @@ describe("a detached handle cannot move the stage", () => {
     });
     expect(extra.attached).toBe(true);
 
-    plot.mainPane.syncSeries([]);
+    plot.mainPane.setSeries(lineSeries());
     expect(extra.attached).toBe(false);
   });
 

@@ -13,6 +13,7 @@ import {
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   DataManagerFactory,
   Range,
   Source,
@@ -55,6 +56,12 @@ import { DEFAULT_Y_FORMAT } from "./format";
 import type { YAxisOptions, AxisOptions } from "./types";
 
 export interface PaneOptions {
+  /**
+   * Stable identity for persisted view state. Give dynamically assembled
+   * panes a semantic key (`"rsi"`, `"volume"`); it is written to
+   * `ChartState` and cannot be changed after the pane has claimed it.
+   */
+  stateKey?: string;
   /** Share of the leftover vertical space this pane takes. Default 1. */
   flex?: number;
   /** Never shrinks below this (px). Default 40. */
@@ -89,6 +96,12 @@ export interface PaneOptions {
  * is the idiom `paneMaximize` uses to collapse a pane.
  */
 function checkPaneNumbers(options: PaneOptions): void {
+  if (
+    options.stateKey !== undefined &&
+    (typeof options.stateKey !== "string" || options.stateKey.trim().length === 0)
+  ) {
+    throw new ContractError("pane stateKey must be a non-empty string");
+  }
   if (options.flex !== undefined) requireNonNegative(options.flex, "pane flex");
   if (options.minHeight !== undefined) {
     requireNonNegative(options.minHeight, "pane minHeight");
@@ -211,13 +224,13 @@ export interface SeriesHandle<
    * If a derivation is attached, this is its result — what's on screen is
    * exactly the next computation's input.
    *
-   * **The returned array is live. Don't mutate it.** The reason it isn't a
+   * **The returned view is live and read-only.** The reason it isn't a
    * copy is that this door is an indicator pipeline's input — copying
    * 100,000 points somewhere that runs on every tick would eat the frame
    * budget on its own. If the receiver needs to sort or filter, it floats
    * one off with `[...handle.read()]`.
    */
-  read(): TPoint[];
+  read(): DataView<TPoint>;
 
   /** Replaces the whole dataset. **Refits both axes.** */
   setData(data: T[]): void;
@@ -415,7 +428,7 @@ export function seriesSpec<
   name?: string;
   color?: string;
   zIndex?: number;
-  derive: (source: TSource[]) => TPoint[];
+  derive: (source: DataView<TSource>) => TPoint[];
   /** Required whenever there's a derivation — without it, everything recomputes on every update. */
   deriveKey: readonly unknown[];
   coordinates?: CoordinateAccessor<TPoint>;
@@ -539,6 +552,8 @@ export interface PaneApi
   readonly axis: Readonly<AxisOptions>;
   /** Whether the value axis is inverted → `PaneOptions.invert` */
   readonly invert: boolean;
+  /** Stable state identity, or null when this pane intentionally uses legacy index state. */
+  readonly stateKey: string | null;
   /** The value axis. Can be swapped out — the log/linear toggle arrives via `setYScale`. */
   readonly yScale: Scale;
 
@@ -583,6 +598,14 @@ export class Pane implements PaneApi {
   private entries: Entry[] = [];
 
   /**
+   * Exactly one API owns the series list at a time. `syncSeries` reconciles
+   * a complete declarative list, while handles are meaningful only for an
+   * imperative list. Letting one silently replace the other detaches live
+   * handles with no call at the point of failure.
+   */
+  private seriesOwner: "imperative" | "declarative" | null = null;
+
+  /**
    * Extensions installed on this pane. **Cleaned up together when the pane
    * detaches.**
    *
@@ -618,6 +641,7 @@ export class Pane implements PaneApi {
   private minHeightPx: number;
   private axisOptions: AxisOptions;
   private inverted: boolean;
+  private stateKeyValue: string | null;
 
   /** The assigned vertical slice. The Plot sets this before every render. */
   private assignedArea: PlotArea = EMPTY_AREA;
@@ -663,6 +687,10 @@ export class Pane implements PaneApi {
   /** Whether the value axis is inverted → PaneOptions.invert */
   get invert(): boolean {
     return this.inverted;
+  }
+
+  get stateKey(): string | null {
+    return this.stateKeyValue;
   }
 
   /**
@@ -721,6 +749,8 @@ export class Pane implements PaneApi {
      * a function rather than a value because `applyOptions` can change the config.
      */
     private readonly inheritedYAxis?: () => YAxisOptions | undefined,
+    /** Plot-owned uniqueness check for the persistent state identity. */
+    private readonly assertStateKeyAvailable?: (key: string) => void,
   ) {
     checkPaneNumbers(options);
     this.valuePadding = options.valuePadding ?? PANE_OPTION_DEFAULTS.valuePadding;
@@ -729,6 +759,8 @@ export class Pane implements PaneApi {
     this.minHeightPx = options.minHeight ?? PANE_OPTION_DEFAULTS.minHeight;
     this.axisOptions = options.axis ?? {};
     this.inverted = options.invert ?? false;
+    this.stateKeyValue = options.stateKey ?? null;
+    if (this.stateKeyValue !== null) this.assertStateKeyAvailable?.(this.stateKeyValue);
   }
 
   /**
@@ -947,11 +979,27 @@ export class Pane implements PaneApi {
   >(
     registration: SeriesRegistration<TSource, TPoint> | Series<TSource>,
   ): SeriesHandle<TSource, TPoint> {
+    this.assertSeriesOwner("imperative", "addSeries");
     const entry = createEntry<TSource, TPoint>(registration, this.createDataManager);
+    this.seriesOwner = "imperative";
     this.entries.push(entry);
     this.notify();
 
     return this.handleFor(entry);
+  }
+
+  private assertSeriesOwner(
+    requested: "imperative" | "declarative",
+    door: "addSeries" | "setSeries" | "syncSeries" | "clearSeries",
+  ): void {
+    if (this.seriesOwner === null || this.seriesOwner === requested) return;
+
+    const owner = this.seriesOwner === "declarative" ? "syncSeries" : "addSeries/setSeries";
+    const next = requested === "declarative" ? "syncSeries" : "addSeries/setSeries";
+    throw new ContractError(
+      `pane series are owned by ${owner}; ${door} cannot take them over. ` +
+        `Clear the ${owner} list first, then use ${next}.`,
+    );
   }
 
   /**
@@ -999,7 +1047,7 @@ export class Pane implements PaneApi {
       // The point type is sealed inside Entry. The only place outside that
       // knows that type is where the registration was called, so the
       // TPoint that came from there is recovered here.
-      read: () => entry.read() as TPoint[],
+      read: () => entry.read() as DataView<TPoint>,
       setData: (data) => {
         live("setData");
         entry.setData(data);
@@ -1101,8 +1149,11 @@ export class Pane implements PaneApi {
   }
 
   /**
-   * Fits the series list to what the array says. **Owns the whole list** —
-   * anything mounted via addSeries gets pushed out here.
+   * Fits the series list to what the array says. **Owns the whole list.**
+   * It cannot be mixed with `addSeries`/`setSeries`; mixed ownership throws
+   * before any entry is detached.
+   * An explicit empty list releases declarative ownership, so it is the
+   * deliberate reset before moving back to an imperative list.
    *
    * The identity is `id`. With a matching id, the Entry is kept as is and
    * only the series reference is swapped, so the derivation cache
@@ -1133,6 +1184,7 @@ export class Pane implements PaneApi {
       }
       seen.add(spec.id);
     }
+    this.assertSeriesOwner("declarative", "syncSeries");
 
     const next = new Map<string, { spec: SeriesSpec; entry: Entry }>();
     const entries: Entry[] = [];
@@ -1174,6 +1226,8 @@ export class Pane implements PaneApi {
           : { spec, built: spec.toEntry(this.createDataManager) },
       );
     }
+
+    this.seriesOwner = specs.length === 0 ? null : "declarative";
 
     for (const step of plan) {
       if ("reuse" in step) {
@@ -1217,7 +1271,9 @@ export class Pane implements PaneApi {
   >(
     registration: SeriesRegistration<TSource, TPoint> | Series<TSource>,
   ): SeriesHandle<TSource, TPoint> {
+    this.assertSeriesOwner("imperative", "setSeries");
     const entry = createEntry<TSource, TPoint>(registration, this.createDataManager, "setSeries");
+    this.seriesOwner = "imperative";
     this.entries = [entry];
     this.synced.clear();
     this.notify();
@@ -1226,8 +1282,10 @@ export class Pane implements PaneApi {
   }
 
   clearSeries(): void {
+    this.assertSeriesOwner("imperative", "clearSeries");
     this.entries = [];
     this.synced.clear();
+    this.seriesOwner = null;
     this.notify();
   }
 
@@ -1286,7 +1344,18 @@ export class Pane implements PaneApi {
       (options.flex !== undefined && options.flex !== this.flexWeight) ||
       (options.autoScale !== undefined &&
         options.autoScale !== this.autoScaleFlag) ||
-      (options.invert !== undefined && options.invert !== this.inverted);
+      (options.invert !== undefined && options.invert !== this.inverted) ||
+      (options.stateKey !== undefined && options.stateKey !== this.stateKeyValue);
+
+    if (options.stateKey !== undefined && options.stateKey !== this.stateKeyValue) {
+      if (this.stateKeyValue !== null) {
+        throw new ContractError(
+          `pane stateKey is already "${this.stateKeyValue}" and cannot be changed; create a new pane for a new identity`,
+        );
+      }
+      this.assertStateKeyAvailable?.(options.stateKey);
+      this.stateKeyValue = options.stateKey;
+    }
 
     if (options.valuePadding !== undefined) {
       this.valuePadding = options.valuePadding;
@@ -1489,5 +1558,3 @@ export class Pane implements PaneApi {
     );
   }
 }
-
-

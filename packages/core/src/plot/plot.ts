@@ -86,7 +86,7 @@ import type { Plugin, PluginApi } from "./plugin";
 import { unionOf } from "./range";
 import { immediateScheduler, type RenderScheduler } from "./scheduler";
 import { PLOT_STYLE_SPEC } from "./style";
-import { paneStateOf, type ChartState } from "./state";
+import { applyPaneState, matchPaneState, paneStateOf, type ChartState } from "./state";
 import { XViewport } from "./x-viewport";
 import type { PlotConfig, PlotDeps, PlotOptionsPatch } from "./types";
 
@@ -648,6 +648,7 @@ export class Plot
       deps.createDataManager,
       {},
       () => this.config.axis?.y,
+      (key) => this.assertPaneStateKeyAvailable(key),
     );
     this.addGrid(main);
     this.watch(main);
@@ -703,6 +704,13 @@ export class Plot
    */
   get panes(): readonly PaneApi[] {
     return [...this.paneList];
+  }
+
+  /** State keys are semantic identities, so duplicates would make restoration ambiguous. */
+  private assertPaneStateKeyAvailable(key: string): void {
+    if (this.paneList.some((pane) => pane.stateKey === key)) {
+      throw new ContractError(`Duplicate pane stateKey: "${key}"`);
+    }
   }
 
   /**
@@ -918,13 +926,14 @@ export class Plot
       this.deps.createDataManager,
       options,
       () => this.config.axis?.y,
+      (key) => this.assertPaneStateKeyAvailable(key),
     );
 
     this.addGrid(pane);
     this.paneList.push(pane);
     this.watch(pane);
-    // The state's panes array grew by one — since index is identity, a
-    // shape change is state too.
+    // The state's panes array grew by one — keyed panes match semantically
+    // and legacy panes by index, so a shape change is state too.
     this.emitStateChange();
     this.scheduleRender();
 
@@ -1694,8 +1703,9 @@ export class Plot
    * shape from these three.
    *
    * `xDomain: null` is a "before fit" snapshot with nothing to apply — it's
-   * ignored. `panes` is paired by index, and a slice for a pane that
-   * doesn't currently exist is dropped — whoever creates panes (the
+   * ignored. Keyed pane slices match `PaneOptions.stateKey`; snapshots and
+   * panes with no keys retain the legacy index pairing. A slice whose pane
+   * does not currently exist is dropped — whoever creates panes (the
    * wrapper) reapplies it once the list changes.
    */
   applyState(state: Partial<ChartState>): void {
@@ -1734,24 +1744,16 @@ export class Plot
       );
     }
 
+    const paneChanges = state.panes === undefined
+      ? []
+      : matchPaneState(this.paneList, state.panes);
+
     this.coalesceState(() => {
       // If there's no data yet, the window holds it as pending and consumes
       // it at the first fit.
       if (state.xDomain != null) this.xViewport.restore(state.xDomain);
 
-      state.panes?.forEach((slice, index) => {
-        const pane = this.paneList[index];
-        if (!pane) return;
-
-        pane.applyOptions({
-          flex: slice.flex,
-          autoScale: slice.autoScale,
-          invert: slice.invert ?? false,
-        });
-        if (!slice.autoScale && slice.valueDomain) {
-          pane.setValueDomain(slice.valueDomain.min, slice.valueDomain.max);
-        }
-      });
+      for (const { pane, slice } of paneChanges) applyPaneState(pane, slice);
     });
 
     this.scheduleRender();

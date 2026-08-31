@@ -12,6 +12,14 @@
     ".": {
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./headless": {
+      "types": "./dist/headless.d.mts",
+      "default": "./dist/headless.mjs"
+    },
+    "./authoring": {
+      "types": "./dist/authoring.d.mts",
+      "default": "./dist/authoring.mjs"
     }
   },
   "sideEffects": false,
@@ -20,15 +28,15 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
-    "dev": "tsdown src/index.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/headless.ts src/authoring.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/headless.ts src/authoring.ts --format esm --dts --watch",
     "lint": "oxlint src",
     "type-check": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "clean": "rm -rf dist .turbo .tsbuildinfo",
     "size": "size-limit",
-    "check:publish": "publint && attw --pack . --ignore-rules cjs-resolves-to-esm"
+    "check:publish": "publint && attw --pack . --ignore-rules cjs-resolves-to-esm no-resolution"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",

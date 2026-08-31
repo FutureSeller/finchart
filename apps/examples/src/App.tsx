@@ -1,5 +1,5 @@
 import { browserDeps } from "@finchart/dom";
-import type { CrosshairPayload, HistogramPoint, LineDataPoint, OHLC, Plot } from "@finchart/core";
+import type { CrosshairPayload, DataView, HistogramPoint, LineDataPoint, OHLC, Plot } from "@finchart/core";
 import { OHLCAccessor, barIndexX, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
 import {
   ChartCandles,
@@ -108,7 +108,7 @@ const ohlcCoordinates = new OHLCAccessor();
  */
 const movingAverage =
   (period: number) =>
-  (source: OHLC[]): LineDataPoint[] => {
+  (source: DataView<OHLC>): LineDataPoint[] => {
     let total = 0;
 
     return source.map((candle, index) => {
@@ -125,7 +125,7 @@ const movingAverage =
 /** The difference from `period` bars ago. Its magnitude differs from price, so it needs its own pane. */
 const momentum =
   (period: number) =>
-  (source: OHLC[]): LineDataPoint[] =>
+  (source: DataView<OHLC>): LineDataPoint[] =>
     source.map((candle, index) => ({
       x: ohlcCoordinates.getX(candle),
       // The first `period` bars have nothing to subtract from.
@@ -137,7 +137,7 @@ const momentum =
  * the data because up-or-down is a fact about the point, not a style
  * (`HistogramPoint.color`).
  */
-const volumeBars = (source: OHLC[]): HistogramPoint[] =>
+const volumeBars = (source: DataView<OHLC>): HistogramPoint[] =>
   source.map((candle) => ({
     x: ohlcCoordinates.getX(candle),
     y: candle.volume ?? null,

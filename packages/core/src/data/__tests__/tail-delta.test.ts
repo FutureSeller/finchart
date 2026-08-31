@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { computation } from "../computation";
 import { tailDelta } from "../tail-delta";
-import type { Source } from "../types";
+import type { DataView, Source } from "../types";
 
 const points = (count: number) => Array.from({ length: count }, (_, i) => ({ x: i }));
 
@@ -71,7 +71,7 @@ describe("computation.calcLast", () => {
     };
   }
 
-  const doubled = (data: { x: number; y: number }[]) =>
+  const doubled = (data: DataView<{ x: number; y: number }>) =>
     data.map((p) => ({ x: p.x, y: p.y * 2 }));
 
   function counted() {
@@ -141,7 +141,7 @@ describe("computation.calcLast", () => {
   it("a non-tail change (replacing the front) runs the full calc", () => {
     const counts = { full: 0, tailCalls: 0 };
     const wire = feed([{ x: 0, y: 1 }, { x: 1, y: 2 }]);
-    let data = wire.source.read();
+    let data: DataView<{ x: number; y: number }> = wire.source.read();
     const node = computation({
       inputs: [wire.source],
       calc: (input) => {

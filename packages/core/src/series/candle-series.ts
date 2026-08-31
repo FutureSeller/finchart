@@ -1,6 +1,6 @@
 import { requireObject, requireOptionalBoolean } from "../primitives";
 import { OhlcAggregation, OHLCAccessor } from "../data";
-import type { OHLC, Range } from "../data";
+import type { DataView, OHLC, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
@@ -74,7 +74,7 @@ export class CandleSeries implements Series<OHLC> {
    * A candle occupies the low-to-high span.
    * Looking only at close would let the wick stick out past the plot.
    */
-  valueExtent(data: OHLC[]): Range | null {
+  valueExtent(data: DataView<OHLC>): Range | null {
     if (data.length === 0) return null;
 
     let min = Infinity;

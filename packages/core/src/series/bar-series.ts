@@ -1,6 +1,6 @@
 import { requireObject } from "../primitives";
 import { OhlcAggregation, OHLCAccessor } from "../data";
-import type { OHLC, Range } from "../data";
+import type { DataView, OHLC, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
@@ -57,7 +57,7 @@ export class BarSeries implements Series<OHLC> {
 
   constructor(private overrides: BarSeriesStyleOverrides = {}) {}
 
-  valueExtent(data: OHLC[]): Range | null {
+  valueExtent(data: DataView<OHLC>): Range | null {
     if (data.length === 0) return null;
 
     let min = Infinity;

@@ -9,11 +9,11 @@
  * compile time instead of runtime?
  */
 
-import type { LineDataPoint, OHLC } from '@finchart/core';
+import type { DataView, LineDataPoint, OHLC } from '@finchart/core';
 import { candleSeries, LineDataAccessor, lineSeries } from '@finchart/core';
 import { ChartSeries } from '../components';
 
-const ma = (source: OHLC[]): LineDataPoint[] =>
+const ma = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((c) => ({ x: c.x, y: c.close }));
 
 // (1) No derive — TPoint = TSource.

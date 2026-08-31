@@ -8,6 +8,7 @@
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   DataManager,
   DataManagerFactory,
   DecimationPolicy,
@@ -110,7 +111,7 @@ interface DerivedRegistration<
    * If there are several branches, use a computed node instead of
    * attaching this more than once → `computation`
    */
-  derive: (source: TSource[]) => TPoint[];
+  derive: (source: DataView<TSource>) => TPoint[];
 
   /**
    * **Tail increment.** Without it, every change is a full re-derivation —
@@ -129,8 +130,8 @@ interface DerivedRegistration<
    * Whatever received `updateLast`/`append` already knows what changed.
    */
   deriveLast?: (
-    previous: readonly TPoint[],
-    source: readonly TSource[],
+    previous: DataView<TPoint>,
+    source: DataView<TSource>,
     change: { kind: "append" | "replace"; count: number },
   ) => TPoint[];
 
@@ -155,8 +156,8 @@ interface DerivedRegistration<
   deriveFirst?: {
     lookback: number;
     head: (
-      previous: readonly TPoint[],
-      source: readonly TSource[],
+      previous: DataView<TPoint>,
+      source: DataView<TSource>,
       change: { kind: "prepend"; count: number },
     ) => TPoint[];
   };
@@ -339,7 +340,7 @@ export interface TypedEntry<TSource extends BaseDataPoint> extends Entry {
    * The derived result's type is erased here too — the only place that
    * knows it is where `addSeries` was called, and the handle recovers it there.
    */
-  read(): BaseDataPoint[];
+  read(): DataView<BaseDataPoint>;
 }
 
 /**
@@ -558,16 +559,16 @@ interface OwnedOrigin<
   toPoints: (source: TSource[]) => TPoint[];
   /** Tail-increment door → `DerivedRegistration.deriveLast`. Absent on identity — the splice path already exists. */
   toTail?: (
-    previous: readonly TPoint[],
-    source: readonly TSource[],
+    previous: DataView<TPoint>,
+    source: DataView<TSource>,
     change: { kind: "append" | "replace"; count: number },
   ) => TPoint[];
   /** Head-increment door → `DerivedRegistration.deriveFirst`. Absent on identity — prepend splices as is. */
   toHead?: {
     lookback: number;
     head: (
-      previous: readonly TPoint[],
-      source: readonly TSource[],
+      previous: DataView<TPoint>,
+      source: DataView<TSource>,
       change: { kind: "prepend"; count: number },
     ) => TPoint[];
   };
@@ -629,10 +630,10 @@ function entryOf<
   let series = initial;
   let [coordinates, manager] = drawSide(initial);
   let source: TSource[] = [];
-  let points: TPoint[] = [];
+  let points: DataView<TPoint> = [];
 
   /** `xValues`'s cache. The mapping rebuild runs on every data change, so this spares the recomputation. */
-  let xsOf: TPoint[] | null = null;
+  let xsOf: DataView<TPoint> | null = null;
   let xs: number[] = [];
 
   /**
@@ -646,7 +647,7 @@ function entryOf<
    * read within the calling frame and discarded. Its only consumer
    * (`Plot.rebuildX` → the mapping) reads it synchronously and lets it go.
    */
-  const extendXs = (previous: TPoint[] | null, appended: number): void => {
+  const extendXs = (previous: DataView<TPoint> | null, appended: number): void => {
     if (xsOf === null || xsOf !== previous) return;
     for (let i = points.length - appended; i < points.length; i++) {
       xs.push(coordinates.getX(points[i]));
@@ -661,7 +662,7 @@ function entryOf<
    * place carries "head, by m" as identity + length + a moved front. The
    * shift is O(n) over plain numbers — the cheap end of a landing.
    */
-  const extendXsHead = (previous: TPoint[] | null, prepended: number): void => {
+  const extendXsHead = (previous: DataView<TPoint> | null, prepended: number): void => {
     if (xsOf === null || xsOf !== previous) return;
     const old = xs.length;
     xs.length = old + prepended;
@@ -829,9 +830,9 @@ function entryOf<
    * same way. `DataError` at least attaches a label.
    */
   /** The change-detection key for an input registration — the source's (the node's) array identity. */
-  let lastRead: TPoint[] | null = null;
+  let lastRead: DataView<TPoint> | null = null;
 
-  const pull = (): TPoint[] => {
+  const pull = (): DataView<TPoint> => {
     if (owns(origin)) return points;
 
     const next = origin.read();
@@ -919,7 +920,7 @@ function entryOf<
       }
     }
 
-    manager.setData(next);
+    manager.setData([...next]);
     lastRead = next;
     points = manager.read();
     return points;
@@ -1007,8 +1008,8 @@ function entryOf<
       const drawn = pull();
       if (drawn.length === 0) return null;
 
-      const low = lowerBoundBy(drawn, target, (point) =>
-        coordinates.getX(point),
+      const low = lowerBoundBy<TPoint>(drawn, target, (point) =>
+        coordinates.getX(point as TPoint),
       );
       const right = Math.min(low, drawn.length - 1);
       const left = Math.max(low - 1, 0);
@@ -1050,7 +1051,7 @@ function entryOf<
        * back in, so the next tick's increment already sees the new manager.
        */
       const [nextCoordinates, nextManager] = drawSide(nextSeries);
-      nextManager.setData(points);
+      nextManager.setData([...points] as TPoint[]);
       series = nextSeries;
       coordinates = nextCoordinates;
       manager = nextManager;

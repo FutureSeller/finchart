@@ -5,7 +5,7 @@ import { useMemo, useRef } from 'react';
  * Turns a React state array into the core's `Source` — the bridge for the
  * indicator lane.
  *
- * `Source`'s whole contract is `read(): T[]`: **if the reference changed,
+ * `Source`'s whole contract is `read(): DataView<T>`: **if the reference changed,
  * the value changed.** React state lives by exactly that discipline (a new
  * array every tick), so the only job here is "let something with a stable
  * identity read the latest" — the `Source` this returns is the same object

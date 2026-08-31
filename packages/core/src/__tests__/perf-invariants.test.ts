@@ -22,6 +22,7 @@ import type { LineDataPoint, OHLC } from "../data";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   DecimationStrategy,
   IndexRange,
 } from "../data";
@@ -177,7 +178,7 @@ function counted(withIndicator: boolean, data: OHLC[] = candles) {
     ? model.plot.mainPane.addSeries({
         series: lineSeries(),
         data,
-        derive: (source: OHLC[]): LineDataPoint[] =>
+        derive: (source: DataView<OHLC>): LineDataPoint[] =>
           source.map((c) => ({ x: c.x, y: c.close })),
       })
     : null;

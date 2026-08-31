@@ -92,7 +92,10 @@ describe("adoptHeadRetainingTail", () => {
 
   it("should walk the retained suffix under verifyAdoptions", () => {
     const m = manager({ verifyAdoptions: true });
-    m.read()[15].y = Number.NaN;
+    // The manager owns a copied array but deliberately retains point identity
+    // for its adoption proof; this simulates a hostile mutation behind it.
+    const retained = (m as unknown as { data: LineDataPoint[] }).data;
+    retained[15].y = Number.NaN;
     expect(() => m.adoptHeadRetainingTail(pts(90, 100), 0)).toThrow(DataError);
   });
 

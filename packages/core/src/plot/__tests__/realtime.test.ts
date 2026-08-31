@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint } from "../../data";
+import type { DataView, LineDataPoint } from "../../data";
 import { DEFAULT_LINE_STYLE, lineSeries } from "../../series";
 import { createPlotModel } from "../model";
 
@@ -75,7 +75,7 @@ describe("updateLast", () => {
     const handle = model.plot.mainPane.addSeries({
       series: lineSeries(),
       data,
-      derive: (source: LineDataPoint[]) => {
+      derive: (source: DataView<LineDataPoint>) => {
         derived++;
         return source.map((point) => ({ x: point.x, y: (point.y ?? 0) * 2 }));
       },

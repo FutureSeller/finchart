@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint } from "../../data";
+import type { DataView, LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { lineSeries } from "../../series";
@@ -12,11 +12,11 @@ const points = (from: number, to: number): LineDataPoint[] =>
 
 /** A series that captures the data it received when drawing. */
 function spySeries(): Series<LineDataPoint> & {
-  seen: LineDataPoint[][];
-  extents: LineDataPoint[][];
+  seen: DataView<LineDataPoint>[];
+  extents: DataView<LineDataPoint>[];
 } {
-  const seen: LineDataPoint[][] = [];
-  const extents: LineDataPoint[][] = [];
+  const seen: DataView<LineDataPoint>[] = [];
+  const extents: DataView<LineDataPoint>[] = [];
 
   return {
     seen,
@@ -55,14 +55,14 @@ function loaded() {
 describe("derive", () => {
   it("should receive the whole source, not the visible window", () => {
     const { plot, deps } = loaded();
-    const sources: LineDataPoint[][] = [];
+    const sources: DataView<LineDataPoint>[] = [];
 
     plot.mainPane.addSeries({
       series: spySeries(),
       data: source,
       derive: (input) => {
         sources.push(input);
-        return input;
+        return [...input];
       },
     });
 
@@ -108,7 +108,7 @@ describe("derive", () => {
     const { plot, deps } = loaded();
     const series = spySeries();
 
-    plot.mainPane.addSeries({ series, data: source, derive: (input) => input });
+    plot.mainPane.addSeries({ series, data: source, derive: (input) => [...input] });
 
     deps.xScale.setDomain(40, 60);
     plot.render();
@@ -128,7 +128,7 @@ describe("derive", () => {
       data: source,
       derive: (input) => {
         runs++;
-        return input;
+        return [...input];
       },
     });
 
@@ -149,7 +149,7 @@ describe("derive", () => {
       data: source,
       derive: (input) => {
         runs++;
-        return input;
+        return [...input];
       },
     });
     const before = runs;

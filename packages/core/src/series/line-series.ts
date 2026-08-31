@@ -1,6 +1,6 @@
 import type { Point } from "../primitives";
 import { requireObject } from "../primitives";
-import type { BaseDataPoint, CoordinateAccessor, LineDataPoint, Range } from "../data";
+import type { BaseDataPoint, CoordinateAccessor, DataView, LineDataPoint, Range } from "../data";
 import { isGap, LineDataAccessor } from "../data";
 import type { DrawTarget, LineStyle, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
@@ -78,7 +78,7 @@ export class LineSeries<T extends BaseDataPoint = LineDataPoint>
    * value axis all the way down to 0. `null` when everything is a gap,
    * since there's nothing to measure.
    */
-  valueExtent(data: T[]): Range | null {
+  valueExtent(data: DataView<T>): Range | null {
     let min = Infinity;
     let max = -Infinity;
 
@@ -192,4 +192,3 @@ export function stepLineSeries(
   if (style !== undefined) requireObject(style, "stepLineSeries(style)");
   return new StepLineSeries({ coordinates: new LineDataAccessor(), style });
 }
-

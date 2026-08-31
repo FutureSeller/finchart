@@ -1,5 +1,5 @@
 import { isGap, LineDataAccessor } from "../data";
-import type { LineDataPoint, Range } from "../data";
+import type { DataView, LineDataPoint, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
@@ -73,7 +73,7 @@ export class BaselineSeries implements Series<LineDataPoint> {
   }
 
   /** This is the line's extent — the baseline itself occupies no value space (unlike a bar). */
-  valueExtent(data: LineDataPoint[]): Range | null {
+  valueExtent(data: DataView<LineDataPoint>): Range | null {
     let min = Infinity;
     let max = -Infinity;
 

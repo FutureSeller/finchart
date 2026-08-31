@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint, OHLC } from "../../data";
+import type { DataView, LineDataPoint, OHLC } from "../../data";
 import { candleSeries, lineSeries } from "../../series";
 import { createPlotModel } from "../model";
 
@@ -47,7 +47,7 @@ describe("Pane.probe", () => {
       series: lineSeries(),
       data: line,
       name: "doubled",
-      derive: (source: LineDataPoint[]) =>
+      derive: (source: DataView<LineDataPoint>) =>
         source.map((point) => ({ x: point.x, y: (point.y ?? 0) * 2 })),
     });
 

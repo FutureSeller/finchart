@@ -5,7 +5,7 @@
  * contract stops with the door named as the culprit.
  */
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint, OHLC } from "../../data";
+import type { DataView, LineDataPoint, OHLC } from "../../data";
 import { DataError } from "../../primitives";
 import { candleSeries, lineSeries } from "../../series";
 import { createPlotModel } from "../model";
@@ -19,7 +19,7 @@ const candles: OHLC[] = Array.from({ length: 30 }, (_, i) => ({
 }));
 
 /** Double the last close — the simplest derivation, where the tail is 1:1 with the source tail. */
-const doubled = (source: OHLC[]): LineDataPoint[] =>
+const doubled = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((c) => ({ x: c.x, y: c.close * 2 }));
 
 function mounted(withDoor: boolean, counts: { full: number; tail: number }) {
@@ -32,7 +32,7 @@ function mounted(withDoor: boolean, counts: { full: number; tail: number }) {
   const handle = model.plot.mainPane.addSeries({
     series: lineSeries(),
     data: candles,
-    derive: (source: OHLC[]) => {
+    derive: (source: DataView<OHLC>) => {
       counts.full += 1;
       return doubled(source);
     },

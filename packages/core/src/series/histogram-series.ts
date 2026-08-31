@@ -1,6 +1,6 @@
 import { DataError, describe, requireObject } from "../primitives";
 import { isGap } from "../data";
-import type { BaseDataPoint, CoordinateAccessor, Range } from "../data";
+import type { BaseDataPoint, CoordinateAccessor, DataView, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
@@ -83,7 +83,7 @@ export class HistogramSeries implements Series<HistogramPoint> {
    * too. This is why a volume pane starts at 0: the extent includes 0,
    * so autoscale never pushes the floor below it.
    */
-  valueExtent(data: HistogramPoint[]): Range | null {
+  valueExtent(data: DataView<HistogramPoint>): Range | null {
     let min = Infinity;
     let max = -Infinity;
 

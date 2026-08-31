@@ -376,6 +376,7 @@ describe("four fixes that had no guard", () => {
       config: {},
     });
     const pane = model.plot.mainPane;
+    pane.clearSeries();
     pane.syncSeries([
       seriesSpec({ id: "a", series: lineSeries(), data: DATA }),
     ]);

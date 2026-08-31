@@ -63,6 +63,7 @@ export type {
   CoordinateAccessor,
   DataManager,
   DataManagerFactory,
+  DataView,
   DataPoint,
   DecimationFactory,
   DecimationPolicy,
@@ -356,4 +357,3 @@ export type {
   XDomainChangePayload,
   YAxisOptions,
 } from "./plot";
-

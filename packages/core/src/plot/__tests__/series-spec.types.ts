@@ -5,13 +5,13 @@
  * type, without `any`?
  */
 
-import type { LineDataPoint, OHLC } from "../../data";
+import type { DataView, LineDataPoint, OHLC } from "../../data";
 import { LineDataAccessor } from "../../data";
 import { candleSeries } from "../../series";
 import { lineSeries } from "../../series/line-series";
 import { type SeriesSpec, seriesSpec } from "../pane";
 
-const ma = (source: OHLC[]): LineDataPoint[] =>
+const ma = (source: DataView<OHLC>): LineDataPoint[] =>
   source.map((c) => ({ x: c.x, y: c.close }));
 
 // (1) No derivation — series only. TPoint is inferred as TSource.
@@ -34,7 +34,7 @@ export const specs: SeriesSpec<OHLC>[] = [price, ma20];
 
 // Caught when derive's return type disagrees with the series' point type.
 // @ts-expect-error: Series<LineDataPoint> with a derive that produces OHLC
-seriesSpec({ id: "x", series: lineSeries(), derive: (s: OHLC[]) => s, deriveKey: [] });
+seriesSpec({ id: "x", series: lineSeries(), derive: (s: DataView<OHLC>) => [...s], deriveKey: [] });
 
 /**
  * Caught when coordinates has a different point type. The point type is

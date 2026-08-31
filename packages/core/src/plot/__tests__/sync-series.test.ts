@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint } from "../../data";
+import type { DataView, LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
-import { lineSeries } from "../../series";
 import { seriesSpec } from "../pane";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -25,7 +24,7 @@ function fakeSeries(name: string, log: string[]): Series<LineDataPoint> {
 
 /** A derivation that counts how many times it was computed. */
 function countingDerive(calls: { n: number }) {
-  return (source: LineDataPoint[]): LineDataPoint[] => {
+  return (source: DataView<LineDataPoint>): LineDataPoint[] => {
     calls.n += 1;
     return source.map((point) => ({ x: point.x, y: point.y === null ? null : point.y * 2 }));
   };
@@ -41,12 +40,11 @@ function drawOrder(plot: ReturnType<typeof loaded>, log: string[]): string[] {
 
 function loaded() {
   const deps = testBrowserDeps();
-  const { plot, handle } = mountPlot({ deps, series: lineSeries(), config: {
+  const { plot } = mountPlot({ deps, config: {
     ...defaultConfig,
     showGrid: false,
     axis: { x: { showLabels: false }, y: { showLabels: false } },
   } });
-  handle.setData(data);
   return plot;
 }
 
@@ -112,16 +110,59 @@ describe("Pane.syncSeries", () => {
     ).toThrow(/same/);
   });
 
-  it("should replace whatever addSeries put there", () => {
+  it("should reject a declarative list that would detach an imperative handle", () => {
     const plot = loaded();
     const log: string[] = [];
 
-    plot.mainPane.addSeries({ series: fakeSeries("imperative", log), data });
+    const imperative = plot.mainPane.addSeries({ series: fakeSeries("imperative", log), data });
+
+    expect(() =>
+      plot.mainPane.syncSeries([
+        seriesSpec<LineDataPoint>({ id: "a", series: fakeSeries("a", log), data }),
+      ]),
+    ).toThrow(/owned by addSeries/);
+
+    expect(imperative.attached).toBe(true);
+    expect(drawOrder(plot, log)).toEqual(["imperative"]);
+  });
+
+  it("should reject imperative insertion into a declarative list", () => {
+    const plot = loaded();
+    const log: string[] = [];
     plot.mainPane.syncSeries([
       seriesSpec<LineDataPoint>({ id: "a", series: fakeSeries("a", log), data }),
     ]);
 
+    expect(() => plot.mainPane.addSeries({ series: fakeSeries("b", log), data })).toThrow(
+      /owned by syncSeries/,
+    );
     expect(drawOrder(plot, log)).toEqual(["a"]);
+  });
+
+  it("should permit an explicit imperative reset before changing owner", () => {
+    const plot = loaded();
+    const log: string[] = [];
+    plot.mainPane.addSeries({ series: fakeSeries("a", log), data });
+    plot.mainPane.clearSeries();
+    plot.mainPane.syncSeries([
+      seriesSpec<LineDataPoint>({ id: "b", series: fakeSeries("b", log), data }),
+    ]);
+
+    expect(drawOrder(plot, log)).toEqual(["b"]);
+  });
+
+  it("should permit an explicit declarative reset before changing owner", () => {
+    const plot = loaded();
+    const log: string[] = [];
+    plot.mainPane.syncSeries([
+      seriesSpec<LineDataPoint>({ id: "a", series: fakeSeries("a", log), data }),
+    ]);
+
+    plot.mainPane.syncSeries([]);
+    const imperative = plot.mainPane.addSeries({ series: fakeSeries("b", log), data });
+
+    expect(imperative.attached).toBe(true);
+    expect(drawOrder(plot, log)).toEqual(["b"]);
   });
 });
 

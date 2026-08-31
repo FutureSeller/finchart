@@ -1,6 +1,7 @@
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   Series,
   SeriesSpec,
   Source,
@@ -45,7 +46,7 @@ interface DerivedSeriesProps<
    * indicator like a moving average from cutting off at the edge of the
    * screen.
    */
-  derive: (source: TSource[]) => TPoint[];
+  derive: (source: DataView<TSource>) => TPoint[];
   /**
    * The condition for re-running the derivation. Follows the same rule as
    * a `useMemo` dependency array.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
+  DataView,
   DecimationStrategy,
   LineDataPoint,
 } from "../../data";
@@ -18,7 +19,7 @@ const data: LineDataPoint[] = [
   { x: 100, y: 25 },
 ];
 
-const double = (source: LineDataPoint[]): LineDataPoint[] =>
+const double = (source: DataView<LineDataPoint>): LineDataPoint[] =>
   source.map((point) => ({ x: point.x, y: point.y === null ? null : point.y * 2 }));
 
 describe("pane subscription", () => {
@@ -147,7 +148,7 @@ describe("each registration gets its own manager", () => {
 
   it("should honour maxPoints for derived points too", () => {
     const many = Array.from({ length: 500 }, (_, i) => ({ x: i, y: i % 7 }));
-    const seen: LineDataPoint[][] = [];
+    const seen: DataView<LineDataPoint>[] = [];
 
     const deps = testBrowserDeps({ maxPoints: 10 });
     const { plot } = mountPlot({ deps, series: lineSeries(), config: defaultConfig, data: many });

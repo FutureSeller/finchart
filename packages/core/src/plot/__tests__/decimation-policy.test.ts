@@ -12,6 +12,7 @@ import {
   OHLCAccessor,
   OhlcAggregation,
   type CoordinateAccessor,
+  type DataView,
   type DataManager,
   type DecimationPolicy,
   type LineDataPoint,
@@ -85,7 +86,7 @@ describe("policy precedence — registration > series > wiring", () => {
   }
 
   /** A derivation is needed for the registration to build its own manager. The value doesn't matter. */
-  const toCandles = (source: LineDataPoint[]): OHLC[] =>
+  const toCandles = (source: DataView<LineDataPoint>): OHLC[] =>
     source.map((p) => {
       // Candles have no "no value" — a gap belongs to lines.
       const y = p.y ?? 0;
@@ -95,7 +96,7 @@ describe("policy precedence — registration > series > wiring", () => {
   it("should pass nothing when neither declares a policy", () => {
     const { pane, seen } = paneWithSpy();
 
-    pane.addSeries({ series: lineSeries(), derive: (s) => s });
+    pane.addSeries({ series: lineSeries(), derive: (s) => [...s] });
 
     expect(seen).toEqual([undefined]);
   });

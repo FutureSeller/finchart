@@ -5,7 +5,7 @@ import {
   SimpleDecimation,
   LttbDecimation,
 } from "../decimation";
-import type { LineDataPoint, Viewport } from "../types";
+import type { DataView, LineDataPoint, Viewport } from "../types";
 
 /** The full window — a test convenience for the range contract: `decimate(...whole(data), threshold)`. */
 const whole = <T,>(data: T[]): [T[], { start: number; end: number }] => [
@@ -211,7 +211,7 @@ describe("viewport slicing", () => {
     height: 600,
   });
 
-  const xs = (points: LineDataPoint[]) => points.map((point) => point.x);
+  const xs = (points: DataView<LineDataPoint>) => points.map((point) => point.x);
 
   it("should include both ends of the window", () => {
     const dataManager = manager();

@@ -1,4 +1,4 @@
-import type { BaseDataPoint, CoordinateAccessor, LineDataPoint, Source } from '@finchart/core';
+import type { BaseDataPoint, CoordinateAccessor, DataView, LineDataPoint, Source } from '@finchart/core';
 import { defaultCoordinates, LineSeries } from '@finchart/core';
 import { ChartSeries } from './chart-series';
 
@@ -46,7 +46,7 @@ interface DerivedLineProps<
   /** The source the derivation receives. Falls back to what's passed down from above when omitted. */
   data?: TSource[];
   /** Builds the points to draw from the whole source — an indicator like a moving average. */
-  derive: (source: TSource[]) => TPoint[];
+  derive: (source: DataView<TSource>) => TPoint[];
   /** The condition for re-running the derivation. Follows the same rule as a `useMemo` dependency array. */
   deriveKey: readonly unknown[];
   /** How to read coordinates from the points `derive` built. Falls back to `x`/`y` when omitted. */
@@ -72,7 +72,7 @@ function coordinatesOf<T extends BaseDataPoint>(
  * Connects points with a line. No need to build a series object yourself.
  *
  * ```tsx
- * // sma20: (source: OHLC[]) => LineDataPoint[] — a derivation is just a function (see README)
+ * // sma20: (source: DataView<OHLC>) => LineDataPoint[] — a derivation is just a function (see README)
  * <ChartLine color="#f59e0b" derive={sma20} deriveKey={[20]} />
  * ```
  *

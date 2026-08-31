@@ -166,9 +166,8 @@ const tools = usePlugin((plot, pane) => pane.use(drawingTools({ plot })), []);
 **A pane has one owner.** If a pane contains even one `<ChartSeries>`, the
 declarative lane owns that pane's series list — add an `addSeries` or an
 `attach*` indicator (which uses `addSeries` internally) imperatively on top,
-and it **silently disappears on the next re-render.** Driving a whole pane
-imperatively is fine (with no series components there, nothing touches the
-list). Indicators that create their own pane (RSI, MACD, and friends) can push
+and the core throws a `ContractError` before either side is detached. Drive a
+whole pane imperatively only when it has no series components. Indicators that create their own pane (RSI, MACD, and friends) can push
 pane indices out of alignment when mixed with `<ChartPane>`, which breaks
 saving and restoring `state` — so on screens that round-trip state, keep pane
 structure in one lane.
