@@ -232,7 +232,17 @@ export interface SeriesHandle<
    */
   read(): DataView<TPoint>;
 
-  /** Replaces the whole dataset. **Refits both axes.** */
+  /**
+   * Replaces the whole dataset. **Refits both axes.**
+   *
+   * The array is copied; the points are not. **A point is handed over,
+   * not lent** — from here on the chart reads `x` off the object you gave
+   * it, so editing that object afterward changes the chart with nothing
+   * scheduled and the sort order that slicing relies on possibly gone.
+   * To change a point, pass a new one (`updateLast`, or `setData` again).
+   * Copying every point on a door that takes 100,000 of them per call
+   * would cost the frame budget on its own, so it's a contract instead.
+   */
   setData(data: T[]): void;
 
   /**
@@ -386,6 +396,9 @@ export interface SeriesSpec<TSource extends BaseDataPoint = BaseDataPoint> {
    * refit, though — in the declarative world, growing data means infinite
    * scroll, and the window shouldn't jump when that happens. Use the
    * imperative `SeriesHandle` when you need incremental updates and refitting.
+   *
+   * Same handoff as `SeriesHandle.setData`: the array is copied, the points
+   * are kept as given — a point isn't edited after it's been passed in.
    */
   readonly data?: TSource[];
 

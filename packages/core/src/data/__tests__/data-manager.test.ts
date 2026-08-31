@@ -72,6 +72,23 @@ describe("SimpleDataManager", () => {
 
     expect(dataManager.getXRange()?.max).toBe(4);
   });
+
+  /**
+   * The array is copied; the points are not. Pins the handoff contract:
+   * a point is the caller's value, handed over **by reference** and read
+   * from then on — no per-point copy on a door that takes 100,000 points
+   * per `setData`. The other half of that contract is on the caller: a
+   * point isn't edited after the handoff.
+   */
+  it("should hand points over by reference, not copy them", () => {
+    const dataManager = manager();
+    const input = series(3);
+
+    dataManager.setData(input);
+
+    expect(dataManager.read()).not.toBe(input);
+    expect(dataManager.read()[0]).toBe(input[0]);
+  });
 });
 
 describe("width-aware decimation", () => {
