@@ -20,6 +20,7 @@ import * as customSeries from "./cases/custom-series";
 import * as drawing from "./cases/drawing";
 import * as heikinAshi from "./cases/heikin-ashi";
 import * as ichimoku from "./cases/ichimoku";
+import * as infiniteHistoryCase from "./cases/infinite-history";
 import * as oscillators from "./cases/oscillators";
 import * as orderbookHeatmap from "./cases/orderbook-heatmap";
 import * as overlays from "./cases/overlays";
@@ -45,6 +46,7 @@ const CASES: readonly (readonly [string, CaseModule])[] = [
   ["volume-profile", volumeProfileCase],
   ["own-panes", ownPanes],
   ["realtime", realtime],
+  ["infinite-history", infiniteHistoryCase],
   ["drawing", drawing],
   ["bar-index", barIndex],
   ["sync-x", syncXCase],

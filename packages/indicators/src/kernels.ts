@@ -300,6 +300,26 @@ function extremum(
 }
 
 /** An array from outside — if it's null, this names the factory instead of throwing a bare `TypeError`. */
+/**
+ * How far back a recursive fold's memory reaches, in steps — the smallest
+ * k where a disturbance at the seed has decayed below `epsilon` of its
+ * size ((1-alpha)^k < epsilon).
+ *
+ * This is what lets an EMA-family kernel land a history page: the landing
+ * restarts the fold at the new beginning of time, and past this horizon
+ * the restarted values agree with the old ones to below the landing
+ * contract's bound — not an approximation, just a very wide corrected
+ * zone. EMA(20) comes out around 340 at 1e-12.
+ */
+export function decayHorizon(alpha: number, epsilon = 1e-12): number {
+  if (!(alpha > 0 && alpha <= 1)) {
+    throw new ContractError(`decayHorizon: alpha must be in (0, 1], got ${alpha}`);
+  }
+  // Full weight on the current value — the fold has no memory to reach back into.
+  if (alpha === 1) return 0;
+  return Math.ceil(Math.log(epsilon) / Math.log(1 - alpha));
+}
+
 export function requireSourceArray<T>(value: readonly T[], name: string): readonly T[] {
   if (!Array.isArray(value)) {
     throw new ContractError(

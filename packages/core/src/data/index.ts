@@ -18,6 +18,8 @@ export type {
 export { mergePolicy } from "./types";
 
 export { computation } from "./computation";
+export { headDelta } from "./head-delta";
+export type { HeadChange } from "./head-delta";
 export { tailDelta } from "./tail-delta";
 export type { TailChange } from "./tail-delta";
 export type { Computation, ComputationSpec } from "./computation";

@@ -28,4 +28,13 @@ export type {
 } from "./pane-maximize";
 export { conflated } from "./conflate";
 export type { ConflatableHandle, ConflatedFeed, ConflatedOptions } from "./conflate";
+export { infiniteHistory } from "./infinite-history";
+export type {
+  HistoryFetch,
+  HistoryLoader,
+  HistorySink,
+  HistoryStatus,
+  InfiniteHistoryHost,
+  InfiniteHistoryOptions,
+} from "./infinite-history";
 export { syncCrosshair, syncX } from "./sync";

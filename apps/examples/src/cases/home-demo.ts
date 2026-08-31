@@ -4,7 +4,8 @@
  * - Bars are generated as a pure function of the index, so they can be
  *   extended deterministically backwards too (to show infinite scroll through
  *   prepend).
- * - Pan near the left edge and it really does fetch older bars.
+ * - Pan near the left edge and it really does fetch older bars —
+ *   through `infiniteHistory`, whose page here is a synchronous generator.
  * - `minBarSpacing` puts a floor under zooming out so the candles never get
  *   too thin.
  *
@@ -13,7 +14,7 @@
  */
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { HistogramPoint, OHLC } from "@finchart/core";
-import { candleSeries, crosshair, histogramSeries, timeTicks } from "@finchart/core";
+import { candleSeries, crosshair, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
 import { chartHost } from "./stage";
 
 export const title = "Candles + volume (home)";
@@ -22,7 +23,6 @@ export const description = "For the homepage hero — a candles-volume variant w
 const MINUTE = 60_000;
 const BASE = Date.UTC(2026, 7, 10, 9, 0);
 const CHUNK = 70; // how many bars show at first, and how many older bars a fetch brings
-const LOAD_THRESHOLD = 20 * MINUTE; // with this much left to the left edge, fetch more
 const MAX_HISTORY = 4000; // the backstop on infinite loading — nothing older than this index gets made
 
 /** Deterministic pseudo-random in [0,1) — one index, always the same value. */
@@ -117,7 +117,6 @@ export function mount(container: HTMLElement): () => void {
     minBarSpacing: pxPerCandle / 2 / MINUTE, // zooming out is allowed only to half
   });
 
-  let earliest = 0;
   const initial = range(-CHUNK, 0);
 
   const priceHandle = plot.mainPane.addSeries({
@@ -133,23 +132,31 @@ export function mount(container: HTMLElement): () => void {
       name: "Volume",
     });
 
-  const off = plot.on("xDomainChange", ({ startX, dataRange }) => {
-    if (!dataRange || earliest <= -MAX_HISTORY) return;
-    if (startX - dataRange.min > LOAD_THRESHOLD) return;
-
-    const newEarliest = earliest - CHUNK;
-    const older = range(newEarliest, earliest);
-    earliest = newEarliest;
-
-    priceHandle.prepend(older);
-    volumeHandle.prepend(older.map(toVolumePoint));
-  });
+  /**
+   * The infinite scroll. The consumer's share is two functions — the page
+   * before a given x, and where a landed page goes (one fetch, fanned out
+   * to both handles). The cursor, the threshold, in-flight dedup, and the
+   * empty-page end (`[]` once the backstop is reached) are the loader's.
+   */
+  const loader = infiniteHistory(
+    plot,
+    (older: OHLC[]) => {
+      priceHandle.prepend(older);
+      volumeHandle.prepend(older.map(toVolumePoint));
+    },
+    (before) => {
+      const end = Math.round((before - BASE) / MINUTE);
+      const from = Math.max(end - CHUNK, -MAX_HISTORY);
+      return from >= end ? [] : range(from, end);
+    },
+    { from: initial[0].x },
+  );
 
   plot.use(crosshair({ magnet: true }));
 
   return Object.assign(
     () => {
-      off();
+      loader.dispose();
       plot.destroy();
       host.remove();
     },

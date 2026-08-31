@@ -17,6 +17,7 @@ import type {
 } from "../data";
 import {
   defaultCoordinates,
+  headDelta,
   isGap,
   lowerBoundBy,
   mergePolicy,
@@ -132,6 +133,33 @@ interface DerivedRegistration<
     source: readonly TSource[],
     change: { kind: "append" | "replace"; count: number },
   ) => TPoint[];
+
+  /**
+   * **Head increment** — a history page landing. Optional and additive,
+   * like `deriveLast`; without it a landing re-derives the whole output
+   * (already down the head-splice route, so only the head revalidates).
+   *
+   * `lookback` declares how many old head outputs the landing corrects —
+   * a window's warmup (`period - 1`), or a recursion's decay horizon.
+   * **The declaration is the contract**: `head` must return exactly
+   * `count + min(lookback, previous.length)` points, and the corrected
+   * ones must sit on the old head's x. Declared, not inferred from the
+   * returned length — inferred, any answer passes, and an off-by-one
+   * correction slips through every x check on a uniform series as a
+   * silently stale head.
+   *
+   * The cheap way to build `head`: fold the new source's prefix from
+   * scratch — a landing needs no checkpoint, its resume point is the
+   * beginning of time.
+   */
+  deriveFirst?: {
+    lookback: number;
+    head: (
+      previous: readonly TPoint[],
+      source: readonly TSource[],
+      change: { kind: "prepend"; count: number },
+    ) => TPoint[];
+  };
 
   input?: undefined;
 }
@@ -331,10 +359,21 @@ function xValuesDiffer<T extends BaseDataPoint>(
   before: readonly T[],
   after: readonly T[],
   coordinates: CoordinateAccessor<T>,
+  beforeOffset = 0,
+  afterOffset = 0,
+  count?: number,
 ): boolean {
-  if (before.length !== after.length) return true;
-  for (let i = 0; i < after.length; i++) {
-    if (coordinates.getX(before[i]) !== coordinates.getX(after[i])) return true;
+  const beforeRemaining = before.length - beforeOffset;
+  const afterRemaining = after.length - afterOffset;
+  if (count === undefined && beforeRemaining !== afterRemaining) return true;
+  const compared = count ?? Math.min(beforeRemaining, afterRemaining);
+  for (let i = 0; i < compared; i++) {
+    if (
+      coordinates.getX(before[beforeOffset + i]) !==
+      coordinates.getX(after[afterOffset + i])
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -395,12 +434,28 @@ export function createEntry<
   }
 
   if (registration.derive) {
+    /**
+     * The lookback declaration is a chokepoint — unvalidated, a negative
+     * value flips `previous.slice(corrected)` into slice-from-the-end and
+     * the retained body silently truncates to its last point, with the
+     * length check agreeing all the way. Refused here, before any
+     * landing can reach it.
+     */
+    if (registration.deriveFirst !== undefined) {
+      const { lookback } = registration.deriveFirst;
+      if (!Number.isInteger(lookback) || lookback < 0) {
+        throw new ContractError(
+          `deriveFirst.lookback must be a non-negative integer, got ${describe(lookback)}`,
+        );
+      }
+    }
     return entryOf<TSource, TPoint>(
       registration.series,
       {
         data: registration.data,
         toPoints: registration.derive,
         toTail: registration.deriveLast,
+        toHead: registration.deriveFirst,
       },
       (series) => drawSideOf(series, registration, createDataManager),
       registration,
@@ -507,6 +562,15 @@ interface OwnedOrigin<
     source: readonly TSource[],
     change: { kind: "append" | "replace"; count: number },
   ) => TPoint[];
+  /** Head-increment door → `DerivedRegistration.deriveFirst`. Absent on identity — prepend splices as is. */
+  toHead?: {
+    lookback: number;
+    head: (
+      previous: readonly TPoint[],
+      source: readonly TSource[],
+      change: { kind: "prepend"; count: number },
+    ) => TPoint[];
+  };
   /**
    * The declaration that `toPoints` is the identity function — only then do
    * increments (append, prepend, updateLast) go straight to the manager's
@@ -591,6 +655,22 @@ function entryOf<
   };
 
   /**
+   * **`prepended` more landed at the head — the mapping learns it the way
+   * it learns tails: the same array grew.** A rebuilt array would force
+   * the mapping into a full re-merge of every source; growing this one in
+   * place carries "head, by m" as identity + length + a moved front. The
+   * shift is O(n) over plain numbers — the cheap end of a landing.
+   */
+  const extendXsHead = (previous: TPoint[] | null, prepended: number): void => {
+    if (xsOf === null || xsOf !== previous) return;
+    const old = xs.length;
+    xs.length = old + prepended;
+    for (let i = old - 1; i >= 0; i--) xs[i + prepended] = xs[i];
+    for (let i = 0; i < prepended; i++) xs[i] = coordinates.getX(points[i]);
+    xsOf = points;
+  };
+
+  /**
    * Replaces the source and rebuilds the drawn points. **Runs only when
    * data changes** — not every frame. `setData` does a full sort check and
    * a derivation is O(n), so putting this in the draw path would turn data
@@ -646,6 +726,87 @@ function entryOf<
       if (sameX) xsOf = points;
       else xsOf = null;
     }
+  };
+
+  /**
+   * A history page landing on a derivation. The full route re-validates
+   * and re-maps the entire output for what is, in shape, a head extension
+   * — so when the re-derived output actually is one (it grew, and every
+   * old x kept its place), the mapping learns of the growth through the
+   * grown-in-place xs cache. A fresh full derivation still goes through
+   * `setData`: it can legitimately correct any body value, and only the
+   * manager-owned tail of a declared door can skip a full validation.
+   *
+   * A derivation that reshapes history instead (bricks renumber, spans
+   * shift) fails the x comparison and takes today's full route — with the
+   * output already in hand, not a second derivation.
+   */
+  const commitDerivedHead = (older: TSource[]): void => {
+    const own = owned(origin);
+    const nextSource = [...older, ...source];
+    const previous = points;
+    const adopt = manager.adoptHeadRetainingTail?.bind(manager);
+
+    /**
+     * The declared door first: the head comes from the derivation's own
+     * increment, the tail is the previous output reused as is — the
+     * landing pays O(page + lookback) instead of a re-derivation. Length
+     * and corrected-zone x are checked against the declaration; a
+     * silently mismatched head drawn is the worst outcome, so both
+     * violations stop with a `DataError` naming the door.
+     */
+    if (own.toHead && adopt && previous.length > 0 && older.length > 0) {
+      const count = older.length;
+      const corrected = Math.min(own.toHead.lookback, previous.length);
+      const head = own.toHead.head(previous, nextSource, {
+        kind: "prepend",
+        count,
+      });
+      requireDataArray(head, "deriveFirst.head(...)");
+      if (head.length !== count + corrected) {
+        throw new DataError(
+          `deriveFirst.head must return count + min(lookback, previous) = ${count + corrected} points, got ${head.length}`,
+        );
+      }
+      if (xValuesDiffer(previous, head, coordinates, 0, count, corrected)) {
+        throw new DataError("deriveFirst.head corrected points moved off their prior x values");
+      }
+      if (corrected < previous.length) {
+        adopt(head, corrected);
+      } else {
+        // No accepted suffix survives. The head is the entire new output,
+        // so it must take the normal full-validation route.
+        manager.setData(head);
+      }
+      source = nextSource;
+      points = manager.read();
+      extendXsHead(previous, count);
+      return;
+    }
+
+    const out = own.toPoints(nextSource);
+    const grown = out.length - previous.length;
+    let headExtension = grown > 0;
+    if (headExtension) {
+      headExtension = !xValuesDiffer(
+        previous,
+        out,
+        coordinates,
+        0,
+        grown,
+        previous.length,
+      );
+    }
+
+    // `out` is a fresh derivation, even if its x values align. Never let a
+    // caller-vouched body bypass production validation;
+    // `adoptHeadRetainingTail` is reserved for a suffix the manager itself
+    // retains.
+    manager.setData(out);
+    source = nextSource;
+    points = manager.read();
+    if (headExtension) extendXsHead(previous, grown);
+    else xsOf = null;
   };
 
   const load = (next: TSource[]): void => {
@@ -719,6 +880,45 @@ function entryOf<
       return points;
     }
 
+    /**
+     * **A landing is still a landing one registration downstream.**
+     * `calcFirst`'s output rule (reuse the previous array's tail beyond
+     * the corrected zone) carries the shape through point identity, and
+     * `headDelta` reads it back out. The corrected zone rides inside the
+     * validated head; a correction whose x drifted isn't treated as a
+     * violation here — this is detection, not a declared door — it just
+     * takes the full route, which is always correct.
+     */
+    const landing =
+      delta === null && lastRead !== null ? headDelta(lastRead, next) : null;
+    if (landing !== null) {
+      const adopt = manager.adoptHeadRetainingTail?.bind(manager);
+      const previous = points;
+      if (adopt !== undefined && previous.length > 0) {
+        const aligned = !xValuesDiffer(
+          previous,
+          next,
+          coordinates,
+          0,
+          landing.count,
+          landing.corrected,
+        );
+        if (aligned) {
+          // `headDelta` proved that the remaining suffix is the same point
+          // objects the manager already accepted. Pass only the changed
+          // head; the manager retains that suffix itself.
+          adopt(
+            next.slice(0, landing.count + landing.corrected),
+            landing.corrected,
+          );
+          lastRead = next;
+          points = manager.read();
+          extendXsHead(previous, landing.count);
+          return points;
+        }
+      }
+    }
+
     manager.setData(next);
     lastRead = next;
     points = manager.read();
@@ -758,15 +958,19 @@ function entryOf<
 
   const prependChunk = (older: readonly TSource[]): void => {
     requireDataArray(older, "prepend(points)");
-    if (!owns(origin) || !origin.identity) {
+    if (!owns(origin)) {
       load([...older, ...source]);
       return;
     }
+    if (!origin.identity) {
+      commitDerivedHead([...older]);
+      return;
+    }
+    const previous = points;
     manager.prepend([...older] as unknown as TPoint[]);
     points = manager.read();
     source = points as unknown as TSource[];
-    // Prepending is rare — the mapping cache just recounts on the natural cache miss.
-    xsOf = null;
+    extendXsHead(previous, older.length);
   };
 
   if (owns(origin)) {

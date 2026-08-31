@@ -12,6 +12,11 @@ import * as mod from "../../examples/src/cases/realtime";
 
 <CaseDemo :case="mod" />
 
+For the other direction of a live chart — loading the past as the user pans
+left — see [Infinite history](/examples/infinite-history). The two doors
+compose on one handle: `conflated` feeds the newest bar, `infiniteHistory`
+prepends the oldest page.
+
 ## Source
 
 `apps/examples/src/cases/realtime.ts` — the real thing, type-checked in CI.

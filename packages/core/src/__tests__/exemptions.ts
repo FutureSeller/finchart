@@ -192,6 +192,10 @@ export const GUARDED: Record<string, string> = {
     + "\"assembly — takes a collaborator\", but that reason only counted the "
     + "collaborator and never counted the two numbers",
   paneMaximize: "chokepoint 4 — load() comes from a URL or localStorage (persisted)",
+  infiniteHistory:
+    "chokepoint 8 — options.from seeds every `before` the fetch is asked for, "
+    + "and screensAhead scales the pull threshold (both throw at the door; "
+    + "guarded in extensions/__tests__/infinite-history.test.ts)",
 };
 
 /**
@@ -250,6 +254,7 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
   computation: { tag: "delegated", note: "assembly vocabulary — a computation node. Its output passes through the data door again" },
   teardown: { tag: "assembly", note: "assembly vocabulary — a bundle of cleanup functions" },
   conflated: { tag: "assembly", note: "assembly vocabulary — wires a handle to a schedule; data shape is judged by updateLast at delivery" },
+  infiniteHistory: { tag: "assembly", note: "assembly vocabulary — wires plot events to a sink and a fetch; a landed page's shape is judged at the landing (ascending check, cursor trim) and by the sink's own target" },
   createScope: { tag: "constant", note: "takes no argument — resource lifetimes, not data; add() takes only a callback" },
   validateSeriesData: { tag: "safe", note: "the validator itself — a payload of any shape comes back as issues, never a throw" },
   frameScheduler: { tag: "assembly", note: "assembly vocabulary — a scheduler factory" },

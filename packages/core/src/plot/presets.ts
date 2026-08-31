@@ -47,6 +47,14 @@ export interface PlotDepsOptions {
    */
   tiered?: boolean;
   /**
+   * Dev-time full re-validation of declared history-page landings. Normal
+   * landings validate their new head and structurally retain the manager's
+   * own accepted tail; with this on, every `adoptHeadRetainingTail` result
+   * also walks that tail, catching illegal mutation during development and
+   * dogfooding. Fresh derived output is fully validated in every build.
+   */
+  verifyLandings?: boolean;
+  /**
    * How to build the decimation strategy. Default is M4 — for every pixel
    * column it picks first, last, min, and max, so extremes never get lost.
    * **Only applies to registrations that don't specify a policy** — a
@@ -155,6 +163,7 @@ export function createPlotDeps(
     maxPoints,
     pointsPerPixel,
     tiered,
+    verifyLandings,
     xScale = new LinearScale(),
     createXMapping,
     mainPaneYScale = new LinearScale(),
@@ -192,6 +201,7 @@ export function createPlotDeps(
           : pointsPerPixel,
       maxPoints,
       tiered,
+      verifyAdoptions: verifyLandings,
     });
 
   return {
@@ -214,4 +224,3 @@ export function createPlotDeps(
 
 const defaultDecimation: DecimationFactory = (coordinates) =>
   new M4Decimation(coordinates);
-

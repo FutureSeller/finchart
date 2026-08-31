@@ -861,8 +861,9 @@ export class Plot
 
     this.xViewport.followNewBar(previousMax, range);
 
-    // A pane with autoScale on refits the render to the visible range.
-    this.fitValueDomain();
+    // An autoScale pane is fitted to the settled visible range by the render.
+    // Do not scan its full value extent here; prepend notifications can arrive
+    // many times before that scheduled render.
     this.scheduleRender();
   }
 
@@ -1769,25 +1770,6 @@ export class Plot
    */
   private get dataRange(): Range | null {
     return unionOf(this.paneList.map((pane) => pane.xRange()));
-  }
-
-  /**
-   * Fits each pane so **everything its series hold** is visible.
-   *
-   * Following the visible range is the render's job — it needs to know the
-   * viewport, which is only settled after `syncRanges()`.
-   *
-   * **Skips a pane with autoScale off.** This is the path data changes
-   * (append, declarative updates) take, and if a manually set value range
-   * (RSI 0–100) got overwritten by streaming, that would break the promise
-   * `autoScale: false` makes. An explicit refit (`fitDomains`, `setData`) is
-   * different — "make everything visible" is the request, so a manual range is
-   * refit too.
-   */
-  private fitValueDomain(): void {
-    for (const pane of this.paneList) {
-      if (pane.autoScale) pane.fitValueDomain();
-    }
   }
 
   /**
