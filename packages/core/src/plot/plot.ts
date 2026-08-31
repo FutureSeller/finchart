@@ -455,6 +455,31 @@ function containsFocus(area: PlotArea, point: Point): boolean {
   );
 }
 
+/**
+ * A config with no object shared with its source. Used at both doors that
+ * cross the ownership line — taking one in (constructor) and handing one
+ * out (`getOptions`) — so neither side can reach the chart's internals
+ * through a nested object it still holds. There are only three nested
+ * spots (padding, axis, style), so they're copied by hand — structured
+ * cloning (`structuredClone`) throws on fields holding functions, like
+ * `format` and `ticks`.
+ */
+function copyConfig(config: PlotConfig): PlotConfig {
+  const { padding, axis, style } = config;
+  const copy: PlotConfig = { ...config, padding: { ...padding } };
+
+  if (axis) {
+    copy.axis = {};
+    if (axis.x) copy.axis.x = { ...axis.x };
+    if (axis.y) copy.axis.y = { ...axis.y };
+  }
+  if (style) {
+    copy.style = style.grid ? { grid: { ...style.grid } } : {};
+  }
+
+  return copy;
+}
+
 export class Plot
   implements
     InteractionTarget,
@@ -584,9 +609,11 @@ export class Plot
      * over its own fields as-is, and `setShowGrid`-style calls can still be
      * made afterward, so building twice from one builder splits the config
      * between them. Copying here is what makes it true that `applyOptions`
-     * is the one door for changes.
+     * is the one door for changes. **Nested objects included** — `padding`
+     * is read on every layout, so a shallow copy let `config.padding.left =
+     * 0` after mounting move the plot area with no render scheduled.
      */
-    this.config = { ...config };
+    this.config = copyConfig(config);
     this.viewportSize = { width: size.width, height: size.height };
 
     this.scheduler = (deps.createScheduler ?? immediateScheduler)(() =>
@@ -1222,25 +1249,10 @@ export class Plot
    * the one door for changes is `applyOptions`.
    *
    * When this was a shallow copy, `getOptions().padding.left = 0` mutated
-   * the internals directly. There are only three nested spots (padding,
-   * axis, style), so they're copied by hand — structured cloning
-   * (`structuredClone`) throws on fields holding functions, like `format`
-   * and `ticks`.
+   * the internals directly.
    */
   getOptions(): PlotConfig {
-    const { padding, axis, style } = this.config;
-    const copy: PlotConfig = { ...this.config, padding: { ...padding } };
-
-    if (axis) {
-      copy.axis = {};
-      if (axis.x) copy.axis.x = { ...axis.x };
-      if (axis.y) copy.axis.y = { ...axis.y };
-    }
-    if (style) {
-      copy.style = style.grid ? { grid: { ...style.grid } } : {};
-    }
-
-    return copy;
+    return copyConfig(this.config);
   }
 
   /**
