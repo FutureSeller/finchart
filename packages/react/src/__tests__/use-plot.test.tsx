@@ -1,8 +1,9 @@
 import { act, cleanup, render } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, type RefObject } from 'react';
 import type {
   BaseDataPoint,
   LineDataPoint,
+  Plot,
   XDomainChangePayload,
 } from '@finchart/core';
 import { immediateScheduler, lineSeries } from '@finchart/core';
@@ -11,9 +12,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { usePlot, type UsePlotOptions } from '../hooks/use-chart';
 import { layersSpy } from './fake-layers';
 
-/** Only the hook is under test, so this renders just one container. */
-function Harness<T extends BaseDataPoint>(props: UsePlotOptions<T>) {
-  const { containerRef } = usePlot(props);
+/** Only the hook is under test, so this renders just one container. `expose` hands out the live plot for a test that reads its state. */
+function Harness<T extends BaseDataPoint>({
+  expose,
+  ...props
+}: UsePlotOptions<T> & { expose?: (plotRef: RefObject<Plot | null>) => void }) {
+  const { containerRef, plotRef } = usePlot(props);
+  expose?.(plotRef);
   return <div ref={containerRef} />;
 }
 
@@ -43,7 +48,7 @@ function setup() {
       clear: () => undefined,
       destroy: () => undefined,
     }),
-    // Feed the recipe an inspectable div to get the finished wiring — the test looks at xScale directly.
+    // Feed the recipe an inspectable div to get the finished wiring.
   })(document.createElement("div"));
 
   return { spy, deps, series: lineSeries() };
@@ -209,6 +214,7 @@ describe('onXDomainChange', () => {
 describe('chart state props', () => {
   it('should let the state prop win over the initial fit', () => {
     const { deps, series } = setup();
+    let plotRef: RefObject<Plot | null> | undefined;
 
     render(
       <StrictMode>
@@ -217,12 +223,13 @@ describe('chart state props', () => {
           series={series}
           data={data}
           state={{ xDomain: { min: 10, max: 20 } }}
+          expose={(ref) => { plotRef = ref; }}
         />
       </StrictMode>,
     );
 
     // This is the restored window, not the data's fit ([0, 100]) — even under double mounting.
-    expect(deps.xScale.getDomain()).toEqual([10, 20]);
+    expect(plotRef?.current?.getState().xDomain).toEqual({ min: 10, max: 20 });
   });
 
   it('should mirror internal changes through onStateChange', () => {

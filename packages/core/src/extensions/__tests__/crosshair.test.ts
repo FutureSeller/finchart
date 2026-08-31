@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import type { CrosshairPayload } from "../../plot/plot";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "../../plot/__tests__/helpers";
 
 const data: LineDataPoint[] = [
@@ -12,7 +12,7 @@ const data: LineDataPoint[] = [
 ];
 
 function twoPanes() {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot, handle } = mountPlot({ deps, series: lineSeries(), config: {
     ...defaultConfig,
     showGrid: false,
@@ -26,7 +26,7 @@ function twoPanes() {
   const seen: CrosshairPayload[] = [];
   plot.on("crosshair", (payload) => seen.push(payload));
 
-  return { plot, deps, lower, seen };
+  return { plot, xScale, yScale, lower, seen };
 }
 
 /** The vertical midpoint of the area. */
@@ -56,7 +56,7 @@ describe("crosshair", () => {
   });
 
   it("should read the value from that pane's own scale", () => {
-    const { plot, deps, lower, seen } = twoPanes();
+    const { plot, yScale, lower, seen } = twoPanes();
 
     plot.crosshair({ x: 300, y: middleY(lower.area) });
 
@@ -64,12 +64,12 @@ describe("crosshair", () => {
     expect(payload.value).toBeCloseTo(lower.yScale.invert(middleY(lower.area)));
     // It's the lower pane's scale, not the mainPane's.
     expect(payload.value).not.toBeCloseTo(
-      deps.mainPaneYScale.invert(middleY(lower.area)),
+      yScale.invert(middleY(lower.area)),
     );
   });
 
   it("should report a domain x shared by every pane", () => {
-    const { plot, deps, lower, seen } = twoPanes();
+    const { plot, xScale, lower, seen } = twoPanes();
 
     plot.crosshair({ x: 300, y: middleY(plot.mainPane.area) });
     const upper = seen.at(-1)!.x;
@@ -77,7 +77,7 @@ describe("crosshair", () => {
     plot.crosshair({ x: 300, y: middleY(lower.area) });
 
     expect(seen.at(-1)!.x).toBeCloseTo(upper);
-    expect(upper).toBeCloseTo(deps.xScale.invert(300));
+    expect(upper).toBeCloseTo(xScale.invert(300));
   });
 
   it("should report no pane in the gap between panes", () => {

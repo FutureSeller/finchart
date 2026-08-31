@@ -38,9 +38,10 @@ function minimal() {
   const factory = fakeLayersFactory();
   const container = fakeContainer();
 
+  const xScale = new LinearScale();
   const deps: PlotDeps = {
-    xScale: new LinearScale(),
-    mainPaneYScale: new LinearScale(),
+    xScale: () => xScale,
+    mainPaneYScale: () => new LinearScale(),
     createDataManager: <T extends { x: number }>(
       coordinates: CoordinateAccessor<T>,
     ) =>
@@ -59,7 +60,7 @@ function minimal() {
     size: defaultSize,
   });
 
-  return { plot, deps, container, layers: factory.created[0] };
+  return { plot, xScale, container, layers: factory.created[0] };
 }
 
 describe("minimal wiring", () => {
@@ -101,15 +102,15 @@ describe("minimal wiring", () => {
   });
 
   it("should move the domain through the API without an input handler", () => {
-    const { plot, deps } = minimal();
+    const { plot, xScale } = minimal();
 
     plot.mainPane.addSeries({ series: lineSeries(), data });
-    const [before] = deps.xScale.getDomain();
+    const [before] = xScale.getDomain();
 
     plot.pan(25);
 
     // No input is accepted, but the stage still moves — a host can drive it directly.
-    expect(deps.xScale.getDomain()[0]).toBe(before + 25);
+    expect(xScale.getDomain()[0]).toBe(before + 25);
   });
 
   it("should tear down cleanly", () => {

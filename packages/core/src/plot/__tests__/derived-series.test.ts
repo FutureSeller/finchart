@@ -3,7 +3,7 @@ import type { DataView, LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { lineSeries } from "../../series";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 
 /** x runs 0..99, y equals x. */
@@ -38,7 +38,7 @@ function spySeries(): Series<LineDataPoint> & {
 const source = points(0, 100);
 
 function loaded() {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot, handle, layers } = mountPlot({
     deps,
     series: lineSeries(),
@@ -49,12 +49,12 @@ function loaded() {
       axis: { x: { showLabels: false }, y: { showLabels: false } },
     },
   });
-  return { plot, handle, deps, layers };
+  return { plot, handle, xScale, yScale, layers };
 }
 
 describe("derive", () => {
   it("should receive the whole source, not the visible window", () => {
-    const { plot, deps } = loaded();
+    const { plot, xScale } = loaded();
     const sources: DataView<LineDataPoint>[] = [];
 
     plot.mainPane.addSeries({
@@ -66,7 +66,7 @@ describe("derive", () => {
       },
     });
 
-    deps.xScale.setDomain(40, 60);
+    xScale.setDomain(40, 60);
     plot.render();
 
     expect(sources.at(-1)).toHaveLength(100);
@@ -89,7 +89,7 @@ describe("derive", () => {
   });
 
   it("should size the value domain from the derived values", () => {
-    const { plot, deps } = loaded();
+    const { plot, yScale } = loaded();
 
     plot.mainPane.clearSeries();
     plot.mainPane.addSeries({
@@ -99,18 +99,18 @@ describe("derive", () => {
     });
     plot.fitDomains();
 
-    const [min, max] = deps.mainPaneYScale.getDomain();
+    const [min, max] = yScale.getDomain();
     expect(min).toBeLessThanOrEqual(1000);
     expect(max).toBeGreaterThanOrEqual(1000);
   });
 
   it("should still clip the derived points to the visible window", () => {
-    const { plot, deps } = loaded();
+    const { plot, xScale } = loaded();
     const series = spySeries();
 
     plot.mainPane.addSeries({ series, data: source, derive: (input) => [...input] });
 
-    deps.xScale.setDomain(40, 60);
+    xScale.setDomain(40, 60);
     plot.render();
 
     for (const point of series.seen.at(-1)!) {
@@ -185,11 +185,11 @@ describe("derive", () => {
 
 describe("series without derive", () => {
   it("should keep receiving the visible window", () => {
-    const { plot, deps } = loaded();
+    const { plot, xScale } = loaded();
     const series = spySeries();
 
     plot.mainPane.addSeries({ series, data: source });
-    deps.xScale.setDomain(40, 60);
+    xScale.setDomain(40, 60);
     plot.render();
 
     for (const point of series.seen.at(-1)!) {

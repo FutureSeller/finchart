@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";
 import { barIndexX } from "../../scale";
 import { candleSeries, lineSeries } from "../../series";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDeps, testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import type { ChartState } from "../state";
 import { mountPlot } from "./helpers";
 
@@ -13,7 +13,7 @@ const data: LineDataPoint[] = [
 ];
 
 function mounted() {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot, handle, layers } = mountPlot({
     deps,
     series: lineSeries(),
@@ -23,7 +23,7 @@ function mounted() {
   const seen: ChartState[] = [];
   plot.on("stateChange", (state) => seen.push(state));
 
-  return { plot, handle, deps, layers, seen };
+  return { plot, handle, xScale, yScale, layers, seen };
 }
 
 describe("getState", () => {
@@ -194,14 +194,14 @@ describe("applyState", () => {
       low: 0,
       close: 1,
     }));
-    const deps = testBrowserDeps({ createXMapping: barIndexX });
+    const { deps, xScale } = testBrowserDepsWithScales({ createXMapping: barIndexX });
     const { plot, handle } = mountPlot({ deps, series: candleSeries() });
 
     plot.applyState({ xDomain: { min: 1, max: 5 } });
     handle.setData(days);
 
     // x 1~5 covers bars 1~3 — a value that can only be counted once the data has arrived.
-    expect(deps.xScale.getDomain()).toEqual([1, 3]);
+    expect(xScale.getDomain()).toEqual([1, 3]);
     expect(plot.getState().xDomain).toEqual({ min: 1, max: 5 });
   });
 
@@ -306,34 +306,34 @@ describe("applyState", () => {
 
 describe("setValueDomain", () => {
   it("should survive streaming appends", () => {
-    const { plot, handle, deps } = mounted();
+    const { plot, handle, yScale } = mounted();
 
     // RSI's fixed 0~100 — the fixed-range use case now comes through the front door.
     plot.mainPane.setValueDomain(0, 100);
     handle.append([{ x: 150, y: 999 }]);
 
-    expect(deps.mainPaneYScale.getDomain()).toEqual([0, 100]);
+    expect(yScale.getDomain()).toEqual([0, 100]);
   });
 
   it("should yield to an explicit full fit", () => {
-    const { plot, handle, deps } = mounted();
+    const { plot, handle, yScale } = mounted();
     plot.mainPane.setValueDomain(0, 100);
     handle.append([{ x: 150, y: 999 }]);
 
     // "Fit everything" is a request — it refits a manual range too.
     plot.fitDomains();
 
-    expect(deps.mainPaneYScale.getDomain()).not.toEqual([0, 100]);
+    expect(yScale.getDomain()).not.toEqual([0, 100]);
   });
 
   it("should yield to an imperative setData", () => {
-    const { plot, handle, deps } = mounted();
+    const { plot, handle, yScale } = mounted();
     plot.mainPane.setValueDomain(0, 100);
 
     // A new dataset refits both axes
     handle.setData([{ x: 0, y: 500 }, { x: 10, y: 700 }]);
 
-    expect(deps.mainPaneYScale.getDomain()).not.toEqual([0, 100]);
+    expect(yScale.getDomain()).not.toEqual([0, 100]);
   });
 
   it("should announce itself as a state change", () => {

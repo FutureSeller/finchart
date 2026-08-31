@@ -24,8 +24,8 @@ const data: LineDataPoint[] = [
 function mount(scope?: ReturnType<typeof createScope>) {
   const factory = fakeLayersFactory();
   const deps: PlotDeps = {
-    xScale: new LinearScale(),
-    mainPaneYScale: new LinearScale(),
+    xScale: () => new LinearScale(),
+    mainPaneYScale: () => new LinearScale(),
     createDataManager: <T extends { x: number }>(
       coordinates: CoordinateAccessor<T>,
     ) =>

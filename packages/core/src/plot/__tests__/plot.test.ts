@@ -9,7 +9,7 @@ import {
 import { Axis, createCanvasAxisLabels } from "../../axis";
 import type { LineDataPoint } from "../../data";
 import { DEFAULT_LINE_STYLE, lineSeries } from "../../series";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDeps, testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { DEFAULT_PLOT_STYLE } from "../style";
 import { defaultConfig, defaultSize, mountPlot } from "./helpers";
 
@@ -226,7 +226,7 @@ describe("coordinate transform", () => {
 
 describe("grid composition", () => {
   it("should place grid lines exactly on the axis ticks", () => {
-    const deps = testBrowserDeps();
+    const { deps, xScale, yScale } = testBrowserDepsWithScales();
     const { handle, layers } = mountPlot({ deps, series: lineSeries() });
 
     handle.setData([
@@ -244,8 +244,8 @@ describe("grid composition", () => {
       .filter(({ points }) => points[0].y === points[1].y)
       .map(({ points }) => points[0].y);
 
-    const xTicks = new Axis(deps.xScale, "horizontal", axisConfig).getTicks();
-    const yTicks = new Axis(deps.mainPaneYScale, "vertical", axisConfig).getTicks();
+    const xTicks = new Axis(xScale, "horizontal", axisConfig).getTicks();
+    const yTicks = new Axis(yScale, "vertical", axisConfig).getTicks();
 
     expect(verticals).toEqual(xTicks.map((t) => t.position));
     expect(horizontals).toEqual(yTicks.map((t) => t.position));
@@ -304,14 +304,14 @@ describe("config updates", () => {
   });
 
   it("should keep the pan position across a config change", () => {
-    const deps = testBrowserDeps();
+    const { deps, xScale } = testBrowserDepsWithScales();
     const { plot } = mountPlot({ deps, series: lineSeries(), data });
 
     plot.pan(30);
-    const panned = deps.xScale.getDomain();
+    const panned = xScale.getDomain();
     plot.applyOptions({ showGrid: false });
 
-    expect(deps.xScale.getDomain()).toEqual(panned);
+    expect(xScale.getDomain()).toEqual(panned);
   });
 
   it("should bring the grid back when re-enabled", () => {

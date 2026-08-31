@@ -4,7 +4,7 @@ import type { LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { DEFAULT_LINE_STYLE, lineSeries } from "../../series";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -28,14 +28,14 @@ function fakeSeries(
 }
 
 function loaded() {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot, handle, layers } = mountPlot({ deps, series: lineSeries(), config: {
     ...defaultConfig,
     showGrid: false,
     axis: { x: { showLabels: false }, y: { showLabels: false } },
   } });
   handle.setData(data);
-  return { plot, handle, deps, layers };
+  return { plot, handle, xScale, yScale, layers };
 }
 
 describe("mainPane", () => {
@@ -156,7 +156,7 @@ describe("addSeries", () => {
 
 describe("value domain across series", () => {
   it("should span the union of every series extent", () => {
-    const { plot, deps } = loaded();
+    const { plot, yScale } = loaded();
     const log: string[] = [];
 
     plot.setSeries({ series: fakeSeries("low", { min: 0, max: 10 }, log), data });
@@ -164,23 +164,23 @@ describe("value domain across series", () => {
     plot.fitDomains();
 
     // 0~100 gets 10% of padding added.
-    expect(deps.mainPaneYScale.getDomain()).toEqual([-10, 110]);
+    expect(yScale.getDomain()).toEqual([-10, 110]);
   });
 
   it("should widen when a series reaching further is added", () => {
-    const { plot, deps } = loaded();
+    const { plot, yScale } = loaded();
     plot.setSeries({ series: fakeSeries("low", { min: 0, max: 10 }, []), data });
     plot.fitDomains();
-    const before = deps.mainPaneYScale.getDomain();
+    const before = yScale.getDomain();
 
     plot.mainPane.addSeries({ series: fakeSeries("high", { min: 0, max: 100 }, []), data });
     plot.fitDomains();
 
-    expect(deps.mainPaneYScale.getDomain()[1]).toBeGreaterThan(before[1]);
+    expect(yScale.getDomain()[1]).toBeGreaterThan(before[1]);
   });
 
   it("should shrink back when that series is removed", () => {
-    const { plot, deps } = loaded();
+    const { plot, yScale } = loaded();
     plot.setSeries({ series: fakeSeries("low", { min: 0, max: 10 }, []), data });
     const high = plot.mainPane.addSeries({ series: fakeSeries("high", { min: 0, max: 100 }, []), data });
     plot.fitDomains();
@@ -188,17 +188,17 @@ describe("value domain across series", () => {
     high.dispose();
     plot.fitDomains();
 
-    expect(deps.mainPaneYScale.getDomain()).toEqual([-1, 11]);
+    expect(yScale.getDomain()).toEqual([-1, 11]);
   });
 
   it("should leave the value domain alone when the pane has no series", () => {
-    const { plot, deps } = loaded();
+    const { plot, yScale } = loaded();
     plot.fitDomains();
-    const before = deps.mainPaneYScale.getDomain();
+    const before = yScale.getDomain();
 
     plot.mainPane.clearSeries();
     plot.fitDomains();
 
-    expect(deps.mainPaneYScale.getDomain()).toEqual(before);
+    expect(yScale.getDomain()).toEqual(before);
   });
 });

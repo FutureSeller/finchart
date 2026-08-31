@@ -41,7 +41,7 @@ function mount(observeResolution?: ResolutionObserver) {
   const xScale = new LinearScale();
   const plot = new Plot({
     deps: {
-      ...testBrowserDeps({ xScale }),
+      ...testBrowserDeps({ xScale: () => xScale }),
       createLayers: factory.createLayers,
       observeResolution,
     },

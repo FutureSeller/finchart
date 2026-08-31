@@ -6,7 +6,7 @@ import { OHLCAccessor } from "../../data";
 import { AreaSeries, CandleSeries, LineSeries } from "../../series";
 import { DEFAULT_PLOT_STYLE } from "../style";
 import { defaultConfig, mountPlot } from "./helpers";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDeps, testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 
 /** The same OHLC data can be drawn as either a line or candles. */
 const candles: OHLC[] = [
@@ -19,15 +19,15 @@ const lineOverOHLC = () => new LineSeries({ coordinates: new OHLCAccessor() });
 
 describe("series swap", () => {
   it("should keep the pan position when the series changes", () => {
-    const deps = testBrowserDeps();
+    const { deps, xScale } = testBrowserDepsWithScales();
     const { plot } = mountPlot({ deps, series: lineOverOHLC(), data: candles });
 
     plot.pan(0.5);
-    const pannedX = deps.xScale.getDomain();
+    const pannedX = xScale.getDomain();
 
     plot.setSeries({ series: new CandleSeries(), data: candles });
 
-    expect(deps.xScale.getDomain()).toEqual(pannedX);
+    expect(xScale.getDomain()).toEqual(pannedX);
   });
 
   it("should keep the same overlay element across a swap", () => {
@@ -42,11 +42,11 @@ describe("series swap", () => {
   });
 
   it("should refit the value domain to the new series", () => {
-    const deps = testBrowserDeps();
+    const { deps, yScale } = testBrowserDepsWithScales();
     const { plot } = mountPlot({ deps, series: lineOverOHLC(), data: candles });
 
     // The line only looks at close (18~24).
-    const [lineMin, lineMax] = deps.mainPaneYScale.getDomain();
+    const [lineMin, lineMax] = yScale.getDomain();
     expect(lineMin).toBeLessThan(18);
     expect(lineMax).toBeGreaterThan(24);
     expect(lineMin).toBeGreaterThan(5);
@@ -54,7 +54,7 @@ describe("series swap", () => {
     plot.setSeries({ series: new CandleSeries(), data: candles });
 
     // Candles take up the whole range from low (2) to high (40).
-    const [candleMin, candleMax] = deps.mainPaneYScale.getDomain();
+    const [candleMin, candleMax] = yScale.getDomain();
     expect(candleMin).toBeLessThan(2);
     expect(candleMax).toBeGreaterThan(40);
   });
@@ -63,7 +63,7 @@ describe("series swap", () => {
     // plot.setSeries empties the whole pane — switching chart type
     // (candle<->area) has to keep a neighboring series like a moving
     // average alive, so it's the handle's door.
-    const deps = testBrowserDeps();
+    const { deps, yScale } = testBrowserDepsWithScales();
     const { plot, handle } = mountPlot({
       deps,
       series: new CandleSeries(),
@@ -77,7 +77,7 @@ describe("series swap", () => {
     expect(plot.mainPane.getSeries()).toHaveLength(2);
     // The value axis refits to the new series' extent — from candles (low
     // 2~high 40) to a close-price area (18~24).
-    const [min, max] = deps.mainPaneYScale.getDomain();
+    const [min, max] = yScale.getDomain();
     expect(min).toBeGreaterThan(5);
     expect(max).toBeLessThan(40);
     // The handle stays alive — a live tick still flows through unchanged.
@@ -103,7 +103,7 @@ describe("series swap", () => {
   });
 
   it("should still draw the grid on the axis ticks after a swap", () => {
-    const deps = testBrowserDeps();
+    const { deps, xScale } = testBrowserDepsWithScales();
     const { plot, layers } = mountPlot({ deps, series: lineOverOHLC(), data: candles });
 
     plot.setSeries({ series: new CandleSeries(), data: candles });
@@ -114,7 +114,7 @@ describe("series swap", () => {
       .filter(({ points }) => points[0].x === points[1].x)
       .map(({ points }) => points[0].x);
 
-    const xTicks = new Axis(deps.xScale, "horizontal", axisConfig).getTicks();
+    const xTicks = new Axis(xScale, "horizontal", axisConfig).getTicks();
     expect(verticals).toEqual(xTicks.map((t) => t.position));
   });
 

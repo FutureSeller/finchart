@@ -4,7 +4,7 @@ import type { LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { lineSeries } from "../../series";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -27,26 +27,26 @@ function spySeries(): Series<LineDataPoint> & { seen: SeriesContext<LineDataPoin
 }
 
 function loaded() {
-  const deps = testBrowserDeps();
+  const { deps, xScale, yScale } = testBrowserDepsWithScales();
   const { plot, handle, layers } = mountPlot({ deps, series: lineSeries(), config: {
     ...defaultConfig,
     showGrid: false,
     axis: { x: { showLabels: false }, y: { showLabels: false } },
   } });
   handle.setData(data);
-  return { plot, handle, deps, layers };
+  return { plot, handle, xScale, yScale, layers };
 }
 
 const heightOf = (area: PlotArea) => area.bottom - area.top;
 
 describe("addPane", () => {
   it("should give the new pane its own value scale", () => {
-    const { plot, deps } = loaded();
+    const { plot, yScale } = loaded();
 
     const pane = plot.addPane();
 
-    expect(pane.yScale).not.toBe(deps.mainPaneYScale);
-    expect(plot.mainPane.yScale).toBe(deps.mainPaneYScale);
+    expect(pane.yScale).not.toBe(yScale);
+    expect(plot.mainPane.yScale).toBe(yScale);
   });
 
   it("should stack the panes without overlapping", () => {

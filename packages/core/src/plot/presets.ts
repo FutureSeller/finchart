@@ -62,16 +62,20 @@ export interface PlotDepsOptions {
    * itself. `createDecimation: (coords) => new LttbDecimation(coords)`
    */
   createDecimation?: DecimationFactory;
-  /** Default is linear. Pass a `LogScale` for a log axis. */
-  xScale?: Scale;
+  /**
+   * Default is linear. Pass `() => new LogScale()` for a log axis. A
+   * factory, so one wiring can serve several charts without them sharing
+   * an axis — the instance is only ever made by the Plot that owns it.
+   */
+  xScale?: () => Scale;
   /**
    * Default is continuous — the domain is data x itself. Financial charts
    * pass `barIndexX` to switch on a bar-index coordinate system (weekends
    * and closed sessions don't open up gaps).
    */
   createXMapping?: XMappingFactory;
-  /** `mainPane`'s value axis. A pane created later gets its own via `addPane({ yScale })`. */
-  mainPaneYScale?: Scale;
+  /** `mainPane`'s value axis, as a factory like `xScale`. A pane created later gets its own via `addPane({ yScale })`. */
+  mainPaneYScale?: () => Scale;
   /** No input is accepted if this is left out. `browserDeps` fills it in with mouse/touch. */
   interactions?: InteractionHandler;
   /**
@@ -164,9 +168,9 @@ export function createPlotDeps(
     pointsPerPixel,
     tiered,
     verifyLandings,
-    xScale = new LinearScale(),
+    xScale = linearScale,
     createXMapping,
-    mainPaneYScale = new LinearScale(),
+    mainPaneYScale = linearScale,
     interactions,
     createLayers,
     createAxisLabels,
@@ -221,6 +225,8 @@ export function createPlotDeps(
     observeResolution,
   };
 }
+
+const linearScale = (): Scale => new LinearScale();
 
 const defaultDecimation: DecimationFactory = (coordinates) =>
   new M4Decimation(coordinates);

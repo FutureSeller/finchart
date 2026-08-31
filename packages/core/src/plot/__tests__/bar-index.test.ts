@@ -4,7 +4,7 @@ import type { OHLC } from "../../data";
 import { barIndexX } from "../../scale";
 import { timeTicks } from "../../axis";
 import { candleSeries } from "../../series";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { testBrowserDeps, testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 
 /** x's for a trading week with a gap between Fri and Mon. Neighbors in bar index. */
@@ -22,7 +22,7 @@ const gappedWeek = TRADING_DAYS.map(candleAt);
 
 function mounted(candles: OHLC[] = gappedWeek) {
   const labels = axisLabelsSpy();
-  const deps = testBrowserDeps({
+  const { deps, xScale, yScale } = testBrowserDepsWithScales({
     createXMapping: barIndexX,
     createAxisLabels: labels.createAxisLabels,
   });
@@ -33,7 +33,7 @@ function mounted(candles: OHLC[] = gappedWeek) {
     config: { ...defaultConfig, showGrid: false },
   });
 
-  return { plot, handle, deps, layers, labels };
+  return { plot, handle, xScale, yScale, layers, labels };
 }
 
 /** Center x of each candle body, left to right. */
@@ -45,10 +45,10 @@ function bodyCenters(layers: ReturnType<typeof mounted>["layers"]): number[] {
 
 describe("bar-index mapping", () => {
   it("should fit the domain in index space", () => {
-    const { deps } = mounted();
+    const { xScale } = mounted();
 
     // Five candles -> index 0~4, not the data x range (0~6).
-    expect(deps.xScale.getDomain()).toEqual([0, 4]);
+    expect(xScale.getDomain()).toEqual([0, 4]);
   });
 
   it("should render gapped candles at a uniform pitch", () => {
@@ -82,23 +82,23 @@ describe("bar-index mapping", () => {
   });
 
   it("should keep the visible window when older bars are prepended", () => {
-    const { plot, handle, deps } = mounted();
+    const { plot, handle, xScale } = mounted();
     plot.pan(-1);
-    const viewing = deps.xScale.getDomain();
+    const viewing = xScale.getDomain();
 
     handle.prepend([-3, -2, -1].map(candleAt));
 
     // Existing bars keep their index (the extension goes negative), so the
     // domain is unchanged — meaning the visible window is unchanged too.
-    expect(deps.xScale.getDomain()).toEqual(viewing);
+    expect(xScale.getDomain()).toEqual(viewing);
   });
 
   it("should keep prepended bars reachable by panning", () => {
-    const { plot, handle, deps, layers } = mounted();
+    const { plot, handle, xScale, layers } = mounted();
     handle.prepend([-3, -2, -1].map(candleAt));
 
     // The new bars sit at index -3~-1.
-    deps.xScale.setDomain(-3, -1);
+    xScale.setDomain(-3, -1);
     plot.render();
 
     expect(bodyCenters(layers)).toHaveLength(3);
@@ -122,7 +122,7 @@ describe("bar-index mapping", () => {
   });
 
   it("should speak data x in crosshair", () => {
-    const { plot, deps } = mounted();
+    const { plot, xScale } = mounted();
     plot.render();
 
     let seen: number | null = null;
@@ -132,7 +132,7 @@ describe("bar-index mapping", () => {
 
     // The pixel where the candle at index 3 (x=5) sits. Axis slices shift the
     // range, so ask the scale instead of hardcoding the pixel.
-    plot.crosshair({ x: deps.xScale.scale(3), y: 300 });
+    plot.crosshair({ x: xScale.scale(3), y: 300 });
 
     expect(seen).toBeCloseTo(5, 6);
   });
@@ -225,10 +225,10 @@ describe("axis labels", () => {
   });
 
   it("should not put ticks between bars when zoomed in", () => {
-    const { plot, deps, labels } = mounted();
+    const { plot, xScale, labels } = mounted();
     // Only two candles are visible — if the automatic spacing drops to 0.5,
     // a tick lands between bars (interpolated x).
-    deps.xScale.setDomain(2, 3);
+    xScale.setDomain(2, 3);
     plot.render();
 
     // Spacing never drops below 1. Labels are only real bar x's.
@@ -281,14 +281,14 @@ describe("ticks never leave the index stale", () => {
    * fitDomains().
    */
   it("a new bar makes it into the index", () => {
-    const { plot, handle, deps } = mounted();
+    const { plot, handle, xScale } = mounted();
     plot.fitDomains();
-    expect(deps.xScale.getDomain()).toEqual([0, 4]);
+    expect(xScale.getDomain()).toEqual([0, 4]);
 
     handle.updateLast(candleAt(9));
     plot.fitDomains();
 
-    expect(deps.xScale.getDomain()).toEqual([0, 5]);
+    expect(xScale.getDomain()).toEqual([0, 5]);
   });
 
   it("a new bar actually gets drawn", () => {
@@ -302,19 +302,19 @@ describe("ticks never leave the index stale", () => {
 
   /** A tick that replaces the same x — only the value changes, so the index must stay put. */
   it("a tick on the same bar does not disturb the index", () => {
-    const { plot, handle, deps, layers } = mounted();
+    const { plot, handle, xScale, layers } = mounted();
 
     handle.updateLast({ ...candleAt(6), close: 130, high: 140 });
     plot.fitDomains();
     plot.render();
 
-    expect(deps.xScale.getDomain()).toEqual([0, 4]);
+    expect(xScale.getDomain()).toEqual([0, 4]);
     expect(bodyCenters(layers)).toHaveLength(TRADING_DAYS.length);
   });
 
   /** Order matters: a new bar after several ticks — if a skipped rebuild also skips the next one, the new bar never makes it into the index. */
   it("a new bar after several ticks still makes it in", () => {
-    const { plot, handle, deps } = mounted();
+    const { plot, handle, xScale } = mounted();
 
     for (const close of [110, 120, 130]) {
       handle.updateLast({ ...candleAt(6), close });
@@ -322,7 +322,7 @@ describe("ticks never leave the index stale", () => {
     handle.updateLast(candleAt(9));
     plot.fitDomains();
 
-    expect(deps.xScale.getDomain()).toEqual([0, 5]);
+    expect(xScale.getDomain()).toEqual([0, 5]);
   });
 });
 

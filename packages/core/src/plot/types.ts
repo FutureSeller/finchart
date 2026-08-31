@@ -153,7 +153,14 @@ export interface PlotOptionsPatch {
  * here — `Plot<T>` figures out what it's drawing from the registration.
  */
 export interface PlotDeps {
-  xScale: Scale;
+  /**
+   * **A factory, not an instance** — like every other collaborator here.
+   * One deps object serves every chart on a page (and React StrictMode
+   * mounts twice from one), so a scale instance placed here would be
+   * shared: panning one chart would move the other. Each Plot calls this
+   * once and owns what it gets.
+   */
+  xScale: () => Scale;
   /**
    * Where data's x lands on screen. **Continuous if omitted** — the domain
    * is data x itself, and an empty span takes up empty screen space too.
@@ -164,9 +171,9 @@ export interface PlotDeps {
   /**
    * **`mainPane`'s value axis.** Not the default for every pane — a pane
    * created later either gets its own via `addPane({ yScale })` or falls
-   * back to linear.
+   * back to linear. A factory for the same reason `xScale` is one.
    */
-  mainPaneYScale: Scale;
+  mainPaneYScale: () => Scale;
   /**
    * Used when a registration builds its own manager. Policy (strategy,
    * density) is decided by whoever knows the point type — registration >
