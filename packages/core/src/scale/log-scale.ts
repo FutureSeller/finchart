@@ -4,7 +4,63 @@ import {
   requireInterval,
   requireRange,
 } from "../primitives";
-import type { ExpandHints, Scale } from "./types";
+import { niceInterval, withoutFloatNoise } from "./tick-arithmetic";
+import type { ExpandHints, Scale, TickGeometry } from "./types";
+
+/**
+ * Same number, same reason as the linear axis's `MAX_TICKS` — a
+ * degenerate domain once spun tick generation forever and killed the tab
+ * with an OOM. Geometry ticks skip that door, so they carry their own
+ * copy of the lock.
+ */
+const MAX_GEOMETRY_TICKS = 1000;
+
+/**
+ * The mantissa ladder's tightest neighbors are 1→2 and 5→10 — both
+ * log₁₀2 ≈ 0.301 decades. Whether the full ladder fits is decided from
+ * this one number and the pixel density.
+ */
+const LOG10_2 = Math.log10(2);
+
+/**
+ * 1·2·5 is the axis's public vocabulary (the linear `niceInterval` and
+ * the glossary both commit to it) — the ladder never invents other
+ * mantissas, and its only coarser rungs are {1} and skipped decades, so
+ * every transition is a pure thinning: surviving ticks keep their
+ * values, the grid fades rather than reshuffles.
+ */
+const MANTISSA_LADDER: readonly number[] = [1, 2, 5];
+
+/**
+ * Everything `values()`/`stepAt` answer from, snapshotted at
+ * `tickGeometry()` time so both stay consistent and O(1)-cheap. Either
+ * the linear candidate won (`linearStep` set) or the ladder did.
+ */
+interface TickPlan {
+  domainMin: number;
+  domainMax: number;
+  pxPerDecade: number;
+  /** Set when the linear candidate kept more ticks than the ladder. */
+  linearStep: number | null;
+  linearFirst: number;
+  linearCount: number;
+  /** Ladder shape: mantissas per decade, and the decade stride. */
+  mantissas: readonly number[];
+  skip: number;
+  /** `stepAt`'s clamp bounds — the visible domain's decade range. */
+  stepFloor: number;
+  stepCeiling: number;
+}
+
+/** `10^floor(log₁₀ v)` — the decade a value lives in. */
+function decadeOf(value: number): number {
+  return 10 ** Math.floor(Math.log10(value));
+}
+
+/** The smallest k ≥ `from` with `k ≡ 0 (mod stride)` — an absolute anchor, so a moving domain edge can't re-seat the whole ladder. */
+function alignDecade(from: number, stride: number): number {
+  return Math.ceil(from / stride) * stride;
+}
 
 /**
  * The fallback used only when the lower bound is at or below 0 and there's
@@ -21,6 +77,11 @@ import type { ExpandHints, Scale } from "./types";
  */
 const LOG_FLOOR_DECADES = 1000;
 
+/**
+ * Pairs well with `priceFormat()` on the axis: the log ladder's local
+ * step (`tickGeometry`) is what lets a step-aware formatter show
+ * `0.00003` near the floor of a wide domain instead of `0.00`.
+ */
 export class LogScale implements Scale {
   private domain: [number, number] = [1, 10];
   private range: [number, number] = [0, 1];
@@ -120,6 +181,118 @@ export class LogScale implements Scale {
   }
 
   /**
+   * Tick geometry on this scale's own arithmetic — the ladder of 1·2·5
+   * mantissas over decades, or a linear run when the window is narrow
+   * enough that the ladder would be sparser. One predicate decides:
+   * **whichever candidate keeps more ticks wins** (tie goes to the
+   * ladder — its values are the rounder ones, and its membership doesn't
+   * depend on where the domain's edges sit, so panning can't reshuffle
+   * the interior). There is no threshold constant to snap at.
+   */
+  tickGeometry(minTickSpacing: number): TickGeometry {
+    requireFinite(minTickSpacing, "tickGeometry(minTickSpacing)");
+    if (minTickSpacing <= 0) {
+      throw new ContractError(
+        `tickGeometry(minTickSpacing) must be positive, got ${minTickSpacing}`,
+      );
+    }
+
+    const plan = this.planTicks(minTickSpacing);
+
+    return {
+      values: () => collectTicks(plan),
+      stepAt: (value) => stepFromPlan(plan, value),
+    };
+  }
+
+  /**
+   * Decides linear-vs-ladder once, without materializing either
+   * candidate — `stepAt` sits on the per-frame badge path, so the
+   * decision has to be a handful of arithmetic, not an array build.
+   */
+  private planTicks(minTickSpacing: number): TickPlan {
+    const [min, max] = this.domain;
+    const [from, to] = this.range;
+    // The range's direction carries the y flip — geometry only needs the
+    // magnitude. Taking it here, in the module that owns the range
+    // invariant, is what spares every caller a sign contract.
+    const span = Math.abs(to - from);
+    // Difference of logs, not log of the ratio — `max / min` overflows to
+    // Infinity past ~600 decades (1e300 / 1e-300), and an infinite decade
+    // count silently produced zero ticks. Caught by a mutation run.
+    const decades = Math.log10(max) - Math.log10(min); // > 0 — the domain contract is min < max
+    const pxPerDecade = span / decades;
+
+    /**
+     * Ladder shape from the pixel density alone — a value-local rule.
+     * The domain's edges play no part in which rung a value belongs to,
+     * so a moving lower bound only adds or drops ticks at the ends.
+     */
+    let mantissas: readonly number[] = [1];
+    let skip = 1;
+    if (pxPerDecade * LOG10_2 >= minTickSpacing) {
+      mantissas = MANTISSA_LADDER;
+    } else if (pxPerDecade < minTickSpacing) {
+      skip = Math.ceil(minTickSpacing / pxPerDecade);
+    }
+
+    let ladderCount = 0;
+    const kFirst = alignDecade(Math.floor(Math.log10(min)), skip);
+    const kLast = Math.floor(Math.log10(max));
+    for (let k = kFirst; k <= kLast && ladderCount < MAX_GEOMETRY_TICKS; k += skip) {
+      for (const mantissa of mantissas) {
+        const value = mantissa * 10 ** k;
+        if (value >= min && value <= max) ladderCount++;
+      }
+    }
+
+    /**
+     * Linear candidate — the same step arithmetic the linear axis uses.
+     * The log top compresses, so pixel gaps shrink monotonically along
+     * the run; the survivors are exactly a prefix, kept while the gap
+     * still clears the spacing.
+     */
+    const fits = Math.max(1, Math.floor(span / minTickSpacing));
+    const linearStep = niceInterval((max - min) / fits);
+    const linearFirst = Math.ceil(min / linearStep) * linearStep;
+    let linearCount = 0;
+    let previousLog = 0;
+    for (let index = 0; linearCount < MAX_GEOMETRY_TICKS; index++) {
+      const value = linearFirst + index * linearStep;
+      if (value > max) break;
+      const logValue = Math.log10(value);
+      // Gaps only shrink from here on, so the first miss ends the prefix.
+      // This also ends a run whose step underflowed to no progress.
+      if (linearCount > 0 && (logValue - previousLog) * pxPerDecade < minTickSpacing) {
+        break;
+      }
+      linearCount++;
+      previousLog = logValue;
+    }
+
+    // `stepAt` clamps to the visible domain's decade range — one rule
+    // for out-of-domain values of either sign, instead of a special case
+    // per sign. `decadeOf` can underflow to 0 on a denormal bound; the
+    // floor stays a formattable positive number (the failure mode isn't
+    // an exception but a silent collapse to base digits downstream).
+    const stepFloor = decadeOf(min) || Number.MIN_VALUE;
+    const stepCeiling = decadeOf(max) || Number.MIN_VALUE;
+
+    return {
+      domainMin: min,
+      domainMax: max,
+      pxPerDecade,
+      linearStep: linearCount > ladderCount ? linearStep : null,
+      linearFirst,
+      linearCount,
+      mantissas,
+      skip,
+      stepFloor,
+      stepCeiling,
+    };
+  }
+
+  /**
    * Pads linearly in log space.
    *
    * On screen it looks the same as a linear axis — "ratio's worth of room
@@ -209,4 +382,54 @@ export class LogScale implements Scale {
     const lower = min / factor;
     return [lower > 0 ? lower : min, max * factor];
   }
+}
+
+/** Materializes the winning candidate — only the frame pass pays this. */
+function collectTicks(plan: TickPlan): number[] {
+  const values: number[] = [];
+
+  if (plan.linearStep !== null) {
+    for (let index = 0; index < plan.linearCount; index++) {
+      // Multiplication instead of accumulating addition — error doesn't
+      // build up. `withoutFloatNoise` keeps 2 × 10⁻⁷ from reaching a
+      // toString label as 2.0000000000000002e-7.
+      values.push(
+        withoutFloatNoise(plan.linearFirst + index * plan.linearStep),
+      );
+    }
+    return values;
+  }
+
+  const kFirst = alignDecade(Math.floor(Math.log10(plan.domainMin)), plan.skip);
+  const kLast = Math.floor(Math.log10(plan.domainMax));
+  for (let k = kFirst; k <= kLast && values.length < MAX_GEOMETRY_TICKS; k += plan.skip) {
+    for (const mantissa of plan.mantissas) {
+      const value = mantissa * 10 ** k;
+      if (value >= plan.domainMin && value <= plan.domainMax) {
+        values.push(withoutFloatNoise(value));
+        // The outer check alone lets a decade's worth of mantissas
+        // overshoot the cap (measured: 1,002).
+        if (values.length >= MAX_GEOMETRY_TICKS) return values;
+      }
+    }
+  }
+  return values;
+}
+
+/**
+ * The local ruler: the linear run's own step, or the value's decade
+ * clamped into the visible domain's decade range. The clamp is what
+ * keeps a legend row far outside the window (an oscillator's 1e-8 next
+ * to prices in the thousands) from blowing the digit count — and it
+ * answers for zero and negative values too, which have no decade of
+ * their own, without a sign special-case.
+ */
+function stepFromPlan(plan: TickPlan, value: number): number {
+  if (plan.linearStep !== null) return plan.linearStep;
+
+  let decade =
+    Number.isFinite(value) && value > 0 ? decadeOf(value) : plan.stepFloor;
+  if (!(decade > 0)) decade = plan.stepFloor;
+
+  return Math.min(Math.max(decade, plan.stepFloor), plan.stepCeiling);
 }

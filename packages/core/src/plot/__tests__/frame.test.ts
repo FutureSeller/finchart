@@ -4,7 +4,7 @@ import { AXIS_LABEL_OFFSET } from "../../axis";
 import type { DataManagerFactory } from "../../data";
 import { M4Decimation, SimpleDataManager } from "../../data";
 import type { PlotArea } from "../../primitives";
-import { barIndexX, continuousX, LinearScale } from "../../scale";
+import { barIndexX, continuousX, LinearScale, LogScale, type Scale } from "../../scale";
 import { resolveConfig } from "../config";
 import { layoutFrame, type FrameInput, type FrameMeasure } from "../frame";
 import type { PlotConfig } from "../types";
@@ -299,6 +299,120 @@ describe("y-axis tick strategy", () => {
     });
 
     expect(ticks.y[0].ticks[0].label).toBe("strategy");
+  });
+});
+
+describe("y-axis scale tick geometry", () => {
+  const fixed = (values: [number, string][]) => ({
+    ticks: () => values.map(([value, label]) => ({ value, label })),
+  });
+
+  function logPane(min = 0.5011, max = 1995.3): Pane {
+    const scale = new LogScale();
+    scale.setDomain(min, max);
+    return new Pane(scale, managers);
+  }
+
+  it("should read the scale's own geometry when it has one", () => {
+    // A log pane with no strategy used to get linear-arithmetic ticks —
+    // R1's bug. The wiring must ask the scale first.
+    const pane = logPane();
+    const { ticks } = frame({ panes: [pane] });
+
+    const values = ticks.y[0].ticks.map((t) => t.value);
+    const geometry = pane.yScale.tickGeometry?.(40);
+    expect(geometry).toBeDefined();
+    expect(values).toEqual(geometry?.values());
+    expect(values).toContain(10); // a decade anchor made it on screen
+  });
+
+  it("should keep the user's format on geometry ticks, fed the local step", () => {
+    // Geometry owns placement only — a log toggle must not silently
+    // drop the formatter the user installed on the axis.
+    const { ticks } = frame({
+      panes: [logPane()],
+      axis: ax({ y: { format: (v, step) => `${v}@${step ?? "none"}` } }),
+    });
+
+    const labels = ticks.y[0].ticks.map((t) => t.label);
+    expect(labels).toContain("10@10");
+    expect(labels).toContain("500@100");
+  });
+
+  it("should still let a user strategy win over the scale's geometry", () => {
+    const { ticks } = frame({
+      panes: [logPane()],
+      axis: ax({ y: { ticks: fixed([[50, "strategy"]]) } }),
+    });
+
+    expect(ticks.y[0].ticks.map((t) => t.label)).toEqual(["strategy"]);
+  });
+
+  it("should place geometry ticks with the pane's own scale", () => {
+    const pane = logPane();
+    const { ticks } = frame({ panes: [pane] });
+
+    for (const tick of ticks.y[0].ticks) {
+      expect(tick.position).toBeCloseTo(pane.yScale.scale(tick.value));
+    }
+  });
+
+  it("should label with toString when no format is set", () => {
+    const { ticks } = frame({ panes: [logPane()] });
+    const ten = ticks.y[0].ticks.find((t) => t.value === 10);
+    expect(ten?.label).toBe("10");
+  });
+
+  it("should leave a linear pane on the axis arithmetic", () => {
+    // LinearScale has no geometry — the wiring change must be invisible
+    // to every existing linear consumer.
+    const { ticks } = frame({ panes: panes(1, [[0, 100]]) });
+    expect(ticks.y[0].ticks.map((t) => t.value)).toContain(50);
+  });
+
+  it("should give badge and tick the same digits on a log pane", () => {
+    // Both read the same `stepAt`, so their digit counts can't split —
+    // the log twin of the linear regression this suite already pins.
+    const scale = new LogScale();
+    scale.setDomain(0.5011, 1995.3);
+    const axis = ax({ y: { format: (v, step) => `${v}~${step}` } });
+    const pane = new Pane(scale, managers, {}, () => axis.y);
+
+    const { ticks } = frame({ panes: [pane], axis });
+    expect(ticks.y[0].ticks.length).toBeGreaterThan(0);
+    for (const tick of ticks.y[0].ticks) {
+      expect(pane.formatValue(tick.value)).toBe(tick.label);
+    }
+  });
+
+  it("should ask the geometry for placement exactly once per frame", () => {
+    // `values()` is the expensive half — the frame pass may pay it once;
+    // anything more means someone rebuilt the ladder mid-layout.
+    let placements = 0;
+    let domain: [number, number] = [1, 100];
+    let range: [number, number] = [0, 1];
+    const counting: Scale = {
+      getDomain: () => domain,
+      getRange: () => range,
+      setDomain: (min, max) => {
+        domain = [min, max];
+      },
+      setRange: (min, max) => {
+        range = [min, max];
+      },
+      scale: (value) => value,
+      invert: (value) => value,
+      tickGeometry: () => ({
+        values: () => {
+          placements++;
+          return [1, 10, 100];
+        },
+        stepAt: () => 1,
+      }),
+    };
+
+    frame({ panes: [new Pane(counting, managers)] });
+    expect(placements).toBe(1);
   });
 });
 

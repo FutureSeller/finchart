@@ -393,9 +393,17 @@ Tick density **comes from pixels.** It picks from 1·2·5 × 10ⁿ so the spacin
 stays readable (80px horizontally, 40px vertically). That is why a short pane
 thins its ticks out on its own.
 
+A scale with its own geometry is the exception: `LogScale` supplies tick
+**placement** itself (`Scale.tickGeometry` — decades × 1·2·5 in log space),
+because linear spacing crowds a log axis's top and leaves its bottom empty.
+The label still belongs to whatever `format` is in force — geometry never
+carries labels, so toggling to log keeps your formatter.
+
 ### Tick
 
 `{ value, position, label }` — data value, pixel position, display string.
+(`TickGeometry.values()` is the bare-number stage before this: placement
+without labels, which the axis then combines with `format`.)
 
 ### Grid line (`GridLine`)
 
@@ -604,7 +612,7 @@ returns and where it plugs in. The full rules and their exceptions are in
 | domain | range | **data units / pixels** |
 | the `Range` type | a scale's range | just an interval / an interval of screen pixels |
 | viewport | plot area | the visible **data interval** (+ canvas size) / the **pixel rectangle** with padding taken off |
-| Scale | Axis | **converting** value↔pixel / **computing** ticks |
+| Scale | Axis | **converting** value↔pixel, plus its own tick **placement** when its geometry differs (`tickGeometry` — log) / turning placement into **labeled** ticks |
 | Series | Pane | one **representation** / a **bundle** sharing a value axis |
 | Pane | Plot | owns y and the series / owns x, the canvas, interaction |
 | `handle.setData` | `handle.append` | a new dataset (fits) / appending to the same dataset (does not fit) |

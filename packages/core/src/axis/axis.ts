@@ -1,4 +1,4 @@
-import type { Scale } from "../scale";
+import { niceInterval, withoutFloatNoise, type Scale } from "../scale";
 import type { AxisConfig, AxisOrientation, Tick } from "./types";
 
 /**
@@ -35,33 +35,6 @@ export function autoTickStep(options: {
   const fits = Math.max(1, Math.floor(Math.abs(options.pixels) / spacing));
 
   return Math.max(niceInterval(range / fits), options.minInterval ?? 0);
-}
-
-/**
- * The smallest value of the form 1·2·5 × 10ⁿ that is at least `raw`.
- *
- * Restricting tick intervals to these three shapes is what keeps labels
- * as human-readable numbers (10, 25, 500…).
- */
-function niceInterval(raw: number): number {
-  if (!(raw > 0) || !Number.isFinite(raw)) return 1;
-
-  const magnitude = 10 ** Math.floor(Math.log10(raw));
-  const normalized = raw / magnitude; // [1, 10)
-
-  if (normalized <= 1) return magnitude;
-  if (normalized <= 2) return 2 * magnitude;
-  if (normalized <= 5) return 5 * magnitude;
-  return 10 * magnitude;
-}
-
-/**
- * Adding 0.05 six times gives you 0.30000000000000004. To keep that from
- * reaching a label as-is, this keeps only the digits double precision can
- * actually distinguish.
- */
-function withoutFloatNoise(value: number): number {
-  return Number.parseFloat(value.toPrecision(15));
 }
 
 export class Axis {

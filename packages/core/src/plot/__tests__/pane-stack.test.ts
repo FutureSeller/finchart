@@ -9,6 +9,7 @@ import type { DataManagerFactory } from "../../data";
 import { M4Decimation, SimpleDataManager } from "../../data";
 import { ContractError } from "../../primitives";
 import { LinearScale } from "../../scale";
+import { resolveConfig } from "../config";
 import type { Pane, PaneChange } from "../pane";
 import { pluginApi } from "../../primitives";
 import { PaneStack } from "../panes";
@@ -24,7 +25,7 @@ function setup() {
   const changes: PaneChange[] = [];
   const stack = new PaneStack(new LinearScale(), {
     createDataManager: managers,
-    yAxisOptions: () => undefined,
+    yAxisOptions: () => resolveConfig({}).axis.y,
     onCreate: (pane) => created.push(pane),
     onChange: (change) => changes.push(change),
   });

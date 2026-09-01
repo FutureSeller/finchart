@@ -1,9 +1,9 @@
 /**
  * Things that must not be on the public surface — the compile itself is the
  * assertion (this isn't a `.test.ts`; only tsc looks at it). Where
- * `public-api.test.ts` guards the barrel's list of exports, this file nails
- * down, with reasons, the names that must never be accidentally added to
- * that list.
+ * `scripts/public-barrel-check.mjs` holds the barrels to explicit
+ * enumeration, this file nails down, with reasons, the names that must
+ * never be accidentally added to that list.
  */
 
 import type * as Public from "../index";
@@ -81,3 +81,22 @@ export type PaneMaximizeOptionsIsPublic = Public.PaneMaximizeOptions;
 /** The door for both parity features — the options object is public. */
 export type CandleDrawIsPublic = Public.CandleDrawOptions;
 export type StepLineIsPublic = typeof Public.stepLineSeries;
+
+/**
+ * `TickGeometry` — a consumer implementing `Scale.tickGeometry` needs the
+ * return type by name (the `ExpandHints` precedent: a hook's parameter
+ * types travel with the hook).
+ */
+export type TickGeometryIsPublic = Public.TickGeometry;
+
+/**
+ * The tick arithmetic that moved down into `scale` did so for the module
+ * graph, not for consumers — 1·2·5 rounding and float-noise trimming are
+ * implementation detail behind `TickGeometry`, and publishing them would
+ * freeze their signatures for no consumer's benefit.
+ */
+// @ts-expect-error: niceInterval is not part of the public contract
+export type NoNiceInterval = typeof Public.niceInterval;
+
+// @ts-expect-error: withoutFloatNoise is not part of the public contract
+export type NoWithoutFloatNoise = typeof Public.withoutFloatNoise;

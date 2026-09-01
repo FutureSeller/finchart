@@ -83,10 +83,16 @@ export function fitScale(
  * count from spacing would drift — the tick reading `0.00001235` while the
  * badge shows `0.00`.
  *
+ * **The scale is asked first.** A scale that owns its tick geometry (the
+ * log axis) also owns the local step — near 0.0003 the ruler is 0.0001,
+ * near 1,800 it's 1,000 — and the ticks were labeled with that same
+ * `stepAt`, so badge and tick digits can't split. Only `stepAt` is
+ * called, never `values()`: this runs on the paint pass, once per badge
+ * per frame, and placement would be an array built for nothing.
+ *
  * **This doesn't hold onto last frame's spacing.** That value goes stale
- * the moment a zoom, resize, or data change happens, and badges get asked
- * outside a frame too (crosshair events). Instead it calls the same
- * arithmetic the axis uses (`autoTickStep`) — there's no stale value to hold.
+ * the moment a zoom, resize, or data change happens. Instead it asks the
+ * same arithmetic the axis uses — there's no stale value to hold.
  */
 export function formatOnAxis(
   scale: Scale,
@@ -94,6 +100,15 @@ export function formatOnAxis(
   minTickSpacing: number | undefined,
   value: number,
 ): string {
+  // A pane wired into a chart always has a resolved spacing; only a bare
+  // Pane with no chart behind it lacks one, and that pane's ticks come
+  // from the linear arithmetic below anyway.
+  const geometry =
+    minTickSpacing !== undefined
+      ? scale.tickGeometry?.(minTickSpacing)
+      : undefined;
+  if (geometry) return format(value, geometry.stepAt(value));
+
   const [min, max] = scale.getDomain();
   const [from, to] = scale.getRange();
   return format(

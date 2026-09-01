@@ -35,7 +35,7 @@ import {
 } from "./pane-options";
 import { createSeriesHandle, type SeriesHandle } from "./series-handle";
 import { SeriesList, type SeriesSample } from "./series-list";
-import type { YAxisOptions, AxisOptions } from "./types";
+import type { ResolvedYAxisOptions, AxisOptions } from "./types";
 import { fitScale, formatOnAxis, replantScale } from "./value-axis";
 
 /**
@@ -263,10 +263,14 @@ export class Pane implements PaneApi {
   }
 
   /**
-   * **Five surfaces use the same ruler — down to the tick spacing.** Axis,
-   * badge, tooltip, legend and priceLine all read this, so their formatting
-   * never drifts apart → `formatOnAxis`. An arrow function because it's
-   * carried into decoration contexts as `formatY`.
+   * **When a format is set, five surfaces use the same ruler — down to
+   * the tick spacing.** Axis, badge, tooltip, legend and priceLine all
+   * read this, so their formatting can't drift apart → `formatOnAxis`.
+   * With no format set they deliberately differ: ticks print the value
+   * as-is while the badge surfaces fall back to two decimals — a split
+   * kept on purpose, because unifying it changes every chart that never
+   * touched formatting. An arrow function because it's carried into
+   * decoration contexts as `formatY`.
    */
   formatValue = (value: number): string => {
     const inherited = this.inheritedYAxis?.();
@@ -296,7 +300,7 @@ export class Pane implements PaneApi {
      * Reads the chart's default y-axis options (notation, tick spacing) —
      * a function rather than a value because `applyOptions` can change the config.
      */
-    private readonly inheritedYAxis?: () => YAxisOptions | undefined,
+    private readonly inheritedYAxis?: () => ResolvedYAxisOptions,
     /** Plot-owned uniqueness check for the persistent state identity. */
     private readonly assertStateKeyAvailable?: (key: string) => void,
   ) {
