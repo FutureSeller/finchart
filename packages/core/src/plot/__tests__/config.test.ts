@@ -141,6 +141,38 @@ describe("checkPlotNumbers", () => {
   it("should pass an empty patch", () => {
     expect(() => checkPlotNumbers({})).not.toThrow();
   });
+
+  /**
+   * The old exemption said rejecting negatives "would break something
+   * that currently works" — measured false: a negative minBarSpacing
+   * turns the span clamp in x-viewport into an always-true branch and
+   * silently locks zoom-out at the current width. Zero stays legal: it
+   * is the documented "no limit in that direction".
+   */
+  it("should reject a negative bar spacing but accept zero", () => {
+    expect(() => checkPlotNumbers({ minBarSpacing: -1 })).toThrow(
+      ContractError,
+    );
+    expect(() => checkPlotNumbers({ maxBarSpacing: -0.5 })).toThrow(
+      ContractError,
+    );
+    expect(() => checkPlotNumbers({ minBarSpacing: 0 })).not.toThrow();
+    expect(() => checkPlotNumbers({ maxBarSpacing: 0 })).not.toThrow();
+  });
+
+  it("should reject min above max when both are positive", () => {
+    expect(() =>
+      checkPlotNumbers({ minBarSpacing: 100, maxBarSpacing: 50 }),
+    ).toThrow(ContractError);
+    // Equal is a fixed spacing, not a contradiction.
+    expect(() =>
+      checkPlotNumbers({ minBarSpacing: 50, maxBarSpacing: 50 }),
+    ).not.toThrow();
+    // Zero means "no limit on that side" — it can't contradict the other.
+    expect(() =>
+      checkPlotNumbers({ minBarSpacing: 100, maxBarSpacing: 0 }),
+    ).not.toThrow();
+  });
 });
 
 describe("checkViewportSize", () => {

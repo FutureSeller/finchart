@@ -252,6 +252,27 @@ describe("the input door — synthesized coordinates aren't ours", () => {
     ).toThrow(ContractError);
   });
 
+  /**
+   * cancel is the capture-**release** key. A malformed cancel that slips
+   * this gate misses `captures.get`, the capture lingers, and — the
+   * exact zombie this gate exists to prevent — that consumer swallows
+   * the next drag on the same pointerId whole.
+   */
+  it.each([
+    ["missing", undefined],
+    ["string", "1"],
+    ["null", null],
+    ["NaN", Number.NaN],
+  ])("should refuse %s as a pointercancel pointerId", (_label, pointerId) => {
+    expect(() =>
+      router().route({
+        type: "pointercancel",
+        point: { x: 1, y: 1 },
+        pointerId,
+      } as never),
+    ).toThrow(ContractError);
+  });
+
   it("should refuse a non-string keydown key", () => {
     expect(() => router().route({ type: "keydown", key: 42 } as never)).toThrow(
       ContractError,

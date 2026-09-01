@@ -99,9 +99,14 @@ export function checkViewportSize(size: ViewportDimensions): void {
  *   becomes "no limit."** Worse for not throwing — the consumer never learns
  *   why the zoom limit they set isn't taking effect.
  *
- * **Only finiteness is checked.** Rejecting negatives has no basis yet —
- * that would break something that currently works, so it waits for a real
- * consumer to force the call.
+ * Negatives are rejected too. This guard once exempted them ("that would
+ * break something that currently works"), but the premise was false — a
+ * negative minBarSpacing flips the span clamp's sign in `x-viewport.ts`
+ * and **silently locks zoom-out at the current width**, the opposite
+ * direction of the NaN failure and just as quiet. Zero stays legal: it is
+ * the documented "no limit in that direction". And the **pair** is a door
+ * of its own — a floor above the ceiling (both positive, min > max) can't
+ * be satisfied by any spacing, so zooming would dead-end either way.
  */
 export function checkPlotNumbers(options: PlotOptionsPatch): void {
   const { padding, paneGap, rightOffset, minBarSpacing, maxBarSpacing, axis } =
@@ -122,10 +127,21 @@ export function checkPlotNumbers(options: PlotOptionsPatch): void {
   if (paneGap !== undefined) requireNonNegative(paneGap, "paneGap");
   if (rightOffset !== undefined) requireFinite(rightOffset, "rightOffset");
   if (minBarSpacing !== undefined) {
-    requireFinite(minBarSpacing, "minBarSpacing");
+    requireNonNegative(minBarSpacing, "minBarSpacing");
   }
   if (maxBarSpacing !== undefined) {
-    requireFinite(maxBarSpacing, "maxBarSpacing");
+    requireNonNegative(maxBarSpacing, "maxBarSpacing");
+  }
+  if (
+    minBarSpacing !== undefined &&
+    maxBarSpacing !== undefined &&
+    minBarSpacing > 0 &&
+    maxBarSpacing > 0 &&
+    minBarSpacing > maxBarSpacing
+  ) {
+    throw new ContractError(
+      `minBarSpacing(${minBarSpacing}) must not exceed maxBarSpacing(${maxBarSpacing})`,
+    );
   }
 
   /**

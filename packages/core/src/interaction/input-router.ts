@@ -304,15 +304,20 @@ function checkInputEvent(event: InputEvent): void {
   if (
     event.type === "pointerdown" ||
     event.type === "pointermove" ||
-    event.type === "pointerup"
+    event.type === "pointerup" ||
+    // cancel is the capture-release key — a malformed cancel that slipped
+    // this gate missed `captures.get`, the capture lingered, and that
+    // consumer swallowed the next drag on the same pointerId whole.
+    event.type === "pointercancel"
   ) {
     requireFinite(event.pointerId, `routeInput({ type: "${event.type}" }) pointerId`);
     /**
      * `button` is optional, so its absence means the primary button, but
      * if given it must be a finite number — a string would make every
      * `!== 0` comparison true, reading every click as a secondary button.
+     * cancel carries no button at all — the type itself says so.
      */
-    if (event.button !== undefined) {
+    if (event.type !== "pointercancel" && event.button !== undefined) {
       requireFinite(event.button, `routeInput({ type: "${event.type}" }) button`);
     }
   }

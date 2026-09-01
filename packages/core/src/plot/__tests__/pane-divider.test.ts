@@ -150,4 +150,23 @@ describe("pane divider handles", () => {
     expect(calls).toContain("clear");
     expect(calls.some((call) => call.startsWith("render"))).toBe(false);
   });
+
+  it("should take the handles down when the frame degenerates", () => {
+    // A collapsing sidebar mid-transition: the frame can't be drawn, and
+    // the empty-data branch already treats a leftover handle as a bug
+    // (it stays in the DOM and can still be dragged). The degenerate
+    // branch is the sibling exit and owes the same cleanup.
+    const { plot, calls } = mountWith({});
+    calls.length = 0;
+    plot.setViewport({ width: 2, height: 2 });
+    plot.render();
+    expect(calls).toContain("clear");
+    expect(calls.some((call) => call.startsWith("render"))).toBe(false);
+
+    // And the handle comes back with the space.
+    calls.length = 0;
+    plot.setViewport({ width: 800, height: 600 });
+    plot.render();
+    expect(calls).toContain("render:1");
+  });
 });
