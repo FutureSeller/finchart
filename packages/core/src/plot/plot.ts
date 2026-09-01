@@ -812,7 +812,17 @@ export class Plot
 
     // Which fields merge and which replace, and why an explicit `undefined`
     // is "not given" everywhere but `axis` → `mergeOptions` in `config.ts`
-    this.config = mergeOptions(this.config, options);
+    const merged = mergeOptions(this.config, options);
+
+    /**
+     * The **merged** result goes through the door too, before it's
+     * installed. A patch can be fine on its own and still cross a
+     * standing value (`minBarSpacing: 100` onto a config holding
+     * `maxBarSpacing: 50`) — and validating after assignment would leave
+     * the config half-landed in exactly the state the check refuses.
+     */
+    checkPlotNumbers(merged);
+    this.config = merged;
 
     this.scheduleRender();
   }
@@ -1484,6 +1494,15 @@ export class Plot
      * throw.
      */
     if (frame === null) {
+      /**
+       * The same cleanup as the empty-data branch, for the same measured
+       * reason: leaving `lastSlices` keeps the previous frame's axis
+       * strip grabbable (one pointermove turns `autoScale` off for
+       * good), and the divider handle stays in the DOM and can still be
+       * dragged over a frame that no longer exists.
+       */
+      this.lastSlices = null;
+      this.dividers?.clear();
       this.axisLabels?.clear();
       this.renderer.commit();
       this.events.emit("render", {});

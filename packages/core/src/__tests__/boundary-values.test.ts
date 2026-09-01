@@ -359,6 +359,23 @@ describe("chokepoint 2 — Plot options' numeric doors", () => {
     expect(unaccounted).toEqual([]);
   });
 
+  /**
+   * The pair is a door too — each field alone can be fine while the
+   * combination locks zooming (a floor above the ceiling). The merged
+   * config is what has to hold, so a patch that crosses the standing
+   * value must be refused, and refused **whole**: a half-landed patch
+   * would leave the config in the state the check exists to prevent.
+   */
+  it("should refuse a patch whose min crosses the standing max, whole", () => {
+    const { model } = twoSeriesStage();
+    model.plot.applyOptions({ maxBarSpacing: 50 });
+    expect(() => model.plot.applyOptions({ minBarSpacing: 100 })).toThrow(
+      ContractError,
+    );
+    expect(model.plot.getOptions().minBarSpacing).toBeUndefined();
+    expect(model.plot.getOptions().maxBarSpacing).toBe(50);
+  });
+
   describe.each(NUMERIC_DOORS)("%s", (field) => {
     it.each(HOSTILE_NUMBERS)("should reject %s", (_l, bad) => {
       const { model } = twoSeriesStage();
