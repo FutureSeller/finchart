@@ -21,6 +21,7 @@ import * as drawing from "./cases/drawing";
 import * as heikinAshi from "./cases/heikin-ashi";
 import * as ichimoku from "./cases/ichimoku";
 import * as infiniteHistoryCase from "./cases/infinite-history";
+import * as logScaleCase from "./cases/log-scale";
 import * as oscillators from "./cases/oscillators";
 import * as orderbookHeatmap from "./cases/orderbook-heatmap";
 import * as overlays from "./cases/overlays";
@@ -35,6 +36,7 @@ import * as workerRender from "./cases/worker-render";
 const CASES: readonly (readonly [string, CaseModule])[] = [
   ["candles-volume", candlesVolume],
   ["chart-types", chartTypes],
+  ["log-scale", logScaleCase],
   ["area-fade", areaFade],
   ["heikin-ashi", heikinAshi],
   ["renko", renkoCase],
