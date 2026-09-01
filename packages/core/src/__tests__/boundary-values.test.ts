@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import { rejectingFont as sharedRejectingFont } from "./dom-fakes";
 import * as publicApi from "../index";
 import { ContractError } from "../primitives";
-import type { LinearScale, LogScale } from "../scale";
+import type { LinearScale, LogScale, Scale } from "../scale";
 import { EXEMPT, GUARDED, SHAPE_EXEMPT, SHAPE_GUARDED } from "./exemptions";
 
 /**
@@ -103,6 +103,72 @@ describe("chokepoint 1 — Scale does not hold a non-finite domain", () => {
       expect(() => new Scale().setDomain(-Infinity, Infinity)).toThrow(
         ContractError,
       );
+    });
+  });
+});
+
+// Chokepoint 1b — tick geometry conformance. Also not hand-written: any
+// scale on the public surface that supplies `tickGeometry` gets held to
+// the TickGeometry contract (ascending, finite, spaced, capped) — its
+// output goes to the draw path without passing the linear axis's own
+// defenses, so this suite is the only door.
+
+describe("chokepoint 1b — tickGeometry honors the TickGeometry contract", () => {
+  const geometric = scaleConstructors().filter(
+    ([, Scale]) => "tickGeometry" in Scale.prototype,
+  );
+
+  it("should discover every geometry-bearing scale on the public surface", () => {
+    // If this is 0, the describe below silently guards nothing.
+    expect(geometric.map(([name]) => name)).toEqual(["LogScale"]);
+  });
+
+  const WINDOWS: readonly (readonly [number, number])[] = [
+    [0.5011, 1995.3],
+    [1, 1.0001],
+    [Number.MIN_VALUE, 1],
+    [1, Number.MAX_VALUE],
+    [1e-300, 1e300],
+  ];
+
+  describe.each(geometric)("%s", (_name, Scale) => {
+    it.each(WINDOWS)("conforms on [%f, %f]", (min, max) => {
+      // Typed as the contract, not the union — `tickGeometry` is the
+      // contract's optional member, and that's what's under test.
+      const scale: Scale = new Scale();
+      scale.setDomain(min, max);
+      scale.setRange(572, 8); // [bottom, top] — the default reversed y range
+      const geometry = scale.tickGeometry?.(40);
+      expect(geometry).toBeDefined();
+      if (geometry === undefined) return;
+
+      const values = geometry.values();
+      expect(values.length).toBeLessThanOrEqual(1000);
+      for (let i = 0; i < values.length; i++) {
+        expect(Number.isFinite(values[i])).toBe(true);
+        if (i > 0) {
+          expect(values[i]).toBeGreaterThan(values[i - 1]);
+          const gap = Math.abs(
+            scale.scale(values[i]) - scale.scale(values[i - 1]),
+          );
+          expect(gap).toBeGreaterThanOrEqual(40 - 1e-9);
+        }
+      }
+
+      // stepAt answers positive-finite for hostile inputs too — badges
+      // hand it whatever a legend row or priceLine holds.
+      for (const [, bad] of HOSTILE_NUMBERS) {
+        const step = geometry.stepAt(bad);
+        expect(Number.isFinite(step)).toBe(true);
+        expect(step).toBeGreaterThan(0);
+      }
+    });
+
+    it.each(HOSTILE_NUMBERS)("should reject %s as minTickSpacing", (_l, bad) => {
+      const scale: Scale = new Scale();
+      scale.setDomain(1, 100);
+      scale.setRange(572, 8);
+      expect(() => scale.tickGeometry?.(bad)).toThrow(ContractError);
     });
   });
 });

@@ -440,9 +440,37 @@ function xTicks(
 }
 
 /**
+ * When the scale owns placement (`Scale.tickGeometry` — the log axis's
+ * decade ladder). Unlike a strategy, geometry never carries labels: the
+ * label stays with whatever `format` is in force, so toggling to a log
+ * axis doesn't silently drop the formatter a user installed. Ownership
+ * still isn't split — placement has one owner (the scale), the label has
+ * one owner (the format); the "mixing halfway" rule forbids two owners
+ * of the same half. `null` when the scale has no geometry of its own.
+ */
+function geometryTicks(
+  scale: Scale,
+  options: ResolvedYAxisOptions,
+): Tick[] | null {
+  if (!scale.tickGeometry) return null;
+
+  const geometry = scale.tickGeometry(options.minTickSpacing);
+  const format = options.format ?? ((value: number) => value.toString());
+
+  return geometry.values().map((value) => ({
+    value,
+    position: scale.scale(value),
+    // The local step rides along — the same ruler the badge asks for,
+    // so tick labels and badges can't split digit counts.
+    label: format(value, geometry.stepAt(value)),
+  }));
+}
+
+/**
  * Per-pane value-axis ticks. **A pane's own setting overrides the
- * chart-wide default.** A strategy is also read here — this is where a
- * log axis's 1/2/5 multiples or percentage ticks go.
+ * chart-wide default.** Ownership goes: a user strategy (placement and
+ * labels as one unit) > the scale's own geometry combined with `format`
+ * > the linear axis arithmetic.
  */
 function yTicks(
   panes: readonly Pane[],
@@ -463,6 +491,7 @@ function yTicks(
       collapsed: false,
       ticks:
         strategyTicks(pane.yScale, options, options.minTickSpacing, IDENTITY_SPACE) ??
+        geometryTicks(pane.yScale, options) ??
         new Axis(pane.yScale, "vertical", {
           format: options.format,
           minTickSpacing: options.minTickSpacing,

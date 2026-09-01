@@ -19,13 +19,13 @@ import type { Scale } from "../scale";
 import { Pane, type PaneApi, type PaneChange } from "./pane";
 import { type PaneOptions } from "./pane-options";
 import { unionOf } from "./range";
-import type { YAxisOptions } from "./types";
+import type { ResolvedYAxisOptions } from "./types";
 
 export interface PaneStackOptions {
   /** Builds a registration's data manager — the wiring's factory, shared by every pane. */
   createDataManager: DataManagerFactory;
   /** The chart's default y-axis options. A reader, not a value — `applyOptions` changes them. */
-  yAxisOptions: () => YAxisOptions | undefined;
+  yAxisOptions: () => ResolvedYAxisOptions;
   /** Runs once for every pane as it's born, the main pane included — the chart mounts its grid here. */
   onCreate: (pane: Pane) => void;
   /** A pane held here reported a change. Stops the moment the pane is removed. */

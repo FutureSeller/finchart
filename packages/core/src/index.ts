@@ -5,7 +5,9 @@
  * explicitly re-lists what's public. Under `export *`, one internal
  * helper landing in a module index made it public automatically — now
  * both adding and removing something here is a deliberate diff on this
- * file. Runtime names are pinned by `__tests__/public-api.test.ts`.
+ * file. `scripts/public-barrel-check.mjs` holds every published barrel
+ * to that rule (explicit enumeration is itself the lock — no separate
+ * name snapshot).
  *
  * Module dependencies point one way (a DAG, not a chain):
  *   primitives ← data · scale · render · interaction   (unaware of each other)
@@ -84,6 +86,7 @@ export { barIndexX, continuousX, LinearScale, LogScale } from "./scale";
 export type {
   ExpandHints,
   Scale,
+  TickGeometry,
   XMapping,
   XMappingFactory,
   XMappingProbe,
