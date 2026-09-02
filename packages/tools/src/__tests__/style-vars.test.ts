@@ -9,6 +9,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { styleVars } from "@finchart/core";
+import { DRAWING_LABEL_SPEC } from "../render";
 import { DRAWING_STYLE_SPEC } from "../tools";
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -37,10 +38,13 @@ describe("drawing tools style variables", () => {
   );
 
   it("should own exactly the declared drawing variables", () => {
-    expect(styleVars(DRAWING_STYLE_SPEC)).toMatchInlineSnapshot(`
+    expect(
+      [...styleVars(DRAWING_STYLE_SPEC), ...styleVars(DRAWING_LABEL_SPEC)].sort(),
+    ).toMatchInlineSnapshot(`
       [
         "--chart-drawing",
         "--chart-drawing-dash",
+        "--chart-drawing-label",
         "--chart-drawing-width",
       ]
     `);
@@ -49,6 +53,7 @@ describe("drawing tools style variables", () => {
   it("should mention no variable outside its specs", () => {
     const declared = new Set([
       ...styleVars(DRAWING_STYLE_SPEC),
+      ...styleVars(DRAWING_LABEL_SPEC),
       ...CORE_OWNED,
     ]);
 

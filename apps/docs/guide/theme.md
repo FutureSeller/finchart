@@ -95,7 +95,7 @@ both files.
 | `--chart-legend` | legend (DOM) |
 | `--chart-band` | band and channel fill (`@finchart/indicators`) |
 | `--chart-profile`, `--chart-profile-poc` | Volume Profile bars and POC (`@finchart/indicators`) |
-| `--chart-drawing`, `--chart-drawing-width`, `--chart-drawing-dash` | drawing tools (`@finchart/tools`) |
+| `--chart-drawing`, `--chart-drawing-width`, `--chart-drawing-dash`, `--chart-drawing-label` | drawing tools (`@finchart/tools`) — the label is the text on a measure's box, the box wears `--chart-drawing` |
 
 ### Kinds of value — the name says it
 
@@ -337,6 +337,7 @@ the consumer**, and moving the defaults breaks apps already tuned to our colors.
   --chart-profile: rgba(148, 163, 184, 0.22);  /* @finchart/indicators */
   --chart-profile-poc: rgba(251, 191, 36, 0.5);/* @finchart/indicators */
   --chart-drawing: #818cf8;                 /* @finchart/tools */
+  --chart-drawing-label: #0f172a;           /* @finchart/tools — text on a measure's box */
 }
 ```
 

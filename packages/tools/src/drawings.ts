@@ -22,6 +22,10 @@ export const DRAWING_KINDS: readonly Drawing["type"][] = [
   "extended",
   "arrow",
   "fib",
+  "rectangle",
+  "ellipse",
+  "priceMeasure",
+  "barMeasure",
 ];
 
 /** Safely describes a value for error messages — `JSON.stringify` throws on cycles. */
@@ -114,6 +118,48 @@ export interface FibRetracement extends DrawingIdentity {
   levels?: number[];
 }
 
+/**
+ * An axis-aligned box with `a` and `b` as opposite corners. Which corner
+ * is which doesn't matter — the outline is derived from the two. Only
+ * the boundary is grabbable; the interior stays the chart's (a filled
+ * shape you can pick up by its body is a separate decision).
+ */
+export interface Rectangle extends DrawingIdentity {
+  type: "rectangle";
+  a: Anchor;
+  b: Anchor;
+}
+
+/** An ellipse inscribed in the box whose opposite corners are `a` and `b`. Boundary-only, like the rectangle. */
+export interface Ellipse extends DrawingIdentity {
+  type: "ellipse";
+  a: Anchor;
+  b: Anchor;
+}
+
+/**
+ * A segment from `a` to `b` that reports the price move between them —
+ * the delta and, when `a` isn't zero, the percent. The label is
+ * presentation: the hit target is the segment.
+ */
+export interface PriceMeasure extends DrawingIdentity {
+  type: "priceMeasure";
+  a: Anchor;
+  b: Anchor;
+}
+
+/**
+ * A segment from `a` to `b` that reports how many bars lie between them
+ * — the pane's nearest bar at each end, counted by index in the data.
+ * The x mapping can't answer this: under a continuous mapping its domain
+ * is time, and time between two bars is not a bar count.
+ */
+export interface BarMeasure extends DrawingIdentity {
+  type: "barMeasure";
+  a: Anchor;
+  b: Anchor;
+}
+
 export type Drawing =
   | HorizontalLine
   | VerticalLine
@@ -121,7 +167,11 @@ export type Drawing =
   | Ray
   | ExtendedLine
   | ArrowLine
-  | FibRetracement;
+  | FibRetracement
+  | Rectangle
+  | Ellipse
+  | PriceMeasure
+  | BarMeasure;
 
 /**
  * Omit distributed over a union — a plain `Omit<Drawing, "id">` would
@@ -174,6 +224,15 @@ export function fibLevels(
  */
 export function fibLevelPrice(drawing: FibRetracement, level: number): number {
   return drawing.b.price + (drawing.a.price - drawing.b.price) * level;
+}
+
+/**
+ * The move a price measure reports — `b` minus `a`, in price space (the
+ * same rule as `fibLevelPrice`: derived values are price arithmetic, and
+ * the label reads this one function).
+ */
+export function priceMeasureDelta(drawing: Pick<PriceMeasure, "a" | "b">): number {
+  return drawing.b.price - drawing.a.price;
 }
 
 // --- Serialization (the version belongs to the format; unreadable is null) ---
@@ -401,7 +460,11 @@ export function ownWithId(drawing: DrawingInput, id: string): Drawing {
     case "trend":
     case "ray":
     case "extended":
-    case "arrow": {
+    case "arrow":
+    case "rectangle":
+    case "ellipse":
+    case "priceMeasure":
+    case "barMeasure": {
       const owned: Drawing = {
         type: drawing.type,
         id,
@@ -477,6 +540,10 @@ export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
   extended: ["a", "b", "style"],
   arrow: ["a", "b", "style"],
   fib: ["a", "b", "style", "levels"],
+  rectangle: ["a", "b", "style"],
+  ellipse: ["a", "b", "style"],
+  priceMeasure: ["a", "b", "style"],
+  barMeasure: ["a", "b", "style"],
 };
 
 /**
@@ -540,6 +607,10 @@ export function hasDrawingShape(value: unknown): value is DrawingInput {
     case "ray":
     case "extended":
     case "arrow":
+    case "rectangle":
+    case "ellipse":
+    case "priceMeasure":
+    case "barMeasure":
       return isAnchor(drawing.a) && isAnchor(drawing.b);
     case "fib":
       return (

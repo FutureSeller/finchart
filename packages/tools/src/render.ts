@@ -1,9 +1,14 @@
 import { ContractError } from "@finchart/core";
-import type { StyleReader, DrawTarget, LineStyle } from "@finchart/core";
-import { labelFont } from "@finchart/core";
+import type {
+  StyleReader,
+  StyleSpec,
+  DrawTarget,
+  LineStyle,
+} from "@finchart/core";
+import { labelFont, resolveStyle, styleSpec } from "@finchart/core";
 import type { Drawing } from "./drawings";
-import { fibLevelPrice, fibLevels } from "./drawings";
-import { infiniteEndpoints } from "./hit";
+import { fibLevelPrice, fibLevels, priceMeasureDelta } from "./drawings";
+import { ellipseOutline, infiniteEndpoints, rectangleOutline } from "./hit";
 import type { DrawingSpace } from "./space";
 import { toPixel } from "./space";
 
@@ -23,6 +28,68 @@ import { toPixel } from "./space";
  * (`HANDLE_TOLERANCE`).
  */
 const HANDLE_RADIUS = 4;
+
+/**
+ * The text on a measure's label box. The box itself is the drawing's
+ * color (the crosshair badge precedent — a box that covers things wears
+ * the strong color, the text the light one), so only the text needs a
+ * token of its own.
+ */
+export const DRAWING_LABEL_SPEC = /* @__PURE__ */ styleSpec({
+  color: { css: "--chart-drawing-label", fallback: "#f8fafc" },
+}) satisfies StyleSpec<{ color: string }>;
+
+/** Padding (px) around a measure label's text, inside its box. */
+const LABEL_PADDING = 3;
+
+/**
+ * What rendering needs beyond the coordinate space: the theme reader,
+ * the pane's value formatter (a price measure's delta wears the axis's
+ * own digits), and the pane's bar index at an x (a bar measure counts
+ * bars, and only the data knows where the bars are — the x mapping's
+ * domain is time under a continuous mapping, so it can't).
+ */
+export interface DrawingRenderContext {
+  readStyle: StyleReader;
+  /** The pane's value formatter — the same one its axis labels use. */
+  formatValue: (value: number) => string;
+  /** The index of the bar nearest `x` in the pane's data — `null` when there is no bar at all. */
+  barIndexAt: (x: number) => number | null;
+}
+
+/** A signed number in the pane's format — `+`/`-` in front of the magnitude. */
+function signed(value: number, format: (value: number) => string): string {
+  return `${value < 0 ? "-" : "+"}${format(Math.abs(value))}`;
+}
+
+/** The delta and, when the base isn't zero, the percent move. */
+function priceMeasureLabel(
+  drawing: Extract<Drawing, { type: "priceMeasure" }>,
+  format: (value: number) => string,
+): string {
+  const delta = priceMeasureDelta(drawing);
+  const text = signed(delta, format);
+  if (drawing.a.price === 0) return text;
+  const percent = (delta / drawing.a.price) * 100;
+  return `${text} (${percent < 0 ? "-" : "+"}${Math.abs(percent).toFixed(2)}%)`;
+}
+
+/**
+ * Whole bars between the anchors — the nearest bar at each end, so a
+ * gap between bars counts as what it is. `null` without data: a count
+ * that can't be taken isn't drawn (a label reading "0 bars" over an
+ * empty pane would be the quietly-wrong side).
+ */
+function barMeasureLabel(
+  drawing: Extract<Drawing, { type: "barMeasure" }>,
+  barIndexAt: (x: number) => number | null,
+): string | null {
+  const from = barIndexAt(drawing.a.x);
+  const to = barIndexAt(drawing.b.x);
+  if (from === null || to === null) return null;
+  const bars = Math.abs(to - from);
+  return `${bars} ${bars === 1 ? "bar" : "bars"}`;
+}
 
 /** Arrowhead barb: length (px) and sweep angle off the shaft. */
 const ARROW_BARB_LENGTH = 9;
@@ -52,11 +119,12 @@ function barbPoint(
 export function drawOne(
   target: DrawTarget,
   space: DrawingSpace,
-  readStyle: StyleReader,
+  context: DrawingRenderContext,
   drawing: Drawing,
   style: LineStyle,
   isSelected: boolean,
 ): void {
+  const { readStyle } = context;
   switch (drawing.type) {
     case "horizontal": {
       // Anything spilling outside the pane gets clipped by core —
@@ -175,6 +243,71 @@ export function drawOne(
           r: HANDLE_RADIUS,
           fill: style.color,
         });
+      }
+      return;
+    }
+
+    case "rectangle":
+    case "ellipse": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+
+      // The same outline hit-testing walks, closed back to its start.
+      const outline =
+        drawing.type === "rectangle"
+          ? rectangleOutline(a, b)
+          : ellipseOutline(a, b);
+      target.drawLine([...outline, outline[0]], style);
+      if (isSelected) {
+        // The anchors are the box's opposite corners — same handles as a
+        // trend line, so the grab vocabulary doesn't change per kind.
+        for (const point of [a, b]) {
+          target.drawShape({
+            shape: "circle",
+            cx: point.x,
+            cy: point.y,
+            r: HANDLE_RADIUS,
+            fill: style.color,
+          });
+        }
+      }
+      return;
+    }
+
+    case "priceMeasure":
+    case "barMeasure": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+
+      target.drawLine([a, b], style);
+      // The label sits on the segment's midpoint in a box of the
+      // drawing's color. Sizing is the receiver's job (`TextParams.box`)
+      // — the tool never measures text.
+      const text =
+        drawing.type === "priceMeasure"
+          ? priceMeasureLabel(drawing, context.formatValue)
+          : barMeasureLabel(drawing, context.barIndexAt);
+      if (text !== null) {
+        const label = resolveStyle(DRAWING_LABEL_SPEC, readStyle);
+        target.drawText({
+          text,
+          at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+          align: "center",
+          baseline: "middle",
+          style: { font: labelFont(readStyle), color: label.color },
+          box: { fill: style.color, padding: LABEL_PADDING },
+        });
+      }
+      if (isSelected) {
+        for (const point of [a, b]) {
+          target.drawShape({
+            shape: "circle",
+            cx: point.x,
+            cy: point.y,
+            r: HANDLE_RADIUS,
+            fill: style.color,
+          });
+        }
       }
       return;
     }

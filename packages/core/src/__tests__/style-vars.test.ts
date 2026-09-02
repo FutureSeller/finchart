@@ -523,6 +523,7 @@ describe("the set of style variables", () => {
       "--chart-drawing",
       "--chart-drawing-width",
       "--chart-drawing-dash",
+      "--chart-drawing-label",
     ]);
 
     const used = new Set<string>();

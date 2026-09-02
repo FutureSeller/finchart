@@ -87,6 +87,30 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
       levels: [0, 0.5, 1, 1.618],
     },
   },
+  rectangle: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "rectangle", id: "rc", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
+  ellipse: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "ellipse", id: "el", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
+  priceMeasure: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "priceMeasure", id: "pm", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
+  barMeasure: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "barMeasure", id: "bm", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
 };
 
 describe("the kind table", () => {

@@ -1,6 +1,7 @@
-import type { OHLC } from "@finchart/core";
+import type { OHLC, SeriesSample } from "@finchart/core";
 import { candleSeries, createPlotModel } from "@finchart/core";
 import { describe, expect, it } from "vitest";
+import { barSampleAt } from "../snap";
 import { drawingTools } from "../tools";
 
 /**
@@ -162,5 +163,33 @@ describe("drag snap", () => {
     // It's a free 40px move, not a snap to a value.
     const expected = pane.yScale.invert(pixelOf(0, 100).y - 40);
     expect(trend.a.price).toBeCloseTo(expected, 8);
+  });
+});
+
+describe("the bar at an x — one rule for snapping and the bar measure", () => {
+  const sample = (over: Partial<SeriesSample>): SeriesSample => ({
+    series: "s",
+    name: null,
+    color: null,
+    x: 1,
+    value: null,
+    min: null,
+    max: null,
+    index: 0,
+    ...over,
+  });
+
+  it("skips a registration sitting on a gap and takes the first one with a value", () => {
+    const gap = sample({ series: "gap", index: 7 });
+    const bar = sample({ series: "bar", value: 100, index: 3 });
+    expect(barSampleAt([gap, bar])).toBe(bar);
+    // A span-only point (a candle's low/high with no close) still counts.
+    const spanOnly = sample({ series: "span", min: 90, max: 110, index: 5 });
+    expect(barSampleAt([gap, spanOnly])).toBe(spanOnly);
+  });
+
+  it("answers null when every registration is on a gap", () => {
+    expect(barSampleAt([sample({}), sample({ index: 2 })])).toBeNull();
+    expect(barSampleAt([])).toBeNull();
   });
 });

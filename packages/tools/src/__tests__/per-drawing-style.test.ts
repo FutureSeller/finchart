@@ -133,7 +133,7 @@ describe("one interpreter for hit and render", () => {
     drawOne(
       target as never,
       space,
-      () => "",
+      { readStyle: () => "", formatValue: String, barIndexAt: (x) => x },
       fib([0, 1]),
       { width: 1, color: "#000" },
       false,

@@ -82,7 +82,14 @@ describe("render draws what hit-testing checks", () => {
       drawText: () => undefined,
       drawCustom: () => undefined,
     };
-    drawOne(target as never, space, () => "", drawing, { width: 1, color: "#000" }, false);
+    drawOne(
+      target as never,
+      space,
+      { readStyle: () => "", formatValue: String, barIndexAt: (x) => x },
+      drawing,
+      { width: 1, color: "#000" },
+      false,
+    );
     return lines;
   }
 
