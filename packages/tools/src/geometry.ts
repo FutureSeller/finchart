@@ -47,3 +47,22 @@ export function distanceToPoint(point: Point, target: Point): number {
     coord(point, "y") - coord(target, "y"),
   );
 }
+
+/**
+ * The point `length` pixels past `through`, on the line from `from`
+ * through `through`. Rays and extended lines render and hit-test with
+ * the same overshoot endpoints (one derived-geometry source — the
+ * `fibLevelPrice` rule), and the pane clips whatever spills. A
+ * zero-length direction answers `through` itself — a degenerate ray is
+ * a point, not a throw.
+ */
+export function extendThrough(from: Point, through: Point, length: number): Point {
+  const dx = through.x - from.x;
+  const dy = through.y - from.y;
+  const span = Math.hypot(dx, dy);
+  if (span === 0 || !Number.isFinite(span)) {
+    return { x: through.x, y: through.y };
+  }
+  const scale = length / span;
+  return { x: through.x + dx * scale, y: through.y + dy * scale };
+}

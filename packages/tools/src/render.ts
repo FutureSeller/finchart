@@ -3,6 +3,7 @@ import type { StyleReader, DrawTarget, LineStyle } from "@finchart/core";
 import { labelFont } from "@finchart/core";
 import type { Drawing } from "./drawings";
 import { fibLevelPrice, fibLevels } from "./drawings";
+import { infiniteEndpoints } from "./hit";
 import type { DrawingSpace } from "./space";
 import { toPixel } from "./space";
 
@@ -22,6 +23,31 @@ import { toPixel } from "./space";
  * (`HANDLE_TOLERANCE`).
  */
 const HANDLE_RADIUS = 4;
+
+/** Arrowhead barb: length (px) and sweep angle off the shaft. */
+const ARROW_BARB_LENGTH = 9;
+const ARROW_BARB_ANGLE = Math.PI / 7;
+
+/** One barb endpoint — swept back from the tip `b` along the shaft from `a`. */
+function barbPoint(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  angle: number,
+): { x: number; y: number } {
+  // Unit vector back along the shaft, rotated around the tip.
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const span = Math.hypot(dx, dy);
+  if (span === 0) return { x: b.x, y: b.y };
+  const ux = dx / span;
+  const uy = dy / span;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: b.x + (ux * cos - uy * sin) * ARROW_BARB_LENGTH,
+    y: b.y + (ux * sin + uy * cos) * ARROW_BARB_LENGTH,
+  };
+}
 
 export function drawOne(
   target: DrawTarget,
@@ -55,6 +81,75 @@ export function drawOne(
           r: HANDLE_RADIUS,
           fill: style.color,
         });
+      }
+      return;
+    }
+
+    case "vertical": {
+      const x = space.pixelAtX(drawing.x);
+
+      target.drawLine(
+        [
+          { x, y: space.area.top },
+          { x, y: space.area.bottom },
+        ],
+        style,
+      );
+      if (isSelected) {
+        // The dual of the horizontal line — one handle at mid-height.
+        target.drawShape({
+          shape: "circle",
+          cx: x,
+          cy: (space.area.top + space.area.bottom) / 2,
+          r: HANDLE_RADIUS,
+          fill: style.color,
+        });
+      }
+      return;
+    }
+
+    case "ray":
+    case "extended": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+
+      // The same overshoot endpoints hit-testing checks — the pane clips
+      // the spill (whoever hands out the area does the clipping).
+      target.drawLine(infiniteEndpoints(drawing.type, a, b, space), style);
+      if (isSelected) {
+        for (const point of [a, b]) {
+          target.drawShape({
+            shape: "circle",
+            cx: point.x,
+            cy: point.y,
+            r: HANDLE_RADIUS,
+            fill: style.color,
+          });
+        }
+      }
+      return;
+    }
+
+    case "arrow": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+
+      target.drawLine([a, b], style);
+      // The arrowhead: two barbs swept back from the tip. Presentation
+      // only — the hit target stays the segment.
+      for (const angle of [ARROW_BARB_ANGLE, -ARROW_BARB_ANGLE]) {
+        target.drawLine([b, barbPoint(a, b, angle)], style);
+      }
+      if (isSelected) {
+        for (const point of [a, b]) {
+          target.drawShape({
+            shape: "circle",
+            cx: point.x,
+            cy: point.y,
+            r: HANDLE_RADIUS,
+            fill: style.color,
+          });
+        }
       }
       return;
     }

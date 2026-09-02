@@ -16,7 +16,11 @@ import { ContractError } from "@finchart/core";
  */
 export const DRAWING_KINDS: readonly Drawing["type"][] = [
   "horizontal",
+  "vertical",
   "trend",
+  "ray",
+  "extended",
+  "arrow",
   "fib",
 ];
 
@@ -63,8 +67,36 @@ export interface HorizontalLine extends DrawingIdentity {
   price: number;
 }
 
+/** horizontal의 쌍대 — one x, spanning the pane's full height. */
+export interface VerticalLine extends DrawingIdentity {
+  type: "vertical";
+  /** The data's x. Serialized like `Anchor.x` — same landing rules. */
+  x: number;
+}
+
 export interface TrendLine extends DrawingIdentity {
   type: "trend";
+  a: Anchor;
+  b: Anchor;
+}
+
+/** A half-line: starts at `a`, passes through `b`, and keeps going. */
+export interface Ray extends DrawingIdentity {
+  type: "ray";
+  a: Anchor;
+  b: Anchor;
+}
+
+/** A full line through `a` and `b`, extended in both directions. */
+export interface ExtendedLine extends DrawingIdentity {
+  type: "extended";
+  a: Anchor;
+  b: Anchor;
+}
+
+/** A trend segment with an arrowhead at `b`. */
+export interface ArrowLine extends DrawingIdentity {
+  type: "arrow";
   a: Anchor;
   b: Anchor;
 }
@@ -82,7 +114,14 @@ export interface FibRetracement extends DrawingIdentity {
   levels?: number[];
 }
 
-export type Drawing = HorizontalLine | TrendLine | FibRetracement;
+export type Drawing =
+  | HorizontalLine
+  | VerticalLine
+  | TrendLine
+  | Ray
+  | ExtendedLine
+  | ArrowLine
+  | FibRetracement;
 
 /**
  * Omit distributed over a union — a plain `Omit<Drawing, "id">` would
@@ -354,9 +393,17 @@ export function ownWithId(drawing: DrawingInput, id: string): Drawing {
       if (style) owned.style = style;
       return owned;
     }
-    case "trend": {
+    case "vertical": {
+      const owned: Drawing = { type: "vertical", id, x: drawing.x };
+      if (style) owned.style = style;
+      return owned;
+    }
+    case "trend":
+    case "ray":
+    case "extended":
+    case "arrow": {
       const owned: Drawing = {
-        type: "trend",
+        type: drawing.type,
         id,
         a: ownAnchor(drawing.a),
         b: ownAnchor(drawing.b),
@@ -424,7 +471,11 @@ export type DrawingUpdate = Partial<DistributiveOmit<Drawing, "id" | "type">>;
 /** The runtime twin of `DrawingUpdate` — which keys a patch may carry, per kind. */
 export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
   horizontal: ["price", "style"],
+  vertical: ["x", "style"],
   trend: ["a", "b", "style"],
+  ray: ["a", "b", "style"],
+  extended: ["a", "b", "style"],
+  arrow: ["a", "b", "style"],
   fib: ["a", "b", "style", "levels"],
 };
 
@@ -439,7 +490,13 @@ export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
 export function assignOwned(target: Drawing, source: Drawing): void {
   if (target.type === "horizontal" && source.type === "horizontal") {
     target.price = source.price;
-  } else if (target.type !== "horizontal" && source.type === target.type) {
+  } else if (target.type === "vertical" && source.type === "vertical") {
+    target.x = source.x;
+  } else if (
+    "a" in target &&
+    "a" in source &&
+    source.type === target.type
+  ) {
     target.a.x = source.a.x;
     target.a.price = source.a.price;
     target.b.x = source.b.x;
@@ -477,7 +534,12 @@ export function hasDrawingShape(value: unknown): value is DrawingInput {
   switch (drawing.type) {
     case "horizontal":
       return Number.isFinite(drawing.price);
+    case "vertical":
+      return Number.isFinite(drawing.x);
     case "trend":
+    case "ray":
+    case "extended":
+    case "arrow":
       return isAnchor(drawing.a) && isAnchor(drawing.b);
     case "fib":
       return (

@@ -39,6 +39,30 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
     snapAxes: "y",
     sample: { type: "horizontal", id: "h", price: 105, style: { color: "#f00" } },
   },
+  vertical: {
+    anchors: 0,
+    clicks: 1,
+    snapAxes: "x",
+    sample: { type: "vertical", id: "v", x: 42, style: { width: 2 } },
+  },
+  ray: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "ray", id: "r", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
+  extended: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "extended", id: "e", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
+  arrow: {
+    anchors: 2,
+    clicks: 2,
+    snapAxes: "xy",
+    sample: { type: "arrow", id: "w", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
+  },
   trend: {
     anchors: 2,
     clicks: 2,

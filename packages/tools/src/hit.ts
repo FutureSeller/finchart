@@ -2,7 +2,7 @@ import { ContractError } from "@finchart/core";
 import type { Point } from "@finchart/core";
 import type { Anchor, Drawing } from "./drawings";
 import { fibLevelPrice, fibLevels } from "./drawings";
-import { distanceToPoint, distanceToSegment } from "./geometry";
+import { distanceToPoint, distanceToSegment, extendThrough } from "./geometry";
 import type { DrawingSpace } from "./space";
 import { domainAt, toPixel } from "./space";
 
@@ -48,12 +48,38 @@ export function restoreDrawing(target: Drawing, snapshot: Drawing): void {
     target.price = snapshot.price;
     return;
   }
-  if (snapshot.type === "horizontal") return;
+  if (target.type === "vertical") {
+    if (snapshot.type !== "vertical") return;
+    target.x = snapshot.x;
+    return;
+  }
+  if (!("a" in snapshot)) return;
 
   target.a.x = snapshot.a.x;
   target.a.price = snapshot.a.price;
   target.b.x = snapshot.b.x;
   target.b.price = snapshot.b.price;
+}
+
+/**
+ * The overshoot endpoints of a ray / extended line — far enough past the
+ * pane that the clipped drawing reaches its edge. The renderer draws
+ * these same two points and the pane clips the spill, so the line you
+ * see and the line you can grab come from one function (the
+ * `fibLevelPrice` rule for derived geometry).
+ */
+export function infiniteEndpoints(
+  kind: "ray" | "extended",
+  a: Point,
+  b: Point,
+  space: DrawingSpace,
+): [Point, Point] {
+  const { area } = space;
+  const overshoot = area.right - area.left + (area.bottom - area.top);
+  const end = extendThrough(a, b, overshoot);
+  const start =
+    kind === "extended" ? extendThrough(b, a, overshoot) : { x: a.x, y: a.y };
+  return [start, end];
 }
 
 /** Whatever's drawn on top gets grabbed first — later in the list is higher (registration order is stacking order). */
@@ -105,7 +131,18 @@ export function gripAt(
         break;
       }
 
+      case "vertical": {
+        const x = space.pixelAtX(drawing.x);
+        if (Math.abs(point.x - x) <= LINE_TOLERANCE) {
+          return { drawing, part: "whole" };
+        }
+        break;
+      }
+
       case "trend":
+      case "ray":
+      case "extended":
+      case "arrow":
       case "fib": {
         const a = toPixel(space, drawing.a);
         const b = toPixel(space, drawing.b);
@@ -119,10 +156,19 @@ export function gripAt(
           return { drawing, part: "b" };
         }
         if (
-          drawing.type === "trend" &&
+          (drawing.type === "trend" || drawing.type === "arrow") &&
           distanceToSegment(point, a, b) <= LINE_TOLERANCE
         ) {
           return { drawing, part: "whole" };
+        }
+        // A ray/extended line hit-tests the same overshoot endpoints the
+        // renderer draws — one derived-geometry source, so the line you
+        // see and the line you can grab can't drift.
+        if (drawing.type === "ray" || drawing.type === "extended") {
+          const [start, end] = infiniteEndpoints(drawing.type, a, b, space);
+          if (distanceToSegment(point, start, end) <= LINE_TOLERANCE) {
+            return { drawing, part: "whole" };
+          }
         }
         // A Fibonacci's body is its level lines — grabbing any level
         // counts as grabbing the whole thing.
@@ -175,6 +221,10 @@ function anchorsOf(grip: Grip): Anchor[] {
     // meaningless placeholder.
     return [{ x: 0, price: grip.drawing.price }];
   }
+  if (grip.drawing.type === "vertical") {
+    // The dual: one x is the whole anchor — price is the placeholder.
+    return [{ x: grip.drawing.x, price: 0 }];
+  }
   if (grip.part === "whole") return [grip.drawing.a, grip.drawing.b];
   return [grip.drawing[grip.part]];
 }
@@ -205,6 +255,10 @@ export function moveGrip(
 
   if (grip.drawing.type === "horizontal") {
     grip.drawing.price = cursor.price + offsets[0].price;
+    return;
+  }
+  if (grip.drawing.type === "vertical") {
+    grip.drawing.x = cursor.x + offsets[0].x;
     return;
   }
 

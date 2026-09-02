@@ -415,9 +415,9 @@ export function drawingTools(
       probe: (x) => pane.probe(x),
     };
 
-    /** Per-tool axis policy — a horizontal line snaps only y (no x), everything else point-wise. */
+    /** Per-tool axis policy — a horizontal line snaps only y (no x), a vertical only x (no price), everything else point-wise. */
     const axesFor = (tool: Drawing["type"]): SnapAxes =>
-      tool === "horizontal" ? "y" : "xy";
+      tool === "horizontal" ? "y" : tool === "vertical" ? "x" : "xy";
 
     const snappedAt = (point: Point, tool: Drawing["type"]) =>
       snappedDomainAt(snap, space, point, axesFor(tool));
@@ -782,7 +782,9 @@ export function drawingTools(
           const draft: Drawing =
             state.tool === "horizontal"
               ? { type: "horizontal", id: mintDrawingId(), price: at.price }
-              : { type: state.tool, id: mintDrawingId(), a: { ...at }, b: { ...at } };
+              : state.tool === "vertical"
+                ? { type: "vertical", id: mintDrawingId(), x: at.x }
+                : { type: state.tool, id: mintDrawingId(), a: { ...at }, b: { ...at } };
           transition({
             kind: "drafting",
             tool: state.tool,
@@ -807,6 +809,8 @@ export function drawingTools(
           const to = snappedAt(event.point, state.draft.type);
           if (state.draft.type === "horizontal") {
             state.draft.price = to.price;
+          } else if (state.draft.type === "vertical") {
+            state.draft.x = to.x;
           } else {
             state.draft.b = { ...to };
           }
@@ -876,6 +880,8 @@ export function drawingTools(
         const at = snappedAt(event.point, state.draft.type);
         if (state.draft.type === "horizontal") {
           state.draft.price = at.price;
+        } else if (state.draft.type === "vertical") {
+          state.draft.x = at.x;
         } else {
           state.draft.b = { ...at };
         }
@@ -945,7 +951,7 @@ export function drawingTools(
       if (state.kind === "drafting" && state.pointerId !== null) {
         if (event.pointerId !== state.pointerId) return true;
 
-        if (state.draft.type === "horizontal") {
+        if (state.draft.type === "horizontal" || state.draft.type === "vertical") {
           // One anchor, so it's done the moment it's released.
           finishPlacement(state.draft);
           return true;

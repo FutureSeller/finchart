@@ -25,11 +25,14 @@ export interface SnapContext {
 }
 
 /**
- * Axis policy — a horizontal line snaps only y (it has no x); a trend
- * line or Fibonacci snaps per point. `null` means behavior outside
- * snapping (moving the whole thing).
+ * Axis policy — a horizontal line snaps only y (it has no x), a vertical
+ * line only x (it has no price); a trend line or Fibonacci snaps per
+ * point. `null` means behavior outside snapping (moving the whole
+ * thing). Without an "x" mode, a vertical line under "xy" would only
+ * stick to a bar when the cursor also happened to sit near that bar's
+ * values — the Euclidean gate would eat the x snap.
  */
-export type SnapAxes = "y" | "xy";
+export type SnapAxes = "x" | "y" | "xy";
 
 /** Cursor pixel → snapped domain. The shape used by drawing and drafting. */
 export function snappedDomainAt(
@@ -59,6 +62,13 @@ export function snapDomainPos(
     (candidate) => candidate.value !== null || candidate.min !== null,
   );
   if (!sample) return pos;
+
+  if (axes === "x") {
+    // Only the bar's x sticks — the price stays free (a vertical line
+    // has no price of its own).
+    const dx = Math.abs(space.pixelAtX(sample.x) - space.pixelAtX(pos.x));
+    return dx <= snap.radius ? { x: sample.x, price: pos.price } : pos;
+  }
 
   const candidates: number[] = [];
   for (const value of [sample.value, sample.min, sample.max]) {
