@@ -46,13 +46,24 @@ export function barSampleAt(samples: readonly SeriesSample[]): SeriesSample | nu
   );
 }
 
+/**
+ * A snapped domain position, and whether it actually stuck — the
+ * toolbox draws a ring on a stuck anchor so the hand knows (the
+ * "did it snap?" report that made snapping without feedback a guess).
+ */
+export interface SnapResult {
+  x: number;
+  price: number;
+  snapped: boolean;
+}
+
 /** Cursor pixel → snapped domain. The shape used by drawing and drafting. */
 export function snappedDomainAt(
   snap: SnapContext,
   space: DrawingSpace,
   point: Point,
   axes: SnapAxes,
-): { x: number; price: number } {
+): SnapResult {
   return snapDomainPos(snap, space, domainAt(space, point), axes);
 }
 
@@ -67,24 +78,25 @@ export function snapDomainPos(
   space: DrawingSpace,
   pos: { x: number; price: number },
   axes: SnapAxes,
-): { x: number; price: number } {
-  if (!snap.enabled()) return pos;
+): SnapResult {
+  const free: SnapResult = { x: pos.x, price: pos.price, snapped: false };
+  if (!snap.enabled()) return free;
 
   const sample = barSampleAt(snap.probe(pos.x));
-  if (!sample) return pos;
+  if (!sample) return free;
 
   if (axes === "x") {
     // Only the bar's x sticks — the price stays free (a vertical line
     // has no price of its own).
     const dx = Math.abs(space.pixelAtX(sample.x) - space.pixelAtX(pos.x));
-    return dx <= snap.radius ? { x: sample.x, price: pos.price } : pos;
+    return dx <= snap.radius ? { x: sample.x, price: pos.price, snapped: true } : free;
   }
 
   const candidates: number[] = [];
   for (const value of [sample.value, sample.min, sample.max]) {
     if (value !== null && !candidates.includes(value)) candidates.push(value);
   }
-  if (candidates.length === 0) return pos;
+  if (candidates.length === 0) return free;
 
   const pixelY = space.pixelAtValue(pos.price);
   let best = candidates[0];
@@ -98,13 +110,13 @@ export function snapDomainPos(
   }
 
   if (axes === "y") {
-    return bestDy <= snap.radius ? { x: pos.x, price: best } : pos;
+    return bestDy <= snap.radius ? { x: pos.x, price: best, snapped: true } : free;
   }
 
   // Point-wise snapping — judged by on-screen Euclidean distance. The
   // bar's x snaps along with it.
   const dx = Math.abs(space.pixelAtX(sample.x) - space.pixelAtX(pos.x));
   return Math.hypot(dx, bestDy) <= snap.radius
-    ? { x: sample.x, price: best }
-    : pos;
+    ? { x: sample.x, price: best, snapped: true }
+    : free;
 }
