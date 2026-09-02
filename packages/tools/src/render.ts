@@ -7,7 +7,13 @@ import type {
 } from "@finchart/core";
 import { labelFont, resolveStyle, styleSpec } from "@finchart/core";
 import type { Drawing } from "./drawings";
-import { fibLevelPrice, fibLevels, priceMeasureDelta } from "./drawings";
+import {
+  channelParallel,
+  fibLevelPrice,
+  fibLevels,
+  pitchforkLines,
+  priceMeasureDelta,
+} from "./drawings";
 import { ellipseOutline, infiniteEndpoints, rectangleOutline } from "./hit";
 import type { DrawingSpace } from "./space";
 import { toPixel } from "./space";
@@ -89,6 +95,23 @@ function barMeasureLabel(
   if (from === null || to === null) return null;
   const bars = Math.abs(to - from);
   return `${bars} ${bars === 1 ? "bar" : "bars"}`;
+}
+
+/** Endpoint handles — the selected drawing's grab points. */
+function drawHandles(
+  target: DrawTarget,
+  points: readonly { x: number; y: number }[],
+  fill: string,
+): void {
+  for (const point of points) {
+    target.drawShape({
+      shape: "circle",
+      cx: point.x,
+      cy: point.y,
+      r: HANDLE_RADIUS,
+      fill,
+    });
+  }
 }
 
 /** Arrowhead barb: length (px) and sweep angle off the shaft. */
@@ -309,6 +332,36 @@ export function drawOne(
           });
         }
       }
+      return;
+    }
+
+    case "parallelChannel": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+      const c = toPixel(space, drawing.c);
+
+      target.drawLine([a, b], style);
+      // The parallel comes from the same price-space formula
+      // hit-testing reads.
+      const [p, q] = channelParallel(drawing).map((anchor) => toPixel(space, anchor));
+      target.drawLine([p, q], style);
+      if (isSelected) drawHandles(target, [a, b, c], style.color);
+      return;
+    }
+
+    case "pitchfork": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+      const c = toPixel(space, drawing.c);
+
+      for (const [from, through] of pitchforkLines(drawing)) {
+        target.drawLine(
+          infiniteEndpoints("ray", toPixel(space, from), toPixel(space, through), space),
+          style,
+        );
+      }
+      target.drawLine([b, c], style);
+      if (isSelected) drawHandles(target, [a, b, c], style.color);
       return;
     }
 

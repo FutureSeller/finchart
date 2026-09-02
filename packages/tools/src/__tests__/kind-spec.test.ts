@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANCHOR_KEYS,
   DRAWING_KINDS,
+  drawingAnchors,
   isDrawing,
   parseDrawings,
   serializeDrawings,
@@ -111,6 +113,30 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
     snapAxes: "xy",
     sample: { type: "barMeasure", id: "bm", a: { x: 1, price: 100 }, b: { x: 5, price: 120 } },
   },
+  parallelChannel: {
+    anchors: 3,
+    clicks: 3,
+    snapAxes: "xy",
+    sample: {
+      type: "parallelChannel",
+      id: "pc",
+      a: { x: 1, price: 100 },
+      b: { x: 5, price: 120 },
+      c: { x: 1, price: 90 },
+    },
+  },
+  pitchfork: {
+    anchors: 3,
+    clicks: 3,
+    snapAxes: "xy",
+    sample: {
+      type: "pitchfork",
+      id: "pf",
+      a: { x: 1, price: 100 },
+      b: { x: 5, price: 120 },
+      c: { x: 5, price: 90 },
+    },
+  },
 };
 
 describe("the kind table", () => {
@@ -128,6 +154,12 @@ describe("the kind table", () => {
 
   it.each(rows)("%s: the predicate accepts the sample", (_kind, spec) => {
     expect(isDrawing(spec.sample)).toBe(true);
+  });
+
+  it.each(rows)("%s: the anchor count agrees with ANCHOR_KEYS and the live enumeration", (kind, spec) => {
+    expect(ANCHOR_KEYS[spec.sample.type]).toHaveLength(spec.anchors);
+    expect(drawingAnchors(spec.sample)).toHaveLength(spec.anchors);
+    expect(kind).toBe(spec.sample.type);
   });
 
   it("the predicate rejects a kind outside the table", () => {

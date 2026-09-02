@@ -10,6 +10,8 @@ export type {
   ExtendedLine,
   FibRetracement,
   HorizontalLine,
+  ParallelChannel,
+  Pitchfork,
   PriceMeasure,
   Ray,
   Rectangle,

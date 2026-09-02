@@ -26,6 +26,8 @@ export const DRAWING_KINDS: readonly Drawing["type"][] = [
   "ellipse",
   "priceMeasure",
   "barMeasure",
+  "parallelChannel",
+  "pitchfork",
 ];
 
 /** Safely describes a value for error messages — `JSON.stringify` throws on cycles. */
@@ -160,6 +162,34 @@ export interface BarMeasure extends DrawingIdentity {
   b: Anchor;
 }
 
+/**
+ * Two parallel lines: `a`–`b`, and a second line through `c` with the
+ * same price-per-x slope, over the same x span. "Parallel" is a
+ * price-space statement — on a log axis the two are not parallel on
+ * screen, deliberately, so the saved bytes mean the same thing under
+ * every scale. `c` is an absolute anchor (its distance from the first
+ * line is derived, never stored).
+ */
+export interface ParallelChannel extends DrawingIdentity {
+  type: "parallelChannel";
+  a: Anchor;
+  b: Anchor;
+  c: Anchor;
+}
+
+/**
+ * Andrews' pitchfork: a median ray from `a` through the midpoint of
+ * `b`–`c`, and two tines from `b` and `c` carrying the median's
+ * price-space direction. Only the standard fork today; a variant would
+ * be an optional field on this kind, not a new kind.
+ */
+export interface Pitchfork extends DrawingIdentity {
+  type: "pitchfork";
+  a: Anchor;
+  b: Anchor;
+  c: Anchor;
+}
+
 export type Drawing =
   | HorizontalLine
   | VerticalLine
@@ -171,7 +201,46 @@ export type Drawing =
   | Rectangle
   | Ellipse
   | PriceMeasure
-  | BarMeasure;
+  | BarMeasure
+  | ParallelChannel
+  | Pitchfork;
+
+export type AnchorKey = "a" | "b" | "c";
+
+/**
+ * Which anchor fields each kind owns, in placement order — the runtime
+ * twin of the union's shape. Drafting reads it to know how many clicks
+ * a kind takes; the kind table in the tests pins each row against the
+ * sample. A `Record` keyed by the union, so a new kind can't skip it.
+ */
+export const ANCHOR_KEYS: Record<Drawing["type"], readonly AnchorKey[]> = {
+  horizontal: [],
+  vertical: [],
+  trend: ["a", "b"],
+  ray: ["a", "b"],
+  extended: ["a", "b"],
+  arrow: ["a", "b"],
+  fib: ["a", "b"],
+  rectangle: ["a", "b"],
+  ellipse: ["a", "b"],
+  priceMeasure: ["a", "b"],
+  barMeasure: ["a", "b"],
+  parallelChannel: ["a", "b", "c"],
+  pitchfork: ["a", "b", "c"],
+};
+
+/**
+ * A drawing's anchors as **live references**, in `ANCHOR_KEYS` order —
+ * the one enumeration that dragging, restoring and in-place copying all
+ * walk, so their indices can't disagree. A horizontal or vertical line
+ * has none (its one coordinate isn't an anchor).
+ */
+export function drawingAnchors(drawing: Drawing): Anchor[] {
+  if (!("a" in drawing)) return [];
+  const anchors = [drawing.a, drawing.b];
+  if ("c" in drawing) anchors.push(drawing.c);
+  return anchors;
+}
 
 /**
  * Omit distributed over a union — a plain `Omit<Drawing, "id">` would
@@ -233,6 +302,49 @@ export function fibLevelPrice(drawing: FibRetracement, level: number): number {
  */
 export function priceMeasureDelta(drawing: Pick<PriceMeasure, "a" | "b">): number {
   return drawing.b.price - drawing.a.price;
+}
+
+/**
+ * The channel's second line — through `c`, with `a`–`b`'s price-per-x
+ * slope, at `a`'s and `b`'s x. When `a` and `b` share an x the slope has
+ * no meaning, so the line is the same vertical span shifted to `c`'s x.
+ * Price space, one formula: hit-testing and rendering both read this.
+ */
+export function channelParallel(
+  drawing: Pick<ParallelChannel, "a" | "b" | "c">,
+): [Anchor, Anchor] {
+  const { a, b, c } = drawing;
+  if (a.x === b.x) {
+    return [
+      { x: c.x, price: a.price },
+      { x: c.x, price: b.price },
+    ];
+  }
+  const slope = (b.price - a.price) / (b.x - a.x);
+  return [
+    { x: a.x, price: c.price + (a.x - c.x) * slope },
+    { x: b.x, price: c.price + (b.x - c.x) * slope },
+  ];
+}
+
+/**
+ * The pitchfork's three lines as `[from, through]` pairs, in price
+ * space: the median from `a` through the midpoint of `b`–`c`, and a
+ * tine from each of `b` and `c` carrying the same direction. Each pair
+ * is a ray on screen — the renderer and hit-testing both extend it with
+ * `infiniteEndpoints`.
+ */
+export function pitchforkLines(
+  drawing: Pick<Pitchfork, "a" | "b" | "c">,
+): [Anchor, Anchor][] {
+  const { a, b, c } = drawing;
+  const dx = (b.x + c.x) / 2 - a.x;
+  const dprice = (b.price + c.price) / 2 - a.price;
+  const along = (from: Anchor): [Anchor, Anchor] => [
+    { x: from.x, price: from.price },
+    { x: from.x + dx, price: from.price + dprice },
+  ];
+  return [along(a), along(b), along(c)];
 }
 
 // --- Serialization (the version belongs to the format; unreadable is null) ---
@@ -474,6 +586,18 @@ export function ownWithId(drawing: DrawingInput, id: string): Drawing {
       if (style) owned.style = style;
       return owned;
     }
+    case "parallelChannel":
+    case "pitchfork": {
+      const owned: Drawing = {
+        type: drawing.type,
+        id,
+        a: ownAnchor(drawing.a),
+        b: ownAnchor(drawing.b),
+        c: ownAnchor(drawing.c),
+      };
+      if (style) owned.style = style;
+      return owned;
+    }
     case "fib": {
       const owned: FibRetracement = {
         type: "fib",
@@ -544,6 +668,8 @@ export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
   ellipse: ["a", "b", "style"],
   priceMeasure: ["a", "b", "style"],
   barMeasure: ["a", "b", "style"],
+  parallelChannel: ["a", "b", "c", "style"],
+  pitchfork: ["a", "b", "c", "style"],
 };
 
 /**
@@ -559,15 +685,12 @@ export function assignOwned(target: Drawing, source: Drawing): void {
     target.price = source.price;
   } else if (target.type === "vertical" && source.type === "vertical") {
     target.x = source.x;
-  } else if (
-    "a" in target &&
-    "a" in source &&
-    source.type === target.type
-  ) {
-    target.a.x = source.a.x;
-    target.a.price = source.a.price;
-    target.b.x = source.b.x;
-    target.b.price = source.b.price;
+  } else if (source.type === target.type) {
+    const sources = drawingAnchors(source);
+    drawingAnchors(target).forEach((anchor, index) => {
+      anchor.x = sources[index].x;
+      anchor.price = sources[index].price;
+    });
   }
   if (source.style) {
     target.style = source.style;
@@ -612,6 +735,9 @@ export function hasDrawingShape(value: unknown): value is DrawingInput {
     case "priceMeasure":
     case "barMeasure":
       return isAnchor(drawing.a) && isAnchor(drawing.b);
+    case "parallelChannel":
+    case "pitchfork":
+      return isAnchor(drawing.a) && isAnchor(drawing.b) && isAnchor(drawing.c);
     case "fib":
       return (
         isAnchor(drawing.a) &&

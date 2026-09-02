@@ -1,7 +1,13 @@
 import { ContractError } from "@finchart/core";
 import type { Point } from "@finchart/core";
 import type { Anchor, Drawing } from "./drawings";
-import { fibLevelPrice, fibLevels } from "./drawings";
+import {
+  channelParallel,
+  drawingAnchors,
+  fibLevelPrice,
+  fibLevels,
+  pitchforkLines,
+} from "./drawings";
 import { distanceToPoint, distanceToSegment, extendThrough } from "./geometry";
 import type { DrawingSpace } from "./space";
 import { domainAt, toPixel } from "./space";
@@ -14,7 +20,8 @@ const HANDLE_TOLERANCE = 6;
 /** What got grabbed — the whole thing, or which endpoint. */
 export type Grip =
   | { drawing: Drawing; part: "whole" }
-  | { drawing: Extract<Drawing, { a: Anchor }>; part: "a" | "b" };
+  | { drawing: Extract<Drawing, { a: Anchor }>; part: "a" | "b" }
+  | { drawing: Extract<Drawing, { c: Anchor }>; part: "c" };
 
 /**
  * The domain offset at the moment of grabbing. Keeping this fixed for the
@@ -53,12 +60,24 @@ export function restoreDrawing(target: Drawing, snapshot: Drawing): void {
     target.x = snapshot.x;
     return;
   }
-  if (!("a" in snapshot)) return;
+  if (target.type !== snapshot.type) return;
 
-  target.a.x = snapshot.a.x;
-  target.a.price = snapshot.a.price;
-  target.b.x = snapshot.b.x;
-  target.b.price = snapshot.b.price;
+  const sources = drawingAnchors(snapshot);
+  drawingAnchors(target).forEach((anchor, index) => {
+    anchor.x = sources[index].x;
+    anchor.price = sources[index].price;
+  });
+}
+
+/** The nearest of a list of pixel points within the handle radius, as a grip part — or null. */
+function handleAt(
+  point: Point,
+  handles: readonly [Point, "a" | "b" | "c"][],
+): "a" | "b" | "c" | null {
+  for (const [pixel, part] of handles) {
+    if (distanceToPoint(point, pixel) <= HANDLE_TOLERANCE) return part;
+  }
+  return null;
 }
 
 /**
@@ -244,6 +263,49 @@ export function gripAt(
         }
         break;
       }
+      case "parallelChannel": {
+        const a = toPixel(space, drawing.a);
+        const b = toPixel(space, drawing.b);
+        const c = toPixel(space, drawing.c);
+        const part = handleAt(point, [[a, "a"], [b, "b"], [c, "c"]]);
+        if (part === "c") return { drawing, part };
+        if (part !== null) return { drawing, part };
+        // Both lines grab; the band between them stays the chart's.
+        const [p, q] = channelParallel(drawing).map((anchor) => toPixel(space, anchor));
+        if (
+          distanceToSegment(point, a, b) <= LINE_TOLERANCE ||
+          distanceToSegment(point, p, q) <= LINE_TOLERANCE
+        ) {
+          return { drawing, part: "whole" };
+        }
+        break;
+      }
+
+      case "pitchfork": {
+        const a = toPixel(space, drawing.a);
+        const b = toPixel(space, drawing.b);
+        const c = toPixel(space, drawing.c);
+        const part = handleAt(point, [[a, "a"], [b, "b"], [c, "c"]]);
+        if (part === "c") return { drawing, part };
+        if (part !== null) return { drawing, part };
+        // Three rays from the shared formula, plus the b–c bar.
+        for (const [from, through] of pitchforkLines(drawing)) {
+          const [start, end] = infiniteEndpoints(
+            "ray",
+            toPixel(space, from),
+            toPixel(space, through),
+            space,
+          );
+          if (distanceToSegment(point, start, end) <= LINE_TOLERANCE) {
+            return { drawing, part: "whole" };
+          }
+        }
+        if (distanceToSegment(point, b, c) <= LINE_TOLERANCE) {
+          return { drawing, part: "whole" };
+        }
+        break;
+      }
+
       default: {
         // A fourth kind breaks the compile here — none of the known
         // three can reach this branch.
@@ -292,7 +354,8 @@ function anchorsOf(grip: Grip): Anchor[] {
     // The dual: one x is the whole anchor — price is the placeholder.
     return [{ x: grip.drawing.x, price: 0 }];
   }
-  if (grip.part === "whole") return [grip.drawing.a, grip.drawing.b];
+  if (grip.part === "whole") return drawingAnchors(grip.drawing);
+  if (grip.part === "c") return [grip.drawing.c];
   return [grip.drawing[grip.part]];
 }
 
