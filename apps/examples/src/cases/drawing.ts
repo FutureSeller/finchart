@@ -10,7 +10,7 @@ export const description =
   "Press a button and click the chart to draw — once for a horizontal line, twice for a trend line or a Fibonacci. Esc cancels, Delete removes the selection, dragging an endpoint edits. " +
   "`]` and `[` cycle the selection without a pointer (the keys only arrive once you've clicked the chart to give it focus). " +
   "For touch and anything else without a keyboard, the three buttons below (deselect · delete · clear all) do the same work. " +
-  "What you draw is saved to localStorage — a serialize()/load() round trip, so it survives a refresh and a theme switch (a remount). A drag-move carries reason \"move\", so only its save is deferred. " +
+  "What you draw is saved to localStorage — a serialize()/load() round trip, so it survives a refresh and a theme switch (a remount; a drawing styled by hand keeps its own color — that is the saved literal working). A drag-move carries reason \"move\", so only its save is deferred. " +
   "Turn the magnet on and drawing and endpoint drags snap to a bar's close, low, and high (and the bar's x) — you don't leave a peak to pixel luck.";
 
 /** Background for the pressed button — the case stands on its own without the shell's CSS. */

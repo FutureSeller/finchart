@@ -77,7 +77,7 @@ underneath.
 > });
 > ```
 >
-> The full story is under "Keyboard" in `docs/plot-contract.md`.
+> The full story is under "Keyboard" in [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md).
 
 **Snapping** — `drawingTools({ plot, snap: true })` or `api.setSnap(on)`.
 Drawing and endpoint dragging snap to bar values (close, low, high) and bar x,
@@ -92,11 +92,31 @@ custom series only has to supply that for snapping to understand it.
 keeps the existing list). The lower-level `serializeDrawings` /
 `parseDrawings` (drawing array ↔ string) is for apps with their own storage
 format or partial saves. You only need one of the two, and usually it's the
-top layer. For when to save, subscribe to `tools.changes`: drag-moves arrive
-separately with `reason: "move"`, so you can debounce just those. There's a
-working example in the
+top layer. For when to save, subscribe to `tools.changes`:
+
+```ts
+tools.changes.subscribe((change) => {
+  if (change.reason !== "move") saveDrawings();
+});
+```
+
+Drag-moves arrive separately with `reason: "move"` so you can debounce just
+those; every other reason is a discrete edit worth saving. `update` fires
+once per `handle.update` call — if you drive it from a spinner or a slider,
+the debounce belongs on your side, the same as `move`. There's a working
+example in the
 [drawing tools case](../../apps/examples/src/cases/drawing.ts), which does a
 localStorage round trip.
+
+**Every drawing carries a stable `id`.** It's minted at the door (`add`, or
+the moment hand-drawing completes) — you never invent one — and survives
+save/load, so a side panel can key its own state by it. `handle.update(patch)`
+edits a drawing in place (geometry, per-drawing `style`, fib `levels`); a key
+passed as `undefined` returns that field to its default — `style: undefined`
+goes back to the theme. Per-drawing `style` uses the same
+`Partial<LineStyle>` leaves as the toolbox override (`width` · `color` ·
+`dashArray`), and the values are literals: a drawing you colored by hand
+keeps its color across a theme switch, deliberately.
 
 ## Pointing at what you restored
 
@@ -114,6 +134,9 @@ handles[n].remove();
 
 Handle objects are created fresh on every call — the contract is **what they
 point at**, not their identity, so `select` and `remove` work just the same.
+Two vocabularies, two jobs: the `id` is **yours** (key your own store or
+panel rows by it), the handle is how you call **us** (`select` / `remove` /
+`update`).
 
 ## How close you have to click
 

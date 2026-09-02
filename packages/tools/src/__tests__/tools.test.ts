@@ -237,10 +237,10 @@ describe("handles() -- a restored drawing can be targeted too", () => {
 
     const [first, second] = tools.handles();
     tools.select(second);
-    expect(tools.selection()).toEqual(two[1]);
+    expect(tools.selection()).toMatchObject(two[1]);
 
     first.remove();
-    expect(tools.list()).toEqual([two[1]]);
+    expect(tools.list()).toMatchObject([two[1]]);
   });
 
   /** The contract is what it points at, not object identity -- this must work even though every call produces a fresh object. */
@@ -253,7 +253,7 @@ describe("handles() -- a restored drawing can be targeted too", () => {
     expect(a).not.toBe(b);
 
     tools.select(b);
-    expect(tools.selection()).toEqual(two[0]);
+    expect(tools.selection()).toMatchObject(two[0]);
     a.remove();
     expect(tools.list()).toEqual([]);
   });
@@ -295,7 +295,7 @@ describe("double-click on a shape", () => {
 
     dbl(model, { x, y: y + 3 });
 
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 110 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   /** Empty space is **let through** -- the fit-all reset still belongs to the shell. */

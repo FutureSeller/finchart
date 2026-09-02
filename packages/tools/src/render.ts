@@ -2,7 +2,7 @@ import { ContractError } from "@finchart/core";
 import type { StyleReader, DrawTarget, LineStyle } from "@finchart/core";
 import { labelFont } from "@finchart/core";
 import type { Drawing } from "./drawings";
-import { FIB_LEVELS, fibLevelPrice } from "./drawings";
+import { fibLevelPrice, fibLevels } from "./drawings";
 import type { DrawingSpace } from "./space";
 import { toPixel } from "./space";
 
@@ -91,7 +91,7 @@ export function drawOne(
       const right = Math.max(a.x, b.x);
       const font = labelFont(readStyle);
 
-      for (const level of FIB_LEVELS) {
+      for (const level of fibLevels(drawing)) {
         const price = fibLevelPrice(drawing, level);
         const y = space.pixelAtValue(price);
 

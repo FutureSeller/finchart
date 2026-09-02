@@ -1,10 +1,14 @@
 import type { CursorHost, DataProbe, FocusAreaHost, InputConsumer, InputEvent, InputHost, LineStyle, Observable, PaneDecoration, PaneDecorationHost, PlotArea, Plugin, PluginApi, Point, RenderRequester, StyleSpec, ValueCoordinates, XCoordinates } from "@finchart/core";
 import { ContractError, emitter, pluginApi, resolveStyle, styleSpec } from "@finchart/core";
-import type { Drawing } from "./drawings";
+import type { Drawing, DrawingInput, DrawingUpdate } from "./drawings";
 import { DRAWING_KINDS, describeValue } from "./drawings";
 import {
+  assignOwned,
   isDrawing,
+  mintDrawingId,
+  ownWithId,
   parseDrawings,
+  PATCHABLE_FIELDS,
   serializeDrawings,
   toOwnedDrawing,
 } from "./drawings";
@@ -100,14 +104,34 @@ export interface DrawingHandle {
   read(): Drawing;
   /** Safe to call twice. */
   remove(): void;
+  /**
+   * Patches the drawing's own fields — geometry, `style`, `levels` —
+   * through the same normalizer every door uses. **Identity is
+   * preserved**: the object in the list is written in place, so every
+   * handle, the selection, and a save recipe keep working.
+   *
+   * A key present with `undefined` means "back to the default" — the
+   * documented way to return `style` to the theme. `type` and `id` can't
+   * be patched. An unfit patch throws and leaves the drawing untouched.
+   *
+   * If the drawing is mid-drag when this arrives, the gesture is
+   * **committed at its current position first**, then the patch applies —
+   * the same rule as removing a mid-drag drawing (an outside change ends
+   * the gesture; it never silently loses your edit to the next
+   * pointermove or an Esc).
+   */
+  update(patch: DrawingUpdate): void;
 }
 
 /**
  * Why the list changed. A drag fires on every `pointermove` while moving,
  * so this is broken out separately so a listener can debounce just that.
+ * `update` fires once per call — if you drive it from a high-frequency
+ * input (a spinner, a slider), the debounce belongs on your side, the
+ * same as `move`.
  */
 export interface DrawingsChange {
-  reason: "add" | "remove" | "move" | "clear" | "load";
+  reason: "add" | "remove" | "move" | "update" | "clear" | "load";
 }
 
 /**
@@ -158,7 +182,7 @@ export interface DrawingToolsApi extends PluginApi {
    * asymmetry with hand-drawing, which selects on completion
    * (`AddDrawingOptions.select`).
    */
-  add(drawing: Drawing, options?: AddDrawingOptions): DrawingHandle;
+  add(drawing: DrawingInput, options?: AddDrawingOptions): DrawingHandle;
   /**
    * The next input draws this kind. A horizontal line lands at the pressed
    * price; a trend line or Fibonacci works with either click-drag or
@@ -270,10 +294,10 @@ const PLACEMENT_DRAG_MIN = 5;
  * Vue) can throw while being read, and letting that bubble up unchanged
  * would show the consumer their own store's exception inside our stack.
  */
-function safeOwned(drawing: unknown): unknown {
+function safeOwned(drawing: unknown, id: string): unknown {
   if (typeof drawing !== "object" || drawing === null) return drawing;
   try {
-    return toOwnedDrawing(drawing as never);
+    return ownWithId(drawing as never, id);
   } catch {
     return null;
   }
@@ -685,12 +709,19 @@ export function drawingTools(
         );
 
         for (const drawing of drawings) {
+          // The third resolution layer — a drawing's own override on top
+          // of the toolbox's resolved style. Owned styles carry no
+          // undefined leaves (the normalizer strips them), so a plain
+          // spread can't erase a toolbox value.
+          const effective = drawing.style
+            ? { ...style, ...drawing.style }
+            : style;
           drawOne(
             target,
             space,
             context.readStyle,
             drawing,
-            style,
+            effective,
             drawing === selected,
           );
         }
@@ -744,10 +775,14 @@ export function drawingTools(
         case "armed": {
           if (!insidePlot(event.point)) return false;
           const at = snappedAt(event.point, state.tool);
+          // The draft is a complete Drawing (the render loop draws it
+          // as-is), so it carries an id from birth. The ledger id is
+          // still minted at `addOwned` on completion — identity begins
+          // when a drawing enters the ledger, not while it's a draft.
           const draft: Drawing =
             state.tool === "horizontal"
-              ? { type: "horizontal", price: at.price }
-              : { type: state.tool, a: { ...at }, b: { ...at } };
+              ? { type: "horizontal", id: mintDrawingId(), price: at.price }
+              : { type: state.tool, id: mintDrawingId(), a: { ...at }, b: { ...at } };
           transition({
             kind: "drafting",
             tool: state.tool,
@@ -1132,9 +1167,60 @@ export function drawingTools(
       changed("remove");
     };
 
+    const updateOne = (target: Drawing, patch: DrawingUpdate): void => {
+      if (typeof patch !== "object" || patch === null) {
+        throw new ContractError(
+          `update(patch) must be an object, got ${describeValue(patch)}`,
+        );
+      }
+      if (!drawings.includes(target)) {
+        throw new ContractError(
+          "Can't update a removed drawing — the handle no longer points at anything",
+        );
+      }
+      const keys = Object.keys(patch);
+      const allowed = PATCHABLE_FIELDS[target.type];
+      for (const key of keys) {
+        if (!allowed.includes(key)) {
+          throw new ContractError(
+            `update(patch) can't patch "${key}" on a ${target.type} — patchable fields are ${allowed.join("·")}`,
+          );
+        }
+      }
+      if (keys.length === 0) return;
+
+      /**
+       * Build first, assign after — the candidate goes through the same
+       * normalizer as every door, and an unfit patch throws **before**
+       * the target is touched. A key present with `undefined` survives
+       * the spread deliberately: that's the documented way back to the
+       * default (`style: undefined` → the theme's).
+       */
+      const { id, ...shape } = target;
+      const candidate = safeOwned({ ...shape, ...patch }, id);
+      if (!isDrawing(candidate)) {
+        throw new ContractError(
+          `update(patch) would make the drawing unfit — got ${describeValue(patch)}`,
+        );
+      }
+
+      /**
+       * An outside change ends an in-flight gesture — the same rule as
+       * `removeOne`. Committed at the current position, not restored:
+       * restoring would snap the shape back on screen, and the next
+       * pointermove or Esc would otherwise erase this very patch.
+       */
+      if (state.kind === "dragging" && state.drag.grip.drawing === target) {
+        transition({ kind: "idle" });
+      }
+
+      assignOwned(target, candidate);
+      changed("update");
+    };
+
     // Doesn't hold onto the caller's object — editing it from outside
     // would drift out of sync without the chart knowing.
-    const addOwned = (drawing: Drawing): Drawing => {
+    const addOwned = (drawing: DrawingInput): Drawing => {
       /**
        * Looks at the same predicate as the parser — whatever
        * `parseDrawings` rejects has to be rejected here too. Otherwise
@@ -1152,7 +1238,9 @@ export function drawingTools(
        * checked and the object being stored are the same one, so that
        * gap can't exist even in principle.
        */
-      const owned = safeOwned(drawing);
+      // The id is minted here, at the door — a consumer never invents
+      // one, so a duplicate can't even arrive.
+      const owned = safeOwned(drawing, mintDrawingId());
       if (!isDrawing(owned)) {
         throw new ContractError(
           `drawing must have finite coordinates, got ${describeValue(drawing)}`,
@@ -1191,13 +1279,17 @@ export function drawingTools(
           alive();
           removeOne(owned);
         },
+        update: (patch) => {
+          alive();
+          updateOne(owned, patch);
+        },
       };
       handleTargets.set(handle, owned);
       return handle;
     };
 
     const add = (
-      drawing: Drawing,
+      drawing: DrawingInput,
       options: AddDrawingOptions = {},
     ): DrawingHandle => {
       const owned = addOwned(drawing);
@@ -1222,7 +1314,7 @@ export function drawingTools(
 
     const api = pluginApi(
       {
-        add(drawing: Drawing, options: AddDrawingOptions = {}): DrawingHandle {
+        add(drawing: DrawingInput, options: AddDrawingOptions = {}): DrawingHandle {
           alive();
           // Options are a door too — the same source that made
           // `setSnap("no")` turn snapping on (`localStorage` /

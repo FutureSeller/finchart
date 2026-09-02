@@ -172,7 +172,7 @@ describe("replacing the list cuts an in-progress gesture", () => {
     expect(() => handle.remove()).toThrow();
     // Reads remain open (this is the path for saving the last state on
     // unmount).
-    expect(handle.read()).toEqual({ type: "horizontal", price: 105 });
+    expect(handle.read()).toMatchObject({ type: "horizontal", price: 105 });
   });
 });
 

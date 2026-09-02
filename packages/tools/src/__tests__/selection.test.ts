@@ -49,10 +49,10 @@ describe("drawingTools selection", () => {
     pick(onLine(110));
 
     const picked = tools.selection();
-    expect(picked).toEqual({ type: "horizontal", price: 110 });
+    expect(picked).toMatchObject({ type: "horizontal", price: 110 });
     // It's a copy -- mutating it outside has no effect on the stage.
     (picked as { price: number }).price = 50;
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 110 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("should deselect on a press in empty space without eating it", () => {
@@ -133,10 +133,10 @@ describe("drawingTools selection", () => {
       pointerId: 1,
     });
     // It has already moved by this point -- cancel has something to undo.
-    expect(tools.list()[0]).not.toEqual({ type: "horizontal", price: 110 });
+    expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 110 });
 
     expect(route({ type: "keydown", key: "Escape" })).toBe(true);
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
   });
 
   it("should tell the consumer that the drag was undone", () => {
@@ -198,7 +198,7 @@ describe("drawingTools selection", () => {
       pointerId: 1,
     });
 
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
   });
 
   /** A release still commits -- only a cancel undoes it. */
@@ -219,7 +219,7 @@ describe("drawingTools selection", () => {
       pointerId: 1,
     });
 
-    expect(tools.list()[0]).not.toEqual({ type: "horizontal", price: 110 });
+    expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("should end a drag with Escape but keep the selection", () => {
@@ -237,7 +237,7 @@ describe("drawingTools selection", () => {
     });
     route({ type: "pointerup", point: { x: grab.x, y: grab.y + 40 }, pointerId: 1 });
 
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
     expect(tools.selection()).not.toBeNull();
   });
 
@@ -264,7 +264,7 @@ describe("drawingTools select and keyboard traversal", () => {
     tools.add({ type: "horizontal", price: 115 });
 
     tools.select(low);
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 105 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
 
     tools.select(null);
     expect(tools.selection()).toBeNull();
@@ -286,19 +286,19 @@ describe("drawingTools select and keyboard traversal", () => {
     // ] grabs the first drawing initially, and the next one on repeat
     // presses. [ goes the other way.
     expect(route({ type: "keydown", key: "]" })).toBe(true);
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 105 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
     route({ type: "keydown", key: "]" });
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 115 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 115 });
     // Wraps around at the end.
     route({ type: "keydown", key: "]" });
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 105 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
     route({ type: "keydown", key: "[" });
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 115 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 115 });
 
     // Completes the pointer-free editing flow -- grab by traversal,
     // delete with Delete.
     route({ type: "keydown", key: "Delete" });
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 105 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
   });
 
   it("should not eat the bracket keys when there is nothing to select", () => {

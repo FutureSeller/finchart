@@ -106,7 +106,7 @@ describe("drawingTools placement", () => {
 
     expect(tools.list()).toHaveLength(0);
     expect(tools.serialize()).toBe(
-      JSON.stringify({ version: 1, drawings: [] }),
+      JSON.stringify({ version: 2, drawings: [] }),
     );
   });
 

@@ -63,6 +63,21 @@ export function subscribeSnippet(plot: Plot, save: (s: string) => void): void {
 }
 
 /**
+ * The README's save recipe -- the four app copies carry the same
+ * `reason !== "move"` line, and the snippet-drift lock holds them all to
+ * this compiled form.
+ */
+export function saveRecipeSnippet(
+  plot: Plot,
+  saveDrawings: () => void,
+): void {
+  const tools = plot.mainPane.use(drawingTools({ plot }));
+  tools.changes.subscribe((change) => {
+    if (change.reason !== "move") saveDrawings();
+  });
+}
+
+/**
  * The stage-layer example from `extensions.md` -- the lowercase `pane`
  * variable form is the original.
  */

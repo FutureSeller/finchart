@@ -101,3 +101,18 @@ text measurer, and so on) live in `@finchart/dom`; the rest stays open to
 testing or server rendering through the same entry point (`@finchart/core`)
 with no browser. The two packages **ship together on one version** — details
 are in the [60-second tutorial](/guide/getting-started).
+
+## Serialized string unions
+
+A string that gets **saved** — `Drawing["type"]`, say — is a name you can
+never take back: it sits in a consumer's localStorage and their server long
+after a rename ships. Three rules, set before the drawing vocabulary grew:
+
+- **A member names one tool, without repeating its type** — `horizontal`,
+  not `horizontalLine`; the union already says it's a drawing.
+- **Don't reuse a word a public core type owns** — `Range` belongs to the
+  `Range { min, max }` type (the glossary pins that as the *only* non-pixel
+  sense of the word), so a measuring tool is a `measure`, not a range.
+- **After release, a member changes only through a format migration.**
+  Before release is the one free window — that's when `verticalLine` became
+  `vertical`.

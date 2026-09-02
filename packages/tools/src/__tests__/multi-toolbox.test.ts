@@ -85,7 +85,7 @@ describe("if the cursor is over another pane, the key belongs there", () => {
     s.key("Delete");
 
     expect(s.main.list()).toEqual([]);
-    expect(s.rsi?.list()).toEqual([{ type: "horizontal", price: 105 }]);
+    expect(s.rsi?.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
   });
 
   it("should hand the keyboard over when the cursor moves to the other pane", () => {
@@ -126,7 +126,7 @@ describe("ownership does not change over a spot nobody claims", () => {
     s.key("Delete");
 
     expect(s.main.list()).toEqual([]);
-    expect(s.rsi?.list()).toEqual([{ type: "horizontal", price: 105 }]);
+    expect(s.rsi?.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
   });
 
   /**
@@ -201,7 +201,7 @@ describe("a neighbor that doesn't contest the key cannot change ownership", () =
     s.hover(s.indicator);
     s.key("Delete");
 
-    expect(s.main.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(s.main.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
     rival.release();
   });
 
@@ -253,7 +253,7 @@ describe("my key survives even a bad areaOf from a contestant", () => {
     s.main.select(s.main.handles()[0]);
     s.hover(s.indicator);
     s.key("Delete");
-    expect(s.main.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(s.main.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
     rival.release();
   });
 
@@ -302,7 +302,7 @@ describe("at a shared boundary, exactly one pane owns it", () => {
     // believing it was theirs, with the winner decided by registration
     // order.
     expect(s.rsi?.list()).toEqual([]);
-    expect(s.main.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(s.main.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
   });
 });
 
@@ -327,7 +327,7 @@ describe("touch -- wherever the finger landed owns it", () => {
     s.key("Delete");
 
     expect(s.rsi?.list()).toEqual([]);
-    expect(s.main.list()).toEqual([{ type: "horizontal", price: 110 }]);
+    expect(s.main.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
   });
 });
 

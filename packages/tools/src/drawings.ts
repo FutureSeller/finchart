@@ -1,3 +1,4 @@
+import type { LineStyle } from "@finchart/core";
 import { ContractError } from "@finchart/core";
 
 /**
@@ -36,27 +37,94 @@ export interface Anchor {
   price: number;
 }
 
-export interface HorizontalLine {
+/**
+ * Every drawing carries a stable identity. It's minted at the door
+ * (`add`, or the moment hand-drawing starts) — a consumer never invents
+ * one — and survives save/load, so a side panel can key its own state by
+ * it. Two drawings with identical geometry stay distinguishable.
+ */
+interface DrawingIdentity {
+  id: string;
+  /**
+   * Per-drawing override — the third layer of the same resolution the
+   * toolbox already does (theme variables → toolbox override → this).
+   * The same `Partial<LineStyle>` shape, deliberately: one leaf
+   * vocabulary (`width`·`color`·`dashArray`), not a second one.
+   *
+   * The values are literals, not theme tokens — a canvas can't read
+   * `var()`, and this is a **saved** value. A drawing colored by hand
+   * keeps its color across a theme switch; absent means "the theme's".
+   */
+  style?: Partial<LineStyle>;
+}
+
+export interface HorizontalLine extends DrawingIdentity {
   type: "horizontal";
   price: number;
 }
 
-export interface TrendLine {
+export interface TrendLine extends DrawingIdentity {
   type: "trend";
   a: Anchor;
   b: Anchor;
 }
 
-export interface FibRetracement {
+export interface FibRetracement extends DrawingIdentity {
   type: "fib";
   a: Anchor;
   b: Anchor;
+  /**
+   * Which levels to draw. Absent means the conventional seven
+   * (`FIB_LEVELS`) — the screen today's consumers already have. Values
+   * outside [0, 1] are legal (extension levels, negative retracements);
+   * the normalizer sorts and dedupes but never clamps.
+   */
+  levels?: number[];
 }
 
 export type Drawing = HorizontalLine | TrendLine | FibRetracement;
 
+/**
+ * Omit distributed over a union — a plain `Omit<Drawing, "id">` would
+ * collapse the union to its common fields and lose the discriminant.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+
+/**
+ * What a consumer hands to `add` (and what hand-drawing produces before
+ * the door stamps it): a drawing without its identity. The id is minted
+ * at the door, so a duplicate can't even arrive through this type.
+ */
+export type DrawingInput = DistributiveOmit<Drawing, "id">;
+
+/**
+ * Mints an id. `crypto.randomUUID` where it exists; a time-and-entropy
+ * fallback elsewhere — `randomUUID` is secure-context only, and an
+ * intranet dashboard served over plain http is a real consumer.
+ */
+export function mintDrawingId(): string {
+  const generator = globalThis.crypto;
+  if (generator && typeof generator.randomUUID === "function") {
+    return generator.randomUUID();
+  }
+  return `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** The Fibonacci retracement's conventional levels. a is 0, b is 1. */
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+
+/**
+ * The one interpreter of a retracement's level list. Hit-testing and
+ * rendering both read this — the same rule as `fibLevelPrice`: two
+ * copies would let the lines you see and the lines you can grab drift.
+ */
+export function fibLevels(
+  drawing: Pick<FibRetracement, "levels">,
+): readonly number[] {
+  return drawing.levels ?? FIB_LEVELS;
+}
 
 /**
  * A level's price — a is 0, b is 1; the retracement reads from b toward a.
@@ -71,8 +139,26 @@ export function fibLevelPrice(drawing: FibRetracement, level: number): number {
 
 // --- Serialization (the version belongs to the format; unreadable is null) ---
 
-/** The serialization format's version. Bump it when the shape changes in a breaking way. */
-const FORMAT_VERSION = 1;
+/**
+ * The serialization format's version. Bump it when the **envelope or a
+ * shared field** changes in a breaking way — adding a drawing kind does
+ * NOT bump it: an older reader rejects an unknown kind outright either
+ * way, so a bump would change nothing but cost a migration.
+ */
+const FORMAT_VERSION = 2;
+
+/**
+ * v1 drawings get their ids here, derived from position — deliberately
+ * deterministic, not random. The save recipe consumers use
+ * (`reason !== "move"`) never fires on a session that only loads, so a
+ * random id would change on every refresh until the first save — and a
+ * side panel keying by id would orphan its state each time. Position is
+ * stable for a frozen payload, so parsing the same string twice yields
+ * the same ledger.
+ */
+function migratedV1Id(index: number): string {
+  return `v1-${index}`;
+}
 
 /**
  * Turns an array of drawings into a string. Rebuilds each one from our own
@@ -98,12 +184,29 @@ export function serializeDrawings(drawings: readonly Drawing[]): string {
     if (built === null || !isDrawing(built)) {
       throw new ContractError(
         `serializeDrawings(drawings)[${i}] is not a drawing — ` +
-          `type must be one of ${DRAWING_KINDS.join("·")} and coordinates must be finite, ` +
-          `got ${describeValue(drawing)}`,
+          `type must be one of ${DRAWING_KINDS.join("·")}, coordinates must be finite, ` +
+          `and id must be a non-empty string, got ${describeValue(drawing)}`,
       );
     }
     return built;
   });
+
+  /**
+   * Ids are a list-level invariant no per-element predicate can see. A
+   * duplicate here comes from the consumer's own store (our door mints
+   * unique ids), and their id is a key on their side — silently reissuing
+   * it would rewire their store behind their back. An input API throws.
+   */
+  const seen = new Set<string>();
+  for (const drawing of owned) {
+    if (seen.has(drawing.id)) {
+      throw new ContractError(
+        `serializeDrawings(drawings) has two drawings with id "${drawing.id}" — ids must be unique within a ledger`,
+      );
+    }
+    seen.add(drawing.id);
+  }
+
   return JSON.stringify({ version: FORMAT_VERSION, drawings: owned });
 }
 
@@ -140,7 +243,9 @@ export function parseDrawings(payload: string): Drawing[] | null {
     version?: unknown;
     drawings?: unknown;
   };
-  if (version !== FORMAT_VERSION || !Array.isArray(drawings)) return null;
+  if ((version !== FORMAT_VERSION && version !== 1) || !Array.isArray(drawings)) {
+    return null;
+  }
   /**
    * `Array.isArray` narrows to `any[]` — if that `any` leaks downward,
    * the check becomes a check in name only. Flatten it to `unknown[]`
@@ -148,7 +253,14 @@ export function parseDrawings(payload: string): Drawing[] | null {
    */
   const items: unknown[] = drawings;
   const checked: Drawing[] = [];
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
+    if (version === 1) {
+      // v1 has no ids — geometry is checked with the same per-kind rules,
+      // and the id is derived from position (see migratedV1Id).
+      if (!hasDrawingShape(item)) return null;
+      checked.push(ownWithId(item, migratedV1Id(index)));
+      continue;
+    }
     if (!isDrawing(item)) return null;
     checked.push(item);
   }
@@ -159,7 +271,41 @@ export function parseDrawings(payload: string): Drawing[] | null {
    * different shape depending on which door it came through (`add` vs.
    * `load`).
    */
-  return checked.map(toOwnedDrawing);
+  return dedupeIds(checked.map(toOwnedDrawing));
+}
+
+/**
+ * A duplicate id in a payload is a repairable defect, not an unreadable
+ * one — every drawing's geometry is intact, only the name tags clash. The
+ * all-or-nothing rule is for shapes that can't be read; throwing the whole
+ * ledger away over a name would hand a recoverable error an unrecoverable
+ * outcome (the same judgment `onContextMenu` wrote down). The reissue is
+ * **deterministic** — derived from the clashing id and its position — so
+ * parsing the same payload twice yields the same ledger.
+ */
+function dedupeIds(drawings: Drawing[]): Drawing[] {
+  /**
+   * Reissues dodge every id in the envelope, not just the ones seen so
+   * far — checking only backwards would let a reissue steal a later
+   * drawing's legitimate name, renaming the original owner instead.
+   */
+  const taken = new Set(drawings.map((drawing) => drawing.id));
+  const seen = new Set<string>();
+  return drawings.map((drawing) => {
+    if (!seen.has(drawing.id)) {
+      seen.add(drawing.id);
+      return drawing;
+    }
+    let suffix = 2;
+    let candidate = `${drawing.id}#${suffix}`;
+    while (taken.has(candidate)) {
+      suffix += 1;
+      candidate = `${drawing.id}#${suffix}`;
+    }
+    taken.add(candidate);
+    seen.add(candidate);
+    return ownWithId(drawing, candidate);
+  });
 }
 
 function isAnchor(value: unknown): value is Anchor {
@@ -191,13 +337,45 @@ function isAnchor(value: unknown): value is Anchor {
  * here too, as a bonus.
  */
 export function toOwnedDrawing(drawing: Drawing): Drawing {
+  return ownWithId(drawing, drawing.id);
+}
+
+/**
+ * The one place a drawing's own shape is built — `add` stamps a fresh id
+ * onto a `DrawingInput` here, `toOwnedDrawing` carries an existing one,
+ * and the v1 migration derives one. A single builder keeps all three
+ * doors saving the identical shape.
+ */
+export function ownWithId(drawing: DrawingInput, id: string): Drawing {
+  const style = ownStyle(drawing.style);
   switch (drawing.type) {
-    case "horizontal":
-      return { type: "horizontal", price: drawing.price };
-    case "trend":
-      return { type: "trend", a: ownAnchor(drawing.a), b: ownAnchor(drawing.b) };
-    case "fib":
-      return { type: "fib", a: ownAnchor(drawing.a), b: ownAnchor(drawing.b) };
+    case "horizontal": {
+      const owned: Drawing = { type: "horizontal", id, price: drawing.price };
+      if (style) owned.style = style;
+      return owned;
+    }
+    case "trend": {
+      const owned: Drawing = {
+        type: "trend",
+        id,
+        a: ownAnchor(drawing.a),
+        b: ownAnchor(drawing.b),
+      };
+      if (style) owned.style = style;
+      return owned;
+    }
+    case "fib": {
+      const owned: FibRetracement = {
+        type: "fib",
+        id,
+        a: ownAnchor(drawing.a),
+        b: ownAnchor(drawing.b),
+      };
+      if (style) owned.style = style;
+      const levels = normalizedLevels(drawing.levels);
+      if (levels) owned.levels = levels;
+      return owned;
+    }
   }
 
   // Adding a fourth kind to the union breaks the compile here.
@@ -205,22 +383,154 @@ export function toOwnedDrawing(drawing: Drawing): Drawing {
   throw new ContractError(`unknown drawing: ${JSON.stringify(unreachable)}`);
 }
 
+/**
+ * Rebuilds the style leaf by leaf — same discipline as the drawing
+ * itself, and only the three leaves the renderer reads. An empty result
+ * normalizes to "absent", so `{}` and no style save identically.
+ */
+function ownStyle(
+  style: Partial<LineStyle> | undefined,
+): Partial<LineStyle> | undefined {
+  if (style === undefined) return undefined;
+  const owned: Partial<LineStyle> = {};
+  if (style.width !== undefined) owned.width = style.width;
+  if (style.color !== undefined) owned.color = style.color;
+  if (style.dashArray !== undefined) owned.dashArray = style.dashArray;
+  return owned.width !== undefined ||
+    owned.color !== undefined ||
+    owned.dashArray !== undefined
+    ? owned
+    : undefined;
+}
+
+/** Sorted, deduped copy — never clamped (extension levels live outside [0, 1]). */
+function normalizedLevels(levels: number[] | undefined): number[] | undefined {
+  if (levels === undefined) return undefined;
+  return [...new Set(levels)].sort((left, right) => left - right);
+}
+
+/**
+ * What `handle.update` accepts — everything a drawing owns except its
+ * identity and its kind. `Partial` distributes over the union, so each
+ * kind patches only its own fields — **at the type level only loosely**:
+ * TypeScript's excess-property check on a union admits any property that
+ * appears in *some* member, so a literal mixing kinds (`{ price, levels }`)
+ * compiles. The runtime check against `PATCHABLE_FIELDS` is the real
+ * door; a handle isn't generic over its kind, so the type can't be
+ * tighter without widening the handle contract.
+ */
+export type DrawingUpdate = Partial<DistributiveOmit<Drawing, "id" | "type">>;
+
+/** The runtime twin of `DrawingUpdate` — which keys a patch may carry, per kind. */
+export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
+  horizontal: ["price", "style"],
+  trend: ["a", "b", "style"],
+  fib: ["a", "b", "style", "levels"],
+};
+
+/**
+ * Copies an owned result onto the existing object — never swaps it out.
+ * Identity is the plugin's backbone (handles, `selected`, a drag's grip
+ * all point at the object), the same rule `restoreDrawing` wrote down.
+ * Anchors are mutated in place too, for the same reason. Absent optional
+ * fields are deleted — `update({ style: undefined })` is the documented
+ * way back to the theme.
+ */
+export function assignOwned(target: Drawing, source: Drawing): void {
+  if (target.type === "horizontal" && source.type === "horizontal") {
+    target.price = source.price;
+  } else if (target.type !== "horizontal" && source.type === target.type) {
+    target.a.x = source.a.x;
+    target.a.price = source.a.price;
+    target.b.x = source.b.x;
+    target.b.price = source.b.price;
+  }
+  if (source.style) {
+    target.style = source.style;
+  } else {
+    delete target.style;
+  }
+  if (target.type === "fib" && source.type === "fib") {
+    if (source.levels) {
+      target.levels = source.levels;
+    } else {
+      delete target.levels;
+    }
+  }
+}
+
 const ownAnchor = (anchor: Anchor): Anchor => ({
   x: anchor.x,
   price: anchor.price,
 });
 
-export function isDrawing(value: unknown): value is Drawing {
+/**
+ * The per-kind geometry rules, without the identity — what a v1 payload
+ * (no ids yet) and a `DrawingInput` at the `add` door both have to
+ * satisfy. `isDrawing` is this plus a valid id.
+ */
+export function hasDrawingShape(value: unknown): value is DrawingInput {
   if (typeof value !== "object" || value === null) return false;
-  const drawing = value as Drawing;
+  const drawing = value as DrawingInput;
+  if (!hasValidStyle(drawing.style)) return false;
 
   switch (drawing.type) {
     case "horizontal":
       return Number.isFinite(drawing.price);
     case "trend":
-    case "fib":
       return isAnchor(drawing.a) && isAnchor(drawing.b);
+    case "fib":
+      return (
+        isAnchor(drawing.a) &&
+        isAnchor(drawing.b) &&
+        hasValidLevels(drawing.levels)
+      );
     default:
       return false;
   }
+}
+
+/**
+ * Text leaves are capped for the storage medium (localStorage, a URL),
+ * not for the renderer — `parseDashArray` already absorbs any malformed
+ * dash string by falling back to a solid line, and writing that grammar
+ * a second time here would be the duplicate rulebook this repo forbids.
+ */
+const MAX_STYLE_TEXT = 64;
+
+function hasValidStyle(style: unknown): boolean {
+  if (style === undefined) return true;
+  if (typeof style !== "object" || style === null) return false;
+  const { width, color, dashArray } = style as Partial<LineStyle>;
+  if (width !== undefined && !(Number.isFinite(width) && width > 0)) {
+    return false;
+  }
+  if (
+    color !== undefined &&
+    !(typeof color === "string" && color.length > 0 && color.length <= MAX_STYLE_TEXT)
+  ) {
+    return false;
+  }
+  if (
+    dashArray !== undefined &&
+    !(typeof dashArray === "string" && dashArray.length <= MAX_STYLE_TEXT)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** Present means drawable: a non-empty, all-finite list (order and duplicates are the normalizer's job). */
+function hasValidLevels(levels: unknown): boolean {
+  if (levels === undefined) return true;
+  if (!Array.isArray(levels) || levels.length === 0 || levels.length > 100) {
+    return false;
+  }
+  return levels.every((level) => Number.isFinite(level));
+}
+
+export function isDrawing(value: unknown): value is Drawing {
+  if (!hasDrawingShape(value)) return false;
+  const id = (value as { id?: unknown }).id;
+  return typeof id === "string" && id.length > 0 && id.length <= 128;
 }

@@ -58,7 +58,7 @@ describe("selection notifications -- all six paths", () => {
     click(110);
 
     expect(seen).toHaveLength(1);
-    expect(seen[0].selection).toEqual({ type: "horizontal", price: 110 });
+    expect(seen[0].selection).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("notifies on a double-click -- this is the reason this door exists", () => {
@@ -88,7 +88,7 @@ describe("selection notifications -- all six paths", () => {
     route({ type: "keydown", key: "]" });
     route({ type: "keydown", key: "]" });
 
-    expect(seen.map((c) => c.selection)).toEqual([
+    expect(seen.map((c) => c.selection)).toMatchObject([
       { type: "horizontal", price: 110 },
       { type: "horizontal", price: 105 },
     ]);
@@ -188,7 +188,7 @@ describe("add(drawing, { select })", () => {
     tools.add({ type: "horizontal", price: 110 }, { select: true });
 
     expect(seen).toHaveLength(1);
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 110 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("not stealing an in-progress edit's selection is why this is the default", () => {
@@ -199,7 +199,7 @@ describe("add(drawing, { select })", () => {
     // As if a server push just arrived -- the user is mid-edit on 110.
     tools.add({ type: "horizontal", price: 90 });
 
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 110 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("the options are a door too -- rejects anything that isn't the right shape", () => {
