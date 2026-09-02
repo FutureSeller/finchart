@@ -154,6 +154,18 @@ export const CODE_LOCKS: readonly {
     contains: "useDataSource(bars)",
     compiledIn: "packages/react/src/__tests__/tsdoc-fences.types.tsx",
   },
+  /**
+   * The save recipe — four apps hand-copied `reason !== "move"` and none
+   * of them was machine-checked; when `reason: "update"` joined the
+   * union, the recipe's premise ("only move is high-frequency") had to be
+   * re-stated in every copy. This lock makes the next such change scream
+   * in five places at once.
+   */
+  { file: "packages/tools/README.md", contains: 'reason !== "move"', compiledIn: COPIES },
+  { file: "apps/examples/src/trading.ts", contains: 'reason !== "move"', compiledIn: COPIES },
+  { file: "apps/examples/src/cases/drawing.ts", contains: 'reason !== "move"', compiledIn: COPIES },
+  { file: "apps/showcase/src/chart-instance.ts", contains: 'reason !== "move"', compiledIn: COPIES },
+  { file: "apps/showcase-react/src/rail.tsx", contains: 'reason !== "move"', compiledIn: COPIES },
 ];
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");

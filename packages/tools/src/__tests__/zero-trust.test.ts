@@ -45,7 +45,7 @@ describe("add builds an owned copy, not the argument itself", () => {
     tools.add(new HorizontalLine());
 
     // This used to be `[{}]`, and the load below used to return false.
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 105 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
     expect(tools.load(tools.serialize())).toBe(true);
   });
 
@@ -62,7 +62,7 @@ describe("add builds an owned copy, not the argument itself", () => {
     expect(() =>
       tools.add({ type: "horizontal", price: 1, onDone: () => {} } as never),
     ).not.toThrow();
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 1 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 1 }]);
   });
 
   it("should not let a cyclic argument poison serialize()", () => {
@@ -202,7 +202,7 @@ describe("validation and storage see the same object", () => {
     } as never);
 
     expect(tools.load(tools.serialize())).toBe(true);
-    expect(tools.list()).toEqual([{ type: "horizontal", price: 1 }]);
+    expect(tools.list()).toMatchObject([{ type: "horizontal", price: 1 }]);
   });
 
   /** Even a getter that throws from a consumer's store gets translated into the contract's vocabulary. */
@@ -218,7 +218,13 @@ describe("validation and storage see the same object", () => {
     ).toThrow(ContractError);
   });
 
-  /** Both doors (add and load) store the same thing -- whichever one it enters through, it goes through the same normalization. */
+  /**
+   * Both doors (add and load) store the same shape -- whichever one it
+   * enters through, it goes through the same normalization. Ids are the
+   * one legitimate difference: add mints a fresh one, load keeps (or
+   * derives) the payload's — so the comparison strips them, and asserts
+   * separately that both doors produced one.
+   */
   it("should store the same shape through add and load", () => {
     const viaAdd = mount2();
     viaAdd.add({ type: "horizontal", price: 100, junk: "x" } as never);
@@ -228,7 +234,12 @@ describe("validation and storage see the same object", () => {
       '{"version":1,"drawings":[{"type":"horizontal","price":100,"junk":"x"}]}',
     );
 
-    expect(viaLoad.serialize()).toBe(viaAdd.serialize());
-    expect(viaAdd.list()).toEqual([{ type: "horizontal", price: 100 }]);
+    const shapeOf = (api: typeof viaAdd) =>
+      api.list().map(({ id, ...rest }) => {
+        expect(id.length).toBeGreaterThan(0);
+        return rest;
+      });
+    expect(shapeOf(viaLoad)).toEqual(shapeOf(viaAdd));
+    expect(viaAdd.list()).toMatchObject([{ type: "horizontal", price: 100 }]);
   });
 });

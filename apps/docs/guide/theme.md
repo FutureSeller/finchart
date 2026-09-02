@@ -230,7 +230,7 @@ answer; injection is for where there is no CSS.
 
 Dark **ends at swapping the variables** — the core reads them every frame, so
 toggling a class and one `requestRender()` re-dresses everything down to grid,
-labels, badge, tooltip, watermark, and drawings.
+labels, badge, tooltip, watermark, and drawings — except a drawing you styled by hand: a per-drawing `style` is a saved literal, so it deliberately keeps its color across the switch (absent style follows the theme).
 
 ```ts
 document.body.classList.toggle("dark");

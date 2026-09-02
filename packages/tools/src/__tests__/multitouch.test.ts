@@ -62,7 +62,7 @@ describe("drawingTools pointer ownership", () => {
     // Finger 2 touches the 115 line -- consumed but ignored: neither
     // selection nor drag changes.
     expect(route("pointerdown", { x: midX, y: yOf(115) }, 2)).toBe(true);
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 105 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
 
     // Finger 2's move and up move nothing.
     route("pointermove", { x: midX, y: yOf(119) }, 2);

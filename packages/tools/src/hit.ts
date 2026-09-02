@@ -1,7 +1,7 @@
 import { ContractError } from "@finchart/core";
 import type { Point } from "@finchart/core";
 import type { Anchor, Drawing } from "./drawings";
-import { FIB_LEVELS, fibLevelPrice } from "./drawings";
+import { fibLevelPrice, fibLevels } from "./drawings";
 import { distanceToPoint, distanceToSegment } from "./geometry";
 import type { DrawingSpace } from "./space";
 import { domainAt, toPixel } from "./space";
@@ -156,7 +156,7 @@ function hitsFibLevel(
     return false;
   }
 
-  return FIB_LEVELS.some((level) => {
+  return fibLevels(drawing).some((level) => {
     const price = fibLevelPrice(drawing, level);
     return Math.abs(point.y - space.pixelAtValue(price)) <= LINE_TOLERANCE;
   });

@@ -204,6 +204,12 @@ const HANDLE: Record<string, Verdict> = {
     policy: "does not throw",
   },
   remove: { shape: "no argument", value: "--", policy: "safe to call twice" },
+  update: {
+    shape: "blocks it -- non-object patches, unknown keys, type/id",
+    value:
+      "goes through the same normalizer as every door; an unfit patch throws before the target is touched",
+    policy: "throws (input API); a removed target throws too",
+  },
 };
 
 const MODULE: Record<string, Verdict> = {

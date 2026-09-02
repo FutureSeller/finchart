@@ -90,7 +90,7 @@ describe("the secondary button does not grab a drawing", () => {
       pointerId: 1,
     });
 
-    expect(tools.list()[0]).not.toEqual({ type: "horizontal", price: 105 });
+    expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 105 });
   });
 
   /** Synthetic input that omits `button` must mean the same thing as today. */
@@ -106,7 +106,7 @@ describe("the secondary button does not grab a drawing", () => {
       pointerId: 1,
     });
 
-    expect(tools.list()[0]).not.toEqual({ type: "horizontal", price: 105 });
+    expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 105 });
   });
 
   /** If `"right"` came through, `!== 0` would be true for everything, and selection would break entirely. */
@@ -131,7 +131,7 @@ describe("a right click selects but doesn't consume", () => {
     expect(tools.selection()).toBeNull();
     model.plot.routeInput({ type: "contextmenu", point: at(5, 105) });
 
-    expect(tools.selection()).toEqual({ type: "horizontal", price: 105 });
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
   });
 
   /**
@@ -208,7 +208,7 @@ describe("a right click selects but doesn't consume", () => {
       return tools.selection();
     });
 
-    expect(answers).toEqual([
+    expect(answers).toMatchObject([
       { type: "horizontal", price: 105 },
       { type: "horizontal", price: 105 },
       { type: "horizontal", price: 105 },

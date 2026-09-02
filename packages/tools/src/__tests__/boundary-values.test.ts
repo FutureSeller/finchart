@@ -48,11 +48,11 @@ describe("parseDrawings does not throw", () => {
 
 describe("entry and exit reject the same things", () => {
   const bad: Drawing[] = [
-    { type: "horizontal", price: NaN },
-    { type: "horizontal", price: HOSTILE },
-    { type: "trend", a: { x: 1, price: NaN }, b: { x: 2, price: 3 } },
-    { type: "trend", a: { x: HOSTILE, price: 1 }, b: { x: 2, price: 3 } },
-    { type: "fib", a: { x: 1, price: 2 }, b: { x: 3, price: HOSTILE } },
+    { type: "horizontal", id: "b1", price: NaN },
+    { type: "horizontal", id: "b2", price: HOSTILE },
+    { type: "trend", id: "b3", a: { x: 1, price: NaN }, b: { x: 2, price: 3 } },
+    { type: "trend", id: "b4", a: { x: HOSTILE, price: 1 }, b: { x: 2, price: 3 } },
+    { type: "fib", id: "b5", a: { x: 1, price: 2 }, b: { x: 3, price: HOSTILE } },
   ];
 
   /**
@@ -72,9 +72,9 @@ describe("entry and exit reject the same things", () => {
    */
   it("should round-trip everything it accepts", () => {
     const good: Drawing[] = [
-      { type: "horizontal", price: 105 },
-      { type: "trend", a: { x: 1, price: 2 }, b: { x: 3, price: 4 } },
-      { type: "fib", a: { x: 1, price: 2 }, b: { x: 3, price: 4 } },
+      { type: "horizontal", id: "h1", price: 105 },
+      { type: "trend", id: "t1", a: { x: 1, price: 2 }, b: { x: 3, price: 4 } },
+      { type: "fib", id: "f1", a: { x: 1, price: 2 }, b: { x: 3, price: 4 } },
     ];
     expect(parseDrawings(serializeDrawings(good))).toEqual(good);
   });

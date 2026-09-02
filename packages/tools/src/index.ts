@@ -1,6 +1,8 @@
 export { FIB_LEVELS, parseDrawings, serializeDrawings } from "./drawings";
 export type {
   Anchor,
+  DrawingInput,
+  DrawingUpdate,
   Drawing,
   FibRetracement,
   HorizontalLine,
