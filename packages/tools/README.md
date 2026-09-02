@@ -32,9 +32,17 @@ tools.dispose();                                 // tears down all the wiring at
 ```
 
 **Editing works by hand too** — select a drawing and its endpoint handles
-appear; drag a handle and only that point moves (a horizontal line has one
-center handle that moves the whole thing). Esc cancels, Delete removes, and
-`]` / `[` cycle the selection.
+appear, and the drawing itself is drawn one pixel heavier than its
+neighbors (its own color and dash, just bolder — handles alone vanish in a
+crowd); drag a handle and only that point moves (a horizontal line has one
+center handle that moves the whole thing). When two handles sit on top of
+each other — a line zoomed down to a few pixels — the **nearest** one is
+grabbed, so both ends stay reachable. Esc cancels, Delete removes, and
+`]` / `[` cycle the selection. **The crosshair keeps reading** while you
+draw or drag: the toolbox consumes those pointer moves, and would otherwise
+switch the chart's crosshair off for exactly the moves where you're reading
+prices, so it drives the crosshair itself (that's why the stage needs a
+`crosshair(position)` — `Plot` has it).
 
 **A drawing you finish by hand is selected on completion; one added with
 `add()` is not.** The asymmetry is deliberate. Hand-drawing is something the
@@ -85,7 +93,8 @@ underneath.
 **Snapping** — `drawingTools({ plot, snap: true })` or `api.setSnap(on)`.
 Drawing and endpoint dragging snap to bar values (close, low, high) and bar x,
 but only within `snapRadius` (8px by default), and moving a whole drawing never
-snaps (it keeps its relative layout). Off by default. The candidate values come
+snaps (it keeps its relative layout). Off by default. When an anchor actually
+sticks, a small ring is drawn around it — so "did it snap?" is never a guess. The candidate values come
 from the core accessor's `getYRange` (a point's **data** value span) — so a
 custom series only has to supply that for snapping to understand it.
 

@@ -59,6 +59,7 @@ const DRAWING_STAGE_MEMBERS = [
   "xAt",
   "pixelAtX",
   "claimFocusArea",
+  "crosshair",
 ] as const satisfies readonly (keyof DrawingStage)[];
 
 /**
@@ -74,7 +75,19 @@ export type StageMembersAreComplete = AllStageMembersListed<
   Exclude<keyof DrawingStage, (typeof DRAWING_STAGE_MEMBERS)[number]>
 >;
 
-export type DrawingStage = RenderRequester &
+/**
+ * The chart's crosshair door — "read the point under this position."
+ * The toolbox consumes pointer moves while drawing or dragging, and a
+ * consumed hover suppresses the wiring's own crosshair; without this
+ * call the price under the hand would go dark for exactly the moves
+ * where it matters most. `Plot.crosshair(position)` satisfies it.
+ */
+export interface CrosshairDriver {
+  crosshair(position: Point): void;
+}
+
+export type DrawingStage = CrosshairDriver &
+  RenderRequester &
   InputHost &
   XCoordinates &
   CursorHost &
@@ -275,6 +288,23 @@ export const DRAWING_STYLE_SPEC = /* @__PURE__ */ styleSpec({
  */
 const PLACEMENT_DRAG_MIN = 5;
 
+/** The snap marker's radius (px) — outside the handle so the two read as different things. */
+const SNAP_RING_RADIUS = 7;
+const SNAP_RING_SEGMENTS = 12;
+
+/** A closed ring of points around `center` — the "it snapped" marker. */
+function snapRing(center: Point): Point[] {
+  const points: Point[] = [];
+  for (let index = 0; index <= SNAP_RING_SEGMENTS; index++) {
+    const angle = (index / SNAP_RING_SEGMENTS) * Math.PI * 2;
+    points.push({
+      x: center.x + SNAP_RING_RADIUS * Math.cos(angle),
+      y: center.y + SNAP_RING_RADIUS * Math.sin(angle),
+    });
+  }
+  return points;
+}
+
 /**
  * A fresh draft with every anchor at the first press — a complete
  * drawing from birth (the render loop draws it as-is), whose unconfirmed
@@ -285,6 +315,7 @@ const PLACEMENT_DRAG_MIN = 5;
  */
 function draftFor(kind: Drawing["type"], at: Anchor): Drawing {
   const id = mintDrawingId();
+  const anchor = (from: Anchor): Anchor => ({ x: from.x, price: from.price });
   switch (kind) {
     case "horizontal":
       return { type: "horizontal", id, price: at.price };
@@ -299,11 +330,11 @@ function draftFor(kind: Drawing["type"], at: Anchor): Drawing {
     case "ellipse":
     case "priceMeasure":
     case "barMeasure":
-      return { type: kind, id, a: { ...at }, b: { ...at } };
+      return { type: kind, id, a: anchor(at), b: anchor(at) };
     case "parallelChannel":
     case "pitchfork":
     case "fibExtension":
-      return { type: kind, id, a: { ...at }, b: { ...at }, c: { ...at } };
+      return { type: kind, id, a: anchor(at), b: anchor(at), c: anchor(at) };
   }
   const unreachable: never = kind;
   throw new ContractError(`unknown drawing kind: ${String(unreachable)}`);
@@ -476,8 +507,18 @@ export function drawingTools(
     const axesFor = (tool: Drawing["type"]): SnapAxes =>
       tool === "horizontal" ? "y" : tool === "vertical" ? "x" : "xy";
 
-    const snappedAt = (point: Point, tool: Drawing["type"]) =>
-      snappedDomainAt(snap, space, point, axesFor(tool));
+    /**
+     * Where the last snap stuck, in domain coordinates — drawn as a ring
+     * so the hand knows it snapped. Null when the last position was
+     * free, and cleared when the gesture ends.
+     */
+    let snapMark: Anchor | null = null;
+
+    const snappedAt = (point: Point, tool: Drawing["type"]): Anchor => {
+      const hit = snappedDomainAt(snap, space, point, axesFor(tool));
+      snapMark = hit.snapped ? { x: hit.x, price: hit.price } : null;
+      return { x: hit.x, price: hit.price };
+    };
 
     /**
      * A drag's cursor — only an endpoint (and a horizontal line's handle)
@@ -506,6 +547,7 @@ export function drawingTools(
         price: free.price + offset.price,
       };
       const snapped = snapDomainPos(snap, space, anchorFree, axes);
+      snapMark = snapped.snapped ? { x: snapped.x, price: snapped.price } : null;
       return { x: snapped.x - offset.x, price: snapped.price - offset.price };
     };
     /**
@@ -612,6 +654,7 @@ export function drawingTools(
       const before = modeOf(state);
       const cursorBefore = cursorOf(state);
       state = next;
+      if (next.kind === "idle") snapMark = null;
 
       const cursorAfter = cursorOf(state);
       // Hover backs off when drawing or dragging claims the cursor — if
@@ -803,13 +846,18 @@ export function drawingTools(
           const effective = drawing.style
             ? { ...style, ...drawing.style }
             : style;
+          const isSelected = drawing === selected;
           drawOne(
             target,
             space,
             renderContext,
             drawing,
-            effective,
-            drawing === selected,
+            // The selected drawing is drawn one pixel heavier — handles
+            // alone vanish in a crowd of thirteen kinds. Its own color
+            // and dash are kept, so the vocabulary is "the same line,
+            // bolder," not a new one.
+            isSelected ? { ...effective, width: effective.width + 1 } : effective,
+            isSelected,
           );
         }
 
@@ -817,6 +865,16 @@ export function drawingTools(
         // to be visible to draw.
         if (state.kind === "drafting") {
           drawOne(target, space, renderContext, state.draft, style, false);
+        }
+
+        // The snap ring — where the anchor under the hand stuck. Only
+        // while a gesture is in flight (the mark clears on idle).
+        if (snapMark && state.kind !== "idle") {
+          target.drawLine(snapRing(toPixel(space, snapMark)), {
+            ...style,
+            width: 1,
+            dashArray: "",
+          });
         }
       },
     };
@@ -949,6 +1007,9 @@ export function drawingTools(
           return true; // Someone else's pointer, already consumed — capture routes it here.
         }
         followCursor(state.draft, state.placed, snappedAt(event.point, state.draft.type));
+        // A consumed move would otherwise switch the crosshair off —
+        // and drawing is exactly when you're reading prices.
+        plot.crosshair(event.point);
         plot.requestRender();
         return true;
       }
@@ -957,6 +1018,7 @@ export function drawingTools(
         if (event.pointerId !== state.pointerId) return true;
         moveGrip(state.drag, dragCursor(state.drag, event.point));
         state.drag.moved = true;
+        plot.crosshair(event.point);
         changed("move");
         return true;
       }

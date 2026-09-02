@@ -413,6 +413,7 @@ describe("self-completeness -- the door-by-door verdict table", () => {
         xAt: () => 0,
         pixelAtX: () => 0,
         claimFocusArea: () => ({ contestedAt: () => false, release: () => {} }),
+        crosshair: () => {},
       },
     });
 

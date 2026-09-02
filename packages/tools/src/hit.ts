@@ -71,15 +71,26 @@ export function restoreDrawing(target: Drawing, snapshot: Drawing): void {
   });
 }
 
-/** The nearest of a list of pixel points within the handle radius, as a grip part — or null. */
+/**
+ * The nearest handle within the handle radius, as a grip part — or
+ * null. **Nearest wins**, not first-listed: a line zoomed down to a few
+ * pixels puts both ends under one radius, and "a always" would make b
+ * ungrabbable at exactly the zoom where you'd want to fix it.
+ */
 function handleAt(
   point: Point,
   handles: readonly [Point, "a" | "b" | "c"][],
 ): "a" | "b" | "c" | null {
+  let best: "a" | "b" | "c" | null = null;
+  let bestDistance = HANDLE_TOLERANCE;
   for (const [pixel, part] of handles) {
-    if (distanceToPoint(point, pixel) <= HANDLE_TOLERANCE) return part;
+    const distance = distanceToPoint(point, pixel);
+    if (distance <= bestDistance) {
+      best = part;
+      bestDistance = distance;
+    }
   }
-  return null;
+  return best;
 }
 
 /**
@@ -224,12 +235,8 @@ export function gripAt(
 
         // Endpoints come first — if the segment check ran first, you
         // could never grab an endpoint.
-        if (distanceToPoint(point, a) <= HANDLE_TOLERANCE) {
-          return { drawing, part: "a" };
-        }
-        if (distanceToPoint(point, b) <= HANDLE_TOLERANCE) {
-          return { drawing, part: "b" };
-        }
+        const part = handleAt(point, [[a, "a"], [b, "b"]]);
+        if (part === "a" || part === "b") return { drawing, part };
         // A measure's label is presentation — the segment is the target.
         if (
           (drawing.type === "trend" ||
