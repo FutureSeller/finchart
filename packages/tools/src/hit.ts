@@ -4,6 +4,8 @@ import type { Anchor, Drawing } from "./drawings";
 import {
   channelParallel,
   drawingAnchors,
+  fibExtensionLevels,
+  fibExtensionPrice,
   fibLevelPrice,
   fibLevels,
   pitchforkLines,
@@ -144,6 +146,11 @@ function distanceToOutline(point: Point, outline: readonly Point[]): number {
     best = Math.min(best, distanceToSegment(point, outline[index], next));
   }
   return best;
+}
+
+/** The x span an extension's level lines cover — all three anchors, so a level is visible wherever the swing is. */
+export function fibExtensionSpan(a: Point, b: Point, c: Point): [number, number] {
+  return [Math.min(a.x, b.x, c.x), Math.max(a.x, b.x, c.x)];
 }
 
 /** Whatever's drawn on top gets grabbed first — later in the list is higher (registration order is stacking order). */
@@ -302,6 +309,31 @@ export function gripAt(
         }
         if (distanceToSegment(point, b, c) <= LINE_TOLERANCE) {
           return { drawing, part: "whole" };
+        }
+        break;
+      }
+
+      case "fibExtension": {
+        const a = toPixel(space, drawing.a);
+        const b = toPixel(space, drawing.b);
+        const c = toPixel(space, drawing.c);
+        const part = handleAt(point, [[a, "a"], [b, "b"], [c, "c"]]);
+        if (part === "c") return { drawing, part };
+        if (part !== null) return { drawing, part };
+        // The swing legs, then the level lines over the anchors' x span.
+        if (
+          distanceToSegment(point, a, b) <= LINE_TOLERANCE ||
+          distanceToSegment(point, b, c) <= LINE_TOLERANCE
+        ) {
+          return { drawing, part: "whole" };
+        }
+        const [left, right] = fibExtensionSpan(a, b, c);
+        if (point.x >= left - LINE_TOLERANCE && point.x <= right + LINE_TOLERANCE) {
+          const onLevel = fibExtensionLevels(drawing).some((level) => {
+            const y = space.pixelAtValue(fibExtensionPrice(drawing, level));
+            return Math.abs(point.y - y) <= LINE_TOLERANCE;
+          });
+          if (onLevel) return { drawing, part: "whole" };
         }
         break;
       }

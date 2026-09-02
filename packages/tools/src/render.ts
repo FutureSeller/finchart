@@ -9,12 +9,19 @@ import { labelFont, resolveStyle, styleSpec } from "@finchart/core";
 import type { Drawing } from "./drawings";
 import {
   channelParallel,
+  fibExtensionLevels,
+  fibExtensionPrice,
   fibLevelPrice,
   fibLevels,
   pitchforkLines,
   priceMeasureDelta,
 } from "./drawings";
-import { ellipseOutline, infiniteEndpoints, rectangleOutline } from "./hit";
+import {
+  ellipseOutline,
+  fibExtensionSpan,
+  infiniteEndpoints,
+  rectangleOutline,
+} from "./hit";
 import type { DrawingSpace } from "./space";
 import { toPixel } from "./space";
 
@@ -361,6 +368,36 @@ export function drawOne(
         );
       }
       target.drawLine([b, c], style);
+      if (isSelected) drawHandles(target, [a, b, c], style.color);
+      return;
+    }
+
+    case "fibExtension": {
+      const a = toPixel(space, drawing.a);
+      const b = toPixel(space, drawing.b);
+      const c = toPixel(space, drawing.c);
+      const [left, right] = fibExtensionSpan(a, b, c);
+      const font = labelFont(readStyle);
+
+      // The swing legs first, so the levels read as projected from them.
+      target.drawLine([a, b, c], style);
+      for (const level of fibExtensionLevels(drawing)) {
+        const y = space.pixelAtValue(fibExtensionPrice(drawing, level));
+        target.drawLine(
+          [
+            { x: left, y },
+            { x: right, y },
+          ],
+          style,
+        );
+        target.drawText({
+          text: `${(level * 100).toFixed(1)}%`,
+          at: { x: left - 4, y },
+          align: "right",
+          baseline: "middle",
+          style: { font, color: style.color },
+        });
+      }
       if (isSelected) drawHandles(target, [a, b, c], style.color);
       return;
     }

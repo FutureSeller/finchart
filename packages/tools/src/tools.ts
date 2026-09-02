@@ -302,6 +302,7 @@ function draftFor(kind: Drawing["type"], at: Anchor): Drawing {
       return { type: kind, id, a: { ...at }, b: { ...at } };
     case "parallelChannel":
     case "pitchfork":
+    case "fibExtension":
       return { type: kind, id, a: { ...at }, b: { ...at }, c: { ...at } };
   }
   const unreachable: never = kind;
