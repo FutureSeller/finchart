@@ -1,8 +1,8 @@
 # @finchart/tools
 
 Drawing tools — horizontal and vertical lines, trend lines, rays, extended
-lines, arrows, Fibonacci, rectangles, ellipses, price and bar measures,
-parallel channels, pitchforks. A drawing is pure
+lines, arrows, Fibonacci retracements and extensions, rectangles, ellipses,
+price and bar measures, parallel channels, pitchforks. A drawing is pure
 data in domain coordinates (data x and price), so serializing one carries it
 across sessions, and dragging beats panning because it sits on top of the input
 stack's capture. Also built with zero commits to core.
@@ -114,7 +114,9 @@ localStorage round trip.
 **Every drawing carries a stable `id`.** It's minted at the door (`add`, or
 the moment hand-drawing completes) — you never invent one — and survives
 save/load, so a side panel can key its own state by it. `handle.update(patch)`
-edits a drawing in place (geometry, per-drawing `style`, fib `levels`); a key
+edits a drawing in place (geometry, per-drawing `style`, a Fibonacci's
+`levels` — a retracement defaults to `FIB_LEVELS`, an extension to
+`FIB_EXTENSION_LEVELS`, and neither clamps a level you set); a key
 passed as `undefined` returns that field to its default — `style: undefined`
 goes back to the theme. Per-drawing `style` uses the same
 `Partial<LineStyle>` leaves as the toolbox override (`width` · `color` ·

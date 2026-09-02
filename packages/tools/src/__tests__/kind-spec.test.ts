@@ -137,6 +137,19 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
       c: { x: 5, price: 90 },
     },
   },
+  fibExtension: {
+    anchors: 3,
+    clicks: 3,
+    snapAxes: "xy",
+    sample: {
+      type: "fibExtension",
+      id: "fx",
+      a: { x: 1, price: 100 },
+      b: { x: 5, price: 120 },
+      c: { x: 7, price: 110 },
+      levels: [0, 1, 1.618],
+    },
+  },
 };
 
 describe("the kind table", () => {

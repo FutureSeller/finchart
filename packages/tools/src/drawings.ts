@@ -28,6 +28,7 @@ export const DRAWING_KINDS: readonly Drawing["type"][] = [
   "barMeasure",
   "parallelChannel",
   "pitchfork",
+  "fibExtension",
 ];
 
 /** Safely describes a value for error messages — `JSON.stringify` throws on cycles. */
@@ -190,6 +191,21 @@ export interface Pitchfork extends DrawingIdentity {
   c: Anchor;
 }
 
+/**
+ * A trend-based Fibonacci extension: the a→b swing, retraced to `c`,
+ * projected from `c` — level 0 sits at `c`, level 1 at `c + (b − a)`.
+ * Its default levels and its formula are its own, not the retracement's:
+ * levels past 1 are the point of this tool.
+ */
+export interface FibExtension extends DrawingIdentity {
+  type: "fibExtension";
+  a: Anchor;
+  b: Anchor;
+  c: Anchor;
+  /** Absent means `FIB_EXTENSION_LEVELS`. Sorted and deduped, never clamped. */
+  levels?: number[];
+}
+
 export type Drawing =
   | HorizontalLine
   | VerticalLine
@@ -203,7 +219,8 @@ export type Drawing =
   | PriceMeasure
   | BarMeasure
   | ParallelChannel
-  | Pitchfork;
+  | Pitchfork
+  | FibExtension;
 
 export type AnchorKey = "a" | "b" | "c";
 
@@ -227,6 +244,7 @@ export const ANCHOR_KEYS: Record<Drawing["type"], readonly AnchorKey[]> = {
   barMeasure: ["a", "b"],
   parallelChannel: ["a", "b", "c"],
   pitchfork: ["a", "b", "c"],
+  fibExtension: ["a", "b", "c"],
 };
 
 /**
@@ -293,6 +311,34 @@ export function fibLevels(
  */
 export function fibLevelPrice(drawing: FibRetracement, level: number): number {
   return drawing.b.price + (drawing.a.price - drawing.b.price) * level;
+}
+
+/**
+ * The extension's conventional levels — the TradingView set, reaching
+ * past 1 because projecting beyond the swing is what the tool is for.
+ * Separate from `FIB_LEVELS` on purpose: one list for both would hand
+ * the extension a retracement's screen.
+ */
+export const FIB_EXTENSION_LEVELS = [
+  0, 0.236, 0.382, 0.5, 0.618, 1, 1.618, 2.618, 3.618, 4.236,
+] as const;
+
+/** The one interpreter of an extension's level list — hit-testing and rendering both read it. */
+export function fibExtensionLevels(
+  drawing: Pick<FibExtension, "levels">,
+): readonly number[] {
+  return drawing.levels ?? FIB_EXTENSION_LEVELS;
+}
+
+/**
+ * A level's price: the a→b move, scaled by the level, laid from `c`.
+ * Price space, one formula, never clamped — a down-swing projects down.
+ */
+export function fibExtensionPrice(
+  drawing: Pick<FibExtension, "a" | "b" | "c">,
+  level: number,
+): number {
+  return drawing.c.price + (drawing.b.price - drawing.a.price) * level;
 }
 
 /**
@@ -598,6 +644,19 @@ export function ownWithId(drawing: DrawingInput, id: string): Drawing {
       if (style) owned.style = style;
       return owned;
     }
+    case "fibExtension": {
+      const owned: FibExtension = {
+        type: "fibExtension",
+        id,
+        a: ownAnchor(drawing.a),
+        b: ownAnchor(drawing.b),
+        c: ownAnchor(drawing.c),
+      };
+      if (style) owned.style = style;
+      const levels = normalizedLevels(drawing.levels);
+      if (levels) owned.levels = levels;
+      return owned;
+    }
     case "fib": {
       const owned: FibRetracement = {
         type: "fib",
@@ -670,6 +729,7 @@ export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
   barMeasure: ["a", "b", "style"],
   parallelChannel: ["a", "b", "c", "style"],
   pitchfork: ["a", "b", "c", "style"],
+  fibExtension: ["a", "b", "c", "style", "levels"],
 };
 
 /**
@@ -697,7 +757,10 @@ export function assignOwned(target: Drawing, source: Drawing): void {
   } else {
     delete target.style;
   }
-  if (target.type === "fib" && source.type === "fib") {
+  if (
+    (target.type === "fib" && source.type === "fib") ||
+    (target.type === "fibExtension" && source.type === "fibExtension")
+  ) {
     if (source.levels) {
       target.levels = source.levels;
     } else {
@@ -738,6 +801,13 @@ export function hasDrawingShape(value: unknown): value is DrawingInput {
     case "parallelChannel":
     case "pitchfork":
       return isAnchor(drawing.a) && isAnchor(drawing.b) && isAnchor(drawing.c);
+    case "fibExtension":
+      return (
+        isAnchor(drawing.a) &&
+        isAnchor(drawing.b) &&
+        isAnchor(drawing.c) &&
+        hasValidLevels(drawing.levels)
+      );
     case "fib":
       return (
         isAnchor(drawing.a) &&

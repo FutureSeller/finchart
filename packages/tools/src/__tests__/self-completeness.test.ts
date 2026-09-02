@@ -242,6 +242,7 @@ const MODULE: Record<string, Verdict> = {
     policy: "does not throw (for arguments 0, 1, and 2 alike)",
   },
   FIB_LEVELS: { shape: "a constant", value: "--", policy: "--" },
+  FIB_EXTENSION_LEVELS: { shape: "a constant", value: "--", policy: "--" },
   DRAWING_STYLE_SPEC: {
     shape: "a constant -- the style spec. Made public because there's no other way to reach the defaults",
     value: "--",

@@ -1,4 +1,9 @@
-export { FIB_LEVELS, parseDrawings, serializeDrawings } from "./drawings";
+export {
+  FIB_EXTENSION_LEVELS,
+  FIB_LEVELS,
+  parseDrawings,
+  serializeDrawings,
+} from "./drawings";
 export type {
   Anchor,
   DrawingInput,
@@ -8,6 +13,7 @@ export type {
   BarMeasure,
   Ellipse,
   ExtendedLine,
+  FibExtension,
   FibRetracement,
   HorizontalLine,
   ParallelChannel,

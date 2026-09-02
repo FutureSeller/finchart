@@ -84,6 +84,7 @@ export function mount(container: HTMLElement): () => void {
     ["Bar measure", "barMeasure"],
     ["Parallel channel", "parallelChannel"],
     ["Pitchfork", "pitchfork"],
+    ["Fib extension", "fibExtension"],
   ] as const) {
     const el = document.createElement("button");
     el.textContent = label;
