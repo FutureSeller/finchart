@@ -29,6 +29,7 @@ export { DRAWING_STYLE_SPEC, drawingTools } from "./tools";
 export type {
   AddDrawingOptions,
   DrawingHandle,
+  DrawingHistoryChange,
   DrawingModeChange,
   DrawingPane,
   DrawingSelectionChange,

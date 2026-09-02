@@ -146,6 +146,14 @@ export interface DrawingHandle {
  */
 export interface DrawingsChange {
   reason: "add" | "remove" | "move" | "update" | "clear" | "load";
+  /** Whether this was a direct edit or a history replay. */
+  via: "direct" | "undo" | "redo";
+}
+
+/** Undo/redo availability changed. A button can render directly from this value. */
+export interface DrawingHistoryChange {
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 /**
@@ -205,7 +213,11 @@ export interface DrawingToolsApi extends PluginApi {
    * itself.
    */
   begin(kind: Drawing["type"]): void;
-  /** Discards whatever was being drawn and releases the armed state too. The same thing Esc calls. */
+  /**
+   * Discards a draft, or restores an unreleased drag to where it was
+   * grabbed, and releases the armed state too — what Esc does. Neither
+   * leaves a history command (nothing was committed).
+   */
   cancel(): void;
   /** The kind currently armed or being drawn. `null` if none. */
   mode(): Drawing["type"] | null;
@@ -240,11 +252,28 @@ export interface DrawingToolsApi extends PluginApi {
    * it points at, not its identity, so `select` / `remove` still work.
    */
   handles(): DrawingHandle[];
+  /** Replaces the ledger with empty and clears undo/redo history. */
   clear(): void;
+  /**
+   * Reverts the latest committed edit. An unreleased drag is cancelled first;
+   * a draft rewinds one confirmed anchor first (the anchors after it trail
+   * the cursor again from the next pointer move — the rewind itself has no
+   * cursor position). Returns whether it consumed anything, so a host that
+   * chains `if (!tools.undo()) app.undo()` never double-undoes.
+   */
+  undo(): boolean;
+  /** Reapplies the latest reverted edit. Declines while a draft or drag is in flight. */
+  redo(): boolean;
+  /** Whether `undo()` would consume a command, drag, or draft. This read remains available after disposal. */
+  canUndo(): boolean;
+  /** Whether `redo()` can replay now; false during a drag or draft. This read remains available after disposal. */
+  canRedo(): boolean;
+  /** Fires when command, boundary, or gesture state changes undo/redo availability. */
+  readonly historyChanges: Observable<DrawingHistoryChange>;
   serialize(): string;
-  /** Returns false and keeps the existing list if it can't be read — doesn't throw. */
+  /** Returns false and keeps the existing list/history if it can't be read; success clears history. */
   load(payload: string): boolean;
-  /** The list changed. A drag's result arrives here too. */
+  /** The list changed. `via` distinguishes direct edits from undo/redo replay. */
   readonly changes: Observable<DrawingsChange>;
   /**
    * The selection changed — every path arrives here: pointer, double-click,
@@ -487,6 +516,78 @@ export function drawingTools(
     /** Internal state — a drag mutates these objects directly. */
     const drawings: Drawing[] = [];
     const changes = emitter<DrawingsChange>();
+    const historyEmitter = emitter<DrawingHistoryChange>();
+
+    /**
+     * Notifications are queued and delivered after the outermost door
+     * returns, in the order the state changed. A subscriber that calls
+     * back in (`clear()` from a selection listener, `undo()` from a change
+     * listener) therefore never runs while a door is half-done: its call
+     * applies at once, and its own notifications line up behind the ones
+     * already queued. Without this, every door needed its own "did a
+     * subscriber pull the rug" check, and a mirror could see a `remove`
+     * for a drawing that had already been put back.
+     *
+     * A notification that throws leaves the rest queued for the next
+     * door — a listener's bug doesn't take the toolbox down with it.
+     */
+    const pending: (() => void)[] = [];
+    let doorDepth = 0;
+    let flushing = false;
+    const notify = (deliver: () => void): void => {
+      pending.push(deliver);
+    };
+    const flush = (): void => {
+      if (flushing) return;
+      flushing = true;
+      try {
+        for (let next = pending.shift(); next; next = pending.shift()) next();
+      } finally {
+        flushing = false;
+      }
+    };
+    /** Every public entry that can change state runs inside one of these. */
+    const door = <T,>(run: () => T): T => {
+      doorDepth += 1;
+      try {
+        return run();
+      } finally {
+        doorDepth -= 1;
+        if (doorDepth === 0) flush();
+      }
+    };
+    type HistoryCommand =
+      | {
+          kind: "add";
+          drawing: Drawing;
+          index: number;
+          selectionBefore: Drawing | null;
+          selectedOnAdd: boolean;
+        }
+      | {
+          kind: "remove";
+          drawing: Drawing;
+          index: number;
+          wasSelected: boolean;
+        }
+      | {
+          kind: "update";
+          drawing: Drawing;
+          before: Drawing;
+          after: Drawing;
+          reason: "move" | "update";
+        };
+    const undoStack: HistoryCommand[] = [];
+    const redoStack: HistoryCommand[] = [];
+    const recordCommand = (command: HistoryCommand): void => {
+      undoStack.push(command);
+      if (undoStack.length > 100) undoStack.shift();
+      redoStack.length = 0;
+    };
+    const resetHistory = (): void => {
+      undoStack.length = 0;
+      redoStack.length = 0;
+    };
     let styleOverride = options.style;
 
     /**
@@ -572,10 +673,11 @@ export function drawingTools(
       if (selected === next) return;
       selected = next;
       plot.requestRender();
-      selectionEmitter.emit({
+      const payload: DrawingSelectionChange = {
         selection: next ? structuredClone(next) : null,
         handle: next ? makeHandle(next) : null,
-      });
+      };
+      notify(() => selectionEmitter.emit(payload));
     };
 
     const deselect = (): void => {
@@ -615,6 +717,26 @@ export function drawingTools(
 
     let state: ToolState = { kind: "idle" };
     const modeEmitter = emitter<DrawingModeChange>();
+    const historyState = (): DrawingHistoryChange => ({
+      canUndo:
+        state.kind === "dragging" ||
+        state.kind === "drafting" ||
+        undoStack.length > 0,
+      canRedo:
+        state.kind !== "dragging" &&
+        state.kind !== "drafting" &&
+        redoStack.length > 0,
+    });
+    const emitHistoryChange = (): void => {
+      const snapshot = historyState();
+      notify(() => historyEmitter.emit(snapshot));
+    };
+    const emitHistoryChangeIfChanged = (before: DrawingHistoryChange): void => {
+      const after = historyState();
+      if (before.canUndo !== after.canUndo || before.canRedo !== after.canRedo) {
+        notify(() => historyEmitter.emit(after));
+      }
+    };
 
     const modeOf = (s: ToolState): Drawing["type"] | null =>
       s.kind === "armed" || s.kind === "drafting" ? s.tool : null;
@@ -650,7 +772,8 @@ export function drawingTools(
     };
 
     /** State transition — announces it when the visible mode changes, and the cursor follows state too. */
-    const transition = (next: ToolState): void => {
+    const transition = (next: ToolState, notifyHistory = true): void => {
+      const historyBefore = notifyHistory ? historyState() : null;
       const before = modeOf(state);
       const cursorBefore = cursorOf(state);
       state = next;
@@ -670,12 +793,54 @@ export function drawingTools(
       }
 
       const after = modeOf(state);
-      if (before !== after) modeEmitter.emit({ mode: after });
+      if (before !== after) notify(() => modeEmitter.emit({ mode: after }));
+      if (historyBefore) emitHistoryChangeIfChanged(historyBefore);
     };
 
-    const cancelPlacement = (): void => {
-      transition({ kind: "idle" });
+    /** A canonical owned drawing has stable field order, so this compares exact persisted geometry and style. */
+    const sameDrawing = (left: Drawing, right: Drawing): boolean =>
+      JSON.stringify(toOwnedDrawing(left)) === JSON.stringify(toOwnedDrawing(right));
+
+    /** Finishes a drag and records its final geometry as one command. */
+    const commitDrag = (drag: DragState, notify = true): boolean => {
+      const historyBefore = historyState();
+      transition({ kind: "idle" }, false);
+      const after = toOwnedDrawing(drag.grip.drawing);
+      if (sameDrawing(drag.original, after)) {
+        if (notify) emitHistoryChangeIfChanged(historyBefore);
+        return false;
+      }
+      recordCommand({
+        kind: "update",
+        drawing: drag.grip.drawing,
+        before: drag.original,
+        after,
+        reason: "move",
+      });
+      if (notify) emitHistoryChange();
+      return true;
+    };
+
+    /** Restores a drag that was never released. Replacement/disposal can keep the intermediate restore quiet. */
+    const cancelDrag = (drag: DragState, notify = true): boolean => {
+      const historyBefore = historyState();
+      transition({ kind: "idle" }, false);
+      if (sameDrawing(drag.original, drag.grip.drawing)) {
+        if (notify) emitHistoryChangeIfChanged(historyBefore);
+        return false;
+      }
+      restoreDrawing(drag.grip.drawing, drag.original);
       plot.requestRender();
+      if (notify) changed("move");
+      if (notify) emitHistoryChangeIfChanged(historyBefore);
+      return true;
+    };
+
+    const cancelPlacement = (notifyHistory = true): void => {
+      const historyBefore = historyState();
+      transition({ kind: "idle" }, false);
+      plot.requestRender();
+      if (notifyHistory) emitHistoryChangeIfChanged(historyBefore);
     };
 
     /**
@@ -793,16 +958,28 @@ export function drawingTools(
 
     /** Completion — enters the list, gets selected, and the armed state releases. */
     const finishPlacement = (draft: Drawing): void => {
+      const selectionBefore = selected;
       const owned = addOwned(draft);
+      recordCommand({
+        kind: "add",
+        drawing: owned,
+        index: drawings.length - 1,
+        selectionBefore,
+        selectedOnAdd: true,
+      });
       transition({ kind: "idle" });
       setSelected(owned);
       changed("add");
+      emitHistoryChange();
     };
 
     /** The list changed — redraw, and notify listeners. Always a pair. */
-    const changed = (reason: DrawingsChange["reason"]): void => {
+    const changed = (
+      reason: DrawingsChange["reason"],
+      via: DrawingsChange["via"] = "direct",
+    ): void => {
       plot.requestRender();
-      changes.emit({ reason });
+      notify(() => changes.emit({ reason, via }));
     };
 
     /**
@@ -1061,12 +1238,7 @@ export function drawingTools(
       if (state.kind === "dragging") {
         if (event.pointerId !== state.pointerId) return true;
         const { drag } = state;
-        transition({ kind: "idle" });
-        if (drag.moved) {
-          restoreDrawing(drag.grip.drawing, drag.original);
-          plot.requestRender();
-          changed("move");
-        }
+        cancelDrag(drag);
         return true;
       }
 
@@ -1103,7 +1275,7 @@ export function drawingTools(
 
       if (state.kind === "dragging") {
         if (event.pointerId !== state.pointerId) return true;
-        transition({ kind: "idle" });
+        commitDrag(state.drag);
         return true;
       }
 
@@ -1128,8 +1300,8 @@ export function drawingTools(
         }
         /**
          * If it's mid-drag, restores it — this is a cancel, not a
-         * finish. The documented contract is "drag cancel," and without
-         * an undo, the user would have no way to go back.
+         * finish. The documented contract is "drag cancel"; recording an
+         * unreleased position would turn cancellation into a committed edit.
          *
          * Reuses the existing "move" reason for the notification — a new
          * reason would break a consumer's exhaustive `switch`, and
@@ -1138,12 +1310,7 @@ export function drawingTools(
          */
         if (state.kind === "dragging") {
           const { drag } = state;
-          transition({ kind: "idle" });
-          if (drag.moved) {
-            restoreDrawing(drag.grip.drawing, drag.original);
-            plot.requestRender();
-            changed("move");
-          }
+          cancelDrag(drag);
           return true;
         }
         if (!selected) return false;
@@ -1246,8 +1413,8 @@ export function drawingTools(
          * right-click over the axis, but that invariant never existed in
          * the first place, since axis dragging sees input before the
          * toolbox does — a recoverable error (deselection, just click
-         * again) is the safer default over an unrecoverable one
-         * (deleting a drawing you never pointed at, with no undo).
+         * again) is the safer default over deleting a drawing you never
+         * pointed at and then asking history to repair the wrong action.
          */
         if (!focusClaim.contestedAt(point)) deselect();
         return false;
@@ -1257,7 +1424,7 @@ export function drawingTools(
     };
 
     const consumer: InputConsumer = {
-      handle(event: InputEvent): boolean {
+      handle: (event: InputEvent): boolean => door(() => {
         switch (event.type) {
           case "pointerdown":
             return onPointerDown(event);
@@ -1276,7 +1443,7 @@ export function drawingTools(
           default:
             return false;
         }
-      },
+      }),
     };
 
     const removeConsumer = plot.addInputConsumer(consumer, {
@@ -1286,6 +1453,7 @@ export function drawingTools(
     const removeOne = (drawing: Drawing): void => {
       const index = drawings.indexOf(drawing);
       if (index === -1) return;
+      const wasSelected = selected === drawing;
       /**
        * Removal cuts off an in-flight gesture too — the same rule as
        * `clear` / `load`. Without this, a drag would keep pushing an
@@ -1297,11 +1465,14 @@ export function drawingTools(
        * the line the user is mid-drawing.
        */
       if (state.kind === "dragging" && state.drag.grip.drawing === drawing) {
-        transition({ kind: "idle" });
+        commitDrag(state.drag, false);
       }
       drawings.splice(index, 1);
-      if (selected === drawing) setSelected(null);
+      const command: HistoryCommand = { kind: "remove", drawing, index, wasSelected };
+      recordCommand(command);
+      if (wasSelected) setSelected(null);
       changed("remove");
+      emitHistoryChange();
     };
 
     const updateOne = (target: Drawing, patch: DrawingUpdate): void => {
@@ -1333,6 +1504,7 @@ export function drawingTools(
        * the spread deliberately: that's the documented way back to the
        * default (`style: undefined` → the theme's).
        */
+      const before = toOwnedDrawing(target);
       const { id, ...shape } = target;
       const candidate = safeOwned({ ...shape, ...patch }, id);
       if (!isDrawing(candidate)) {
@@ -1348,11 +1520,19 @@ export function drawingTools(
        * pointermove or Esc would otherwise erase this very patch.
        */
       if (state.kind === "dragging" && state.drag.grip.drawing === target) {
-        transition({ kind: "idle" });
+        commitDrag(state.drag, false);
       }
 
       assignOwned(target, candidate);
+      recordCommand({
+        kind: "update",
+        drawing: target,
+        before,
+        after: toOwnedDrawing(candidate),
+        reason: "update",
+      });
       changed("update");
+      emitHistoryChange();
     };
 
     // Doesn't hold onto the caller's object — editing it from outside
@@ -1412,14 +1592,14 @@ export function drawingTools(
          * the normal path of saving the last state on unmount depends
          * on it.
          */
-        remove: () => {
+        remove: () => door(() => {
           alive();
           removeOne(owned);
-        },
-        update: (patch) => {
+        }),
+        update: (patch) => door(() => {
           alive();
           updateOne(owned, patch);
-        },
+        }),
       };
       handleTargets.set(handle, owned);
       return handle;
@@ -1429,12 +1609,22 @@ export function drawingTools(
       drawing: DrawingInput,
       options: AddDrawingOptions = {},
     ): DrawingHandle => {
+      const selectionBefore = selected;
       const owned = addOwned(drawing);
+      const command: HistoryCommand = {
+        kind: "add",
+        drawing: owned,
+        index: drawings.length - 1,
+        selectionBefore,
+        selectedOnAdd: options.select === true,
+      };
+      recordCommand(command);
       // Announces the selection first — the same order as hand-drawing
       // (`finishPlacement`), so a consumer sees the same sequence
       // through both doors.
       if (options.select) setSelected(owned);
       changed("add");
+      emitHistoryChange();
       return makeHandle(owned);
     };
 
@@ -1451,7 +1641,7 @@ export function drawingTools(
 
     const api = pluginApi(
       {
-        add(drawing: DrawingInput, options: AddDrawingOptions = {}): DrawingHandle {
+        add: (drawing: DrawingInput, options: AddDrawingOptions = {}): DrawingHandle => door(() => {
           alive();
           // Options are a door too — the same source that made
           // `setSnap("no")` turn snapping on (`localStorage` /
@@ -1470,7 +1660,7 @@ export function drawingTools(
             );
           }
           return add(drawing, options);
-        },
+        }),
 
         list: () => drawings.map((drawing) => structuredClone(drawing)),
 
@@ -1478,7 +1668,7 @@ export function drawingTools(
 
         selection: () => (selected ? structuredClone(selected) : null),
 
-        select(handle: DrawingHandle | null) {
+        select: (handle: DrawingHandle | null): void => door(() => {
           alive();
           if (handle === null) {
             deselect();
@@ -1504,9 +1694,9 @@ export function drawingTools(
             throw new ContractError("Can't select a removed drawing");
           }
           setSelected(target);
-        },
+        }),
 
-        begin(kind: Drawing["type"]) {
+        begin: (kind: Drawing["type"]): void => door(() => {
           alive();
           // The kind exists only in the type, not at runtime. If
           // `begin(null)` went through, an app would have no way to
@@ -1517,33 +1707,115 @@ export function drawingTools(
               `begin(kind) must be one of ${DRAWING_KINDS.map((k) => `"${k}"`).join("|")}, got ${describeValue(kind)}`,
             );
           }
-          // Discards whatever was being drawn — the newly armed one is
-          // the user's latest intent.
+          const committed =
+            state.kind === "dragging" ? commitDrag(state.drag, false) : false;
+          // Discards whatever was being drawn — the newly armed one is the user's latest intent.
           transition({ kind: "armed", tool: kind });
           plot.requestRender();
-        },
+          if (committed) emitHistoryChange();
+        }),
 
-        cancel() {
+        cancel: (): void => door(() => {
           alive();
-          cancelPlacement();
-        },
+          if (state.kind === "dragging") cancelDrag(state.drag);
+          else cancelPlacement();
+        }),
 
         mode: () => modeOf(state),
 
         modeChanges: modeEmitter as Observable<DrawingModeChange>,
 
-        clear() {
+        clear: (): void => door(() => {
           alive();
           // Cuts off an in-flight gesture before swapping out the list —
           // otherwise, pressing "clear all" with a trend line's first
           // point already placed would leave the rubber band and the
           // pressed toolbar behind, and the next click would draw a line
           // onto the canvas that was just cleared.
-          cancelPlacement();
+          if (state.kind === "dragging") cancelDrag(state.drag, false);
+          else cancelPlacement(false);
           drawings.length = 0;
           setSelected(null);
+          resetHistory();
           changed("clear");
-        },
+          emitHistoryChange();
+        }),
+
+        undo: (): boolean => door(() => {
+          alive();
+          if (state.kind === "dragging") {
+            cancelDrag(state.drag);
+            return true;
+          }
+          if (state.kind === "drafting") {
+            if (state.placed <= 1) {
+              transition({ kind: "armed", tool: state.tool });
+            } else {
+              transition({ ...state, placed: state.placed - 1, pointerId: null });
+            }
+            plot.requestRender();
+            return true;
+          }
+          const command = undoStack.pop();
+          if (!command) return false;
+          redoStack.push(command);
+
+          if (command.kind === "add") {
+            const index = drawings.indexOf(command.drawing);
+            if (index !== -1) drawings.splice(index, 1);
+            if (selected === command.drawing) {
+              setSelected(
+                command.selectionBefore && drawings.includes(command.selectionBefore)
+                  ? command.selectionBefore
+                  : null,
+              );
+            }
+            changed("remove", "undo");
+          } else if (command.kind === "remove") {
+            drawings.splice(Math.min(command.index, drawings.length), 0, command.drawing);
+            if (command.wasSelected) setSelected(command.drawing);
+            changed("add", "undo");
+          } else {
+            // A fresh copy, not the snapshot itself — `assignOwned` hands
+            // `style`/`levels` over by reference, and a live drawing that
+            // shared them with the stack would let one in-place edit
+            // rewrite history.
+            assignOwned(command.drawing, toOwnedDrawing(command.before));
+            changed(command.reason, "undo");
+          }
+          emitHistoryChange();
+          return true;
+        }),
+
+        redo: (): boolean => door(() => {
+          alive();
+          if (state.kind === "dragging" || state.kind === "drafting") return false;
+          const command = redoStack.pop();
+          if (!command) return false;
+          undoStack.push(command);
+
+          if (command.kind === "add") {
+            drawings.splice(Math.min(command.index, drawings.length), 0, command.drawing);
+            if (command.selectedOnAdd) setSelected(command.drawing);
+            changed("add", "redo");
+          } else if (command.kind === "remove") {
+            const index = drawings.indexOf(command.drawing);
+            if (index !== -1) drawings.splice(index, 1);
+            if (selected === command.drawing) setSelected(null);
+            changed("remove", "redo");
+          } else {
+            assignOwned(command.drawing, toOwnedDrawing(command.after));
+            changed(command.reason, "redo");
+          }
+          emitHistoryChange();
+          return true;
+        }),
+
+        canUndo: () => historyState().canUndo,
+
+        canRedo: () => historyState().canRedo,
+
+        historyChanges: historyEmitter as Observable<DrawingHistoryChange>,
 
         changes: changes as Observable<DrawingsChange>,
 
@@ -1592,7 +1864,7 @@ export function drawingTools(
 
         serialize: () => serializeDrawings(drawings),
 
-        load(payload: string) {
+        load: (payload: string): boolean => door(() => {
           alive();
           const parsed = parseDrawings(payload);
           if (parsed === null) return false;
@@ -1601,13 +1873,16 @@ export function drawingTools(
           // — otherwise, restoring mid-drag would leave the drag pushing
           // an object that's fallen out of the list, and
           // `changes: "move"` would keep firing.
-          cancelPlacement();
+          if (state.kind === "dragging") cancelDrag(state.drag, false);
+          else cancelPlacement(false);
           drawings.length = 0;
           setSelected(null);
           drawings.push(...parsed);
+          resetHistory();
           changed("load");
+          emitHistoryChange();
           return true;
-        },
+        }),
       },
       () => {
         removeConsumer();
@@ -1629,6 +1904,12 @@ export function drawingTools(
         // Same for the hover claim. Disposing the tool while over a
         // line would leave `grab` stuck on the chart.
         hoverCursor(false);
+        if (
+          state.kind === "dragging" &&
+          !sameDrawing(state.drag.original, state.drag.grip.drawing)
+        ) {
+          restoreDrawing(state.drag.grip.drawing, state.drag.original);
+        }
         state = { kind: "idle" };
         selected = null;
         plot.requestRender();

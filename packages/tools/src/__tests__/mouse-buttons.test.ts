@@ -10,7 +10,7 @@ type Area = { left: number; right: number; top: number; bottom: number };
  * field, right-clicking on a line (the habitual gesture for opening a
  * properties/delete menu) turns any hand tremor while the button is
  * held into a real drag, shifting the price line and potentially saving
- * it -- with no undo.
+ * an edit the user never intended.
  */
 
 const data: LineDataPoint[] = [

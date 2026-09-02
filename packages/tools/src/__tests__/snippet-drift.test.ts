@@ -166,6 +166,11 @@ export const CODE_LOCKS: readonly {
   { file: "apps/examples/src/cases/drawing.ts", contains: 'reason !== "move"', compiledIn: COPIES },
   { file: "apps/showcase/src/chart-instance.ts", contains: 'reason !== "move"', compiledIn: COPIES },
   { file: "apps/showcase-react/src/rail.tsx", contains: 'reason !== "move"', compiledIn: COPIES },
+  {
+    file: "packages/tools/README.md",
+    contains: "tools.historyChanges.subscribe(syncHistory)",
+    compiledIn: "packages/tools/src/__tests__/readme.types.ts",
+  },
 ];
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -204,4 +209,3 @@ describe("doc snippets vs. compiled copies", () => {
 
 
 });
-
