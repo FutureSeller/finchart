@@ -82,6 +82,51 @@ export function infiniteEndpoints(
   return [start, end];
 }
 
+/** The four corners of the box with `a` and `b` as opposite corners — clockwise from the top-left. */
+export function rectangleOutline(a: Point, b: Point): Point[] {
+  const left = Math.min(a.x, b.x);
+  const right = Math.max(a.x, b.x);
+  const top = Math.min(a.y, b.y);
+  const bottom = Math.max(a.y, b.y);
+  return [
+    { x: left, y: top },
+    { x: right, y: top },
+    { x: right, y: bottom },
+    { x: left, y: bottom },
+  ];
+}
+
+/**
+ * How many segments approximate an ellipse. At 48, a pane-sized ellipse
+ * deviates from the true arc by well under a pixel — below the 4px line
+ * tolerance, so the polyline you see and the one you grab agree.
+ */
+const ELLIPSE_SEGMENTS = 48;
+
+/** Points along the ellipse inscribed in the `a`–`b` box. Rendering and hit-testing walk this same list. */
+export function ellipseOutline(a: Point, b: Point): Point[] {
+  const cx = (a.x + b.x) / 2;
+  const cy = (a.y + b.y) / 2;
+  const rx = Math.abs(b.x - a.x) / 2;
+  const ry = Math.abs(b.y - a.y) / 2;
+  const points: Point[] = [];
+  for (let index = 0; index < ELLIPSE_SEGMENTS; index++) {
+    const angle = (index / ELLIPSE_SEGMENTS) * Math.PI * 2;
+    points.push({ x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) });
+  }
+  return points;
+}
+
+/** The shortest distance from a point to a closed polyline's edges. */
+function distanceToOutline(point: Point, outline: readonly Point[]): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < outline.length; index++) {
+    const next = outline[(index + 1) % outline.length];
+    best = Math.min(best, distanceToSegment(point, outline[index], next));
+  }
+  return best;
+}
+
 /** Whatever's drawn on top gets grabbed first — later in the list is higher (registration order is stacking order). */
 export function gripAt(
   drawings: readonly Drawing[],
@@ -143,7 +188,11 @@ export function gripAt(
       case "ray":
       case "extended":
       case "arrow":
-      case "fib": {
+      case "fib":
+      case "rectangle":
+      case "ellipse":
+      case "priceMeasure":
+      case "barMeasure": {
         const a = toPixel(space, drawing.a);
         const b = toPixel(space, drawing.b);
 
@@ -155,9 +204,27 @@ export function gripAt(
         if (distanceToPoint(point, b) <= HANDLE_TOLERANCE) {
           return { drawing, part: "b" };
         }
+        // A measure's label is presentation — the segment is the target.
         if (
-          (drawing.type === "trend" || drawing.type === "arrow") &&
+          (drawing.type === "trend" ||
+            drawing.type === "arrow" ||
+            drawing.type === "priceMeasure" ||
+            drawing.type === "barMeasure") &&
           distanceToSegment(point, a, b) <= LINE_TOLERANCE
+        ) {
+          return { drawing, part: "whole" };
+        }
+        // Area kinds grab on their boundary only — the interior stays
+        // the chart's, so a click inside a box still pans.
+        if (
+          drawing.type === "rectangle" &&
+          distanceToOutline(point, rectangleOutline(a, b)) <= LINE_TOLERANCE
+        ) {
+          return { drawing, part: "whole" };
+        }
+        if (
+          drawing.type === "ellipse" &&
+          distanceToOutline(point, ellipseOutline(a, b)) <= LINE_TOLERANCE
         ) {
           return { drawing, part: "whole" };
         }

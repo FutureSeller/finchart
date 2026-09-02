@@ -15,9 +15,10 @@ import {
 import { distanceToPoint } from "./geometry";
 import type { DragState } from "./hit";
 import { gripAt, gripOffsets, moveGrip, restoreDrawing } from "./hit";
+import type { DrawingRenderContext } from "./render";
 import { drawOne } from "./render";
 import type { SnapAxes, SnapContext } from "./snap";
-import { snapDomainPos, snappedDomainAt } from "./snap";
+import { barSampleAt, snapDomainPos, snappedDomainAt } from "./snap";
 import type { DrawingSpace } from "./space";
 import { domainAt, toPixel } from "./space";
 
@@ -708,6 +709,14 @@ export function drawingTools(
           styleOverride,
         );
 
+        // What the renderer needs beyond the space — built per frame,
+        // since the formatter and the mapping are the frame's.
+        const renderContext: DrawingRenderContext = {
+          readStyle: context.readStyle,
+          formatValue: context.formatY,
+          barIndexAt: (x) => barSampleAt(pane.probe(x))?.index ?? null,
+        };
+
         for (const drawing of drawings) {
           // The third resolution layer — a drawing's own override on top
           // of the toolbox's resolved style. Owned styles carry no
@@ -719,7 +728,7 @@ export function drawingTools(
           drawOne(
             target,
             space,
-            context.readStyle,
+            renderContext,
             drawing,
             effective,
             drawing === selected,
@@ -729,7 +738,7 @@ export function drawingTools(
         // The one being drawn right now — outside the list, but it has
         // to be visible to draw.
         if (state.kind === "drafting") {
-          drawOne(target, space, context.readStyle, state.draft, style, false);
+          drawOne(target, space, renderContext, state.draft, style, false);
         }
       },
     };

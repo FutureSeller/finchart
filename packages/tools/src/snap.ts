@@ -34,6 +34,18 @@ export interface SnapContext {
  */
 export type SnapAxes = "x" | "y" | "xy";
 
+/**
+ * "The bar at this x" — the first registration with a value there. One
+ * rule for everyone who asks the pane about a bar (snapping, a bar
+ * measure's count), so the bar you snap to is the bar you count.
+ */
+export function barSampleAt(samples: readonly SeriesSample[]): SeriesSample | null {
+  return (
+    samples.find((candidate) => candidate.value !== null || candidate.min !== null) ??
+    null
+  );
+}
+
 /** Cursor pixel → snapped domain. The shape used by drawing and drafting. */
 export function snappedDomainAt(
   snap: SnapContext,
@@ -58,9 +70,7 @@ export function snapDomainPos(
 ): { x: number; price: number } {
   if (!snap.enabled()) return pos;
 
-  const sample = snap.probe(pos.x).find(
-    (candidate) => candidate.value !== null || candidate.min !== null,
-  );
+  const sample = barSampleAt(snap.probe(pos.x));
   if (!sample) return pos;
 
   if (axes === "x") {

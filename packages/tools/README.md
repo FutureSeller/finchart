@@ -1,6 +1,7 @@
 # @finchart/tools
 
-Drawing tools — horizontal and vertical lines, trend lines, rays, extended lines, arrows, Fibonacci. A drawing is pure
+Drawing tools — horizontal and vertical lines, trend lines, rays, extended
+lines, arrows, Fibonacci, rectangles, ellipses, price and bar measures. A drawing is pure
 data in domain coordinates (data x and price), so serializing one carries it
 across sessions, and dragging beats panning because it sits on top of the input
 stack's capture. Also built with zero commits to core.
@@ -118,6 +119,17 @@ goes back to the theme. Per-drawing `style` uses the same
 `dashArray`), and the values are literals: a drawing you colored by hand
 keeps its color across a theme switch, deliberately.
 
+**The two measures carry a label** on their segment's midpoint — a price
+measure reports the move from `a` to `b` (delta in the pane's own format,
+plus the percent when `a` isn't zero), a bar measure the number of bars
+between them — the pane's nearest bar at each end, counted by index, so a
+gap between bars counts as what it is and the count is the same under a
+time axis and a bar-index one. Without any bars there is no count, so no
+label. The label's box wears
+the drawing's color and its text `--chart-drawing-label` (light by
+default, the same inverted pair as the crosshair badge). The label is
+presentation only: the segment is what you grab.
+
 ## Pointing at what you restored
 
 `serialize()` / `load()` carry drawings **across sessions**. Restored drawings
@@ -145,7 +157,8 @@ change them.
 
 | What | Distance | |
 |---|---|---|
-| A line (trend line body · horizontal line · Fibonacci level) | **4px** | |
+| A line (trend line body · horizontal line · Fibonacci level · a measure's segment) | **4px** | |
+| A shape's boundary (rectangle · ellipse) | **4px** | The interior is **not** grabbable — a click inside still pans |
 | An endpoint handle (`a` · `b`) | **6px** | Generous on purpose — **endpoints win over lines** |
 
 Endpoints having the wider radius is deliberate. If lines won where the two

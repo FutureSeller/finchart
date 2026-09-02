@@ -78,6 +78,10 @@ export function mount(container: HTMLElement): () => void {
     ["Extended line", "extended"],
     ["Arrow", "arrow"],
     ["Fibonacci", "fib"],
+    ["Rectangle", "rectangle"],
+    ["Ellipse", "ellipse"],
+    ["Price measure", "priceMeasure"],
+    ["Bar measure", "barMeasure"],
   ] as const) {
     const el = document.createElement("button");
     el.textContent = label;
