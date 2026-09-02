@@ -1,7 +1,8 @@
 # @finchart/tools
 
 Drawing tools — horizontal and vertical lines, trend lines, rays, extended
-lines, arrows, Fibonacci, rectangles, ellipses, price and bar measures. A drawing is pure
+lines, arrows, Fibonacci, rectangles, ellipses, price and bar measures,
+parallel channels, pitchforks. A drawing is pure
 data in domain coordinates (data x and price), so serializing one carries it
 across sessions, and dragging beats panning because it sits on top of the input
 stack's capture. Also built with zero commits to core.
@@ -25,6 +26,7 @@ import { drawingTools } from "@finchart/tools";
 const tools = plot.mainPane.use(drawingTools({ plot }));
 
 tools.begin("trend");                            // the next two clicks draw a trend line
+tools.begin("pitchfork");                        // three clicks — one per anchor
 tools.add({ type: "horizontal", price: 105 });   // add one programmatically
 tools.dispose();                                 // tears down all the wiring at once
 ```
@@ -157,9 +159,9 @@ change them.
 
 | What | Distance | |
 |---|---|---|
-| A line (trend line body · horizontal line · Fibonacci level · a measure's segment) | **4px** | |
+| A line (trend line body · horizontal line · Fibonacci level · a measure's segment · either channel line · a pitchfork's rays and bar) | **4px** | |
 | A shape's boundary (rectangle · ellipse) | **4px** | The interior is **not** grabbable — a click inside still pans |
-| An endpoint handle (`a` · `b`) | **6px** | Generous on purpose — **endpoints win over lines** |
+| An endpoint handle (`a` · `b` · `c`) | **6px** | Generous on purpose — **endpoints win over lines** |
 
 Endpoints having the wider radius is deliberate. If lines won where the two
 overlap, you could never grab an endpoint — and dragging to change a line's

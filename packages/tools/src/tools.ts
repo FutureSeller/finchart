@@ -1,7 +1,7 @@
 import type { CursorHost, DataProbe, FocusAreaHost, InputConsumer, InputEvent, InputHost, LineStyle, Observable, PaneDecoration, PaneDecorationHost, PlotArea, Plugin, PluginApi, Point, RenderRequester, StyleSpec, ValueCoordinates, XCoordinates } from "@finchart/core";
 import { ContractError, emitter, pluginApi, resolveStyle, styleSpec } from "@finchart/core";
-import type { Drawing, DrawingInput, DrawingUpdate } from "./drawings";
-import { DRAWING_KINDS, describeValue } from "./drawings";
+import type { Anchor, Drawing, DrawingInput, DrawingUpdate } from "./drawings";
+import { DRAWING_KINDS, describeValue, drawingAnchors } from "./drawings";
 import {
   assignOwned,
   isDrawing,
@@ -276,6 +276,61 @@ export const DRAWING_STYLE_SPEC = /* @__PURE__ */ styleSpec({
 const PLACEMENT_DRAG_MIN = 5;
 
 /**
+ * A fresh draft with every anchor at the first press — a complete
+ * drawing from birth (the render loop draws it as-is), whose unconfirmed
+ * anchors then trail the cursor. The draft carries an id from birth
+ * too; the ledger id is still minted at `addOwned` on completion —
+ * identity begins when a drawing enters the ledger, not while it's a
+ * draft.
+ */
+function draftFor(kind: Drawing["type"], at: Anchor): Drawing {
+  const id = mintDrawingId();
+  switch (kind) {
+    case "horizontal":
+      return { type: "horizontal", id, price: at.price };
+    case "vertical":
+      return { type: "vertical", id, x: at.x };
+    case "trend":
+    case "ray":
+    case "extended":
+    case "arrow":
+    case "fib":
+    case "rectangle":
+    case "ellipse":
+    case "priceMeasure":
+    case "barMeasure":
+      return { type: kind, id, a: { ...at }, b: { ...at } };
+    case "parallelChannel":
+    case "pitchfork":
+      return { type: kind, id, a: { ...at }, b: { ...at }, c: { ...at } };
+  }
+  const unreachable: never = kind;
+  throw new ContractError(`unknown drawing kind: ${String(unreachable)}`);
+}
+
+/**
+ * Moves every anchor from `placed` onward to `at` — the unconfirmed
+ * anchors trail the cursor together, so a three-anchor draft is always
+ * a complete drawing. A one-coordinate kind has no anchors; its single
+ * value follows instead.
+ */
+function followCursor(draft: Drawing, placed: number, at: Anchor): void {
+  if (draft.type === "horizontal") {
+    draft.price = at.price;
+    return;
+  }
+  if (draft.type === "vertical") {
+    draft.x = at.x;
+    return;
+  }
+  const anchors = drawingAnchors(draft);
+  for (let index = placed; index < anchors.length; index++) {
+    anchors[index].x = at.x;
+    anchors[index].price = at.price;
+  }
+}
+
+/**
  * A drawing toolbox — one toolbox is one decoration. It doesn't make a
  * decoration per drawing: stacking order (z) and hit order are decided by
  * a single list, and install/teardown are tied to one plugin lifecycle.
@@ -437,7 +492,7 @@ export function drawingTools(
     ): { x: number; price: number } => {
       const free = domainAt(space, point);
       const axes: SnapAxes | null =
-        drag.grip.part === "a" || drag.grip.part === "b"
+        drag.grip.part !== "whole"
           ? "xy"
           : drag.grip.drawing.type === "horizontal"
             ? "y"
@@ -510,6 +565,8 @@ export function drawingTools(
           tool: Drawing["type"];
           draft: Drawing;
           pointerId: number | null;
+          /** How many anchors are confirmed; the rest trail the cursor. */
+          placed: number;
         }
       | { kind: "dragging"; drag: DragState; pointerId: number };
 
@@ -574,6 +631,26 @@ export function drawingTools(
 
     const cancelPlacement = (): void => {
       transition({ kind: "idle" });
+      plot.requestRender();
+    };
+
+    /**
+     * Confirms the next anchor at `at` — finishing the draft when it was
+     * the last one, otherwise handing the pointer (or the free "move"
+     * span, when `pointerId` is null) to the anchor after it.
+     */
+    const confirmAnchor = (
+      drafting: Extract<ToolState, { kind: "drafting" }>,
+      at: Anchor,
+      pointerId: number | null,
+    ): void => {
+      followCursor(drafting.draft, drafting.placed, at);
+      const placed = drafting.placed + 1;
+      if (placed >= drawingAnchors(drafting.draft).length) {
+        finishPlacement(drafting.draft);
+        return;
+      }
+      transition({ ...drafting, placed, pointerId });
       plot.requestRender();
     };
 
@@ -784,21 +861,12 @@ export function drawingTools(
         case "armed": {
           if (!insidePlot(event.point)) return false;
           const at = snappedAt(event.point, state.tool);
-          // The draft is a complete Drawing (the render loop draws it
-          // as-is), so it carries an id from birth. The ledger id is
-          // still minted at `addOwned` on completion — identity begins
-          // when a drawing enters the ledger, not while it's a draft.
-          const draft: Drawing =
-            state.tool === "horizontal"
-              ? { type: "horizontal", id: mintDrawingId(), price: at.price }
-              : state.tool === "vertical"
-                ? { type: "vertical", id: mintDrawingId(), x: at.x }
-                : { type: state.tool, id: mintDrawingId(), a: { ...at }, b: { ...at } };
           transition({
             kind: "drafting",
             tool: state.tool,
-            draft,
+            draft: draftFor(state.tool, at),
             pointerId: event.pointerId,
+            placed: 1,
           });
           plot.requestRender();
           return true;
@@ -813,17 +881,10 @@ export function drawingTools(
             return true;
           }
           if (!insidePlot(event.point)) return false;
-          // The second click of click-move-click — where it's pressed
-          // becomes b.
-          const to = snappedAt(event.point, state.draft.type);
-          if (state.draft.type === "horizontal") {
-            state.draft.price = to.price;
-          } else if (state.draft.type === "vertical") {
-            state.draft.x = to.x;
-          } else {
-            state.draft.b = { ...to };
-          }
-          finishPlacement(state.draft);
+          // The next click of click-move-click — where it's pressed
+          // confirms the next anchor (and the ones after it keep
+          // trailing until their own click).
+          confirmAnchor(state, snappedAt(event.point, state.draft.type), event.pointerId);
           return true;
         }
 
@@ -886,14 +947,7 @@ export function drawingTools(
         if (state.pointerId !== null && event.pointerId !== state.pointerId) {
           return true; // Someone else's pointer, already consumed — capture routes it here.
         }
-        const at = snappedAt(event.point, state.draft.type);
-        if (state.draft.type === "horizontal") {
-          state.draft.price = at.price;
-        } else if (state.draft.type === "vertical") {
-          state.draft.x = at.x;
-        } else {
-          state.draft.b = { ...at };
-        }
+        followCursor(state.draft, state.placed, snappedAt(event.point, state.draft.type));
         plot.requestRender();
         return true;
       }
@@ -960,20 +1014,25 @@ export function drawingTools(
       if (state.kind === "drafting" && state.pointerId !== null) {
         if (event.pointerId !== state.pointerId) return true;
 
-        if (state.draft.type === "horizontal" || state.draft.type === "vertical") {
-          // One anchor, so it's done the moment it's released.
+        const anchors = drawingAnchors(state.draft);
+        if (anchors.length === 0) {
+          // One coordinate, so it's done the moment it's released.
           finishPlacement(state.draft);
           return true;
         }
 
-        const a = toPixel(space, state.draft.a);
-        const moved = distanceToPoint(event.point, a) >= PLACEMENT_DRAG_MIN;
+        // "Was that a drag" is measured from the anchor this press
+        // confirmed — the last one placed, not `a`. Measuring from `a`
+        // would read a click on b as a drag and stamp c on top of it.
+        const reference = toPixel(space, anchors[state.placed - 1]);
+        const moved = distanceToPoint(event.point, reference) >= PLACEMENT_DRAG_MIN;
         if (moved) {
-          // Drawn by dragging — the release point becomes b.
-          finishPlacement(state.draft);
+          // Drawn by dragging — the release point confirms the next
+          // anchor (which finishes a two-anchor kind).
+          confirmAnchor(state, snappedAt(event.point, state.draft.type), null);
         } else {
-          // It was a click — releases the pointer and b keeps following
-          // the cursor.
+          // It was a click — releases the pointer and the next anchor
+          // keeps following the cursor.
           transition({ ...state, pointerId: null });
         }
         return true;

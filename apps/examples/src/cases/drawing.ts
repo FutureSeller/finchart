@@ -82,6 +82,8 @@ export function mount(container: HTMLElement): () => void {
     ["Ellipse", "ellipse"],
     ["Price measure", "priceMeasure"],
     ["Bar measure", "barMeasure"],
+    ["Parallel channel", "parallelChannel"],
+    ["Pitchfork", "pitchfork"],
   ] as const) {
     const el = document.createElement("button");
     el.textContent = label;
