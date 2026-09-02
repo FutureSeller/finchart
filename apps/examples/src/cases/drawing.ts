@@ -72,7 +72,11 @@ export function mount(container: HTMLElement): () => void {
   const buttons = new Map<string, HTMLButtonElement>();
   for (const [label, kind] of [
     ["Horizontal line", "horizontal"],
+    ["Vertical line", "vertical"],
     ["Trend line", "trend"],
+    ["Ray", "ray"],
+    ["Extended line", "extended"],
+    ["Arrow", "arrow"],
     ["Fibonacci", "fib"],
   ] as const) {
     const el = document.createElement("button");

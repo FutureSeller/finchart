@@ -1,6 +1,6 @@
 # @finchart/tools
 
-Drawing tools — horizontal lines, trend lines, Fibonacci. A drawing is pure
+Drawing tools — horizontal and vertical lines, trend lines, rays, extended lines, arrows, Fibonacci. A drawing is pure
 data in domain coordinates (data x and price), so serializing one carries it
 across sessions, and dragging beats panning because it sits on top of the input
 stack's capture. Also built with zero commits to core.

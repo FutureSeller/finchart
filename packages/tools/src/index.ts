@@ -4,9 +4,13 @@ export type {
   DrawingInput,
   DrawingUpdate,
   Drawing,
+  ArrowLine,
+  ExtendedLine,
   FibRetracement,
   HorizontalLine,
+  Ray,
   TrendLine,
+  VerticalLine,
 } from "./drawings";
 export { distanceToPoint, distanceToSegment } from "./geometry";
 export { DRAWING_STYLE_SPEC, drawingTools } from "./tools";
