@@ -77,6 +77,31 @@ export function saveRecipeSnippet(
   });
 }
 
+/** The README's undo/redo controls and single-toolbox shortcut. */
+export function historySnippet(
+  plot: Plot,
+  chartEl: HTMLElement,
+  undoButton: HTMLButtonElement,
+  redoButton: HTMLButtonElement,
+): void {
+  const tools = plot.mainPane.use(drawingTools({ plot }));
+  const syncHistory = () => {
+    undoButton.disabled = !tools.canUndo();
+    redoButton.disabled = !tools.canRedo();
+  };
+
+  tools.historyChanges.subscribe(syncHistory);
+  undoButton.addEventListener("click", () => tools.undo());
+  redoButton.addEventListener("click", () => tools.redo());
+  syncHistory();
+
+  chartEl.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") return;
+    const used = event.shiftKey ? tools.redo() : tools.undo();
+    if (used) event.preventDefault();
+  });
+}
+
 /**
  * The stage-layer example from `extensions.md` -- the lowercase `pane`
  * variable form is the original.

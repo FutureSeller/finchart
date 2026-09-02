@@ -431,6 +431,17 @@ series), so you can measure how close to the edge you are from the payload
 alone. Incremental adds do not touch the domain, so they are silent — that is
 why prepending history inside the handler does not recurse.
 
+### Drawing history (`undo` · `redo`)
+
+**The drawing tools' command stack** — one command per committed edit
+(`add`, `remove`, `update`, a whole drag on release), replayed onto the
+same objects so handles and selection survive. It is session state, not
+part of `serialize()`, and `clear()` or a successful `load()` empties it.
+Three things in this glossary share the word "history" and are unrelated:
+this one (drawing edits), *view state* (`ChartState` — the viewport and
+pane layout an app may keep its own undo of), and *infinite history*
+below (loading older bars).
+
 ### Infinite history (`infiniteHistory`)
 
 **The past-loading door** — `infiniteHistory(plot, sink, fetch, { from })`

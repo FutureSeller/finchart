@@ -25,7 +25,14 @@ tools.add({ type: "horizontal", price: 105 });
 tools.select(handle); // select programmatically
 tools.select(null); // clear the selection
 tools.clear(); // erase everything
+tools.undo(); // one committed add/remove/update/drag
+tools.redo();
 ```
+
+`canUndo()` / `canRedo()` answer button state, including an in-flight draft or
+drag, and `historyChanges` announces when to read them again. A drag becomes one
+command on release. `clear()` and a successful `load()` replace a document and
+empty both stacks.
 
 A full running example — down to the clear-selection, delete and erase-all
 buttons — is in [Drawing tools](/examples/drawing).
@@ -91,6 +98,12 @@ option branch.
 | `Delete` `Backspace` | delete the selected drawing | drawing tools |
 | `]` `[` | cycle the drawing selection (next/previous, wraps at the ends) | drawing tools |
 | double-click a pane | toggle maximize on that pane | `paneMaximize({ gestures: true })` |
+
+Ctrl/⌘+Z does not pass through this table yet: the DOM host deliberately keeps
+modified keys outside the normalized input stack. Bind it on the chart element
+and call `tools.undo()` / `tools.redo()` directly. That recipe is unambiguous
+with one toolbox; with one toolbox per pane, the application must choose its
+active pane because the toolbox's cursor-based keyboard owner is private.
 
 **The owner is whoever contends under the cursor.** Mount one drawing-tools
 instance per pane and `Delete`, `]` and `[` belong to **the pane the cursor

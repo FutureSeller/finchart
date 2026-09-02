@@ -691,6 +691,12 @@ chart by keyboard.
 | `]` `[` | cycle the drawing selection (next/previous, wrapping at the ends) | drawing tools |
 | double-click a pane | toggle maximizing that pane | `paneMaximize({ gestures: true })` — **opt-in**, off by default |
 
+Ctrl/⌘+Z is not normalized into this stack yet. The DOM host keeps modifier
+combinations for the browser, so an application that wants drawing history
+binds the chart element and calls `tools.undo()` / `tools.redo()` directly.
+That is a single-toolbox recipe; an application with toolboxes on several panes
+must choose its active toolbox itself.
+
 **The owner is whoever competes under the cursor.** Hang one set of drawing tools
 per pane and `Delete`, `]` and `[` belong to **the pane the cursor last passed
 over.** Over a spot where nobody competes (an axis, the padding, an indicator

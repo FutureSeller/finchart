@@ -176,12 +176,41 @@ const API: Record<string, Verdict> = {
       "-- feeding that notification straight back into a save would " +
       "overwrite the source",
   },
+  undo: {
+    shape: "no argument",
+    value: "--",
+    policy:
+      "returns whether a command or draft/drag cancellation was consumed. " +
+      "Throws ContractError after dispose",
+  },
+  redo: {
+    shape: "no argument",
+    value: "--",
+    policy:
+      "returns whether a command was replayed. Refuses an in-flight draft/drag, " +
+      "and throws ContractError after dispose",
+  },
+  canUndo: {
+    shape: "no argument",
+    value: "--",
+    policy: "mirrors whether undo consumes a command, drag, or draft; stays open after dispose",
+  },
+  canRedo: {
+    shape: "no argument",
+    value: "--",
+    policy: "mirrors whether redo can replay now; stays open after dispose",
+  },
   dispose: { shape: "no argument", value: "--", policy: "safe to call twice" },
   changes: {
     shape: "a value -- a subscription channel",
     value: "--",
     policy:
-      "carries only `reason`, since it's a list notification -- selection is session state, not the list, so it split off into `selectionChanges`",
+      "carries `reason` plus the required direct/undo/redo origin; selection is session state, not the list, so it split off into `selectionChanges`",
+  },
+  historyChanges: {
+    shape: "a value -- a subscription channel",
+    value: "canUndo/canRedo -- enough to render history controls",
+    policy: "fires when a command, boundary, draft, or drag changes availability",
   },
   modeChanges: {
     shape: "a value -- a subscription channel",
@@ -283,10 +312,30 @@ const MODULE_DOORS: Record<string, (args: unknown[]) => unknown> = {
 };
 
 describe("self-completeness -- the door-by-door verdict table", () => {
+  /**
+   * The notification's own fields -- the first public shape that is
+   * neither an option nor an api member, so `membersOf` would never see a
+   * field added here (the `via` day proved it: "carries only reason" went
+   * stale with nothing red).
+   */
+  const CHANGE: Record<string, Verdict> = {
+    reason: {
+      shape: "a closed union -- add|remove|move|update|clear|load",
+      value: "undo/redo emit the inverse operation's reason, never a new member",
+      policy: "--",
+    },
+    via: {
+      shape: "required -- direct|undo|redo",
+      value: "every producer fills it (one emit site); a gesture cancel is direct",
+      policy: "--",
+    },
+  };
+
   const TABLES = [
     ["options", OPTIONS],
     ["api", API],
     ["handle", HANDLE],
+    ["change", CHANGE],
     ["module", MODULE],
   ] as const;
 
@@ -294,6 +343,7 @@ describe("self-completeness -- the door-by-door verdict table", () => {
     ["the assembly door's option fields", "tools.ts", "DrawingToolsOptions", OPTIONS],
     ["the api's methods and values", "tools.ts", "DrawingToolsApi", API],
     ["the handle", "tools.ts", "DrawingHandle", HANDLE],
+    ["the change notification", "tools.ts", "DrawingsChange", CHANGE],
   ];
 
   it.each(cases)("should judge every door of %s", (_l, file, name, table) => {
@@ -498,13 +548,18 @@ describe("self-completeness -- the door-by-door verdict table", () => {
      * table only wrote "does not throw," the behavior after dispose
      * would be missing, and that statement could turn out to be a lie.
      */
-    it("cancel and clear's promise belongs to a live toolbox", () => {
+    it("write doors close after dispose while history reads stay open", () => {
       const api = drawingTools(stage())(pane() as never);
       expect(() => api.cancel()).not.toThrow();
       expect(() => api.clear()).not.toThrow();
+      api.add({ type: "horizontal", price: 1 });
       api.dispose();
       expect(() => api.cancel()).toThrow(ContractError);
       expect(() => api.clear()).toThrow(ContractError);
+      expect(() => api.undo()).toThrow(ContractError);
+      expect(() => api.redo()).toThrow(ContractError);
+      expect(api.canUndo()).toBe(true);
+      expect(api.canRedo()).toBe(false);
     });
 
     it("both parser doors do not throw no matter what comes in as the argument", () => {

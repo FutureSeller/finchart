@@ -70,6 +70,30 @@ tools.selectionChanges.subscribe(({ selection, handle }) => {
 });
 ```
 
+**Undo and redo count committed edits, not pointer frames.** A whole drag is
+one command when the pointer is released; `add`, `remove`, and `update` are one
+command per call. Undoing a selected removal restores that same object and its
+selection, so existing handles keep working. `clear()` and a successful
+`load()` are document boundaries and empty both stacks — use them to replace a
+ledger, not for an undoable "remove all" action.
+
+```ts
+const syncHistory = () => {
+  undoButton.disabled = !tools.canUndo();
+  redoButton.disabled = !tools.canRedo();
+};
+
+tools.historyChanges.subscribe(syncHistory);
+undoButton.addEventListener("click", () => tools.undo());
+redoButton.addEventListener("click", () => tools.redo());
+syncHistory();
+```
+
+During a drag, `undo()` cancels the unreleased move first. During a multi-point
+draft it removes the last confirmed anchor before reaching the command stack;
+an armed tool has no draft, so undo reaches history normally. `redo()` declines
+while a draft or drag is in flight.
+
 The `handle` is the point. With only the value, an app **can't tell two
 identical drawings apart** (two horizontal lines at the same price) — the
 cursor pointed at the one drawn on top, but a lookup by value finds the one
@@ -89,6 +113,23 @@ underneath.
 > ```
 >
 > The full story is under "Keyboard" in [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md).
+
+Ctrl/⌘+Z is deliberately not built into the chart input stack yet: modifier
+keys are kept by the DOM host. In a **single-toolbox** chart, bind the DOM key
+and call the API directly:
+
+```ts
+chartEl.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") return;
+  const used = event.shiftKey ? tools.redo() : tools.undo();
+  if (used) event.preventDefault();
+});
+```
+
+With one toolbox per pane, the application must call undo on its active pane's
+toolbox; the private cursor-ownership decision used by Delete is not a public
+API. Built-in modified-key routing reopens when core and the DOM host carry
+modifiers together.
 
 **Snapping** — `drawingTools({ plot, snap: true })` or `api.setSnap(on)`.
 Drawing and endpoint dragging snap to bar values (close, low, high) and bar x,
@@ -115,7 +156,14 @@ tools.changes.subscribe((change) => {
 Drag-moves arrive separately with `reason: "move"` so you can debounce just
 those; every other reason is a discrete edit worth saving. `update` fires
 once per `handle.update` call — if you drive it from a spinner or a slider,
-the debounce belongs on your side, the same as `move`. There's a working
+the debounce belongs on your side, the same as `move`. Every notification also
+carries `via: "direct" | "undo" | "redo"`, so a host-level command stack can
+ignore a drawing-history replay instead of recording it again. Notifications
+(`changes`, `selectionChanges`, `modeChanges`, `historyChanges`) are delivered
+after the call that caused them returns, in the order the state changed — so
+calling back into the toolbox from a subscriber (`clear()` from a selection
+listener, `undo()` from a change listener) is safe, and a mirror that replays
+the events lands on the same state as `list()`. There's a working
 example in the
 [drawing tools case](../../apps/examples/src/cases/drawing.ts), which does a
 localStorage round trip.
