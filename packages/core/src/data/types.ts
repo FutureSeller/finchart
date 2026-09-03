@@ -36,7 +36,16 @@ export interface OHLC extends BaseDataPoint {
   high: number;
   low: number;
   close: number;
-  volume?: number;
+  /**
+   * Optional, and — unlike the four prices — `null` is a **gap**, not a
+   * rejection. A bar without volume is still a bar (a feed's JSON says
+   * `"volume": null` on a halted day and the candle still draws), where a
+   * bar without a close is nothing to draw. What is rejected: a string, a
+   * `NaN`, an infinity — the data gate checks volume for finiteness the
+   * same way it checks the prices. Consumers of volume (aggregation, the
+   * indicators) read a gap through `isGap`.
+   */
+  volume?: number | null;
 }
 
 export type DataPoint = LineDataPoint | OHLC;
