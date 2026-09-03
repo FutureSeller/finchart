@@ -127,6 +127,7 @@ export const EXEMPT: Record<string, Exemption> = {
   conflated: { tag: "assembly", note: "takes a handle and callbacks — no numeric slot; the points flowing through push() are accepted by updateLast's own gate" },
   createScope: { tag: "constant", note: "takes no argument — the door is add(), which takes only a callback (no numeric slot)" },
   validateSeriesData: { tag: "safe", note: "the validator itself — reporting bad values as issues is its output, never a throw" },
+  validateSeriesPoint: { tag: "safe", note: "the tick validator — the same per-point rules as updateLast, reported as issues, never a throw" },
   frameScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback). The old reason (no amplifier) was empty, since there was no door to measure" },
   // Not "no amplifier" — there is simply no door to measure. Keep the tag honest.
   immediateScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback). The old reason (no amplifier) was empty, since there was no door to measure" },
@@ -257,6 +258,7 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
   infiniteHistory: { tag: "assembly", note: "assembly vocabulary — wires plot events to a sink and a fetch; a landed page's shape is judged at the landing (ascending check, cursor trim) and by the sink's own target" },
   createScope: { tag: "constant", note: "takes no argument — resource lifetimes, not data; add() takes only a callback" },
   validateSeriesData: { tag: "safe", note: "the validator itself — a payload of any shape comes back as issues, never a throw" },
+  validateSeriesPoint: { tag: "safe", note: "the tick validator — a point of any shape comes back as issues, never a throw" },
   frameScheduler: { tag: "assembly", note: "assembly vocabulary — a scheduler factory" },
   immediateScheduler: { tag: "constant", note: "a value — a stateless scheduler" },
   manualScheduler: { tag: "constant", note: "assembly vocabulary — takes no arguments" },

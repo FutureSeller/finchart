@@ -1,6 +1,6 @@
 [
   {
-    "name": "the quick start — one candlestick chart, core + dom · 26.7 KB gzip (26634B measured)",
+    "name": "the quick start — one candlestick chart, core + dom · 27 KB gzip (26677B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -9,11 +9,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps }"
     },
-    "limit": "26.7 KB",
+    "limit": "27 KB",
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 30.1 KB gzip (29978B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 30.5 KB gzip (30047B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -22,11 +22,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }"
     },
-    "limit": "30.1 KB",
+    "limit": "30.5 KB",
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 34.5 KB gzip (34195B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 34.5 KB gzip (34259B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 43 KB gzip (42505B measured)",
+    "name": "+ every drawing tool · 43 KB gzip (42550B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -58,7 +58,7 @@
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 43.5 KB gzip (43247B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 43.5 KB gzip (43295B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

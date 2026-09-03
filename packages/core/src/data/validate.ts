@@ -11,6 +11,32 @@ export type SeriesDataIssueCode =
   | "unsorted-x";
 
 /**
+ * What the consumer already holds at the seam — the x of the tail a chunk
+ * has to continue after (`lastX`), or of the head it has to end before
+ * (`firstX`). Facts, not rules: the rule is the door's — `validateSeriesData`
+ * answers `append`/`prepend`, `validateSeriesPoint` answers `updateLast`.
+ */
+export interface SeamContext {
+  lastX?: number;
+  firstX?: number;
+}
+
+/**
+ * The seam comparators — one sentence each, read by every door that joins
+ * new data to existing data (the manager's three seams, the tick router,
+ * and the pre-check doors), so the validator and ingestion cannot answer
+ * differently. `uniqueX` is the accessor's declaration that one x holds
+ * one point; without it a repeated x at the seam is legal.
+ */
+export function continuesAfter(x: number, tailX: number, uniqueX: boolean): boolean {
+  return uniqueX ? x > tailX : x >= tailX;
+}
+
+export function endsBefore(x: number, headX: number, uniqueX: boolean): boolean {
+  return uniqueX ? x < headX : x <= headX;
+}
+
+/**
  * One rule the data broke, as a value — the door for showing a bad payload
  * to a user instead of catching an exception. `index` is the offending
  * point; `-1` means the payload as a whole (not an array).
@@ -46,11 +72,16 @@ export function scanSeriesData<T extends BaseDataPoint>(
   points: readonly T[],
   coordinates: CoordinateAccessor<T>,
   report: ((issue: SeriesDataIssue) => void) | null,
+  seam?: SeamContext,
 ): boolean {
   const watchGaps = coordinates.gapless !== true;
   let sawGap = false;
   const last = points.length - 1;
-  let previousX: number | null = null;
+  // The existing tail seeds "the previous point" — the seam is checked by
+  // the same comparison as the order inside the chunk, at the chunk's own
+  // index 0. The seed walks on, so a wholly overlapping ascending chunk is
+  // one issue, exactly what `append` sees.
+  let previousX: number | null = seam?.lastX ?? null;
   let previousIndex = -1;
 
   for (let i = 0; i < points.length; i++) {
@@ -73,17 +104,36 @@ export function scanSeriesData<T extends BaseDataPoint>(
      * Repeated x values in a row are allowed (two points at one moment).
      */
     if (finiteX) {
-      if (previousX !== null && x < previousX) {
+      if (previousX !== null && !continuesAfter(x, previousX, false)) {
         fail(
           report,
           "unsorted-x",
           i,
-          `data must be sorted by x, but index ${i} (${x}) comes before index ${previousIndex} (${previousX})`,
+          previousIndex === -1
+            ? `data must continue after the existing tail x=${previousX}, but index ${i} is ${x}`
+            : `data must be sorted by x, but index ${i} (${x}) comes before index ${previousIndex} (${previousX})`,
         );
       }
       previousX = x;
       previousIndex = i;
     }
+  }
+
+  // The other seam — a chunk landing in front has to end before the head.
+  // Only the last readable point can break it, so it is one comparison
+  // after the walk, not a second walk.
+  if (
+    seam?.firstX !== undefined &&
+    previousIndex !== -1 &&
+    previousX !== null &&
+    !endsBefore(previousX, seam.firstX, false)
+  ) {
+    fail(
+      report,
+      "unsorted-x",
+      previousIndex,
+      `data must end before the existing head x=${seam.firstX}, but index ${previousIndex} is ${previousX}`,
+    );
   }
 
   return sawGap;
@@ -228,14 +278,18 @@ function fail(
  */
 export function validateSeriesData(
   data: readonly LineDataPoint[],
+  coordinates?: undefined,
+  seam?: SeamContext,
 ): SeriesDataIssue[] | null;
 export function validateSeriesData<T extends BaseDataPoint>(
   data: readonly T[],
   coordinates: CoordinateAccessor<T>,
+  seam?: SeamContext,
 ): SeriesDataIssue[] | null;
 export function validateSeriesData<T extends BaseDataPoint>(
   data: readonly T[],
   coordinates?: CoordinateAccessor<T>,
+  seam?: SeamContext,
 ): SeriesDataIssue[] | null {
   if (!Array.isArray(data)) {
     return [
@@ -248,8 +302,66 @@ export function validateSeriesData<T extends BaseDataPoint>(
   }
 
   const issues: SeriesDataIssue[] = [];
-  scanSeriesData(data, coordinates ?? defaultCoordinates<T>(), (issue) =>
-    issues.push(issue),
+  scanSeriesData(
+    data,
+    coordinates ?? defaultCoordinates<T>(),
+    (issue) => issues.push(issue),
+    seam,
   );
+  return issues.length === 0 ? null : issues;
+}
+
+/**
+ * The tick door's pre-check — one point, the same rules `updateLast` runs
+ * on the way in (`checkPoint`, then the router's own rule: the same x
+ * replaces the bar, an earlier x is the past). `null` means exactly one
+ * thing: `handle.updateLast(point)` on an identity registration whose tail
+ * is at `lastX` will not throw a `DataError`. Never throws.
+ *
+ * ```ts
+ * socket.on("tick", (tick) => {
+ *   const issues = validateSeriesPoint(tick, accessor, { lastX });
+ *   if (issues) return report(issues);
+ *   handle.updateLast(tick);
+ * });
+ * ```
+ */
+export function validateSeriesPoint(
+  point: LineDataPoint,
+  coordinates?: undefined,
+  seam?: Pick<SeamContext, "lastX">,
+): SeriesDataIssue[] | null;
+export function validateSeriesPoint<T extends BaseDataPoint>(
+  point: T,
+  coordinates: CoordinateAccessor<T>,
+  seam?: Pick<SeamContext, "lastX">,
+): SeriesDataIssue[] | null;
+export function validateSeriesPoint<T extends BaseDataPoint>(
+  point: T,
+  coordinates?: CoordinateAccessor<T>,
+  seam?: Pick<SeamContext, "lastX">,
+): SeriesDataIssue[] | null {
+  const issues: SeriesDataIssue[] = [];
+  const x = checkPoint(
+    point,
+    0,
+    coordinates ?? defaultCoordinates<T>(),
+    "updateLast(point)",
+    (issue) => issues.push(issue),
+    true,
+  );
+  const lastX = seam?.lastX;
+  if (
+    x !== null &&
+    Number.isFinite(x) &&
+    lastX !== undefined &&
+    !continuesAfter(x, lastX, false)
+  ) {
+    issues.push({
+      code: "unsorted-x",
+      index: 0,
+      message: `updateLast(point) must keep x >= ${lastX}, but index 0 is ${x} — fix the past with setData`,
+    });
+  }
   return issues.length === 0 ? null : issues;
 }
