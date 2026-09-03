@@ -55,7 +55,9 @@ a fixed 800×400):
 
 Drag to pan, scroll to zoom.
 
-> Data must be in ascending x order, or you'll get a `DataError`.
+> Data must be in ascending x order, or you'll get a `DataError`. To find
+> out before it throws, `validateSeriesData(data)` answers as a value —
+> see [Checking data before it goes in](/guide/plot-contract#checking-data-before-it-goes-in).
 
 ## Real-Time Updates & Indicators
 

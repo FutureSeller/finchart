@@ -40,6 +40,8 @@ export {
   SimpleDecimation,
 } from "./decimation";
 export {
+  SERIES_DATA_ISSUE_CODES,
+  checkPoint,
   continuesAfter,
   endsBefore,
   scanSeriesData,

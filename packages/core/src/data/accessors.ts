@@ -38,8 +38,8 @@ export class LineDataAccessor implements CoordinateAccessor<LineDataPoint> {
    * Doesn't throw on `undefined` here — `assertReadableValue` catches that
    * and gives a better message that also teaches the way out.
    */
-  assertFinite(point: LineDataPoint, index: number): void {
-    assertFiniteValue(point.y, index);
+  assertFinite(point: LineDataPoint, index: number, label = "data"): void {
+    assertFiniteValue(point.y, index, label);
   }
 
   /** `null` passes straight through — having no value is data too. */
@@ -103,15 +103,15 @@ export class OHLCAccessor implements CoordinateAccessor<OHLC> {
    * rejected, so if a fifth field appears and this isn't updated, that test
    * goes red.
    */
-  assertFinite(point: OHLC, index: number): void {
-    if (!Number.isFinite(point.open)) reject("open", point.open, index);
-    if (!Number.isFinite(point.high)) reject("high", point.high, index);
-    if (!Number.isFinite(point.low)) reject("low", point.low, index);
-    if (!Number.isFinite(point.close)) reject("close", point.close, index);
+  assertFinite(point: OHLC, index: number, label = "data"): void {
+    if (!Number.isFinite(point.open)) reject("open", point.open, index, label);
+    if (!Number.isFinite(point.high)) reject("high", point.high, index, label);
+    if (!Number.isFinite(point.low)) reject("low", point.low, index, label);
+    if (!Number.isFinite(point.close)) reject("close", point.close, index, label);
     // Present but not a number — a feed's `"1234"` used to slip through and
     // concatenate in the aggregate; a gap (null/absent) is fine.
     if (!isGap(point.volume) && !Number.isFinite(point.volume)) {
-      reject("volume", point.volume, index);
+      reject("volume", point.volume, index, label);
     }
   }
 }
@@ -121,17 +121,21 @@ export class OHLCAccessor implements CoordinateAccessor<OHLC> {
  * value (line, histogram, derived). Uses `isGap` instead of hand-rolling
  * `=== null || === undefined` again.
  */
-function assertFiniteValue(y: number | null | undefined, index: number): void {
+function assertFiniteValue(
+  y: number | null | undefined,
+  index: number,
+  label = "data",
+): void {
   if (isGap(y) || Number.isFinite(y)) return;
   throw new DataError(
-    `data y must be a finite number or null (gap), but index ${index} is ${describe(y)}`,
+    `${label} y must be a finite number or null (gap), but index ${index} is ${describe(y)}`,
   );
 }
 
-/** Builds the message in one place — four branches writing their own would drift apart. */
-function reject(field: string, value: unknown, index: number): never {
+/** Builds the message in one place — five branches writing their own would drift apart. `label` names the door. */
+function reject(field: string, value: unknown, index: number, label: string): never {
   throw new DataError(
-    `data ${field} must be a finite number, but index ${index} is ${describe(value)}`,
+    `${label} ${field} must be a finite number, but index ${index} is ${describe(value)}`,
   );
 }
 
@@ -180,7 +184,7 @@ export function defaultCoordinates<
   return {
     getX: (point) => point.x,
     getY: readY,
-    assertFinite: (point, index) => assertFiniteValue(readY(point), index),
+    assertFinite: (point, index, label) => assertFiniteValue(readY(point), index, label),
   };
 }
 

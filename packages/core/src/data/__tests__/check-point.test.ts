@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../types";
-import { candleSeries, lineSeries } from "../../series";
+import { candleSeries, histogramSeries, lineSeries } from "../../series";
 import { createPlotModel } from "../../plot/model";
 import { LineDataAccessor, OHLCAccessor } from "../accessors";
 import { checkPoint } from "../validate";
@@ -66,20 +66,49 @@ describe("updateLast names its door and the bar it replaces", () => {
     expect(message).not.toContain("index 0");
   });
 
-  it("a bar with a non-finite field is rejected by the accessor at the last index", () => {
+  it("a bar with a non-finite field is rejected by the accessor at the last index — naming the door", () => {
     const handle = mountedCandles();
     const message = messageOf(() =>
       handle.updateLast({ x: 2, open: 1, high: 2, low: 1, close: Number.NaN }),
     );
+    expect(message).toContain("updateLast(point)");
     expect(message).toContain("close");
     expect(message).toContain("index 1");
   });
 
-  it("a tick without a readable value is guided toward an accessor", () => {
+  it("a tick that opens a new bar is judged as a tick — the door's label and its own index", () => {
+    const handle = mountedCandles();
+    const message = messageOf(() =>
+      handle.updateLast({ x: 3, open: 1, high: 2, low: 1, close: Number.NaN }),
+    );
+    expect(message).toContain("updateLast(point)");
+    expect(message).toContain("close");
+    expect(message).toContain("index 2");
+    expect(message).not.toContain("index 0");
+  });
+
+  it("a tick without a readable value is guided toward an accessor — and names the door", () => {
     const handle = mountedLine();
     const message = messageOf(() => handle.updateLast({ x: 3, value: 5 } as never));
+    expect(message).toContain("updateLast(point)");
     expect(message).toContain("could not read a value");
     expect(message).toContain("index 2");
+  });
+});
+
+describe("every built-in accessor names the door", () => {
+  it("a histogram tick with a NaN value says updateLast(point)", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+    });
+    const handle = model.plot.mainPane.addSeries({
+      series: histogramSeries(),
+      data: [{ x: 1, y: 1 }, { x: 2, y: 2 }],
+    });
+    const message = messageOf(() => handle.updateLast({ x: 2, y: Number.NaN }));
+    expect(message).toContain("updateLast(point)");
+    expect(message).toContain("index 1");
   });
 });
 

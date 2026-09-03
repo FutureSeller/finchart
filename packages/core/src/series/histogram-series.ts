@@ -59,11 +59,11 @@ class HistogramAccessor implements CoordinateAccessor<HistogramPoint> {
   }
 
   /** The same rule as line — `null` is a gap, any other non-finite value is rejected. */
-  assertFinite(point: HistogramPoint, index: number): void {
+  assertFinite(point: HistogramPoint, index: number, label = "data"): void {
     const y = point.y;
     if (isGap(y) || Number.isFinite(y)) return;
     throw new DataError(
-      `data y must be a finite number or null (gap), but index ${index} is ${describe(y)}`,
+      `${label} y must be a finite number or null (gap), but index ${index} is ${describe(y)}`,
     );
   }
 }

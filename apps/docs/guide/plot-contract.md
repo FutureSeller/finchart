@@ -303,7 +303,50 @@ const ma = source.map((c, i) => ({ x: c.x, y: i < 19 ? null : average(i) }));
 - The line is drawn separately **for each unbroken run of values** (it breaks at the holes)
 - `valueExtent` doesn't count holes. All holes means `null`
 - Decimation **doesn't swallow** holes — consecutive holes fold into one
-- **x can't be empty.** A parse failure is a `DataError` (the same type as an ordering violation)
+- **x can't be empty.** A non-finite x is a `DataError` (the same type as an ordering violation)
+
+### Checking data before it goes in
+
+Every data door runs one rule set (`scanSeriesData`), and two doors let you
+ask it **before** ingestion, as a value instead of a thrown `DataError`:
+`validateSeriesData(data, accessor?, seam?)` for an array and
+`validateSeriesPoint(point, accessor?, { lastX })` for one tick. `null` means
+the matching door will not throw (identity registrations — a derived series
+re-checks its own output under its own accessor). `lastX`/`firstX` are the x
+you hold **as the accessor reads it** — `point.x` for every built-in one. Codes name the **fact the
+data broke**, not the fix and not our declaration:
+
+<!-- issue-codes:start -->
+
+| Code | The fact |
+|---|---|
+| `not-an-array` | the payload is not an array (index −1) |
+| `not-an-object` | a point is not an object |
+| `unreadable-y` | the accessor reads no value from the first or last point — a wrong field name, which a `.map()` makes uniform |
+| `non-finite-x` | x is not a finite number |
+| `non-finite-value` | a value the accessor checks is not finite (for bars: a price is `null`/absent/`NaN`, or volume is present but not a number) |
+| `unsorted-x` | x goes backwards — inside the chunk, or against the seam you passed |
+| `duplicate-x` | x repeats where the accessor declared one point per x (`uniqueX` — bars do) |
+
+<!-- issue-codes:end -->
+
+| Door | Pre-check |
+|---|---|
+| `setData(data)` | `validateSeriesData(data, accessor)` |
+| `append(points)` | `validateSeriesData(points, accessor, { lastX })` — `lastX` is the tail you hold; with `uniqueX` a chunk starting *on* it is a duplicate |
+| `prepend(points)` | `validateSeriesData(points, accessor, { firstX })` |
+| `updateLast(point)` | `validateSeriesPoint(point, accessor, { lastX })` — the same x replaces the bar, an earlier x is the past |
+| `swapSeries(next)` | `validateSeriesData(handle.read(), next's accessor)` — a swap re-checks what you hold under the new rules |
+| a derived series' own output | — ¹ |
+
+¹ A derivation runs inside the frame; its output is checked there and a
+defect throws from `pull()`. Validate the **source** you hand it.
+
+The socket recipe (type-checked) is `onTick` in [Getting started's real
+service](/guide/getting-started#real-time-updates-indicators). A page that
+overlaps what you hold (an inclusive REST bound) is dropped with
+`page.filter((bar) => bar.x > lastX)` — the filter `infiniteHistory` applies
+to its own pages; a door that merges overlap for you is not here yet.
 
 ### Derived series
 

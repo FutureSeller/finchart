@@ -125,13 +125,13 @@ context transform carries the scale factor by itself.
 
 ### Data point
 
-The smallest unit that has an `x` (`BaseDataPoint`). `x` is
-`number | string | Date`.
+The smallest unit that has an `x` (`BaseDataPoint`). `x` is a `number` —
+a timestamp in milliseconds, a bar index, anything you can order (ADR-0040).
 
 | Type | Value field | Used by |
 |---|---|---|
 | `LineDataPoint` | `y` | line, area, baseline |
-| `OHLC` | `open`/`high`/`low`/`close`(`volume?`) | candles, OHLC bars |
+| `OHLC` | `open`/`high`/`low`/`close`(`volume?` — `null` is a gap; the four prices never are) | candles, OHLC bars |
 | `HistogramPoint` | `y`(`color?`) | histogram (volume, MACD) |
 
 `y` is `number | null` — `null` is *whitespace* (below).
@@ -221,7 +221,8 @@ Three places know it together: the line breaks there, `valueExtent` does not
 count it, and decimation does not swallow it.
 
 **x cannot be empty.** A point you cannot place cannot even be drawn as a
-hole, so a parse failure is thrown as a `DataError`.
+hole, so a non-finite x is thrown as a `DataError` — or reported as
+`non-finite-x` by `validateSeriesData` if you ask first.
 
 ### Computed node (`computation`) / source (`Source`)
 
@@ -600,7 +601,7 @@ a `catch` meant to swallow a data error quietly swallows programmer bugs too.
 
 | What | When | What the consumer can do |
 |---|---|---|
-| `DataError` | A **value** from outside broke the contract — x ordering, x parsing, where a hole sits | **Catch it.** Server responses really do come back wrong at runtime |
+| `DataError` | A **value** from outside broke the contract — x ordering, a non-finite x, a repeated x on bars, where a hole sits | **Catch it.** Server responses really do come back wrong at runtime — or ask `validateSeriesData` first |
 | `ContractError` | The call site used the **API** against its contract — an undeletable pane, a non-positive zoom factor, a duplicate series id, a registration that does not own its data | Nothing. It is a bug; the code has to be fixed |
 | `RenderError` | The **wiring** does not line up, so it cannot draw — DOM labels on headless layers, a canvas renderer on a surface with no context, a screenshot of a chart with no pixels | Nothing. The combination of collaborators has to be fixed |
 
@@ -619,6 +620,7 @@ returns and where it plugs in. The full rules and their exceptions are in
 | A | B | What separates them |
 |---|---|---|
 | `DataError` | `ContractError` | the value is wrong / the way you called it is wrong |
+| `gapless` | `uniqueX` | both are an accessor's static declaration; `gapless` skips the gap scan (falsely declared it swallows gaps quietly), `uniqueX` rejects a repeated x (declared it makes every door loud) |
 | `ContractError` | `RenderError` | fix the call site / fix the wiring |
 | domain | range | **data units / pixels** |
 | the `Range` type | a scale's range | just an interval / an interval of screen pixels |

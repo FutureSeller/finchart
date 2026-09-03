@@ -5,7 +5,7 @@ import { createPlotModel } from "../../plot/model";
 import { LineDataAccessor, OHLCAccessor } from "../accessors";
 import { SimpleDataManager } from "../data-manager";
 import { SimpleDecimation } from "../decimation";
-import type { LineDataPoint, OHLC } from "../types";
+import type { CoordinateAccessor, LineDataPoint, OHLC } from "../types";
 import { validateSeriesData, validateSeriesPoint } from "../validate";
 
 /**
@@ -53,8 +53,98 @@ describe("validateSeriesData with a seam", () => {
     expect(issues?.map((issue) => issue.code)).toEqual(["non-finite-x"]);
   });
 
+  it("an empty chunk is a no-op with any seam — like append([]) and prepend([])", () => {
+    expect(validateSeriesData([], line, { lastX: 10, firstX: 5 })).toBeNull();
+  });
+
   it("without a seam nothing changes", () => {
     expect(validateSeriesData([{ x: 1, y: 1 }, { x: 0, y: 1 }], line)?.[0].index).toBe(1);
+  });
+});
+
+describe("validateSeriesData with a seam — an unreadable last point", () => {
+  it("does not measure an earlier point against the head, and keeps issues ascending", () => {
+    const issues = validateSeriesData([{ x: 2, y: 1 }, null as never], line, { firstX: 1 });
+    expect(issues?.map((issue) => [issue.code, issue.index])).toEqual([["not-an-object", 1]]);
+  });
+});
+
+/**
+ * One ordering space: an identity registration's tick router, the manager
+ * and the pre-check door all read the accessor's x, so the equivalence
+ * holds for an accessor ordering by any field — `lastX` is that field's
+ * value on the tail.
+ */
+describe("validateSeriesPoint with an accessor whose getX is not point.x", () => {
+  interface Timed extends LineDataPoint {
+    t: number;
+  }
+  const byT: CoordinateAccessor<Timed> = {
+    getX: (point) => point.t,
+    getY: (point) => point.y,
+  };
+
+  function mountedTimed() {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+    });
+    const data: Timed[] = [{ x: 1, t: 10, y: 1 }, { x: 2, t: 20, y: 1 }];
+    return model.plot.mainPane.addSeries({ series: lineSeries(), data, coordinates: byT });
+  }
+
+  it.each([
+    ["same t — replaces", { x: 9, t: 20, y: 2 }],
+    ["earlier t than the tail — the past", { x: 2, t: 15, y: 2 }],
+    ["earlier t than the bar before the last", { x: 2, t: 5, y: 2 }],
+    ["later t — a new bar, whatever raw x says", { x: 1.5, t: 25, y: 2 }],
+    ["between the two held bars", { x: 3, t: 15, y: 2 }],
+    ["new bar", { x: 3, t: 30, y: 2 }],
+  ])("agrees with updateLast — %s", (_label, point) => {
+    const said = validateSeriesPoint(point, byT, { lastX: 20 }) === null;
+    let threw = false;
+    try {
+      mountedTimed().updateLast(point);
+    } catch (error) {
+      if (!(error instanceof DataError)) throw error;
+      threw = true;
+    }
+    expect(said).toBe(!threw);
+  });
+});
+
+describe("a throwing accessor — collect mode reports, never throws", () => {
+  interface Stamped extends LineDataPoint {
+    time: Date | null;
+  }
+  const byTime: CoordinateAccessor<Stamped> = {
+    getX: (point) => (point.time === null ? Number.NaN : point.time.valueOf()),
+    getY: (point) => point.y,
+  };
+  const blowing: CoordinateAccessor<Stamped> = {
+    getX: (point) => {
+      if (point.time === null) throw new TypeError("time is null");
+      return point.time.valueOf();
+    },
+    getY: (point) => point.y,
+  };
+
+  it("validateSeriesPoint reports the accessor's failure as the fact it is", () => {
+    const issues = validateSeriesPoint({ x: 1, time: null, y: 1 }, blowing, { lastX: 0 });
+    expect(issues?.map((issue) => issue.code)).toEqual(["non-finite-x"]);
+    expect(issues?.[0].message).toContain("could not read x");
+    // A total accessor that answers NaN says the same thing without the quote.
+    expect(validateSeriesPoint({ x: 1, time: null, y: 1 }, byTime)?.map((i) => i.code)).toEqual([
+      "non-finite-x",
+    ]);
+  });
+
+  it("validateSeriesData walks past a point the accessor can't read", () => {
+    const issues = validateSeriesData(
+      [{ x: 1, time: new Date(10), y: 1 }, { x: 2, time: null, y: 1 }, { x: 3, time: new Date(30), y: 1 }],
+      blowing,
+    );
+    expect(issues?.map((issue) => [issue.code, issue.index])).toEqual([["non-finite-x", 1]]);
   });
 });
 

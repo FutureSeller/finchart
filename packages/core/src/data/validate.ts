@@ -18,7 +18,9 @@ export type SeriesDataIssueCode =
  * answers `append`/`prepend`, `validateSeriesPoint` answers `updateLast`.
  */
 export interface SeamContext {
+  /** The tail you hold, as the accessor reads it (`getX` — `point.x` for every built-in accessor). */
   lastX?: number;
+  /** The head you hold, as the accessor reads it. */
   firstX?: number;
 }
 
@@ -36,6 +38,27 @@ export function continuesAfter(x: number, tailX: number, uniqueX: boolean): bool
 export function endsBefore(x: number, headX: number, uniqueX: boolean): boolean {
   return uniqueX ? x < headX : x <= headX;
 }
+
+/**
+ * The runtime twin of `SeriesDataIssueCode` — the `Record` forces every
+ * union member to be listed, and a test holds the guide's table to this
+ * list (a code documented nowhere, or documented but gone, goes red).
+ */
+const ISSUE_CODES = [
+  "not-an-array",
+  "not-an-object",
+  "unreadable-y",
+  "non-finite-x",
+  "non-finite-value",
+  "unsorted-x",
+  "duplicate-x",
+] as const satisfies readonly SeriesDataIssueCode[];
+/** A union member missing from the list above breaks the compile here. */
+type IssueCodesAreComplete<T extends never> = T;
+export type IssueCodeListIsComplete = IssueCodesAreComplete<
+  Exclude<SeriesDataIssueCode, (typeof ISSUE_CODES)[number]>
+>;
+export const SERIES_DATA_ISSUE_CODES: readonly SeriesDataIssueCode[] = ISSUE_CODES;
 
 /**
  * One rule the data broke, as a value — the door for showing a bad payload
@@ -95,8 +118,21 @@ export function scanSeriesData<T extends BaseDataPoint>(
     if (x === null) continue;
     const finiteX = Number.isFinite(x);
 
-    if (watchGaps && !sawGap && isGap(coordinates.getY(point))) {
-      sawGap = true;
+    if (watchGaps && !sawGap) {
+      if (report === null) {
+        if (isGap(coordinates.getY(point))) sawGap = true;
+      } else {
+        try {
+          if (isGap(coordinates.getY(point))) sawGap = true;
+        } catch (error) {
+          report({
+            code: "unreadable-y",
+            index: i,
+            message: `data: the accessor could not read a value from index ${i} — ${messageOf(error)}`,
+          });
+          continue;
+        }
+      }
     }
 
     /**
@@ -129,11 +165,14 @@ export function scanSeriesData<T extends BaseDataPoint>(
   }
 
   // The other seam — a chunk landing in front has to end before the head.
-  // Only the last readable point can break it, so it is one comparison
-  // after the walk, not a second walk.
+  // It is the chunk's **last point** that lands on the head, so the
+  // comparison runs only when that point was readable: an unreadable
+  // last point already has its own issue, and measuring an earlier point
+  // against the head would be a phantom (and out of index order).
   if (
     seam?.firstX !== undefined &&
-    previousIndex !== -1 &&
+    last >= 0 &&
+    previousIndex === last &&
     previousX !== null &&
     !endsBefore(previousX, seam.firstX, uniqueX)
   ) {
@@ -163,7 +202,8 @@ export function scanSeriesData<T extends BaseDataPoint>(
  * need a neighbour (gaps, order) — a scalar, so the tick path allocates
  * nothing. In collect mode a broken shape returns `null` (nothing on it
  * can be read); throw mode never returns for one — it threw. `label`
- * names the door in every message ("data", "updateLast(point)").
+ * names the door ("data", "updateLast(point)") in every message — the
+ * accessor's `assertFinite` receives it too.
  *
  * The accessor's `assertFinite` is called as a method on purpose — a
  * hoisted `.call` was measured 55% slower here (it breaks the inline
@@ -213,21 +253,57 @@ export function checkPoint<T extends BaseDataPoint>(
     return null;
   }
 
-  if (edge && coordinates.getY(point) === undefined) {
-    fail(
-      report,
-      "unreadable-y",
-      index,
-      `could not read a value from a data point — index ${index} has no y. ` +
-        "If your field is named differently, e.g. {x, value}, provide a coordinates accessor",
-    );
+  // Collect mode never throws — an accessor that blows up on a point (a
+  // `getX: p => p.time.valueOf()` meeting `time: null`) is reported as the
+  // fact it is: this point can't be read. Throw mode reads straight; the
+  // ingestion path carries no try/catch, and a throwing accessor there is
+  // the consumer's own TypeError, exactly as before.
+  if (edge) {
+    let y: number | null | undefined;
+    if (report === null) {
+      y = coordinates.getY(point);
+    } else {
+      try {
+        y = coordinates.getY(point);
+      } catch (error) {
+        report({
+          code: "unreadable-y",
+          index,
+          message: `${label}: the accessor could not read a value from index ${index} — ${messageOf(error)}`,
+        });
+        return null;
+      }
+    }
+    if (y === undefined) {
+      fail(
+        report,
+        "unreadable-y",
+        index,
+        `${label}: could not read a value from a data point — index ${index} has no y. ` +
+          "If your field is named differently, e.g. {x, value}, provide a coordinates accessor",
+      );
+    }
   }
 
   // A sort check alone doesn't catch `NaN` — `NaN < previous` is false, so
   // it passes through silently. x is the basis for slicing's binary search
   // and decimation's buckets, so one `NaN` makes every comparison false
   // and the search returns the wrong range.
-  const x = coordinates.getX(point);
+  let x: number;
+  if (report === null) {
+    x = coordinates.getX(point);
+  } else {
+    try {
+      x = coordinates.getX(point);
+    } catch (error) {
+      report({
+        code: "non-finite-x",
+        index,
+        message: `${label}: the accessor could not read x from index ${index} — ${messageOf(error)}`,
+      });
+      return null;
+    }
+  }
   if (!Number.isFinite(x)) {
     fail(
       report,
@@ -241,21 +317,26 @@ export function checkPoint<T extends BaseDataPoint>(
   // ingestion path carries no try/catch.
   if (coordinates.assertFinite) {
     if (report === null) {
-      coordinates.assertFinite?.(point, index);
+      coordinates.assertFinite?.(point, index, label);
     } else {
       try {
-        coordinates.assertFinite?.(point, index);
+        coordinates.assertFinite?.(point, index, label);
       } catch (error) {
         report({
           code: "non-finite-value",
           index,
-          message: error instanceof Error ? error.message : describe(error),
+          message: messageOf(error),
         });
       }
     }
   }
 
   return x;
+}
+
+/** What a thrown accessor said — a consumer's own error, quoted, never rethrown in collect mode. */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : describe(error);
 }
 
 /** Throw mode throws; collect mode hands over. The message is built only on the failing branch. */
@@ -329,6 +410,11 @@ export function validateSeriesData<T extends BaseDataPoint>(
  * replaces the bar, an earlier x is the past). `null` means exactly one
  * thing: `handle.updateLast(point)` on an identity registration whose tail
  * is at `lastX` will not throw a `DataError`. Never throws.
+ *
+ * Every door orders in one space — the x the accessor reads (`getX`):
+ * the tick router of an identity registration, the manager's own check
+ * and this door all compare that value, so `lastX` is the tail's x as the
+ * accessor reads it (for every built-in accessor, `point.x`).
  *
  * ```ts
  * socket.on("tick", (tick) => {
