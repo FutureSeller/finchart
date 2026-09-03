@@ -95,8 +95,10 @@ function rng(seed: number): () => number {
 }
 
 /**
- * Bars with the shapes the sorted-x contract allows: irregular spacing,
- * occasional weekend-sized holes, occasional runs of duplicate x.
+ * Bars with the shapes the sorted-x contract allows for bars: irregular
+ * spacing, occasional weekend-sized holes. A repeated x is line data's
+ * privilege (`incremental.test.ts`, `x-mapping.test.ts`) — bars declare
+ * `uniqueX`, so the fixture never repeats one.
  */
 function makeBars(random: () => number, count: number): OHLC[] {
   const out: OHLC[] = [];
@@ -105,9 +107,7 @@ function makeBars(random: () => number, count: number): OHLC[] {
   for (let i = 0; i < count; i++) {
     const roll = random();
     if (i > 0) {
-      if (roll < 0.06) {
-        // a duplicate-x run — two points at one moment is legal
-      } else if (roll < 0.16) {
+      if (roll < 0.16) {
         x += 60 * (2 + Math.floor(random() * 40)); // a hole
       } else {
         x += 60;

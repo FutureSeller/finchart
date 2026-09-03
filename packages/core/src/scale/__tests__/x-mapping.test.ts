@@ -209,7 +209,8 @@ describe("x union across multiple series", () => {
 
   /**
    * Two or more series, each with internal duplicates. The contract allows
-   * a repeated x ("two points can share one timestamp" — `DataManager`).
+   * a repeated x for line data ("two points can share one timestamp" —
+   * `DataManager`; bars declare `uniqueX` and reject it).
    * A single series takes the fast path, so this combination is needed to
    * actually exercise the merge loop's duplicate handling.
    */

@@ -39,7 +39,13 @@ export {
   M4Decimation,
   SimpleDecimation,
 } from "./decimation";
-export { continuesAfter, endsBefore, validateSeriesData, validateSeriesPoint } from "./validate";
+export {
+  continuesAfter,
+  endsBefore,
+  scanSeriesData,
+  validateSeriesData,
+  validateSeriesPoint,
+} from "./validate";
 export type { SeamContext, SeriesDataIssue, SeriesDataIssueCode } from "./validate";
 export { SimpleDataManager } from "./data-manager";
 export type { SimpleDataManagerOptions } from "./data-manager";

@@ -15,7 +15,7 @@
  */
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { HistogramPoint, HistoryStatus, OHLC } from "@finchart/core";
-import { candleSeries, crosshair, histogramSeries, infiniteHistory, priceFormat, timeTicks } from "@finchart/core";
+import { OHLCAccessor, candleSeries, crosshair, histogramSeries, infiniteHistory, priceFormat, timeTicks } from "@finchart/core";
 import { chartHost } from "./stage";
 
 const timeFormat = new Intl.DateTimeFormat("en-US", {
@@ -141,7 +141,7 @@ export function mount(container: HTMLElement): () => void {
       held += older.length;
     },
     fetchOlder,
-    { from: initial[0].x },
+    { from: initial[0].x, coordinates: new OHLCAccessor() },
   );
   const offStatus = loader.statusChanges.subscribe(paint);
   paint();

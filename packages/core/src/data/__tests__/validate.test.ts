@@ -77,7 +77,7 @@ describe("issues", () => {
     ).toBeNull();
   });
 
-  it("should accept repeated x in a row", () => {
+  it("should accept repeated x in a row on line data (no uniqueX)", () => {
     expect(
       validateSeriesData([
         { x: 1, y: 1 },

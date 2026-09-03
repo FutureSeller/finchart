@@ -8,7 +8,8 @@
  * that ignore the cursor, and shutting down on permanently wrong fetches.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LineDataPoint } from "../../data";
+import type { LineDataPoint, OHLC } from "../../data";
+import { OHLCAccessor } from "../../data";
 import { ContractError, DataError } from "../../primitives";
 import { lineSeries } from "../../series";
 import { createPlotModel } from "../../plot/model";
@@ -86,6 +87,34 @@ afterEach(() => {
 });
 
 describe("infiniteHistory", () => {
+  it("a page repeating an x on bars is a fetch defect — terminated, never delivered, never retried", async () => {
+    const captured = muteRethrow();
+    const { plot } = chart();
+    const bar = (x: number): OHLC => ({ x, open: 1, high: 2, low: 0.5, close: 1.5 });
+    const calls: number[] = [];
+    const pages: OHLC[][] = [];
+    const loader = infiniteHistory<OHLC>(
+      plot,
+      (page) => void pages.push(page),
+      (before) => {
+        calls.push(before);
+        return [bar(90), bar(90), bar(95)];
+      },
+      { from: 100, coordinates: new OHLCAccessor() },
+    );
+
+    plot.setVisibleRange(90, 110);
+    await settle();
+    expect(loader.status()).toBe("terminated");
+    expect(pages).toEqual([]);
+    expect(captured[0]).toBeInstanceOf(DataError);
+    expect(String((captured[0] as Error).message)).toContain("one point per x");
+
+    plot.setVisibleRange(85, 105);
+    await settle();
+    expect(calls).toEqual([100]);
+  });
+
   it("guard 1: a gap (screen past the data) fetches and delivers to the sink", async () => {
     const { plot } = chart();
     const { calls, fetch } = servedFetch(points(80, 100));

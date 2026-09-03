@@ -8,7 +8,8 @@ export type SeriesDataIssueCode =
   | "unreadable-y"
   | "non-finite-x"
   | "non-finite-value"
-  | "unsorted-x";
+  | "unsorted-x"
+  | "duplicate-x";
 
 /**
  * What the consumer already holds at the seam — the x of the tail a chunk
@@ -75,6 +76,7 @@ export function scanSeriesData<T extends BaseDataPoint>(
   seam?: SeamContext,
 ): boolean {
   const watchGaps = coordinates.gapless !== true;
+  const uniqueX = coordinates.uniqueX === true;
   let sawGap = false;
   const last = points.length - 1;
   // The existing tail seeds "the previous point" — the seam is checked by
@@ -101,17 +103,24 @@ export function scanSeriesData<T extends BaseDataPoint>(
      * Order compares only against the last *readable* x — in collect mode
      * a point with a broken x already has its own issue, and measuring the
      * next point against garbage would manufacture a second phantom one.
-     * Repeated x values in a row are allowed (two points at one moment).
+     * A repeated x is allowed (two points at one moment) unless the
+     * accessor declares `uniqueX` — then it is its own code, because the
+     * fix is different (dedupe, not sort).
      */
     if (finiteX) {
-      if (previousX !== null && !continuesAfter(x, previousX, false)) {
+      if (previousX !== null && !continuesAfter(x, previousX, uniqueX)) {
+        const repeated = x === previousX;
         fail(
           report,
-          "unsorted-x",
+          repeated ? "duplicate-x" : "unsorted-x",
           i,
           previousIndex === -1
-            ? `data must continue after the existing tail x=${previousX}, but index ${i} is ${x}`
-            : `data must be sorted by x, but index ${i} (${x}) comes before index ${previousIndex} (${previousX})`,
+            ? repeated
+              ? `data must hold one point per x, but index ${i} repeats the existing tail x=${previousX}`
+              : `data must continue after the existing tail x=${previousX}, but index ${i} is ${x}`
+            : repeated
+              ? `data must hold one point per x, but index ${i} repeats index ${previousIndex} (${x})`
+              : `data must be sorted by x, but index ${i} (${x}) comes before index ${previousIndex} (${previousX})`,
         );
       }
       previousX = x;
@@ -126,13 +135,16 @@ export function scanSeriesData<T extends BaseDataPoint>(
     seam?.firstX !== undefined &&
     previousIndex !== -1 &&
     previousX !== null &&
-    !endsBefore(previousX, seam.firstX, false)
+    !endsBefore(previousX, seam.firstX, uniqueX)
   ) {
+    const repeated = previousX === seam.firstX;
     fail(
       report,
-      "unsorted-x",
+      repeated ? "duplicate-x" : "unsorted-x",
       previousIndex,
-      `data must end before the existing head x=${seam.firstX}, but index ${previousIndex} is ${previousX}`,
+      repeated
+        ? `data must hold one point per x, but index ${previousIndex} repeats the existing head x=${seam.firstX}`
+        : `data must end before the existing head x=${seam.firstX}, but index ${previousIndex} is ${previousX}`,
     );
   }
 

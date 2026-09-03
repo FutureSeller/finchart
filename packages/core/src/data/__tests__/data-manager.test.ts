@@ -331,7 +331,7 @@ describe("sorted x contract", () => {
     ).toThrow(/index 3/);
   });
 
-  it("should accept repeated x", () => {
+  it("should accept repeated x on line data (no uniqueX)", () => {
     expect(() =>
       manager().setData([
         { x: 1, y: 0 },

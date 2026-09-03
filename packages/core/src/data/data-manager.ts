@@ -243,9 +243,14 @@ export class SimpleDataManager<
       this.data.length > 1
         ? this.coordinates.getX(this.data[this.data.length - 2])
         : null;
-    if (previousX !== null && !continuesAfter(x, previousX, false)) {
+    // The bar before the last is the tick's seam — `uniqueX` says it may
+    // not be landed on (one bar per x); the last one itself is what a
+    // tick replaces, so it is never compared.
+    if (previousX !== null && !continuesAfter(x, previousX, this.coordinates.uniqueX === true)) {
       throw new DataError(
-        `replaced last point must keep x >= ${previousX}, got ${describe(x)}`,
+        x === previousX
+          ? `updateLast(point) must hold one point per x, but x=${x} repeats the bar before the last`
+          : `replaced last point must keep x >= ${previousX}, got ${describe(x)}`,
       );
     }
 
@@ -304,8 +309,8 @@ export class SimpleDataManager<
   /**
    * x-ascending order is a contract. Violate it and you find out here —
    * slicing is a binary search, which needs order, and unsorted data gets
-   * drawn wrong regardless. Repeated x values in a row are allowed (two
-   * points at one moment in time is fine).
+   * drawn wrong regardless. A repeated x is allowed (two points at one
+   * moment) unless the accessor declares `uniqueX`.
    *
    * Merged into one with `assertChunkSorted` — these used to be nearly
    * identical copies, and the one real difference (the empty-array gate,
