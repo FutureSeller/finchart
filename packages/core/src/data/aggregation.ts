@@ -1,3 +1,4 @@
+import { isGap } from "./accessors";
 import { passthrough } from "./decimation";
 import type { DecimationStrategy, IndexRange, OHLC } from "./types";
 
@@ -49,15 +50,17 @@ function merge(data: OHLC[], start: number, end: number): OHLC {
 
   let high = first.high;
   let low = first.low;
-  let volume = first.volume;
+  // A gap (null or absent) is not a number to add — the first bar's gap
+  // used to seed the sum with `null`, which `+` turned into 0.
+  let volume: number | undefined = isGap(first.volume) ? undefined : first.volume;
 
   for (let i = start + 1; i < end; i++) {
     const candle = data[i];
 
     if (candle.high > high) high = candle.high;
     if (candle.low < low) low = candle.low;
-    // Volume can be absent. Sum only what's there, and leave it absent if none are.
-    if (candle.volume !== undefined) volume = (volume ?? 0) + candle.volume;
+    // Volume can be a gap. Sum only what's there, and leave it absent if none are.
+    if (!isGap(candle.volume)) volume = (volume ?? 0) + candle.volume;
   }
 
   const candle: OHLC = {

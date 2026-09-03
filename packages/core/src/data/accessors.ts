@@ -85,7 +85,11 @@ export class OHLCAccessor implements CoordinateAccessor<OHLC> {
    * `null` is a rejection, not a gap — a bar is a bundle of four, and if
    * one is missing there's nothing left to draw. A missing bar is already
    * expressed as "don't include the point," so giving `null` a meaning
-   * here would make it mean "price zero."
+   * here would make it mean "price zero." **Volume is the one field with
+   * the other rule**: a bar without volume is still a bar, so `null` (and
+   * absence) is a gap there — only a value that is present and not a
+   * finite number is rejected. `OHLC_GAP_FIELDS` names that group for the
+   * same machine check.
    *
    * Lays out the four fields by hand — the machine, not a runtime check,
    * guards against a leak. Four hand-laid lines are more than twice as
@@ -104,6 +108,11 @@ export class OHLCAccessor implements CoordinateAccessor<OHLC> {
     if (!Number.isFinite(point.high)) reject("high", point.high, index);
     if (!Number.isFinite(point.low)) reject("low", point.low, index);
     if (!Number.isFinite(point.close)) reject("close", point.close, index);
+    // Present but not a number — a feed's `"1234"` used to slip through and
+    // concatenate in the aggregate; a gap (null/absent) is fine.
+    if (!isGap(point.volume) && !Number.isFinite(point.volume)) {
+      reject("volume", point.volume, index);
+    }
   }
 }
 
@@ -127,9 +136,10 @@ function reject(field: string, value: unknown, index: number): never {
 }
 
 /**
- * The four values a bar has. A test iterates this, not the runtime —
+ * The four values a bar must have. A test iterates this, not the runtime —
  * `assertFinite` lays the four out by hand, and `ohlc-fields.test.ts`
- * confirms every field in this array is actually rejected.
+ * confirms every field in this array is actually rejected, `null` and
+ * absence included.
  */
 export const OHLC_FIELDS: readonly ["open", "high", "low", "close"] = [
   "open",
@@ -137,6 +147,14 @@ export const OHLC_FIELDS: readonly ["open", "high", "low", "close"] = [
   "low",
   "close",
 ];
+
+/**
+ * The values a bar may leave out — the other rule: `null` and absence are
+ * a gap, only a present non-number is rejected. Kept as its own list so
+ * the same test holds both rules and neither field can slip out of the
+ * machine's sight.
+ */
+export const OHLC_GAP_FIELDS: readonly ["volume"] = ["volume"];
 
 /**
  * Reads x and y as they are.

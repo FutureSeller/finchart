@@ -128,6 +128,22 @@ describe("OhlcAggregation", () => {
     expect(merged[0].volume).toBe(20);
   });
 
+  it("should skip a null volume as a gap — including a null on the first bar", () => {
+    const data = candles(100).map((candle, i) => ({
+      ...candle,
+      volume: i % 10 === 0 ? null : 2,
+    }));
+    const merged = aggregation().decimate(...whole(data), 10);
+    // Nine bars of 2 per bucket; the bucket's first bar is a gap, not a 0 seed.
+    expect(merged[0].volume).toBe(18);
+  });
+
+  it("should leave volume absent when every bar in the bucket is a gap", () => {
+    const data = candles(100).map((candle) => ({ ...candle, volume: null }));
+    const merged = aggregation().decimate(...whole(data), 10);
+    expect(merged[0].volume).toBeUndefined();
+  });
+
   it("should leave volume alone when the data has none", () => {
     const merged = aggregation().decimate(...whole(candles(100)), 10);
 
