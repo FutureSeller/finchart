@@ -17,6 +17,7 @@ import type {
   Viewport,
 } from "../data";
 import {
+  continuesAfter,
   defaultCoordinates,
   headDelta,
   isGap,
@@ -1102,9 +1103,12 @@ function entryOf<
         return true;
       }
 
-      if (newX < lastX) {
+      // The same seam sentence the manager and the pre-check door read.
+      // A tick never declares uniqueX here: the same x is the bar being
+      // replaced, which is this door's whole meaning.
+      if (!continuesAfter(newX, lastX, false)) {
         throw new DataError(
-          `updateLast must keep x >= ${lastX}, got ${describe(newX)} — fix the past with setData`,
+          `updateLast(point) must keep x >= ${lastX}, but index ${source.length - 1} is ${describe(newX)} — fix the past with setData`,
         );
       }
 

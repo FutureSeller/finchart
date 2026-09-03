@@ -5,7 +5,8 @@ import { ContractError,
 } from "../primitives";
 import { isGap } from "./accessors";
 import { lowerBoundBy, upperBoundBy } from "./search";
-import { checkPoint, scanSeriesData } from "./validate";
+import type { SeamContext } from "./validate";
+import { checkPoint, continuesAfter, scanSeriesData } from "./validate";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
@@ -179,16 +180,14 @@ export class SimpleDataManager<
   append(points: T[]): void {
     if (points.length === 0) return;
 
-    const chunkHasGap = this.assertChunkSorted(points);
-    const lastX = this.data.length
-      ? this.coordinates.getX(this.data[this.data.length - 1])
-      : null;
-    const firstNewX = this.coordinates.getX(points[0]);
-    if (lastX !== null && firstNewX < lastX) {
-      throw new DataError(
-        `appended data must continue after x=${lastX}, got ${describe(firstNewX)}`,
-      );
-    }
+    // The seam is the walk's seed — the existing tail plays "the previous
+    // point" for the chunk's first one (one rule set, ADR-0032).
+    const chunkHasGap = this.assertChunkSorted(
+      points,
+      this.data.length
+        ? { lastX: this.coordinates.getX(this.data[this.data.length - 1]) }
+        : undefined,
+    );
 
     this.data = this.data.concat(points);
     // If there's already a gap (i.e., unknown), checking what was appended changes nothing.
@@ -199,16 +198,10 @@ export class SimpleDataManager<
   prepend(points: T[]): void {
     if (points.length === 0) return;
 
-    const aheadHasGap = this.assertChunkSorted(points);
-    const firstX = this.data.length
-      ? this.coordinates.getX(this.data[0])
-      : null;
-    const lastNewX = this.coordinates.getX(points[points.length - 1]);
-    if (firstX !== null && lastNewX > firstX) {
-      throw new DataError(
-        `prepended data must end before x=${firstX}, got ${describe(lastNewX)}`,
-      );
-    }
+    const aheadHasGap = this.assertChunkSorted(
+      points,
+      this.data.length ? { firstX: this.coordinates.getX(this.data[0]) } : undefined,
+    );
 
     this.data = points.concat(this.data);
     if (this.gapFree) this.gapFree = !aheadHasGap;
@@ -250,7 +243,7 @@ export class SimpleDataManager<
       this.data.length > 1
         ? this.coordinates.getX(this.data[this.data.length - 2])
         : null;
-    if (previousX !== null && x < previousX) {
+    if (previousX !== null && !continuesAfter(x, previousX, false)) {
       throw new DataError(
         `replaced last point must keep x >= ${previousX}, got ${describe(x)}`,
       );
@@ -304,8 +297,8 @@ export class SimpleDataManager<
    * The return value is "does this chunk have a gap." For a `gapless`
    * accessor, `getY` isn't read at all.
    */
-  private assertChunkSorted(points: readonly T[]): boolean {
-    return scanSeriesData(points, this.coordinates, null);
+  private assertChunkSorted(points: readonly T[], seam?: SeamContext): boolean {
+    return scanSeriesData(points, this.coordinates, null, seam);
   }
 
   /**
@@ -349,14 +342,10 @@ export class SimpleDataManager<
     if (this.verifyAdoptions) {
       this.gapFree = !this.assertSorted(adopted);
     } else {
-      const headHasGap = this.assertChunkSorted(head);
-      const headLastX = this.coordinates.getX(head[head.length - 1]);
-      const tailFirstX = this.coordinates.getX(this.data[retainedFrom]);
-      if (tailFirstX < headLastX) {
-        throw new DataError(
-          `adopted head must continue before retained x=${tailFirstX}, got ${describe(headLastX)}`,
-        );
-      }
+      // The retained tail is the head's seam — same rule as `prepend`.
+      const headHasGap = this.assertChunkSorted(head, {
+        firstX: this.coordinates.getX(this.data[retainedFrom]),
+      });
       if (this.gapFree) this.gapFree = !headHasGap;
     }
     this.data = adopted;
