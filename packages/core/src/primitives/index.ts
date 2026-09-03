@@ -16,6 +16,7 @@ export {
   requireInterval,
   requireDataArray,
   requireDataPoint,
+  requireFiniteX,
   requireNonNegative,
   requireObject,
   requireOptionalBoolean,

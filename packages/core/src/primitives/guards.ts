@@ -185,6 +185,22 @@ export function requireDataPoint(value: unknown, index: number, label: string): 
 }
 
 /**
+ * The x rule of every data door, as one sentence. A sort check alone
+ * can't catch `NaN` (`NaN < previous` is false), and x is the basis for
+ * slicing's binary search — one `NaN` in the array makes every comparison
+ * false. `label` names the door ("data", "updateLast(point)") so a
+ * consumer reading the message in a socket callback knows which call it was.
+ */
+export function requireFiniteX(x: unknown, index: number, label: string): number {
+  if (typeof x !== "number" || !Number.isFinite(x)) {
+    throw new DataError(
+      `${label} x must be a finite number, but index ${index} is ${describe(x)}`,
+    );
+  }
+  return x;
+}
+
+/**
  * For coordinate gates. Throws `ContractError` if the value isn't a point,
  * or its x/y aren't finite.
  *
