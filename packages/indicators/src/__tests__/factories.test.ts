@@ -285,7 +285,7 @@ describe("stochastic", () => {
   });
 });
 
-function traded(x: number, close: number, volume?: number): OHLC {
+function traded(x: number, close: number, volume?: number | null): OHLC {
   return { x, open: close, high: close + 1, low: close - 1, close, volume };
 }
 
@@ -309,6 +309,14 @@ describe("vwap", () => {
 
     // Skipping ahead and carrying the accumulation forward would fake
     // having a value — instead everything from that bar on is null.
+    expect(out.map((point) => point.y !== null)).toEqual([true, false, false]);
+  });
+
+  it("should treat a null volume as missing — a feed's JSON null is a gap, not a 0 weight", () => {
+    const source = sourceOf([traded(0, 10, 5), traded(1, 11, null), traded(2, 12, 7)]);
+
+    const out = vwap(source).out.vwap.read();
+
     expect(out.map((point) => point.y !== null)).toEqual([true, false, false]);
   });
 
@@ -344,6 +352,14 @@ describe("obv", () => {
 
   it("should go null from a missing volume to the end — no anchor to revive it", () => {
     const source = sourceOf([traded(0, 10, 5), traded(1, 11), traded(2, 12, 7)]);
+
+    const out = obv(source).out.obv.read();
+
+    expect(out.map((point) => point.y)).toEqual([5, null, null]);
+  });
+
+  it("should treat a null volume as missing, not as a volume of 0", () => {
+    const source = sourceOf([traded(0, 10, 5), traded(1, 11, null), traded(2, 12, 7)]);
 
     const out = obv(source).out.obv.read();
 
