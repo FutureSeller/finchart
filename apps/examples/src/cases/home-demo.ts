@@ -14,7 +14,7 @@
  */
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { HistogramPoint, OHLC } from "@finchart/core";
-import { candleSeries, crosshair, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
+import { OHLCAccessor, candleSeries, crosshair, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
 import { chartHost } from "./stage";
 
 export const title = "Candles + volume (home)";
@@ -149,7 +149,7 @@ export function mount(container: HTMLElement): () => void {
       const from = Math.max(end - CHUNK, -MAX_HISTORY);
       return from >= end ? [] : range(from, end);
     },
-    { from: initial[0].x },
+    { from: initial[0].x, coordinates: new OHLCAccessor() },
   );
 
   plot.use(crosshair({ magnet: true }));

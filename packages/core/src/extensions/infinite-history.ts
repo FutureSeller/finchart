@@ -1,4 +1,5 @@
-import type { BaseDataPoint } from "../data";
+import type { BaseDataPoint, CoordinateAccessor } from "../data";
+import { defaultCoordinates, scanSeriesData } from "../data";
 import { ContractError, DataError } from "../primitives";
 import type { PlotEventSource, XCoordinates } from "../plot/capabilities";
 import { emitter, type Observable } from "../primitives";
@@ -47,7 +48,16 @@ export type HistoryFetch<T extends BaseDataPoint> = (
  */
 export type HistoryStatus = "idle" | "loading" | "done" | "terminated";
 
-export interface InfiniteHistoryOptions {
+export interface InfiniteHistoryOptions<T extends BaseDataPoint = BaseDataPoint> {
+  /**
+   * The accessor the sink's series uses, so a landed page is judged by the
+   * same rule the sink will apply — notably `uniqueX` (a bar per moment).
+   * Omitted, the loader checks order only, as line data allows. A page
+   * that fails here is a **fetch shape** defect (the loader terminates);
+   * without this, the same page would fail inside the sink and read as a
+   * delivery failure that retries on every gesture.
+   */
+  coordinates?: CoordinateAccessor<T>;
   /**
    * The cursor origin: the first x the consumer already holds. Required
    * because every value the loader could guess is wrong for some
@@ -119,8 +129,8 @@ const rethrow = (error: unknown): void => {
  * - Points at or after `before` are trimmed off quietly — inclusive end
  *   bounds are the norm for exchange REST APIs, and every consumer would
  *   otherwise rediscover the same one-line filter. Left alone, the
- *   boundary bar would slip through prepend's seam check (equal x is
- *   legal) and silently double.
+ *   boundary bar would slip through prepend's seam check (equal x is legal
+ *   for line data; bars declare `uniqueX` and reject it loudly) and silently double.
  * - A non-empty page trimmed to nothing throws, carrying `before` and the
  *   page's last x: a fetch that ignores its cursor must not read as "the
  *   end of history".
@@ -153,13 +163,14 @@ export function infiniteHistory<T extends BaseDataPoint>(
   host: InfiniteHistoryHost,
   sink: HistorySink<T>,
   fetch: HistoryFetch<T>,
-  options: InfiniteHistoryOptions,
+  options: InfiniteHistoryOptions<T>,
 ): HistoryLoader {
   if (!Number.isFinite(options.from)) {
     throw new ContractError(
       `infiniteHistory: options.from must be a finite data x, got ${options.from}`,
     );
   }
+  const coordinates = options.coordinates ?? defaultCoordinates<T>();
   const screensAhead = options.screensAhead ?? 1;
   if (!(Number.isFinite(screensAhead) && screensAhead > 0)) {
     throw new ContractError(
@@ -202,17 +213,21 @@ export function infiniteHistory<T extends BaseDataPoint>(
   const land = (before: number, page: T[]): void => {
     if (disposed) return;
 
-    for (let i = 1; i < page.length; i++) {
-      if (page[i].x < page[i - 1].x) {
-        set("terminated");
-        rethrow(
-          new DataError(
-            `infiniteHistory: the page for before=${before} is not ascending in x ` +
-              `(${page[i - 1].x} then ${page[i].x}) — reverse it inside the fetch`,
-          ),
-        );
-        return;
-      }
+    // The page's own shape is judged by the same walker every data door
+    // runs (one rule set — a hand-written `<` loop here used to let a
+    // repeated x through to the sink, where it read as a retryable
+    // delivery failure instead of the fetch defect it is).
+    try {
+      scanSeriesData(page, coordinates, null);
+    } catch (error) {
+      set("terminated");
+      rethrow(
+        new DataError(
+          `infiniteHistory: the page for before=${before} is not valid series data — ` +
+            `${error instanceof Error ? error.message : String(error)}. Fix it inside the fetch`,
+        ),
+      );
+      return;
     }
 
     if (page.length === 0) {

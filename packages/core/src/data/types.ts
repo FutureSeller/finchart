@@ -148,6 +148,23 @@ export interface CoordinateAccessor<T extends BaseDataPoint = BaseDataPoint> {
    * return `null` or `undefined`.
    */
   readonly gapless?: boolean;
+
+  /**
+   * Declares that one x holds one point — a bar per moment. If omitted,
+   * a repeated x is legal (two points at one moment: line data's contract).
+   *
+   * Like `gapless`, a static fact about the accessor written down as a
+   * value (`gapFree` on the manager is the array's runtime state — a
+   * different thing). Unlike `gapless`, the risk runs the other way:
+   * declaring `gapless` falsely swallows a gap **quietly**, while
+   * declaring `uniqueX` makes every door **loud** — a repeated x at
+   * `setData`, a seam, or the tick's previous bar is a `DataError`
+   * (`duplicate-x`), and data that was legal without the declaration is
+   * rejected with it. Declare it only where a repeat is a defect, not a
+   * second point: the reconnect gap-fill that hands back the boundary
+   * candle twice is the case this exists for.
+   */
+  readonly uniqueX?: boolean;
 }
 
 /** The data range currently visible on screen. */
@@ -263,7 +280,8 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
   read(): DataView<T>;
 
   /**
-   * Must be x-ascending. Repeated x values in a row are fine.
+   * Must be x-ascending. A repeated x is fine unless the accessor declares
+   * `uniqueX` (bars do) — then it is a `duplicate-x` rejection.
    *
    * Needed because slicing is a binary search, and data that breaks this
    * gets drawn wrong regardless — the line follows array order and

@@ -64,6 +64,14 @@ export class OHLCAccessor implements CoordinateAccessor<OHLC> {
    */
   readonly gapless = true;
 
+  /**
+   * One bar per x. A repeated x on bars is never "two points at one
+   * moment" — it is the same candle handed over twice (an inclusive REST
+   * boundary after a reconnect), and it would draw twice and answer
+   * `probe` with either one. Loud at every door (`duplicate-x`).
+   */
+  readonly uniqueX = true;
+
   /** One bar's data value span — low to high. A candidate for snapping. */
   getYRange(point: OHLC): { min: number; max: number } {
     return { min: point.low, max: point.high };

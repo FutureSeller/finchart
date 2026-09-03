@@ -70,7 +70,7 @@ describe("adoptHeadRetainingTail", () => {
     expect(() => m.adoptHeadRetainingTail(pts(90, 102), 0)).toThrow(DataError);
   });
 
-  it("should allow an equal-x seam — two points at one moment is legal", () => {
+  it("should allow an equal-x seam on line data — two points at one moment is legal", () => {
     const m = manager();
     const head = [...pts(90, 100), pt(100)];
     m.adoptHeadRetainingTail(head, 0);
