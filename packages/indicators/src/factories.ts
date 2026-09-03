@@ -5,7 +5,7 @@ import type {
   OHLC,
   Source,
 } from "@finchart/core";
-import { computation } from "@finchart/core";
+import { computation, isGap } from "@finchart/core";
 import {
   decayHorizon,
   ema,
@@ -791,7 +791,9 @@ export function vwap(source: Source<OHLC>, options: VwapOptions = {}): Vwap {
           broken = false;
         }
 
-        if (broken || candle.volume === undefined) {
+        // A gap is `null` as much as `undefined` — a feed's JSON says
+        // `"volume": null`, and `=== undefined` let it through as 0.
+        if (broken || isGap(candle.volume)) {
           broken = true;
           continue;
         }
@@ -828,7 +830,7 @@ export function obv(source: Source<OHLC>): Obv {
 
       for (let index = 0; index < data.length; index++) {
         const volume = data[index].volume;
-        if (broken || volume === undefined) {
+        if (broken || isGap(volume)) {
           broken = true;
           continue;
         }

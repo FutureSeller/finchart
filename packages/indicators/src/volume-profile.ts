@@ -14,7 +14,7 @@ import { describeValue, requireOptions } from "./kernels";
  * the aggregation — if none have it, nothing is drawn.
  */
 import type { OHLC, PaneDecoration, Source, StyleSpec } from "@finchart/core";
-import { ContractError, resolveStyle, styleSpec } from "@finchart/core";
+import { ContractError, isGap, resolveStyle, styleSpec } from "@finchart/core";
 
 export interface VolumeProfileOptions {
   source: Source<OHLC>;
@@ -84,7 +84,9 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
       const totals = new Array<number>(bins).fill(0);
       for (const candle of visible) {
         const volume = candle.volume;
-        if (volume === undefined || volume <= 0) continue;
+        // `isGap` covers `null` too — `null <= 0` happened to be true, but
+        // that was luck, not a rule. Finiteness is the data gate's job.
+        if (isGap(volume) || volume <= 0) continue;
         const typical = (candle.high + candle.low + candle.close) / 3;
         const index = Math.min(
           bins - 1,
