@@ -76,6 +76,16 @@ describe("volumeProfile", () => {
     expect(Math.max(...widths) / Math.min(...widths)).toBeCloseTo(6, 6);
   });
 
+  it("should treat a null volume as absence — the halted day draws no bar", () => {
+    const silent: OHLC[] = [
+      { x: 0, open: 10, high: 11, low: 9, close: 10, volume: null },
+      { x: 1, open: 10, high: 11, low: 9, close: 10, volume: null },
+    ];
+    const model = mounted(silent, 4);
+
+    expect(profileRects(model)).toHaveLength(0);
+  });
+
   it("should draw nothing when no candle carries volume — absence is absence", () => {
     const silent: OHLC[] = [
       { x: 0, open: 10, high: 11, low: 9, close: 10 },
