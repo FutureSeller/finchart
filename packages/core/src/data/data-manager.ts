@@ -1,12 +1,11 @@
 import { ContractError,
   DataError,
   describe,
-  requireDataPoint,
   requirePositive,
 } from "../primitives";
 import { isGap } from "./accessors";
 import { lowerBoundBy, upperBoundBy } from "./search";
-import { scanSeriesData } from "./validate";
+import { checkPoint, scanSeriesData } from "./validate";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
@@ -17,30 +16,6 @@ import type {
   Viewport,
   VisiblePlaced,
 } from "./types";
-
-/**
- * x must be finite.
- *
- * A sort check alone doesn't catch `NaN` — `NaN < previous` is false, so it
- * passes through silently. x is the basis for slicing's binary search and
- * decimation's buckets, so one `NaN` makes every comparison false and the
- * search returns the wrong range.
- *
- * No extra read added, since this is in the same loop — the sort check
- * already calls `getX`.
- *
- * Doesn't check y here — that would be a separate O(n) read, and the gate
- * at `Scale.setDomain` already blocks the dangerous outcome (an infinite
- * tick loop).
- */
-function assertFiniteX(x: number, index: number): number {
-  if (!Number.isFinite(x)) {
-    throw new DataError(
-      `data x must be a finite number, but index ${index} is ${describe(x)}`,
-    );
-  }
-  return x;
-}
 
 export interface SimpleDataManagerOptions<T extends BaseDataPoint> {
   decimation: DecimationStrategy<T>;
@@ -261,10 +236,16 @@ export class SimpleDataManager<
      * recomputed to a phantom value and only throw the moment the bar
      * rolls over — the hardest possible shape of bug to diagnose.
      */
-    requireDataPoint(point, this.data.length - 1, "updateLast(point)");
-    this.assertReadableValue(point, this.data.length - 1);
-    this.coordinates.assertFinite?.(point, this.data.length - 1);
-    const x = assertFiniteX(this.coordinates.getX(point), this.data.length - 1);
+    // The same per-point body the whole-array walk runs — one rule set,
+    // reported at the index of the bar being replaced.
+    const x = checkPoint(
+      point,
+      this.data.length - 1,
+      this.coordinates,
+      "updateLast(point)",
+      null,
+      true,
+    );
     const previousX =
       this.data.length > 1
         ? this.coordinates.getX(this.data[this.data.length - 2])
@@ -311,27 +292,6 @@ export class SimpleDataManager<
     // Tiers are derived from the original — discarded entirely, same reasoning as `setData`. The option docs already say `tiered` is a loss for real time.
     this.tiers = [this.data];
     this.tierCeiling = Number.POSITIVE_INFINITY;
-  }
-
-  /**
-   * Catches a mapping mistake from a single first point — O(1). Mapping a
-   * wrong field name like `{x, value}` makes the accessor return
-   * `undefined`, and not a single line gets drawn while the console stays
-   * silent.
-   *
-   * Checks only the first point, not every point — this error comes from a
-   * `.map()`, so it's uniform, and an individual point missing a value is
-   * already legal by contract (`null`, whitespace). This is a different
-   * axis than checking y's finiteness (the same gate as x) — this is about
-   * y being absent (shape), not its value.
-   */
-  private assertReadableValue(point: T, index: number): void {
-    if (this.coordinates.getY(point) === undefined) {
-      throw new DataError(
-        `could not read a value from a data point — index ${index} has no y. ` +
-          "If your field is named differently, e.g. {x, value}, provide a coordinates accessor",
-      );
-    }
   }
 
   /**

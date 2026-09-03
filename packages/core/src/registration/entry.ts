@@ -30,6 +30,7 @@ import {
   describe,
   requireDataArray,
   requireDataPoint,
+  requireFiniteX,
   requireFinite,
   requireObject,
   type PlotArea,
@@ -1073,7 +1074,9 @@ function entryOf<
      */
     updateLast: (point) => {
       // Shape comes before finiteness — the instant `point.x` is read, a `null` is a TypeError.
-      requireDataPoint(point, 0, "updateLast(point)");
+      // Reported at the bar this tick replaces — the last one — not a
+      // made-up index 0. The manager's own check says the same index.
+      requireDataPoint(point, Math.max(source.length - 1, 0), "updateLast(point)");
       const own = owned(origin);
 
       if (source.length === 0) {
@@ -1091,11 +1094,7 @@ function entryOf<
        * vanish on the next frame. The manager's `replaceLast` carries the
        * same check — an input API trusts incoming values no more than a parser does.
        */
-      if (!Number.isFinite(newX)) {
-        throw new DataError(
-          `updateLast x must be a finite number, got ${describe(newX)}`,
-        );
-      }
+      requireFiniteX(newX, source.length - 1, "updateLast(point)");
 
       if (newX > lastX) {
         // A new bar opened — the same thing as appending. x grew by one.

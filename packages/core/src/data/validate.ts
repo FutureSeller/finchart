@@ -48,7 +48,6 @@ export function scanSeriesData<T extends BaseDataPoint>(
   report: ((issue: SeriesDataIssue) => void) | null,
 ): boolean {
   const watchGaps = coordinates.gapless !== true;
-  const throwing = report === null;
   let sawGap = false;
   const last = points.length - 1;
   let previousX: number | null = null;
@@ -57,64 +56,11 @@ export function scanSeriesData<T extends BaseDataPoint>(
   for (let i = 0; i < points.length; i++) {
     const point = points[i];
 
-    // Shape before any read — one null element used to blow up inside the
-    // accessor as a raw TypeError.
-    if (typeof point !== "object" || point === null) {
-      fail(
-        report,
-        "not-an-object",
-        i,
-        `data points must be objects, but index ${i} is ${describe(point)}`,
-      );
-      continue;
-    }
-
-    if ((i === 0 || i === last) && coordinates.getY(point) === undefined) {
-      fail(
-        report,
-        "unreadable-y",
-        i,
-        `could not read a value from a data point — index ${i} has no y. ` +
-          "If your field is named differently, e.g. {x, value}, provide a coordinates accessor",
-      );
-    }
-
-    /**
-     * A sort check alone doesn't catch `NaN` — `NaN < previous` is false,
-     * so it passes through silently. x is the basis for slicing's binary
-     * search and decimation's buckets, so one `NaN` makes every comparison
-     * false and the search returns the wrong range.
-     */
-    const x = coordinates.getX(point);
+    // The per-point rules — the same body the tick path runs on one point.
+    const x = checkPoint(point, i, coordinates, "data", report, i === 0 || i === last);
+    // A broken shape (collect mode) skips the reads that would blow up on it.
+    if (x === null) continue;
     const finiteX = Number.isFinite(x);
-    if (!finiteX) {
-      fail(
-        report,
-        "non-finite-x",
-        i,
-        `data x must be a finite number, but index ${i} is ${describe(x)}`,
-      );
-    }
-
-    // The accessor's own contract throws; only collect mode converts, so
-    // the ingestion path carries no try/catch. Called as a method on
-    // purpose — a hoisted `.call` was measured 55% slower here (it breaks
-    // the inline cache on the ingestion path).
-    if (coordinates.assertFinite) {
-      if (throwing) {
-        coordinates.assertFinite?.(point, i);
-      } else {
-        try {
-          coordinates.assertFinite?.(point, i);
-        } catch (error) {
-          report?.({
-            code: "non-finite-value",
-            index: i,
-            message: error instanceof Error ? error.message : describe(error),
-          });
-        }
-      }
-    }
 
     if (watchGaps && !sawGap && isGap(coordinates.getY(point))) {
       sawGap = true;
@@ -141,6 +87,113 @@ export function scanSeriesData<T extends BaseDataPoint>(
   }
 
   return sawGap;
+}
+
+/**
+ * The rules one point has to satisfy, in the order they are checked:
+ * shape → readable y (edge points only — the `.map()` mistake is uniform,
+ * and a lone point is its own edge) → finite x → the accessor's own
+ * values. **One body for two doors**: the whole-array walk calls it per
+ * point, and `replaceLast` — the tick path — calls it once on the bar it
+ * replaces. A second copy used to live on the tick path and could drift.
+ *
+ * Returns the point's x so the caller can carry on with the rules that
+ * need a neighbour (gaps, order) — a scalar, so the tick path allocates
+ * nothing. In collect mode a broken shape returns `null` (nothing on it
+ * can be read); throw mode never returns for one — it threw. `label`
+ * names the door in every message ("data", "updateLast(point)").
+ *
+ * The accessor's `assertFinite` is called as a method on purpose — a
+ * hoisted `.call` was measured 55% slower here (it breaks the inline
+ * cache on the ingestion path).
+ */
+export function checkPoint<T extends BaseDataPoint>(
+  point: T,
+  index: number,
+  coordinates: CoordinateAccessor<T>,
+  label: string,
+  report: null,
+  edge: boolean,
+): number;
+export function checkPoint<T extends BaseDataPoint>(
+  point: T,
+  index: number,
+  coordinates: CoordinateAccessor<T>,
+  label: string,
+  report: (issue: SeriesDataIssue) => void,
+  edge: boolean,
+): number | null;
+export function checkPoint<T extends BaseDataPoint>(
+  point: T,
+  index: number,
+  coordinates: CoordinateAccessor<T>,
+  label: string,
+  report: ((issue: SeriesDataIssue) => void) | null,
+  edge: boolean,
+): number | null;
+export function checkPoint<T extends BaseDataPoint>(
+  point: T,
+  index: number,
+  coordinates: CoordinateAccessor<T>,
+  label: string,
+  report: ((issue: SeriesDataIssue) => void) | null,
+  edge: boolean,
+): number | null {
+  // Shape before any read — one null element used to blow up inside the
+  // accessor as a raw TypeError.
+  if (typeof point !== "object" || point === null) {
+    fail(
+      report,
+      "not-an-object",
+      index,
+      `${label} points must be objects, but index ${index} is ${describe(point)}`,
+    );
+    return null;
+  }
+
+  if (edge && coordinates.getY(point) === undefined) {
+    fail(
+      report,
+      "unreadable-y",
+      index,
+      `could not read a value from a data point — index ${index} has no y. ` +
+        "If your field is named differently, e.g. {x, value}, provide a coordinates accessor",
+    );
+  }
+
+  // A sort check alone doesn't catch `NaN` — `NaN < previous` is false, so
+  // it passes through silently. x is the basis for slicing's binary search
+  // and decimation's buckets, so one `NaN` makes every comparison false
+  // and the search returns the wrong range.
+  const x = coordinates.getX(point);
+  if (!Number.isFinite(x)) {
+    fail(
+      report,
+      "non-finite-x",
+      index,
+      `${label} x must be a finite number, but index ${index} is ${describe(x)}`,
+    );
+  }
+
+  // The accessor's own contract throws; only collect mode converts, so the
+  // ingestion path carries no try/catch.
+  if (coordinates.assertFinite) {
+    if (report === null) {
+      coordinates.assertFinite?.(point, index);
+    } else {
+      try {
+        coordinates.assertFinite?.(point, index);
+      } catch (error) {
+        report({
+          code: "non-finite-value",
+          index,
+          message: error instanceof Error ? error.message : describe(error),
+        });
+      }
+    }
+  }
+
+  return x;
 }
 
 /** Throw mode throws; collect mode hands over. The message is built only on the failing branch. */
