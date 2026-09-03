@@ -1,5 +1,5 @@
 import type { BaseDataPoint, CoordinateAccessor } from "../data";
-import { defaultCoordinates, scanSeriesData } from "../data";
+import { scanSeriesData } from "../data";
 import { ContractError, DataError } from "../primitives";
 import type { PlotEventSource, XCoordinates } from "../plot/capabilities";
 import { emitter, type Observable } from "../primitives";
@@ -43,8 +43,9 @@ export type HistoryFetch<T extends BaseDataPoint> = (
  * - `idle` — nothing in flight; gestures can trigger a fetch
  * - `loading` — a page is in flight
  * - `done` — the fetch returned an empty page: history is exhausted
- * - `terminated` — the fetch's shape is permanently wrong (out-of-order
- *   pages); retrying would throw forever, so the loader stopped
+ * - `terminated` — the fetch's shape is permanently wrong (a page that is
+ *   not valid series data: out of order, a repeated x on bars, a broken
+ *   point); retrying would throw forever, so the loader stopped
  */
 export type HistoryStatus = "idle" | "loading" | "done" | "terminated";
 
@@ -55,7 +56,12 @@ export interface InfiniteHistoryOptions<T extends BaseDataPoint = BaseDataPoint>
    * Omitted, the loader checks order only, as line data allows. A page
    * that fails here is a **fetch shape** defect (the loader terminates);
    * without this, the same page would fail inside the sink and read as a
-   * delivery failure that retries on every gesture.
+   * delivery failure that retries on every gesture. The cursor — `from`,
+   * `before`, the trim, the next frontier — lives in the same space: the
+   * x the accessor reads (`getX`), which is the x the chart orders by. For
+   * every built-in accessor that is `point.x`. Omitted, the loader checks
+   * x order only — it does not know the point's shape, so it asks nothing
+   * of its values.
    */
   coordinates?: CoordinateAccessor<T>;
   /**
@@ -159,6 +165,15 @@ const rethrow = (error: unknown): void => {
  * // later: loader.dispose() — or scope.add(() => loader.dispose())
  * ```
  */
+/**
+ * What the loader can judge about a page on its own: x order, and nothing
+ * about the values — a bar, a line point, anything with an x. The `{x, y}`
+ * default accessor would demand a `y` the page may not have.
+ */
+function orderOnly<T extends BaseDataPoint>(): CoordinateAccessor<T> {
+  return { getX: (point) => point.x, getY: () => null, gapless: true };
+}
+
 export function infiniteHistory<T extends BaseDataPoint>(
   host: InfiniteHistoryHost,
   sink: HistorySink<T>,
@@ -170,7 +185,7 @@ export function infiniteHistory<T extends BaseDataPoint>(
       `infiniteHistory: options.from must be a finite data x, got ${options.from}`,
     );
   }
-  const coordinates = options.coordinates ?? defaultCoordinates<T>();
+  const coordinates = options.coordinates ?? orderOnly<T>();
   const screensAhead = options.screensAhead ?? 1;
   if (!(Number.isFinite(screensAhead) && screensAhead > 0)) {
     throw new ContractError(
@@ -210,40 +225,55 @@ export function infiniteHistory<T extends BaseDataPoint>(
     if (userWentLeft && slack < screensAhead * width) pull();
   };
 
+  /** The fetch's shape is wrong — a retry would throw forever, so the loader stops. */
+  const terminate = (before: number, error: unknown): void => {
+    set("terminated");
+    rethrow(
+      new DataError(
+        `infiniteHistory: the page for before=${before} is not valid series data — ` +
+          `${error instanceof Error ? error.message : String(error)}. Fix it inside the fetch`,
+      ),
+    );
+  };
+
   const land = (before: number, page: T[]): void => {
     if (disposed) return;
-
-    // The page's own shape is judged by the same walker every data door
-    // runs (one rule set — a hand-written `<` loop here used to let a
-    // repeated x through to the sink, where it read as a retryable
-    // delivery failure instead of the fetch defect it is).
-    try {
-      scanSeriesData(page, coordinates, null);
-    } catch (error) {
-      set("terminated");
-      rethrow(
-        new DataError(
-          `infiniteHistory: the page for before=${before} is not valid series data — ` +
-            `${error instanceof Error ? error.message : String(error)}. Fix it inside the fetch`,
-        ),
-      );
-      return;
-    }
 
     if (page.length === 0) {
       set("done");
       return;
     }
 
-    const trimmed = page.filter((point) => point.x < before);
+    // Trim first, judge what lands. An inclusive REST bound hands back the
+    // boundary bar (and a provider may repeat it); those points are
+    // discarded by contract, so a defect among them is not the fetch's
+    // shape being wrong. A point the cursor can't even read is.
+    let trimmed: T[];
+    try {
+      trimmed = page.filter((point) => coordinates.getX(point) < before);
+    } catch (error) {
+      terminate(before, error);
+      return;
+    }
     if (trimmed.length === 0) {
       set("idle");
       rethrow(
         new DataError(
           `infiniteHistory: the fetch ignored its cursor — asked for points before ` +
-            `${before} but every point sits at or after it (last x ${page[page.length - 1].x})`,
+            `${before} but every point sits at or after it (last x ${coordinates.getX(page[page.length - 1])})`,
         ),
       );
+      return;
+    }
+
+    // The retained page's own shape is judged by the same walker every
+    // data door runs (one rule set — a hand-written `<` loop here used to
+    // let a repeated x through to the sink, where it read as a retryable
+    // delivery failure instead of the fetch defect it is).
+    try {
+      scanSeriesData(trimmed, coordinates, null);
+    } catch (error) {
+      terminate(before, error);
       return;
     }
 
@@ -256,7 +286,7 @@ export function infiniteHistory<T extends BaseDataPoint>(
       return;
     }
 
-    frontier = trimmed[0].x;
+    frontier = coordinates.getX(trimmed[0]);
     set("idle");
     // A prepend never moves the domain, so no event follows a landing —
     // the loader re-judges here or the gap would never finish filling.

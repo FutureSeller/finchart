@@ -1,6 +1,6 @@
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { DrawTarget, OHLC, Series } from "@finchart/core";
-import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
+import { OHLCAccessor, candleSeries, isGap, priceFormat, timeTicks } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
 import { chartHost } from "./stage";
 
@@ -18,6 +18,8 @@ const DOT_COLOR = "rgba(217, 119, 6, 0.55)"; // amber-600 — a color that doesn
  * much of the y axis it needs, and `draw` puts that out as commands.
  */
 const volumeDots: Series<OHLC> = {
+  // Bars, not {x, y} — the data gate reads the point through this.
+  coordinates: new OHLCAccessor(),
   valueExtent(data) {
     if (data.length === 0) return null;
     let min = Number.POSITIVE_INFINITY;
@@ -30,7 +32,9 @@ const volumeDots: Series<OHLC> = {
   },
   draw(target: DrawTarget, { data, x, yScale }) {
     for (const point of data) {
-      const radius = 3 + ((point.volume ?? 0) / MAX_VOLUME) * 13;
+      // A bar without volume is a gap — no dot, not a minimum-size one.
+      if (isGap(point.volume)) continue;
+      const radius = 3 + (point.volume / MAX_VOLUME) * 13;
       target.drawShape({
         shape: "circle",
         cx: x.toPixel(point.x),

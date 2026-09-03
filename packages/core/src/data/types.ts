@@ -102,6 +102,10 @@ export interface CoordinateAccessor<T extends BaseDataPoint = BaseDataPoint> {
 
   /**
    * Are all of this point's value fields finite? If not, throw `DataError`.
+   * `label` names the door the point came through ("data" for a whole
+   * array, "updateLast(point)" for a tick) — put it in front of the
+   * message, so a consumer reading a socket callback's error knows which
+   * call it was. Omitted, say "data".
    *
    * If omitted, the data gate only checks `getY` — for a line or a derived
    * series where there's one value, that's enough. For OHLC, where there
@@ -126,7 +130,7 @@ export interface CoordinateAccessor<T extends BaseDataPoint = BaseDataPoint> {
    * per point) is more than twice as slow — `ohlc-fields.test.ts` guards
    * against a dropped field.
    */
-  assertFinite?(point: T, index: number): void;
+  assertFinite?(point: T, index: number, label?: string): void;
 
   /**
    * This one point's data value span — low to high for a candle. If
@@ -328,7 +332,8 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
   /**
    * Swaps out the last point — the tick of a bar in progress.
    * `DataError` if the new point's x is less than the x of the point before
-   * it (second-to-last). If empty, it becomes the first point.
+   * it (second-to-last) — or equal to it, when the accessor declares
+   * `uniqueX`. If empty, it becomes the first point.
    */
   replaceLast(point: T): void;
   getVisibleData(viewport: Viewport): DataView<T>;

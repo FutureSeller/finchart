@@ -17,6 +17,7 @@ import type {
   Viewport,
 } from "../data";
 import {
+  checkPoint,
   continuesAfter,
   defaultCoordinates,
   headDelta,
@@ -539,7 +540,17 @@ function plainEntry<TSource extends BaseDataPoint>(
 ): TypedEntry<TSource> {
   return entryOf<TSource, TSource>(
     series,
-    { data, toPoints: (source) => source, identity: true },
+    {
+      data,
+      toPoints: (source) => source,
+      identity: true,
+      // The drawn point is the source point, so the source's ordering x is
+      // the accessor's — built here, where the two types are one, instead
+      // of asserting it at the tick door.
+      sourceX: (coordinates, point) => coordinates.getX(point),
+      checkSource: (coordinates, point, index, label) =>
+        checkPoint(point, index, coordinates, label, null, true),
+    },
     (next) => drawSideOf(next, overrides, createDataManager),
     overrides,
     door,
@@ -582,6 +593,27 @@ interface OwnedOrigin<
    * takes the full route.
    */
   identity?: boolean;
+  /**
+   * How to read the ordering x off a **source** point — the x the tick
+   * router compares. An identity registration reads it through the
+   * accessor (the drawn point *is* the source point), so the router, the
+   * manager and the pre-check door all order in one space. A derivation's
+   * source has no accessor (the accessor is for the drawn point), so it
+   * falls back to the data x every point carries.
+   */
+  sourceX?: (coordinates: CoordinateAccessor<TPoint>, point: TSource) => number;
+  /**
+   * The per-point rules on a **source** point, under the tick door's label
+   * and index — so a tick that opens a new bar is judged as the tick it is
+   * (`updateLast(point)`, index n) before it rides the append path, whose
+   * walker would otherwise report it as "data", index 0.
+   */
+  checkSource?: (
+    coordinates: CoordinateAccessor<TPoint>,
+    point: TSource,
+    index: number,
+    label: string,
+  ) => void;
 }
 
 type Origin<TSource extends BaseDataPoint, TPoint extends BaseDataPoint> =
@@ -1074,7 +1106,7 @@ function entryOf<
      * the domain anywhere.
      */
     updateLast: (point) => {
-      // Shape comes before finiteness — the instant `point.x` is read, a `null` is a TypeError.
+      // Shape comes before finiteness — the instant an x is read off the point, a `null` is a TypeError.
       // Reported at the bar this tick replaces — the last one — not a
       // made-up index 0. The manager's own check says the same index.
       requireDataPoint(point, Math.max(source.length - 1, 0), "updateLast(point)");
@@ -1085,8 +1117,12 @@ function entryOf<
         return true;
       }
 
-      const lastX = source[source.length - 1].x;
-      const newX = point.x;
+      // One ordering space per registration — see `OwnedOrigin.sourceX`.
+      // Branched inline: this is the tick path, and a closure per tick
+      // would be an allocation the measurement never saw.
+      const last = source[source.length - 1];
+      const lastX = own.sourceX ? own.sourceX(coordinates, last) : last.x;
+      const newX = own.sourceX ? own.sourceX(coordinates, point) : point.x;
 
       /**
        * **Finiteness comes before ordering.** Both comparisons below let
@@ -1099,6 +1135,9 @@ function entryOf<
 
       if (newX > lastX) {
         // A new bar opened — the same thing as appending. x grew by one.
+        // Judged here first, as a tick at its own index — the append
+        // walker would name it "data", index 0.
+        own.checkSource?.(coordinates, point, source.length, "updateLast(point)");
         appendChunk([point]);
         return true;
       }

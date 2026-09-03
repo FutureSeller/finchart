@@ -87,6 +87,40 @@ afterEach(() => {
 });
 
 describe("infiniteHistory", () => {
+  it("without coordinates the loader judges x order only — a bar page has no y and still lands", async () => {
+    const { plot } = chart();
+    const bar = (x: number): OHLC => ({ x, open: 1, high: 2, low: 0.5, close: 1.5 });
+    const pages: OHLC[][] = [];
+    const loader = infiniteHistory<OHLC>(
+      plot,
+      (page) => void pages.push(page),
+      () => (pages.length === 0 ? [bar(80), bar(90)] : []),
+      { from: 100 },
+    );
+
+    plot.setVisibleRange(90, 110);
+    await settle();
+    expect(pages).toEqual([[bar(80), bar(90)]]);
+    expect(loader.status()).not.toBe("terminated");
+  });
+
+  it("trims before judging — a repeated boundary bar at or after the cursor is discarded, not fatal", async () => {
+    const { plot } = chart();
+    const bar = (x: number): OHLC => ({ x, open: 1, high: 2, low: 0.5, close: 1.5 });
+    const pages: OHLC[][] = [];
+    const loader = infiniteHistory<OHLC>(
+      plot,
+      (page) => void pages.push(page),
+      () => (pages.length === 0 ? [bar(90), bar(95), bar(100), bar(100)] : []),
+      { from: 100, coordinates: new OHLCAccessor() },
+    );
+
+    plot.setVisibleRange(90, 110);
+    await settle();
+    expect(pages).toEqual([[bar(90), bar(95)]]);
+    expect(loader.status()).not.toBe("terminated");
+  });
+
   it("a page repeating an x on bars is a fetch defect — terminated, never delivered, never retried", async () => {
     const captured = muteRethrow();
     const { plot } = chart();
@@ -108,11 +142,55 @@ describe("infiniteHistory", () => {
     expect(loader.status()).toBe("terminated");
     expect(pages).toEqual([]);
     expect(captured[0]).toBeInstanceOf(DataError);
-    expect(String((captured[0] as Error).message)).toContain("one point per x");
+    expect(captured[0]).toMatchObject({ message: expect.stringContaining("one point per x") });
 
     plot.setVisibleRange(85, 105);
     await settle();
     expect(calls).toEqual([100]);
+  });
+
+  it("trims and advances in the accessor's x — the space the chart orders by", async () => {
+    interface Timed extends LineDataPoint {
+      t: number;
+    }
+    const byT = {
+      getX: (point: Timed) => point.t,
+      getY: (point: Timed) => point.y,
+    };
+    const model = createPlotModel({ size: { width: 800, height: 600 }, series: null });
+    const held: Timed[] = [
+      { x: 5, t: 100, y: 1 },
+      { x: 6, t: 110, y: 1 },
+    ];
+    model.plot.mainPane.addSeries({ series: lineSeries(), data: held, coordinates: byT });
+    const calls: number[] = [];
+    const pages: Timed[][] = [];
+    // Ascending in t, and t is what the cursor speaks — raw x is unrelated.
+    const page: Timed[] = [
+      { x: 900, t: 80, y: 1 },
+      { x: 1, t: 90, y: 1 },
+      { x: 2, t: 100, y: 1 },
+    ];
+    const loader = infiniteHistory<Timed>(
+      model.plot,
+      (older) => void pages.push(older),
+      (before) => {
+        calls.push(before);
+        return calls.length === 1 ? page : [];
+      },
+      { from: 100, coordinates: byT },
+    );
+
+    model.plot.setVisibleRange(90, 120);
+    await settle();
+    expect(calls[0]).toBe(100);
+    // Trimmed by t (the point at t=100 sits on the cursor), delivered in order.
+    expect(pages[0]?.map((point) => point.t)).toEqual([80, 90]);
+    // The next cursor is the accessor x of the oldest landed point.
+    model.plot.setVisibleRange(60, 90);
+    await settle();
+    expect(calls[1]).toBe(80);
+    expect(["idle", "done"]).toContain(loader.status());
   });
 
   it("guard 1: a gap (screen past the data) fetches and delivers to the sink", async () => {

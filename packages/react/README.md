@@ -152,7 +152,11 @@ Two exceptions:
 
 - **Declarative lane** — anything whose meaning is "present or absent"
   (series, panes, decorations, tool installs) is a component. React decides
-  conditionals, lists, ordering, and identity.
+  conditionals, lists, ordering, and identity. A `data` prop is applied in
+  an effect, so a bad payload throws its `DataError` **outside** your
+  render — into the nearest error boundary. Validate before rendering:
+  `validateSeriesData(data, accessor)` returns the issues as a value, and
+  the tick path has `validateSeriesPoint`.
 - **Imperative lane** — a plugin's API handle, a one-shot command like
   `fitDomains()`, and subscriptions go through hooks and refs: `usePlugin`
   (install/teardown lifetime), `useChartPlot` (configuration from inside the
