@@ -8,8 +8,8 @@ top of it. You can test it headless.
 packages/core        @finchart/core        Chart engine (zero dependencies, no DOM)
 packages/dom         @finchart/dom         Browser shell — the react-dom to core's react
 packages/react       @finchart/react       React composable components
-packages/indicators  @finchart/indicators  Indicators (MA·MACD·Bollinger) — built with 0 core commits
-packages/tools       @finchart/tools       Drawing tools (horizontal·trend line·Fibonacci) — also 0
+packages/indicators  @finchart/indicators  Indicators (MA·MACD·Bollinger) — the core API never grew for them
+packages/tools       @finchart/tools       Drawing tools (horizontal·trend line·Fibonacci) — nor for these
 apps/examples        Where you see it for yourself
 ```
 
@@ -39,7 +39,7 @@ syncX(btcPlot, ethPlot);         // sync is a 30-line helper
 ```
 
 **Extensions are built as packages.** The indicators and drawing-tools packages
-were built with **zero core commits** — the only irrefutable proof that the
+were built **without the core API growing for them** — the only irrefutable proof that the
 computed-node, input-stack, and plugin contracts are real.
 
 ## What's there

@@ -15,14 +15,32 @@ import type { OHLC, Source } from "@finchart/core";
 import {
   adx,
   atr,
+  awesomeOscillator,
+  elderRay,
   bollingerBands,
   cci,
   donchianChannels,
   keltnerChannels,
   macd,
+  mfi,
+  momentum,
   movingAverage,
   rsi,
+  bbi,
+  brar,
+  cr,
+  kdj,
+  dma,
+  emv,
+  pvt,
+  vr,
+  psy,
+  roc,
+  squeezeMomentum,
   stochastic,
+  trix,
+  stochasticRsi,
+  ultimateOscillator,
   williamsR,
 } from "../factories";
 import type { Computation } from "@finchart/core";
@@ -30,7 +48,8 @@ import { ema, sma } from "../kernels";
 
 const bar = (i: number): OHLC => {
   const v = 100 + Math.sin(i / 17) * 9 + (i % 5) * 0.7;
-  return { x: i * 60, open: v, high: v + 1, low: v - 1, close: v + 0.3 };
+  // Volume varies so the volume-fed indicators (MFI, VR, EMV, PVT) produce values, not nulls.
+  return { x: i * 60, open: v, high: v + 1, low: v - 1, close: v + 0.3, volume: 1000 + (i % 7) * 50 };
 };
 const bars = (from: number, to: number): OHLC[] => {
   const out: OHLC[] = [];
@@ -51,6 +70,12 @@ function feed(initial: OHLC[]) {
     source,
     prepend(older: OHLC[]) {
       data = [...older, ...data];
+    },
+    append(next: OHLC) {
+      data = [...data, next];
+    },
+    replaceLast(next: OHLC) {
+      data = [...data.slice(0, -1), next];
     },
     get reads() {
       return reads;
@@ -86,6 +111,17 @@ const closes = (data: readonly OHLC[]) => data.map((point) => point.close);
  * declaration reds here without any hand-rolled formula (proven by
  * mutation: shrinking a horizon by one fails its row).
  */
+/*
+ * The toned histograms (macd, awesomeOscillator, squeezeMomentum) declare
+ * one more bar — a tone remembers the bar before it. Every field is
+ * compared, so the AO and Squeeze rows go red without that `+ 1`. The
+ * macd row cannot tell: its EMA horizons settle the value to 1e-12, and a
+ * tone flips only when the true one-bar difference sits below that — a
+ * band no finite horizon closes. The `+ 1` stays for the rule's sake.
+ * The same holds for every recursive lookback here — trix's three chained
+ * ema horizons settle its value the same way, so shrinking that row's
+ * declaration by one does not go red either (recorded, not a gap).
+ */
 describe("every doored indicator lands within the bound", () => {
   const doored: [string, (source: Source<OHLC>) => Computation<Record<string, { x: number }[]>>][] = [
     ["movingAverage sma", (s) => movingAverage(s, { period: 14 })],
@@ -100,6 +136,24 @@ describe("every doored indicator lands within the bound", () => {
     ["williamsR", (s) => williamsR(s, {})],
     ["donchianChannels", (s) => donchianChannels(s, {})],
     ["keltnerChannels", (s) => keltnerChannels(s, {})],
+    ["stochasticRsi", (s) => stochasticRsi(s, {})],
+    ["mfi", (s) => mfi(s, {})],
+    ["ultimateOscillator", (s) => ultimateOscillator(s, {})],
+    ["awesomeOscillator", (s) => awesomeOscillator(s, {})],
+    ["momentum", (s) => momentum(s, {})],
+    ["elderRay", (s) => elderRay(s, {})],
+    ["squeezeMomentum", (s) => squeezeMomentum(s, {})],
+    ["roc", (s) => roc(s, {})],
+    ["trix", (s) => trix(s, {})],
+    ["psy", (s) => psy(s, {})],
+    ["bbi", (s) => bbi(s, {})],
+    ["dma", (s) => dma(s, {})],
+    ["brar", (s) => brar(s, {})],
+    ["cr", (s) => cr(s, {})],
+    ["vr", (s) => vr(s, {})],
+    ["emv", (s) => emv(s, {})],
+    // pvt declares no door (a running sum has no bounded lookback) — it lands by recomputing, like obv;
+    // so does kdj (its recursions' memory is counted in observations, and a flat stretch holds it).
   ];
 
   it.each(doored)("%s", (_name, make) => {
@@ -210,5 +264,69 @@ describe("indicator landings", () => {
       return v === null || s === null ? null : v - s;
     });
     expectClose(histogram, wantHistogram, all.map((p) => p.x), "histogram");
+  });
+});
+
+/**
+ * A landing re-runs `calc` on a prefix, and the increments (MA, MACD) keep
+ * their resume checkpoints in `calc`. The tick right after a landing must
+ * therefore not resume from that checkpoint — it belongs to the prefix,
+ * not the array. Deep history on purpose: MACD's lookback is ~480 bars, so
+ * a short fixture makes the prefix the whole array and hides the bug.
+ */
+describe("a landing, then ticks — the increments still agree with a cold node", () => {
+  const increments: [string, (source: Source<OHLC>) => Computation<Record<string, { x: number; y: number | null }[]>>][] = [
+    ["movingAverage sma", (s) => movingAverage(s, { period: 5 })],
+    ["movingAverage ema", (s) => movingAverage(s, { period: 5, type: "ema" })],
+    ["macd", (s) => macd(s, {})],
+    ["stochasticRsi", (s) => stochasticRsi(s, {})],
+    ["mfi", (s) => mfi(s, {})],
+    ["ultimateOscillator", (s) => ultimateOscillator(s, {})],
+    ["awesomeOscillator", (s) => awesomeOscillator(s, {})],
+    ["momentum", (s) => momentum(s, {})],
+    ["elderRay", (s) => elderRay(s, {})],
+    ["squeezeMomentum", (s) => squeezeMomentum(s, {})],
+    ["roc", (s) => roc(s, {})],
+    ["trix", (s) => trix(s, {})],
+    ["psy", (s) => psy(s, {})],
+    ["bbi", (s) => bbi(s, {})],
+    ["dma", (s) => dma(s, {})],
+    ["brar", (s) => brar(s, {})],
+    ["cr", (s) => cr(s, {})],
+    ["vr", (s) => vr(s, {})],
+    ["emv", (s) => emv(s, {})],
+    ["pvt", (s) => pvt(s)],
+    ["kdj", (s) => kdj(s, {})],
+  ];
+
+  it.each(increments)("%s", (_name, make) => {
+    const f = feed(bars(2000, 6000));
+    const node = make(f.source);
+    const branches = Object.keys(node.out);
+    for (const key of branches) node.out[key].read();
+
+    f.prepend(bars(1000, 2000));
+    for (const key of branches) node.out[key].read();
+
+    const last = bar(5999);
+    const ticks = [
+      () => f.replaceLast({ ...last, close: last.close + 1 }),
+      () => f.append(bar(6000)),
+      () => f.append(bar(6001)),
+    ];
+    for (const tick of ticks) {
+      tick();
+      for (const key of branches) node.out[key].read();
+    }
+
+    const cold = make({ read: () => f.source.read() });
+    for (const key of branches) {
+      const got = node.out[key].read();
+      const want = cold.out[key].read();
+      expect(got.length, `${key} length`).toBe(want.length);
+      for (let i = want.length - 5; i < want.length; i++) {
+        expect(got[i].y, `${key} y[${i}]`).toBe(want[i].y);
+      }
+    }
   });
 });

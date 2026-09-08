@@ -8,9 +8,9 @@ If you want your own indicator or drawing tool to snap in and out like a
 package, it helps to know first that there are already cases that started from
 exactly the same place.
 
-`@finchart/indicators` and `@finchart/tools` were built with **zero core
-commits** — 17 indicators and three drawing tools, all of them built on
-contracts core had already published. This page shows those contracts. So a
+`@finchart/indicators` and `@finchart/tools` were built **without the core
+API growing for them** — 35 indicators and three drawing tools, all of them
+built on contracts core had already published. This page shows those contracts. So a
 third party can start from the same place.
 
 ## A plugin — one function, one dispose
@@ -123,6 +123,26 @@ The names without `attach` — `rsi()` and `macd()` in `@finchart/indicators` �
 return exactly this computed node. The full naming rules are in
 [The grammar of names](/reference/naming).
 
+A node that declares only `calc` recomputes wholesale on every tick, and
+because every output object is then new, its consumers read the tick as a
+full change — re-validate, copy, re-map the whole history. `calcLast` is the
+door to the tail path. It can be a real increment (a moving average steps one
+fold), or, for a kernel with no cheap resume point, a full recompute that
+keeps the unchanged objects:
+
+```ts
+const node = computation({
+  inputs: [price],
+  calc,
+  calcLast: (previous, inputs) => reuseUnchanged(previous, calc(...inputs)),
+});
+```
+
+`reuseUnchanged` compares points as plain data records — the `{ x, y }`
+literals a calc builds — which is why it is a call you make and not something
+the node assumes about your output. The built-in indicators without an
+increment take this door.
+
 ## Reconfiguring — don't unmount and remount
 
 Switch a plugin off and on again to change one option and an extension that
@@ -138,7 +158,11 @@ other way: what `attachRsi` returns is nothing but `{ node, pane }` plus
 **reinstalling** — `dispose()`, then `use()` again with new options
 (`@finchart/indicators`'s README says the same). Because a computed node is a
 value, rebuilding it is cheap, and because there is no state, there is nothing
-to lose.
+to lose — with one exception. An indicator that made its own pane takes that
+pane with it on `dispose()`, together with anything else you mounted there,
+and the reinstalled one lands at the bottom of the stack. Give it
+`ownPane: { stateKey }` so a saved layout follows it, and mount your own
+series on a pane you own.
 
 ## Styling
 

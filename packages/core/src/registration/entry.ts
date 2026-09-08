@@ -63,8 +63,10 @@ interface RegistrationBase<TPoint extends BaseDataPoint> {
   /**
    * A decimation policy for this registration alone. Overrides the `Series` default.
    *
-   * Priority: **registration > `Series.decimation` > wiring (`createDecimation`)**.
-   * Merged field by field, so giving just one side is fine.
+   * Priority, **field by field**: registration > `Series.decimation` > wiring —
+   * the wiring's `createDecimation` for a `strategy` neither names, its
+   * `pointsPerPixel` for a density neither names. Giving just one field on
+   * one side is fine; the other field still resolves down the same chain.
    */
   decimation?: DecimationPolicy<TPoint>;
 }
@@ -107,9 +109,9 @@ interface DerivedRegistration<
    * Receives **all of `data`, not just the visible range.** That's required
    * so an indicator like a moving average, which has to look back, doesn't
    * cut off at the screen's left edge. Recomputes wholesale every time the
-   * source changes — since there's no incremental computation, values near
-   * the boundary correct themselves automatically once `prepend` splices in
-   * more history.
+   * source changes unless a door takes the change — `deriveLast` for a tail,
+   * `deriveFirst` for a landing; with neither, values near the boundary
+   * correct themselves automatically once `prepend` splices in more history.
    *
    * If there are several branches, use a computed node instead of
    * attaching this more than once → `computation`
@@ -141,7 +143,12 @@ interface DerivedRegistration<
   /**
    * **Head increment** — a history page landing. Optional and additive,
    * like `deriveLast`; without it a landing re-derives the whole output
-   * (already down the head-splice route, so only the head revalidates).
+   * and hands it to `setData`, which validates all of it. `head` runs when
+   * the manager can adopt a head over a retained tail
+   * (`adoptHeadRetainingTail`), there is prior output, and the page is
+   * non-empty; its result is spliced over a retained tail only when some
+   * old output outlives the lookback — when the lookback covers all of it,
+   * the head goes through `setData` and its full validation instead.
    *
    * `lookback` declares how many old head outputs the landing corrects —
    * a window's warmup (`period - 1`), or a recursion's decay horizon.
@@ -269,7 +276,7 @@ export interface Entry {
     value: number | null;
     min: number | null;
     max: number | null;
-    /** Which index the chosen point sits at in the drawn point array. */
+    /** Which index the chosen point sits at in the registration's own points (the derived output, under a transform). */
     index: number;
   } | null;
 
@@ -588,9 +595,9 @@ interface OwnedOrigin<
   /**
    * The declaration that `toPoints` is the identity function — only then do
    * increments (append, prepend, updateLast) go straight to the manager's
-   * splice path with no re-derivation or full validation. A derivation's
-   * contract is "the whole input," so it has no increment path — it always
-   * takes the full route.
+   * splice path with no re-derivation or full validation. A derivation
+   * takes an increment only through a door it declares — `deriveLast` for
+   * the tail, `deriveFirst` for the head — and the full route otherwise.
    */
   identity?: boolean;
   /**
@@ -1228,6 +1235,14 @@ function entryOf<
     positiveFloor: (visible) => {
       const drawn = pull();
       const points = visible ? manager.getVisibleData(visible) : drawn;
+      // The doors in order, each asked only when the one before is absent.
+      const floorOf = (point: TPoint): number | null | undefined => {
+        const own = coordinates.getPositiveFloor?.(point);
+        if (own !== undefined) return own;
+        const low = coordinates.getYRange?.(point)?.min;
+        if (low !== undefined) return low;
+        return coordinates.getY(point);
+      };
 
       let smallest: number | null = null;
       for (const point of points) {
@@ -1240,8 +1255,9 @@ function entryOf<
          * other bar's lower wick. `getYRange` already exists, and a line or
          * derivation lacking it falls back to `getY` naturally.
          */
-        const low = coordinates.getYRange?.(point)?.min;
-        const y = low !== undefined ? low : coordinates.getY(point);
+        // A point that knows its own positive floor answers for itself — a column of boxes dipping below zero
+        // still has a lowest box above it; the range's `min` would say the column has none.
+        const y = floorOf(point);
         // Skips gaps and non-finite values — something with no place on the axis isn't a floor candidate either.
         if (isGap(y) || !Number.isFinite(y)) continue;
         if (y <= 0) continue;

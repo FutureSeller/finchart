@@ -2,7 +2,7 @@
 description: "Infinite history: pan toward the left edge and older bars arrive page by page — infiniteHistory owns the cursor, the threshold, and the in-flight bookkeeping."
 ---
 
-# Infinite history
+# Infinite history — infiniteHistory
 
 <script setup>
 import * as mod from "../../examples/src/cases/infinite-history";
@@ -25,7 +25,9 @@ One sizing rule worth stealing: against a capped API (Toss and Upbit take
 `count` up to 200, Binance `limit` up to 1000), request the cap every time.
 One bigger page beats several small ones on every axis at once — round trips
 while the user is looking at a gap, request quota, and landings (each landing
-recomputes every derivation on the chart).
+recomputes, wholesale, every derivation fed by the source that changed and
+declaring no head door — `deriveFirst`, `calcFirst` or `headLookback` — and a price-axis
+transform never declares one).
 
 The status line reads the loader's `status()` / `statusChanges` pair — the
 same snapshot-plus-subscription shape `usePluginState` consumes in React.

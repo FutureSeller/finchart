@@ -2,7 +2,7 @@
 description: "Two charts linked with syncX, sharing a time window while keeping their own settings."
 ---
 
-# Two charts in sync — syncX
+# Two synchronized charts — syncX
 
 <script setup>
 import * as mod from "../../examples/src/cases/sync-x";

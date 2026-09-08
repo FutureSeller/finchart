@@ -66,6 +66,19 @@ describe("createSeriesHandle", () => {
     ]);
   });
 
+  it("should keep the window when setData is told not to refit", () => {
+    const { handle, notified } = setup();
+    handle.setData([{ x: 1 }], { refit: false });
+    handle.setData([{ x: 1 }], { refit: true });
+    handle.setData([{ x: 1 }], {});
+
+    expect(notified).toEqual([
+      { data: true, refit: false },
+      { data: true, refit: true },
+      { data: true, refit: true },
+    ]);
+  });
+
   it("should skip an empty append or prepend without notifying", () => {
     const { handle, entry, notified } = setup();
     handle.append([]);

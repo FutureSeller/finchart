@@ -1,4 +1,5 @@
 import { requireInterval, requireRange } from "../primitives";
+import { lerp, unlerp } from "./finite-lerp";
 import type { Scale } from "./types";
 
 export class LinearScale implements Scale {
@@ -46,19 +47,23 @@ export class LinearScale implements Scale {
     return [...this.range];
   }
 
+  /**
+   * A domain — or a range — is two finite numbers, but their difference
+   * need not be one: `[-MAX_VALUE, MAX_VALUE]` is legal for either, its span
+   * overflows, and `∞ / ∞` is `NaN`, a pixel the canvas silently drops.
+   * `lerp`/`unlerp` take the plain arithmetic wherever it is finite (an
+   * ordinary axis's pixels are the same bits as before) and the same
+   * interpolation at half scale where it is not.
+   */
   scale(value: number): number {
     const [domainMin, domainMax] = this.domain;
     const [rangeMin, rangeMax] = this.range;
-
-    const ratio = (value - domainMin) / (domainMax - domainMin);
-    return rangeMin + ratio * (rangeMax - rangeMin);
+    return lerp(rangeMin, rangeMax, unlerp(domainMin, domainMax, value));
   }
 
   invert(screenValue: number): number {
     const [domainMin, domainMax] = this.domain;
     const [rangeMin, rangeMax] = this.range;
-
-    const ratio = (screenValue - rangeMin) / (rangeMax - rangeMin);
-    return domainMin + ratio * (domainMax - domainMin);
+    return lerp(domainMin, domainMax, unlerp(rangeMin, rangeMax, screenValue));
   }
 }

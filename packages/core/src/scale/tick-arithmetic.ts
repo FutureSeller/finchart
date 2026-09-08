@@ -8,7 +8,11 @@
  */
 
 /**
- * The smallest value of the form 1·2·5 × 10ⁿ that is at least `raw`.
+ * The smallest value of the form 1·2·5 × 10ⁿ that is at least `raw` —
+ * except at the two ends of the doubles, where that value does not exist:
+ * at the top the decade itself (the next shape up is past the doubles),
+ * at the bottom the smallest double (the decade under it is 0). Both are
+ * positive and finite, which is what a step must be.
  *
  * Restricting tick intervals to these three shapes is what keeps labels
  * as human-readable numbers (10, 25, 500…).
@@ -16,13 +20,17 @@
 export function niceInterval(raw: number): number {
   if (!(raw > 0) || !Number.isFinite(raw)) return 1;
 
-  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  // At the bottom of the doubles the decade under the smallest subnormal is 0 — the smallest double is the
+  // decade there.
+  const magnitude = 10 ** Math.floor(Math.log10(raw)) || Number.MIN_VALUE;
   const normalized = raw / magnitude; // [1, 10)
 
   if (normalized <= 1) return magnitude;
-  if (normalized <= 2) return 2 * magnitude;
-  if (normalized <= 5) return 5 * magnitude;
-  return 10 * magnitude;
+  if (normalized <= 2) return Number.isFinite(2 * magnitude) ? 2 * magnitude : magnitude;
+  if (normalized <= 5) return Number.isFinite(5 * magnitude) ? 5 * magnitude : magnitude;
+  // At the top of the doubles the next nice step up is past them — the decade itself is the nice step there.
+  const nice = 10 * magnitude;
+  return Number.isFinite(nice) ? nice : magnitude;
 }
 
 /**
@@ -31,5 +39,7 @@ export function niceInterval(raw: number): number {
  * actually distinguish.
  */
 export function withoutFloatNoise(value: number): number {
-  return Number.parseFloat(value.toPrecision(15));
+  const rounded = Number.parseFloat(value.toPrecision(15));
+  // Fifteen digits of the largest doubles round past them — a tick at the edge of the range stays as it is.
+  return Number.isFinite(rounded) ? rounded : value;
 }

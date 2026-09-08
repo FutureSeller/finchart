@@ -350,20 +350,46 @@ describe("obv", () => {
     expect(out.map((point) => point.y)).toEqual([5, 8, 4, 4]);
   });
 
-  it("should go null from a missing volume to the end — no anchor to revive it", () => {
-    const source = sourceOf([traded(0, 10, 5), traded(1, 11), traded(2, 12, 7)]);
+  it("is null on a bar without volume and resumes on the next — the level is arbitrary, the shape is not", () => {
+    // 10 → 11 (gap) → 12: the gap bar's own contribution is lost; the resume bar is up against the gap bar's close.
+    const source = sourceOf([traded(0, 10, 5), traded(1, 11), traded(2, 12, 7), traded(3, 11, 2)]);
 
     const out = obv(source).out.obv.read();
 
-    expect(out.map((point) => point.y)).toEqual([5, null, null]);
+    expect(out.map((point) => point.y)).toEqual([5, null, 12, 10]);
   });
 
-  it("should treat a null volume as missing, not as a volume of 0", () => {
+  it("treats a null volume as missing, not as a volume of 0 — and still resumes", () => {
     const source = sourceOf([traded(0, 10, 5), traded(1, 11, null), traded(2, 12, 7)]);
 
     const out = obv(source).out.obv.read();
 
-    expect(out.map((point) => point.y)).toEqual([5, null, null]);
+    expect(out.map((point) => point.y)).toEqual([5, null, 12]);
+  });
+
+  it("the resuming bar's direction is against the previous bar's close — gap or not", () => {
+    // 10 → 12 (gap) → 11: down against the gap bar's 12, not up against the last volume-bearing 10.
+    const source = sourceOf([traded(0, 10, 5), traded(1, 12), traded(2, 11, 7)]);
+
+    const out = obv(source).out.obv.read();
+
+    expect(out.map((point) => point.y)).toEqual([5, null, -2]);
+  });
+
+  it("a volume of 0 is a value, not a gap — it contributes nothing and does not break the run", () => {
+    const source = sourceOf([traded(0, 10, 5), traded(1, 12, 0), traded(2, 13, 3)]);
+
+    const out = obv(source).out.obv.read();
+
+    expect(out.map((point) => point.y)).toEqual([5, 5, 8]);
+  });
+
+  it("seeds on the first bar that has volume when the first bars are gaps", () => {
+    const source = sourceOf([traded(0, 10), traded(1, 11, 4), traded(2, 9, 3)]);
+
+    const out = obv(source).out.obv.read();
+
+    expect(out.map((point) => point.y)).toEqual([null, 4, 1]);
   });
 });
 
@@ -491,6 +517,33 @@ describe("defaults single source", () => {
  * (the macd line) of the other two folds, resume has to treat the three
  * as one atomic unit.
  */
+describe("macd — histogram tone", () => {
+  it("each histogram bar carries its direction against the bar before, through an append and a replace", () => {
+    const tape = Array.from({ length: 80 }, (_, i) => candle(i, 100 + Math.sin(i / 5) * 8 + (i % 3)));
+    const source = sourceOf(tape);
+    const node = macd(source, { fast: 3, slow: 7, signal: 3 });
+    const check = (points: readonly { y: number | null; tone?: "up" | "down" }[]) => {
+      for (let i = 0; i < points.length; i++) {
+        const previous = i > 0 ? points[i - 1].y : undefined;
+        const y = points[i].y;
+        const want = y === null || previous === null || previous === undefined ? undefined : y >= previous ? "up" : "down";
+        expect(points[i].tone, `tone[${i}]`).toBe(want);
+        expect("tone" in points[i], "the key is always there").toBe(true);
+      }
+      expect(points.some((p) => p.tone === "up") && points.some((p) => p.tone === "down")).toBe(true);
+    };
+    check(node.out.histogram.read());
+    for (const point of node.out.macd.read()) expect("tone" in point, "the lines carry none").toBe(false);
+    for (const next of [candle(80, 140), candle(80, 60)]) {
+      source.swap([...tape, next]);
+      const live = node.out.histogram.read();
+      check(live);
+      const cold = macd(sourceOf([...tape, next]), { fast: 3, slow: 7, signal: 3 }).out.histogram.read();
+      expect(live[live.length - 1].tone, "the live bar").toBe(cold[cold.length - 1].tone);
+    }
+  });
+});
+
 describe("macd — tail-door equivalence", () => {
   it("all three branches still match a full calculation after a tick sequence", () => {
     const seed = Array.from({ length: 50 }, (_, i) => candle(i, 100 + (i % 9)));

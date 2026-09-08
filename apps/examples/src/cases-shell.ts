@@ -28,7 +28,7 @@ import * as overlays from "./cases/overlays";
 import * as ownPanes from "./cases/own-panes";
 import * as pivots from "./cases/pivots";
 import * as realtime from "./cases/realtime";
-import * as renkoCase from "./cases/renko";
+import * as priceAxisTransforms from "./cases/price-axis-transforms";
 import * as volumeProfileCase from "./cases/volume-profile";
 import * as syncXCase from "./cases/sync-x";
 import * as workerRender from "./cases/worker-render";
@@ -39,7 +39,7 @@ const CASES: readonly (readonly [string, CaseModule])[] = [
   ["log-scale", logScaleCase],
   ["area-fade", areaFade],
   ["heikin-ashi", heikinAshi],
-  ["renko", renkoCase],
+  ["price-axis-transforms", priceAxisTransforms],
   ["overlays", overlays],
   ["ichimoku", ichimoku],
   ["oscillators", oscillators],

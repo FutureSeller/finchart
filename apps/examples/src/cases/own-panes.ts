@@ -2,13 +2,13 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { OHLC, Pane } from "@finchart/core";
 import { candleSeries, paneMaximize, priceFormat, timeTicks } from "@finchart/core";
 import { legend } from "@finchart/dom";
-import { attachAdx, attachMacd, attachObv } from "@finchart/indicators";
+import { attachAdx, attachCr, attachMacd, attachObv } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
 import { chartHost } from "./stage";
 
-export const title = "Own-pane indicators — MACD · ADX · OBV";
+export const title = "Own-pane indicators — MACD · ADX · OBV · CR";
 export const description =
-  "Indicators whose magnitudes differ from the price's — each makes its own pane to mount into, and dispose tears the pane down with it. Unlike the oscillators, the axis stays on autoScale. The buttons demonstrate pane maximizing — back when the panes were equal, the price pane got squeezed to the same size as an indicator.";
+  "Indicators whose magnitudes differ from the price's — each makes its own pane to mount into, and dispose tears the pane down with it. Unlike the oscillators, the axis stays on autoScale. CR is five lines on one pane: the band and four averages drawn back by ceil(p / 2.5 + 1) bars, the averages in one colour and told apart by the window in their labels, with a line at 100 where the two sums balance. The buttons demonstrate pane maximizing — back when the panes were equal, the price pane got squeezed to the same size as an indicator.";
 
 /** Background for the pressed button — the case stands on its own without the shell's CSS. */
 function paintPressed(el: HTMLButtonElement, pressed: boolean): void {
@@ -40,6 +40,9 @@ export function mount(container: HTMLElement): () => void {
   const macd = plot.use(attachMacd({ source: price }));
   const adx = plot.use(attachAdx({ source: price }));
   const obv = plot.use(attachObv({ source: price }));
+  const cr = plot.use(attachCr({ source: price }));
+  // The four averages share a colour — the legend on CR's own pane is what tells them apart.
+  if (cr.pane) plot.use(legend({ pane: cr.pane }));
   plot.use(legend({}));
 
   // The maximize API — this is the only core extension involved (it asks for
@@ -52,6 +55,7 @@ export function mount(container: HTMLElement): () => void {
     ["MACD", macd.pane!],
     ["ADX", adx.pane!],
     ["OBV", obv.pane!],
+    ["CR", cr.pane!],
   ];
 
   const buttons = new Map<Pane, HTMLButtonElement>();

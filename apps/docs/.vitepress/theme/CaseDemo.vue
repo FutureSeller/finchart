@@ -102,15 +102,18 @@ onBeforeUnmount(() => {
 
 /* Dark values for --chart-* — the same values as
    apps/examples/src/theme.css (that file is the single source of truth; the
-   selector is rewritten here only because the DOM differs). If a value
-   changes, style-vars.test.ts's "set by the examples but read by nobody"
-   check scans apps/docs too, so a typo gets caught. */
+   selector is rewritten here only because the DOM differs). No machine
+   holds the two together: style-vars.test.ts skips .vitepress and reads no
+   .vue, so a value that changes there has to be carried here by hand. */
 :global(.dark) .case-demo-stage {
   --chart-grid: #1e293b;
+  --chart-pane-divider: #334155;
   --chart-label: #94a3b8;
   --chart-crosshair: #475569;
   --chart-candle-up: #22c55e;
   --chart-candle-down: #f87171;
+  --chart-histogram-up: #22c55e;
+  --chart-histogram-down: #f87171;
   --chart-tooltip-back: rgba(226, 232, 240, 0.92);
   --chart-tooltip: #0f172a;
   --chart-legend: #cbd5e1;

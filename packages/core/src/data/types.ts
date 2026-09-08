@@ -144,6 +144,18 @@ export interface CoordinateAccessor<T extends BaseDataPoint = BaseDataPoint> {
   getYRange?(point: T): Range | null;
 
   /**
+   * The smallest positive value this one point holds on the axis — what a
+   * log axis stands on when the point dips to zero or below. If omitted,
+   * the point's positive floor is its range's `min` (then `getY`) when
+   * that is positive, and nothing otherwise — right for a candle, whose
+   * `low` is its lowest value, and wrong for a point that holds more
+   * values than its range names, such as a column of boxes whose lowest
+   * box is below zero and whose next is not: without this door the log
+   * axis is fitted from a constant instead of that box.
+   */
+  getPositiveFloor?(point: T): number | null;
+
+  /**
    * Declares that this accessor can never produce a gap. If omitted, assume
    * it can.
    *

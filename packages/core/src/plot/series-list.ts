@@ -38,12 +38,14 @@ export interface SeriesSample {
   min: number | null;
   max: number | null;
   /**
-   * **Which index the chosen point sits at in the drawn point array.** The
-   * consumer's key back to the source — the core seals off the point type
-   * so it can't hand back OHLC, but it can hand back a position:
-   * `bars[sample.index]`. Without this the consumer has to hand-roll a
-   * binary search, and then the tooltip and the header can end up naming
-   * different bars.
+   * **Which index the chosen point sits at in the registration's own
+   * points** — the array the registration holds, which for a derived
+   * registration is the derived output, not its source. The consumer's key
+   * back to that array — the core seals off the point type so it can't
+   * hand back OHLC, but it can hand back a position: `bars[sample.index]`
+   * (or `bricks[sample.index]` under a transform). Without this the
+   * consumer has to hand-roll a binary search, and then the tooltip and
+   * the header can end up naming different bars.
    */
   index: number;
 }

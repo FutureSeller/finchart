@@ -26,7 +26,7 @@ import type {
   DecimationStrategy,
   IndexRange,
 } from "../data";
-import { computation, M4Decimation, OHLCAccessor } from "../data";
+import { computation, M4Decimation, OHLCAccessor, reuseUnchanged } from "../data";
 import { createPlotModel } from "../plot/model";
 import { candleSeries, lineSeries } from "../series";
 import { barIndexX } from "../scale";
@@ -475,6 +475,58 @@ describe("a computation node's tick does not get cut off downstream", () => {
     model.plot.render();
 
     // If this had taken the full path, validation plus re-mapping would put it at >= 2,000.
+    expect(getX).toBeLessThan(50);
+  });
+
+  /**
+   * The same bound for a kernel with no cheap resume point: a `calcLast`
+   * that recomputes wholesale but keeps the unchanged output objects
+   * (`reuseUnchanged`), so the drawing registration still reads the tick
+   * as a tail change. Identity of the consumer's array alone would not
+   * prove this — the full path's `setData` keeps point objects too. The
+   * accessor count does.
+   */
+  it("getX does not scale with history for a tick through a wholesale recompute that reuses", () => {
+    const model = createPlotModel<OHLC>({
+      size: { width: 800, height: 600 },
+      series: { series: candleSeries(), data: candlesOf(1_000) },
+      config: { showGrid: false },
+    });
+    const data = candlesOf(1_000);
+    const price = model.plot.mainPane.addSeries({ series: candleSeries(), data });
+
+    const calc = (input: DataView<OHLC>) => ({
+      doubled: input.map((c) => ({ x: c.x, y: c.close * 2 })),
+    });
+    const node = computation({
+      inputs: [price],
+      calc,
+      calcLast: (previous, [input]) => reuseUnchanged(previous, calc(input)),
+    });
+
+    let getX = 0;
+    model.plot.mainPane.addSeries({
+      series: lineSeries(),
+      input: node.out.doubled,
+      coordinates: {
+        getX: (point: { x: number }) => {
+          getX += 1;
+          return point.x;
+        },
+        getY: (point: { x: number; y: number | null }) => point.y,
+      },
+      decimation: { strategy: { decimate: () => [] } },
+    });
+    model.plot.render();
+    getX = 0;
+
+    price.updateLast({ ...data[data.length - 1], close: 999 });
+    model.plot.render();
+    expect(getX).toBeLessThan(50);
+
+    getX = 0;
+    price.updateLast({ ...data[data.length - 1], x: data[data.length - 1].x + 1 });
+    model.plot.render();
     expect(getX).toBeLessThan(50);
   });
 });

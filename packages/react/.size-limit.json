@@ -1,6 +1,6 @@
 [
   {
-    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 3.9 KB gzip (3534B measured)",
+    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 3.9 KB gzip (3626B measured)",
     "path": "dist/index.mjs",
     "import": "*",
     "limit": "3.9 KB",
@@ -13,7 +13,7 @@
     "gzip": true
   },
   {
-    "name": "one chart — ChartContainer + ChartCandles · 2.1 KB gzip (1884B measured)",
+    "name": "one chart — ChartContainer + ChartCandles · 2.1 KB gzip (1885B measured)",
     "path": "dist/index.mjs",
     "import": "{ ChartContainer, ChartCandles }",
     "limit": "2.1 KB",

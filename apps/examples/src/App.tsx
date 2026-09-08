@@ -133,18 +133,18 @@ const momentum =
     }));
 
 /**
- * Volume bars, colored by whether the candle rose or fell. The color rides on
- * the data because up-or-down is a fact about the point, not a style
- * (`HistogramPoint.color`).
+ * Volume bars, coloured by whether the candle rose or fell. The direction
+ * rides on the data because up-or-down is a fact about the point, not a
+ * style (`HistogramPoint.tone`); the colour is the series style's — a
+ * green/red pair at 45% so the pane recedes under price. On the series, not
+ * in a CSS variable: a variable is chart-wide and would wash an indicator's bars.
  */
+const VOLUME_STYLE = { up: "rgba(22, 163, 74, 0.45)", down: "rgba(220, 38, 38, 0.45)" };
 const volumeBars = (source: DataView<OHLC>): HistogramPoint[] =>
   source.map((candle) => ({
     x: ohlcCoordinates.getX(candle),
     y: candle.volume ?? null,
-    color:
-      candle.close >= candle.open
-        ? "rgba(22, 163, 74, 0.45)"
-        : "rgba(220, 38, 38, 0.45)",
+    tone: candle.close >= candle.open ? "up" : "down",
   }));
 
 const MA_COLOR = "#f59e0b";
@@ -447,7 +447,7 @@ export function App() {
           <ChartPane flex={1} minHeight={50}>
             <YAxis format={(v) => `${(v / 1000).toFixed(1)}k`} />
             <ChartSeries
-              series={histogramSeries()}
+              series={histogramSeries({ style: VOLUME_STYLE })}
               derive={volumeBars}
               deriveKey={[]}
             />

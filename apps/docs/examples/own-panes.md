@@ -1,8 +1,8 @@
 ---
-description: "MACD, ADX and OBV, each making the pane it mounts into and tearing it down on dispose."
+description: "MACD, ADX, OBV and CR, each making the pane it mounts into and tearing it down on dispose."
 ---
 
-# Own-pane indicators — MACD · ADX · OBV
+# Own-pane indicators — MACD · ADX · OBV · CR
 
 <script setup>
 import * as mod from "../../examples/src/cases/own-panes";

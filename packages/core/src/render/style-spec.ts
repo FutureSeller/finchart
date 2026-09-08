@@ -124,6 +124,18 @@ export type StyleOverridesOf<Spec> = {
 export const noStyle: StyleReader = () => "";
 
 /**
+ * Whether an override says anything. `undefined` and `null` both mean "no
+ * value" — state serialization and a React props round trip turn one into
+ * the other, and neither should win over a CSS variable. Every place that
+ * asks "did the consumer give this leaf a value?" asks here, so the answer
+ * cannot drift between the resolver and a series that reads its own
+ * overrides.
+ */
+export function isGiven(value: unknown): boolean {
+  return value != null;
+}
+
+/**
  * override > CSS variable > fallback. The order shows up as the code's
  * order.
  *
@@ -170,7 +182,7 @@ export function resolveStyle<Spec>(
        * times the slot, so candles overlap each other; let a `NaN` in and
        * `fillRect` no-ops, wiping the body out entirely.
        */
-      out[key] = given != null ? coerceLeaf(given, node) : readVar(read, node);
+      out[key] = isGiven(given) ? coerceLeaf(given, node) : readVar(read, node);
     } else {
       out[key] = resolveStyle(node, read, given as never);
     }

@@ -3,6 +3,7 @@ import type { OHLC } from "@finchart/core";
 import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { legend } from "@finchart/dom";
 import {
+  attachBbi,
   attachBollingerBands,
   attachMovingAverage,
   attachParabolicSar,
@@ -14,7 +15,7 @@ import { chartHost } from "./stage";
 
 export const title = "Overlay indicators";
 export const description =
-  "Indicators that share the price's axis — MA(20) · EMA(50) · Bollinger · VWAP · SAR · SuperTrend all mount onto mainPane. The band fill sits under the candles at zIndex −1, and SuperTrend alternates between two strands, an uptrend support line and a downtrend resistance line (the opposite stretch is null, so the line breaks).";
+  "Indicators that share the price's axis — MA(20) · EMA(50) · BBI · Bollinger · VWAP · SAR · SuperTrend all mount onto mainPane. BBI is the mean of four smas (3, 6, 12, 24), one line labelled with its windows. The band fill sits under the candles at zIndex −1, and SuperTrend alternates between two strands, an uptrend support line and a downtrend resistance line (the opposite stretch is null, so the line breaks).";
 
 export function mount(container: HTMLElement): () => void {
   const host = chartHost(container, 480);
@@ -36,6 +37,7 @@ export function mount(container: HTMLElement): () => void {
   plot.mainPane.use(
     attachMovingAverage({ source: price, period: 50, type: "ema", color: "#8b5cf6" }),
   );
+  plot.mainPane.use(attachBbi({ source: price, color: "#10b981" }));
   plot.mainPane.use(attachBollingerBands({ source: price, period: 20 }));
   plot.mainPane.use(attachVwap({ source: price, color: "#0ea5e9" }));
   plot.mainPane.use(attachParabolicSar({ source: price, color: "#ef4444" }));

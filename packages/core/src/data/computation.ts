@@ -56,7 +56,10 @@ export interface ComputationSpec<
    *
    * Build the output array by reusing the front of the previous array
    * (`slice`/`concat`) — unchanged point objects need to keep their
-   * identity for this branch's consumers to reach the same verdict.
+   * identity for this branch's consumers to reach the same verdict. A
+   * kernel without a cheap resume point can still hand them that: a full
+   * recompute that keeps the unchanged objects,
+   * `(previous, inputs) => reuseUnchanged(previous, calc(...inputs))`.
    */
   calcLast?: (
     previous: TOut,
@@ -75,7 +78,10 @@ export interface ComputationSpec<
    * Build each branch by computing the new head (plus whatever old head
    * positions the landing corrects) and **reusing the previous array's
    * tail beyond that** (`slice`/`concat`) — the reused identities are how
-   * this branch's consumers classify the landing in turn.
+   * this branch's consumers classify the landing in turn. Unlike the
+   * declared door, this one does not call `calc`, so the node leaves your
+   * `calcLast` checkpoints alone — if your `calcFirst` touches them, it
+   * owns keeping them true.
    */
   calcFirst?: (
     previous: TOut,
@@ -91,6 +97,11 @@ export interface ComputationSpec<
    * (`count + headLookback` positions — a landing's resume point is the
    * beginning of time, so no checkpoint is needed) and reuses each
    * branch's tail as is.
+   *
+   * That prefix run is a real call to your `calc`: a resume checkpoint it
+   * keeps for `calcLast` now describes the prefix's end, not the array's.
+   * The node knows this — the first tick after a declared landing is a
+   * full computation, and `calcLast` is used again only after that.
    *
    * The 1:1 assumption is checked at runtime, per branch, per landing —
    * a branch whose prefix output isn't position-aligned makes the door
@@ -123,6 +134,104 @@ export interface ComputationSpec<
  * change means one computation, and a branch nobody draws just sits there
  * with its value computed and unused.
  */
+/**
+ * Hands back the previous output object wherever the new one is the same
+ * plain record — the explicit way for a full recompute to meet
+ * `calcLast`'s identity requirement:
+ *
+ * ```ts
+ * calcLast: (previous, inputs) => reuseUnchanged(previous, calc(...inputs)),
+ * ```
+ *
+ * Downstream, a change's shape is read from point identity (`tailDelta`):
+ * with every position a fresh object, a one-bar tick reads as a full
+ * change and every consumer re-validates and copies its whole array.
+ *
+ * Why a call, not something the node does on its own: the points are
+ * compared as **plain data records** — plain objects whose own
+ * enumerable string keys are their whole state, with `===` values (`NaN`
+ * never matches; 0 and -0 are told apart). That is a fact about the
+ * `{ x, y }` literal your calc built; it is not something a node can
+ * assume about arbitrary output — a value behind a getter, a symbol key,
+ * a cache keyed by the object itself would all be missed — so a node
+ * without `calcLast` keeps every new object. Anything not a plain object
+ * (a class instance, a Proxy, a non-object entry) is not judged and stays
+ * the new object.
+ *
+ * Pure: neither argument is touched. A branch with nothing to reuse is
+ * returned as is; otherwise a copy carries the reused objects (frozen in,
+ * frozen out). The walk costs about 5× the `map` that produced the
+ * points — measured ~70 ns per point: 14 ms for 100k × 2 branches, 1.4 ms
+ * for 10k × 2 — against the full path it prevents, which re-validates and
+ * re-maps every point per consumer.
+ */
+export function reuseUnchanged<TOut extends Record<string, BaseDataPoint[]>>(
+  previous: TOut,
+  next: TOut,
+): TOut {
+  // Not records — nothing to judge; hand `next` on for the data door to name.
+  if (typeof previous !== "object" || previous === null) return next;
+  if (typeof next !== "object" || next === null) return next;
+  let out: TOut | null = null;
+  for (const key in next) {
+    const before = previous[key];
+    const after = next[key];
+    if (!Array.isArray(before) || !Array.isArray(after)) continue;
+    const reused = reuseBranch(before, after);
+    if (reused === null) continue;
+    if (out === null) out = { ...next };
+    // `Reflect.set`: `out[key]` is `TOut[K]`, and a copy of it is only
+    // known to be `BaseDataPoint[]` — the same array type, but not the
+    // same name — so the write goes through the reflective door instead
+    // of an assertion.
+    Reflect.set(out, key, Object.isFrozen(after) ? Object.freeze(reused) : reused);
+  }
+  return out ?? next;
+}
+
+/** A copy of `after` carrying the reused objects, or null when there is nothing to reuse. */
+function reuseBranch(
+  before: readonly BaseDataPoint[],
+  after: readonly BaseDataPoint[],
+): BaseDataPoint[] | null {
+  const shared = Math.min(before.length, after.length);
+  let copy: BaseDataPoint[] | null = null;
+  for (let i = 0; i < shared; i++) {
+    const mine = before[i];
+    const theirs = after[i];
+    if (mine === theirs || !samePoint(mine, theirs)) continue;
+    if (copy === null) copy = after.slice();
+    copy[i] = mine;
+  }
+  return copy;
+}
+
+/**
+ * Equal as plain data: both plain objects, the same own enumerable string
+ * keys, and `===` values. `for…in` over a plain object walks exactly its
+ * own enumerable keys without allocating a key array.
+ */
+function samePoint(a: unknown, b: unknown): boolean {
+  if (!isPlain(a) || !isPlain(b)) return false;
+  for (const key in a) {
+    if (!Object.hasOwn(b, key)) return false;
+    const mine = Reflect.get(a, key);
+    const theirs = Reflect.get(b, key);
+    // `===` says 0 and -0 are equal; a formatter can tell them apart.
+    if (mine !== theirs || (mine === 0 && !Object.is(mine, theirs))) return false;
+  }
+  for (const key in b) {
+    if (!Object.hasOwn(a, key)) return false;
+  }
+  return true;
+}
+
+function isPlain(value: unknown): value is object {
+  if (typeof value !== "object" || value === null) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 export function computation<
   const TIn extends readonly Source<any>[],
   TOut extends Record<string, BaseDataPoint[]>,
@@ -155,6 +264,17 @@ export function computation<
 
   let fed: DataView<BaseDataPoint>[] | null = null;
   let result: TOut;
+  /**
+   * The declared head door re-runs `calc` on a prefix. A `calc` that keeps
+   * a resume checkpoint for `calcLast` — every fold-based increment does —
+   * then holds the prefix's end, not the array's, and a tick resuming from
+   * it would corrupt the tail for good (and every tick after, since the
+   * next checkpoint is taken from the corrupted state). So after a
+   * declared landing the tail gate stays closed until `calc` has run over
+   * the whole input once more. A rule the node enforces, not one a
+   * factory has to remember.
+   */
+  let tailResumeStale = false;
 
   /**
    * `headLookback`'s interpreter. Declines (null → full path) whenever
@@ -229,7 +349,7 @@ export function computation<
     // change; if even one is a full change (`tailDelta` returns null), this
     // is a full computation. The same commit-order rule applies to
     // `calcLast`.
-    if (calcLast && fed !== null) {
+    if (calcLast && fed !== null && !tailResumeStale) {
       const previous = fed;
       // Bails out the moment even one input can't be classified (null) —
       // narrowing as it collects, rather than filtering afterward, is what
@@ -278,6 +398,7 @@ export function computation<
       if (headOnly) {
         const next = landPage(result, values as ReadOf<TIn>, changes);
         if (next !== null) {
+          if (landPage === declaredDoor) tailResumeStale = true;
           fed = values;
           result = next;
           return result;
@@ -286,6 +407,7 @@ export function computation<
     }
 
     const next = calc(...(values as ReadOf<TIn>));
+    tailResumeStale = false;
     fed = values;
     result = next;
     return result;

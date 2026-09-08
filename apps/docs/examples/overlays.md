@@ -1,5 +1,5 @@
 ---
-description: "Moving averages and Bollinger bands sharing the price pane and its value axis."
+description: "Moving averages, BBI and Bollinger bands sharing the price pane and its value axis."
 ---
 
 # Overlay indicators

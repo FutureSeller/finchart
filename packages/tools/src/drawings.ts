@@ -3,9 +3,17 @@ import { ContractError } from "@finchart/core";
 
 /**
  * A drawing is pure data in domain coordinates: x is the data's x —
- * serialization crosses sessions even under a bar-index coordinate
- * system — and the vertical is price. Pixels only show up at the moment
- * you draw and the moment you hit-test.
+ * serialization crosses sessions under a time or a bar-index coordinate
+ * system, because the data's x is the same x next session — and the
+ * vertical is price. On an ordinal axis (a price-axis transform such as
+ * Renko) the data's x is a brick number, valid for one transform, one set
+ * of options and one source: reloading such a drawing onto that same triple
+ * means translating the nearest brick inside the span (round, then clamp)
+ * to its `closedAt` plus its rank among the bricks sharing it (one candle
+ * can close several), keeping the signed remainder (a free-placed anchor
+ * can sit between bricks or beyond either end), and back — across a
+ * parameter change there is no faithful mapping. Pixels only show up at the
+ * moment you draw and the moment you hit-test.
  */
 
 /**

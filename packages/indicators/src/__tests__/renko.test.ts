@@ -9,6 +9,22 @@ function tick(x: number, close: number): OHLC {
 }
 
 describe("renko", () => {
+  it("refuses a close 2⁴⁷ bricks or more from zero — a brick under the doubles' spacing there could not move the level", () => {
+    const at = (x: number, close: number): OHLC => ({ x, open: close, high: close, low: close, close });
+    expect(() => renko([at(0, 1e20), at(1, 1e20 + 16384)], { brickSize: 1638.4 })).toThrow(ContractError);
+    expect(() => renko([at(0, 2 ** 47)], { brickSize: 1 })).toThrow(/too small to step the price/);
+    // A brick over half the largest double has no reversal inside the doubles (it used to lay one at −∞); under
+    // that, every brick lies between the level and a finite close, so a tape from −1.5e308 to 1.5e308 and back
+    // is laid in finite bricks, reversal included.
+    expect(() => renko([at(0, -1e308), at(1, 1e308), at(2, -1e308)], { brickSize: 1e308 })).toThrow(/at most half the largest double/);
+    const quarter = Number.MAX_VALUE / 4;
+    const laid = renko([at(0, -1.5e308), at(1, 1.5e308), at(2, -1.5e308)], { brickSize: quarter });
+    expect(laid.length).toBeGreaterThan(6);
+    for (const brick of laid) expect(Number.isFinite(brick.open) && Number.isFinite(brick.close)).toBe(true);
+    // Just inside the door the bricks are laid as ever — three of them, one price unit each.
+    expect(renko([at(0, 2 ** 47 - 5), at(1, 2 ** 47 - 2)], { brickSize: 1 })).toHaveLength(3);
+  });
+
   it("should refuse a non-positive brick size", () => {
     expect(() => renko([tick(0, 10)], { brickSize: 0 })).toThrow(ContractError);
   });

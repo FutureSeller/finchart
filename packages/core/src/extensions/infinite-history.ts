@@ -33,7 +33,8 @@ export type HistorySink<T extends BaseDataPoint> = (page: T[]) => void;
  * API (Toss and Upbit take `count` up to 200, Binance `limit` up to
  * 1000), just request the cap: one bigger page beats several small ones
  * on every axis — round trips while the screen shows a gap, request
- * quota, and landings (each landing recomputes every derivation).
+ * quota, and landings (each landing costs every derivation its head
+ * door where one takes it, or a whole recompute otherwise).
  */
 export type HistoryFetch<T extends BaseDataPoint> = (
   before: number,
@@ -148,12 +149,19 @@ const rethrow = (error: unknown): void => {
  * next gesture retries naturally.
  *
  * **Landing cost** — a landing pays for the points held, not the page:
- * a prepend copies the whole array and rebuilds the x index, and a
- * derivation's contract is "the whole input", so each landing recomputes
- * every derivation wholesale. Measured at 100k candles, +500 bars per
- * landing: 1.4ms bare, 37.7ms with four SMA derivations (≈9ms per
- * derivation) — past a 60Hz frame budget on its own. Landings equal
- * pages, so a derivation-heavy chart wants larger, rarer pages.
+ * a prepend copies the whole array and shifts any populated cached x
+ * values by the page. A derivation pays by its door. With a head door
+ * (`deriveFirst`), the built-in manager, prior output and a non-empty
+ * page, the door's `head` returns outputs for the page plus up to its
+ * declared lookback of old ones; when some old output outlives that
+ * lookback the result is spliced over the retained tail — same objects,
+ * normally only the head and the seam validated — and when the lookback
+ * covers all of it the head goes through `setData` and full validation.
+ * Without a head door the whole input is re-derived and fully validated.
+ * Measured at 100k candles, +500 bars per landing, at a 500-bar window:
+ * 0.40ms bare, 3.90ms with four SMA derivations through their head doors
+ * — under the 8ms hitch line. Landings equal pages, so a chart whose
+ * derivations re-derive wholesale still wants larger, rarer pages.
  *
  * **Changing worlds under the loader is undefined.** Swapping symbols by
  * calling `setData` on the same handle cannot be detected here — dispose

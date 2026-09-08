@@ -245,6 +245,9 @@ button[aria-pressed="true"] {
   --chart-candle-down: #f87171;
   --chart-bar-up: #22c55e;
   --chart-bar-down: #f87171;
+  /* The indicator histograms (MACD) — the candle's hue, opaque; light overrides below. The volume pane carries its own translucent pair on the series */
+  --chart-histogram-up: #22c55e;
+  --chart-histogram-down: #f87171;
   --chart-watermark: rgba(120, 123, 134, 0.14);
   --chart-price-line: #2962ff;
   --chart-tooltip: #d1d4dc;
@@ -313,6 +316,8 @@ button[aria-pressed="true"] {
 
 body.light #charts {
   --chart-grid: #eef1f6;
+  --chart-histogram-up: #16a34a;
+  --chart-histogram-down: #dc2626;
   --chart-label: #64748b;
   --chart-crosshair: #94a3b8;
   --chart-crosshair-badge: #ffffff;

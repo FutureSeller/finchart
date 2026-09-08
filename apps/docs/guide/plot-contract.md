@@ -337,10 +337,13 @@ data broke**, not the fix and not our declaration:
 | `prepend(points)` | `validateSeriesData(points, accessor, { firstX })` |
 | `updateLast(point)` | `validateSeriesPoint(point, accessor, { lastX })` — the same x replaces the bar, an earlier x is the past |
 | `swapSeries(next)` | `validateSeriesData(handle.read(), next's accessor)` — a swap re-checks what you hold under the new rules |
-| a derived series' own output | — ¹ |
+| a derived series' own output | — ⁶ |
 
-¹ A derivation runs inside the frame; its output is checked there and a
-defect throws from `pull()`. Validate the **source** you hand it.
+⁶ A derivation runs when its data changes — synchronously, inside the data
+door that changed it (`setData`, `append`, `prepend`, `updateLast`) — and its
+output is checked there, so a defect throws from that call; a registration
+fed by an external `input` re-reads and validates that input when it is next
+read. Validate the **source** you hand it.
 
 The socket recipe (type-checked) is `onTick` in [Getting started's real
 service](/guide/getting-started#real-time-updates-indicators). A page that
@@ -362,10 +365,18 @@ pane.addSeries({ series, data, derive: (source) => points, coordinates });
 - It recomputes **only when the data changes.** Calling it on the draw path
   would put the data size inside the frame budget — O(n) per indicator, so it
   multiplies as you add panes.
-- There's no incremental computation. When `prepend` glues history on, the whole
-  thing is recomputed, and that's what makes the values near the boundary
-  correct on their own (a 20-day moving average only becomes right once the 20
-  points before it exist).
+- The incremental doors — `calcLast`/`calcFirst`/`headLookback` on a computed
+  node, `deriveLast`/`deriveFirst` on a derivation whose output is one point
+  per input point — are optional and live on the node or registration that
+  declares them. A plain `derive`
+  has none: when `prepend` glues history on, the whole thing is recomputed, and
+  that's what makes the values near the boundary correct on their own (a
+  20-day moving average only becomes right once the 20 points before it
+  exist). `deriveLast`'s contract is the shape of the changed tail — exactly
+  one output point for a replaced last input, exactly `count` for `count`
+  appended — so a derivation in which one input can create or destroy any
+  number of outputs (a price-axis transform, below) has no honest way to
+  declare it.
 - The derived result is clipped against the same viewport and goes through
   decimation too. **Every registration, derived or not, has its own
   `DataManager`** — there's one path for clipping.
@@ -389,11 +400,108 @@ pane.addSeries({ series, data, derive: (source) => points, coordinates });
   OHLC[]` (`@finchart/indicators`) is a pure function turning source OHLC into
   smoothed OHLC, so `candleSeries()` draws it unchanged:
   `pane.addSeries({ series: candleSeries(), data, derive: heikinAshi })`.
-- **Renko, Kagi and Point&Figure** don't fall out of these ingredients — one bar
-  doesn't correspond to one input point; bricks are born and die as price
-  moves, so x can't inherit the source's x (it collides head-on with the
-  mapping premise of one x per input point). They need a coordinate-system
-  design first, so they're deferred — recorded as real demand.
+- **Renko** (and its lineage — Line Break, Kagi, Point & Figure) is a
+  derivation too, but not a one-to-one one: a bar doesn't correspond to one
+  input point, bricks are born and die as price moves, so x can't inherit the
+  source's x. Its x is an ordinal, and that has consequences — the next section.
+
+### Price-axis transforms
+
+Renko throws time away and keeps price: a brick each time the close moves
+`brickSize` in the current direction, and two bricks' worth — a one-brick
+gap plus the brick — to reverse. `renko(candles, { brickSize })`
+(`@finchart/indicators`) is a pure function `OHLC[] → RenkoBrick[]`, the
+bricks are OHLC-shaped so `candleSeries()` draws them unchanged. Three rules
+make it a price-axis transform — the rules of the lineage (Line Break ships
+beside it; Kagi and Point & Figure belong to it too):
+
+1. **x is an ordinal** (0, 1, 2 …), never the source's x. When one candle
+   closes several bricks they share that candle's x as `closedAt` — the key
+   that wins time back for the axis, the tooltip and the crosshair badge in
+   one place, the axis format. Read the bricks from the handle — that is
+   the array the chart accepted, atomically with its validation — and
+   narrow the point, because `candleSeries()` types the handle's points as
+   `OHLC`:
+   ```ts
+   const handle = pane.addSeries({
+     series: candleSeries(),
+     data: candles,
+     derive: (c) => renko(c, { brickSize }),
+   });
+   plot.applyOptions({ axis: { x: { format: (x) => {
+     // A tick inside the bricks' span takes the nearest brick's time; outside it there is no time — label nothing.
+     const bricks = handle.read();
+     const brick = x >= 0 && x <= bricks.length - 1 ? bricks[Math.round(x)] : undefined;
+     return brick && "closedAt" in brick && typeof brick.closedAt === "number" ? label(brick.closedAt) : "";
+   } } } });
+   ```
+   (Keeping the derive's return value in a variable of your own is one step
+   behind on a rejected output: the chart keeps its last accepted bricks,
+   your variable holds the rejected ones.)
+2. **A transform is a `derive`, and the tick goes in through the source
+   door.** Feed ticks with `handle.updateLast(candle)` / `handle.append([candle])`,
+   and validate those candles yourself first: the registration checks the
+   bricks it draws, not the candles it derives them from (footnote ⁶ above) —
+   `updateLast` checks the one candle's shape and, once the source holds a
+   candle, its x (finite, not earlier than the last); the array doors check
+   nothing of the source — so a NaN close, or a duplicate x inside an
+   appended array, passes through to the transform. On each
+   tick the derivation re-runs, the x mapping follows (bricks may be born or
+   die), and the x viewport is not reset: the visible range is not touched
+   (an auto-scaled value axis still follows the visible values, as on every
+   render), except that `shiftVisibleRangeOnNewBar`, when on and you were
+   looking at the last brick, follows a new brick as it would a new bar;
+   when the open candle's bricks die the range keeps its numbers and its
+   right side goes empty; and the tick that produces the very first brick,
+   if it is the plot's first drawn data, fits the domains once, as any first
+   data does. `handle.setData(candles)` is for a new dataset (it is the source
+   door too — the bricks are re-derived), not a tick: it requests a refit on
+   every call (an output with no bricks has nothing to fit), and a chart
+   that jumps to its full range twenty times a second is unusable. A noisy feed goes through `conflated()`.
+   There is no incremental door — one candle can create or destroy any
+   number of bricks, which is not the tail shape `deriveLast` promises — so
+   every tick re-derives the whole output and revalidates it: O(input +
+   output) per tick, a long tape is linear even when it yields few bricks.
+3. **Ordinals are stable only over the closed prefix.** A tick can only
+   create or destroy the bricks the still-open candle is producing; every
+   brick before it keeps its value and its ordinal. A history page
+   (`prepend`) re-derives from the new first candle and can renumber the
+   whole output (whenever the page changes what the first brick is seeded
+   from, or how many bricks precede the old head) — the drawing is right
+   afterwards, but the window you were looking at may now show different
+   bricks, so re-anchor it (`fitDomains()` or `scrollToRealTime()`).
+
+**Options are the consumer's.** `brickSize` is required — knowledge of tick
+size and volatility is not the transform's. A helper that suggests a step
+from the data is something the consumer calls explicitly, so *when* the
+suggestion was taken stays visible in the call site; the transform itself
+never defaults it.
+
+**What does not fit beside an ordinal axis — and what you would see.** The
+core does not know an ordinal from a timestamp (x is a number either way),
+so most of these are not refused; they draw wrong, and the table says what
+wrong looks like:
+
+| Beside a transform | What you would see |
+|---|---|
+| Time-x candles on the same pane | under `continuousX` the second series sits off-screen until a fit, and after `fitDomains()` the union of a timestamp range and an ordinal one squeezes the ordinal one into the left edge; under `barIndexX` the two become adjacent blocks of slots — the bricks first, then the candles, as if they followed each other in time. Either way snapping and the bar measure attach to whichever series was registered first |
+| A volume pane fed by the time source | panes share one x mapping, so the pane's bars cannot align under the bricks — they land wherever their timestamps map (bricks carrying their own volume is not implemented yet) |
+| `infiniteHistory` on the transform's handle (time-x candles as the source) | it installs, its cursor and its pages are in source space and correct — but it judges *when* to fetch in ordinal pixels, so with timestamps as the source x the first judgement already sees an infinite gap and it pulls pages without a cap until an empty one arrives |
+| `handle.updateLast(brick)` — a tick on the transform's own points | wrong door: the handle's points are candles, so the brick is taken for one. Its ordinal x decides what happens next — below the last candle's x it is refused (`DataError: must keep x >= …`) and nothing changes; equal, it replaces the last candle; above, it is appended as a candle — and in the two accepted cases the bricks are re-derived from a tape that now holds a brick. Ticks go in as candles (rule 2) |
+| Drawings and annotations | an anchor's x is an ordinal — valid only for one (transform, options, source) triple; the anchor's numbers stay put, but on the open candle's tail bricks the brick it points at can be replaced or vanish with a tick. An anchor's x is a number on that axis: a brick's ordinal when snapped, any value — between bricks, or in the empty space before the first or after the last — when placed free. To reload a drawing onto the **same** transform, options and source next session, take the nearest brick inside the span (`clamp(round(x), 0, bricks.length − 1)`), save that brick's `closedAt` **and its rank among the bricks that share it** (one candle can close several) plus the signed remainder `x − index`, and restore by finding that pair and adding the remainder back. Across a parameter change there is no faithful mapping — a rank can vanish, or survive pointing at another price — so treat a restore as best effort and handle a miss |
+| The bar measure | counts bricks, and calls them bars |
+
+**Reading a brick back from a probe.** `probe(x)` returns the value the
+series' accessor reads (a brick's close, low and high), and `sample.index` is
+the index into the derived array — the whole of it, not the decimated part
+drawn on screen — so anything the brick carries beyond price is one lookup
+away: `handle.read()[sample.index]`.
+
+**Decimation.** When the core's OHLC aggregation merges points it builds the
+merged candle from x, the four prices, `label` and `volume`; any other field
+a derived point carries (`closedAt`, a tone) is gone from that bucket (below
+the threshold the points pass through untouched). A series that draws such
+points declares its own `decimation` strategy.
 
 ### Height
 

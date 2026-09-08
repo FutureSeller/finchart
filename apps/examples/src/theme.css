@@ -16,6 +16,9 @@ body.dark #chart {
   --chart-crosshair: #475569;
   --chart-candle-up: #22c55e;
   --chart-candle-down: #f87171;
+  /* The indicator histograms (MACD, on the trading screen and the own-panes case) — the candle's hue. The volume pane carries its own translucent pair on the series. */
+  --chart-histogram-up: #22c55e;
+  --chart-histogram-down: #f87171;
   --chart-tooltip-back: rgba(226, 232, 240, 0.92);
   --chart-tooltip: #0f172a;
   --chart-legend: #cbd5e1;
