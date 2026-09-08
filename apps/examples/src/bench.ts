@@ -23,7 +23,7 @@
 import { browserDeps, createDomLayers, PlotBuilder } from "@finchart/dom";
 import { barIndexX, candleSeries, computation, conflated, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, manualScheduler, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type ConflatedFeed, type CrosshairLine, type DataView, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
 import { tooltip } from "@finchart/dom";
-import { smaFold, type SmaState } from "@finchart/indicators";
+import { atrPriceStep, renko, smaFold, type SmaState } from "@finchart/indicators";
 import { drawingTools } from "@finchart/tools";
 
 const WIDTH = 1200;
@@ -76,6 +76,24 @@ function mulberry32(seed: number): () => number {
  * next.
  */
 const candleCache = new Map<string, OHLC[]>();
+
+/**
+ * Candles whose price stays within one band — a bounded walk around `centre`
+ * — for the scenarios where a transform sized from the tape's own volatility
+ * has to lay a bounded number of units over the whole history.
+ */
+function stationaryCandles(count: number, centre = 100, seed = 42): OHLC[] {
+  const out: OHLC[] = [];
+  const random = mulberry32(seed);
+  let close = centre;
+  for (let i = 0; i < count; i++) {
+    const move = (random() - 0.5) * 2 - (close - centre) * 0.02;
+    const open = close;
+    close = open + move;
+    out.push({ x: i, open, high: Math.max(open, close) + 0.5, low: Math.min(open, close) - 0.5, close });
+  }
+  return out;
+}
 
 function candles(count: number, seed = 42, startX = 0, startPrice = 100): OHLC[] {
   const key = `${count}:${seed}:${startX}:${startPrice}`;
@@ -207,6 +225,8 @@ interface Scenario {
 }
 
 interface ChartOptions {
+  /** Build on the stationary tape instead of the multiplicative walk — the pair's like-for-like source. */
+  stationary?: boolean;
   /** The full surface — drawing tools and the tooltip mounted on top too. */
   fullSurface?: boolean;
   points: number;
@@ -398,7 +418,7 @@ function candleChart(options: ChartOptions): Build {
     const crosshair = crosshairLine();
     plot.addDecoration(crosshair);
 
-    const data = candles(options.points);
+    const data = options.stationary ? stationaryCandles(options.points) : candles(options.points);
     // Candles merge to one pixel per bar — that policy comes along with candleSeries().
     const price = plot.mainPane.addSeries({ series: candleSeries(), data });
     const handles: Pick<SeriesHandle<OHLC>, "append" | "prepend" | "updateLast">[] = [price];
@@ -905,6 +925,16 @@ const scenarios: Scenario[] = [
     step: replaceTick(100_000 - 1),
   },
   {
+    // A price-axis transform under a live feed: the derived registration re-derives the whole tape per tick —
+    // O(n) by design (there is no incremental door for a transform) — this is the number that says what that costs.
+    name: "tick update · 100k, renko derive",
+    // A stationary tape: the bench's multiplicative walk drifts across decades, and a brick sized by its last
+    // fourteen bars would lay a hundred million bricks over its early history. The step is fixed at build, once —
+    // the derivation under measurement is renko's alone. The paired form of this scenario is `renkoDerivePair`.
+    build: renkoDerivePair(100_000).variant.build,
+    step: replaceTick(100_000 - 1),
+  },
+  {
     name: "tick update · 100k, 4 indicators (bar index)",
     build: candleChart({ points: 100_000, indicators: 4, barIndexed: true }),
     step: replaceTick(100_000 - 1),
@@ -1089,19 +1119,56 @@ function zoomedTo(build: Build, fraction: number): Build {
   };
 }
 
+/**
+ * A tick under a price-axis transform against the four-indicator sibling —
+ * the pair whose ratio the performance ledger quotes for the transform
+ * lineage's live path (a derived registration re-derives the whole tape per
+ * tick, O(n) by design; the indicators take the tail door).
+ */
+function renkoDerivePair(points: number): Pair {
+  const renkoChart: Build = (host, createRenderer) => {
+    const plot = PlotBuilder.create<OHLC>(browserDeps({ createScheduler: inertScheduler, createRenderer }))
+      .setSize(WIDTH, HEIGHT)
+      .build(host);
+    const crosshair = crosshairLine();
+    plot.addDecoration(crosshair);
+    const data = stationaryCandles(points);
+    const brickSize = atrPriceStep(data, { period: 14 });
+    const bricks = plot.mainPane.addSeries({ series: candleSeries(), data, derive: (source) => renko(source, { brickSize }) });
+    return { plot, crosshair, handles: [bricks] };
+  };
+  return {
+    question: `A tick under a price-axis transform, ${points.toLocaleString("en")} points: renko derive against four continuous-x indicators`,
+    baseline: {
+      // The same stationary tape as the variant — the pair asks about the tick's work, not the tape's.
+      name: "4 indicators (continuous x), stationary tape",
+      build: candleChart({ points, indicators: 4, stationary: true }),
+      step: replaceTick(points - 1),
+    },
+    variant: {
+      name: "renko derive",
+      build: renkoChart,
+      step: replaceTick(points - 1),
+    },
+  };
+}
+
 const pairs: Pair[] = [
   liveTickPair(100_000),
   liveTickPair(10_000),
+  renkoDerivePair(100_000),
   // The headline case and the honesty case — the second is where conflation
   // buys nothing, which is why it stays an opt-in door and not a default.
   tickBurstPair(100_000, 50),
   tickBurstPair(10_000, 10),
   {
     /**
-     * The landing cost behind infiniteHistory's page-size advice: a
-     * derivation has no increment path, so every prepend recomputes it
-     * wholesale — the landing pays O(held), multiplied by the derivation
-     * count, not O(page). The ratio here is that multiplier.
+     * The landing cost behind infiniteHistory's page-size advice: the
+     * prepend itself is O(held), and each derivation adds what its door
+     * costs — these four SMA registrations declare `deriveFirst`, so they
+     * replace the page's outputs and keep the rest; a derivation without
+     * a head door would recompute wholesale instead. The ratio here is
+     * the four doors' multiplier over the bare prepend.
      */
     question:
       "A history page landing, 100k candles +500/frame: candles alone against 4 SMA derivations",

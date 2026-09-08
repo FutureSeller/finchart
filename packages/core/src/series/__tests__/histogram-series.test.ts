@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { HistogramPoint } from "../histogram-series";
-import { histogramSeries } from "../histogram-series";
+import type { HistogramPoint, HistogramSeriesStyleOverrides } from "../histogram-series";
+import { DEFAULT_HISTOGRAM_STYLE, histogramSeries } from "../histogram-series";
 import { createPlotModel } from "../../plot";
 
 const volume: HistogramPoint[] = [
@@ -81,5 +81,85 @@ describe("histogramSeries", () => {
     expect(
       histogramSeries().valueExtent([{ x: 0, y: null }]),
     ).toBeNull();
+  });
+
+  /**
+   * Tone: the bar says which of the two colour slots it wears, the theme
+   * says what colour that is. The order is CSS specificity's — the most
+   * local explicit value wins: point.color, then a slot override, then one
+   * explicit series colour, then the slot's variable. The plain colour is
+   * the last step only for a bar without a tone.
+   */
+  describe("tone", () => {
+    const toned: HistogramPoint[] = [
+      { x: 0, y: 10, tone: "up" },
+      { x: 1, y: 20, tone: "down" },
+      { x: 2, y: 15 },
+    ];
+    const vars: Record<string, string> = {
+      "--chart-histogram-up": "#0a0",
+      "--chart-histogram-down": "#a00",
+      "--chart-histogram": "#888",
+    };
+
+    function fillsWith(
+      style?: HistogramSeriesStyleOverrides,
+      variables: Record<string, string> = vars,
+      data = toned,
+    ) {
+      const model = createPlotModel({
+        size: { width: 800, height: 600 },
+        series: { series: histogramSeries({ style }), data },
+        config: {
+          showGrid: false,
+          axis: { x: { showLabels: false }, y: { showLabels: false } },
+        },
+        deps: { createStyleReader: () => (name) => variables[name] ?? "" },
+      });
+      return model
+        .commands()
+        .flatMap((c) =>
+          c.type === "drawShape" && c.shape.shape === "rect" ? [c.shape.fill] : [],
+        );
+    }
+
+    it("should read the slot's variable for a toned bar and the plain one otherwise", () => {
+      expect(fillsWith()).toEqual(["#0a0", "#a00", "#888"]);
+    });
+
+    it("should fall back to the candle colours when no variable is set", () => {
+      expect(fillsWith(undefined, {})).toEqual([
+        DEFAULT_HISTOGRAM_STYLE.up,
+        DEFAULT_HISTOGRAM_STYLE.down,
+        DEFAULT_HISTOGRAM_STYLE.color,
+      ]);
+      expect(DEFAULT_HISTOGRAM_STYLE.up).toBe("#16a34a");
+      expect(DEFAULT_HISTOGRAM_STYLE.down).toBe("#dc2626");
+    });
+
+    it("should let an explicit point colour beat its tone", () => {
+      const data: HistogramPoint[] = [{ x: 0, y: 10, tone: "up", color: "#f0b" }];
+      expect(fillsWith(undefined, vars, data)).toEqual(["#f0b"]);
+    });
+
+    it("should let one explicit series colour beat the slot variables", () => {
+      // A consumer who wrote `style: { color }` asked for one colour — a
+      // toned input must not silently take it away.
+      expect(fillsWith({ color: "#f0b" })).toEqual(["#f0b", "#f0b", "#f0b"]);
+    });
+
+    it("should let a slot override beat the explicit series colour", () => {
+      expect(fillsWith({ color: "#f0b", up: "#0f0" })).toEqual(["#0f0", "#f0b", "#f0b"]);
+    });
+
+    it("should leave the other slot on its variable when only one is overridden", () => {
+      expect(fillsWith({ up: "#0f0" })).toEqual(["#0f0", "#a00", "#888"]);
+    });
+
+    it("should treat a null override as absent, the same way the resolver does", () => {
+      // A props round trip turns undefined into null; neither says anything.
+      expect(fillsWith({ color: null as never })).toEqual(["#0a0", "#a00", "#888"]);
+      expect(fillsWith({ up: null as never, color: "#f0b" })).toEqual(["#f0b", "#f0b", "#f0b"]);
+    });
   });
 });

@@ -39,7 +39,12 @@ export interface SeriesHandle<
   read(): DataView<TPoint>;
 
   /**
-   * Replaces the whole dataset. **Refits both axes.**
+   * Replaces the whole dataset. **Refits both axes** — unless told not to.
+   *
+   * `refit: false` keeps the current window: the door for reconciling
+   * recent bars from a REST snapshot while the user is scrolled into
+   * history. Replacing what the screen shows is still a replacement —
+   * only the *viewport verdict* changes, not the data contract below.
    *
    * The array is copied; the points are not. **A point is handed over,
    * not lent** — from here on the chart reads `x` off the object you gave
@@ -49,7 +54,7 @@ export interface SeriesHandle<
    * Copying every point on a door that takes 100,000 of them per call
    * would cost the frame budget on its own, so it's a contract instead.
    */
-  setData(data: T[]): void;
+  setData(data: T[], options?: { refit?: boolean }): void;
 
   /**
    * Splices past data onto the front. Leaves the domain alone — dragging
@@ -169,10 +174,10 @@ export function createSeriesHandle<
     // knows that type is where the registration was called, so the
     // TPoint that came from there is recovered here.
     read: () => entry.read() as DataView<TPoint>,
-    setData: (data) => {
+    setData: (data, options) => {
       live("setData");
       entry.setData(data);
-      host.notify({ data: true, refit: true });
+      host.notify({ data: true, refit: options?.refit !== false });
     },
     /**
      * **The shape is checked here first.**

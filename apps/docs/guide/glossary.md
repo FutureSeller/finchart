@@ -132,12 +132,14 @@ a timestamp in milliseconds, a bar index, anything you can order (ADR-0040).
 |---|---|---|
 | `LineDataPoint` | `y` | line, area, baseline |
 | `OHLC` | `open`/`high`/`low`/`close`(`volume?` — `null` is a gap; the four prices never are) | candles, OHLC bars |
-| `HistogramPoint` | `y`(`color?`) | histogram (volume, MACD) |
+| `HistogramPoint` | `y`(`tone?`, `color?`) | histogram (volume, MACD) |
 
 `y` is `number | null` — `null` is *whitespace* (below).
-`HistogramPoint.color` is per-point because up-or-down is not styling but **a
+`HistogramPoint.tone` is per-point because up-or-down is not styling but **a
 fact about the data**, and the only side that knows that fact is the side
-making the point.
+making the point. The tone picks a colour slot (`--chart-histogram-up` /
+`-down`) and the theme fills it; `color` is an explicit literal for one bar,
+outside the theme.
 
 ### Source data / visible data
 
@@ -145,17 +147,31 @@ making the point.
   (`addSeries({ data })` or `handle.setData`). It belongs to the registration,
   not to the chart, so it can differ per series — that is what lets BTC and
   ETH be drawn on one chart. **It must ascend in x** — slicing is a binary
-  search, and breaking that raises a `DataError`.
+  search. A plain registration's accessor checks that and raises a
+  `DataError`; a derived registration checks its derive's output instead —
+  of its source only `updateLast(point)` checks the point's shape and, once
+  the source holds a point, that its x is finite and not earlier than the
+  last one (that is how it tells a replace from an append) — so a source
+  array is yours to keep in order (below).
 - **Visible data** is what comes out after slicing by viewport and running
   decimation.
 
 A derived series' `derive` receives the **source data**. It has to, or
 indicators that look backward — a moving average — would break off at the left
-edge of the screen.
+edge of the screen. What the registration validates is the derive's
+**output** — the points it draws — not that source: a source array handed to
+`setData`, `append` or `prepend` is yours to check before you hand it over
+(`updateLast` alone checks the one point's shape, and its x once there is a
+last one to compare with), and the plot
+contract's [price-axis transforms](/guide/plot-contract#price-axis-transforms)
+says why that matters for a transform.
 
 ### Accessor (`CoordinateAccessor`)
 
-How the layout numbers get pulled out of a point. `getX(point)`, `getY(point)`.
+How the layout numbers get pulled out of a point. `getX(point)`, `getY(point)`;
+optionally `getYRange(point)` (the span a candle has, what a probe snaps to)
+and `getPositiveFloor(point)` (the smallest positive value the point holds —
+what a log axis stands on when the point dips to zero or below).
 
 For the same `OHLC`, measuring the x range needs `x` while placing y needs
 `close`. The extraction rule is kept separate from the point type
@@ -257,15 +273,22 @@ series mounted later would jerk your window out to the union.
 
 ### Series
 
-Knows only **what shape to draw the data in**. Two responsibilities, no more.
+Knows only **what shape to draw the data in**. Two required answers and two
+optional ones, four in all.
 
 ```ts
 valueExtent(data): Range   // how much y it occupies
 draw(renderer, context)    // how it draws
+decimation?                // how its points are thinned
+coordinates?               // how their coordinates are read
 ```
 
-Two optional properties on top (`decimation`, `coordinates`) — this is where
-"the side that knows the point type states the policy" lives.
+The optional two are where "the side that knows the point type states the
+policy" lives — a candle's value is its close, and only the candle knows that.
+Each is resolved registration first, then series, then fallback: a
+registration's `coordinates` wins over the series', and plain `x` / `y` reads
+when neither says; a registration's `decimation` fields win over the series'
+field by field, and the wiring's policy fills what neither sets.
 
 Grid, axes, pan/zoom, and layers belong to Plot, so a series knows nothing of
 them. Six built-in implementations:

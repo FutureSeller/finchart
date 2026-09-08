@@ -2,7 +2,7 @@
 description: "Volume distributed over the visible price range, recomputed as you pan."
 ---
 
-# Volume Profile — the distribution over the visible range
+# Volume Profile — the distribution of what you can see
 
 <script setup>
 import * as mod from "../../examples/src/cases/volume-profile";

@@ -2,7 +2,7 @@
 description: "swapSeries changes the presentation and nothing else: candles to line to area and back, with the data, viewport and drawings untouched."
 ---
 
-# Switching chart types — swapSeries
+# Switching chart types — swapSeries changes only the presentation
 
 <script setup>
 import * as mod from "../../examples/src/cases/chart-types";

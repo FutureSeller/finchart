@@ -4,6 +4,7 @@ import {
   requireInterval,
   requireRange,
 } from "../primitives";
+import { lerp, unlerp } from "./finite-lerp";
 import { niceInterval, withoutFloatNoise } from "./tick-arithmetic";
 import type { ExpandHints, Scale, TickGeometry } from "./types";
 
@@ -47,6 +48,9 @@ interface TickPlan {
   /** Ladder shape: mantissas per decade, and the decade stride. */
   mantissas: readonly number[];
   skip: number;
+  /** The requested pixel gap, and the axis that measures it — a ladder rung under the gap is not a tick. */
+  minTickSpacing: number;
+  pixelOf: (value: number) => number;
   /** `stepAt`'s clamp bounds — the visible domain's decade range. */
   stepFloor: number;
   stepCeiling: number;
@@ -75,6 +79,58 @@ function alignDecade(from: number, stride: number): number {
  * nowhere to ask (a direct call with no hints, or an interval with no
  * positive value at all).
  */
+/**
+ * A gap is judged against the requested spacing less this fraction of it —
+ * the rounding of the pixels' own arithmetic (a rung the decade density
+ * placed exactly a gap apart lands a few ulps under it). Relative, so no
+ * spacing, however small, lets two ticks on one pixel through: a gap of 0
+ * is under any positive spacing's share.
+ */
+const TICK_GAP_SLACK = 2 ** -40;
+
+/** `log(Number.MAX_VALUE)` — where a log axis's arithmetic changes form, never in the middle of the range. */
+const LOG_MAX_VALUE = Math.log(Number.MAX_VALUE);
+
+/**
+ * `log(value / base)` for two positive numbers, as `log1p` of the relative
+ * offset — which keeps every digit near `base`, where a difference of two
+ * logarithms keeps almost none (two adjacent doubles differ in the
+ * sixteenth digit; their logarithms in none) — wherever that is finite.
+ * It leaves the doubles at two ends only, and only there is another form
+ * used, so the forms never meet where both are finite and could disagree
+ * by a rounding: an offset ratio past the doubles (a value above `base`
+ * times the largest double) is measured in steps of the largest double —
+ * `value / (MAX_VALUE × base)`, dividing by the product, an ordinary number
+ * there, not by each in turn, which would pass through a subnormal and lose
+ * its digits; and, where even that is past the doubles (the smallest
+ * subnormal under the largest double: six hundred decades), `value` itself
+ * is brought down by the largest double a step at a time — each step's
+ * remainder is a ratio near 1, so consecutive steps meet exactly at
+ * `log(MAX_VALUE)`; and a value so far below `base` that the ratio rounds
+ * to −1 falls to the difference of logarithms, which has all its digits
+ * there.
+ */
+function logOver(base: number, value: number): number {
+  // A value or base that is not a positive finite number has no ratio to measure — the logarithms say so
+  // (NaN, or the infinity it is), as they always did; the steps below are for positive finite pairs only. (A
+  // base is a domain end, or an extent's — and an extent a series returns is not checked before it is padded.)
+  if (!Number.isFinite(value) || !(base > 0) || !Number.isFinite(base)) return Math.log(value) - Math.log(base);
+  const relative = (value - base) / base;
+  if (Number.isFinite(relative)) {
+    const near = Math.log1p(relative);
+    return Number.isFinite(near) ? near : Math.log(value) - Math.log(base);
+  }
+  const perStep = Number.MAX_VALUE * base;
+  let rest = value;
+  let steps = 1;
+  let remainder = rest / perStep;
+  while (!Number.isFinite(remainder)) {
+    rest /= Number.MAX_VALUE;
+    steps += 1;
+    remainder = rest / perStep;
+  }
+  return steps * LOG_MAX_VALUE + Math.log1p(Math.max(0, remainder - 1));
+}
 const LOG_FLOOR_DECADES = 1000;
 
 /**
@@ -156,28 +212,83 @@ export class LogScale implements Scale {
        * from `rangeMax` — down in the non-inverted case, up in the
        * inverted one; either way it's outside the area.
        */
-      return rangeMin + (rangeMin - rangeMax);
+      const off = lerp(rangeMin, rangeMax, -1);
+      // An axis two largest-doubles tall has no room past its end: then the edge of the doubles on that side
+      // is as far past as there is — a finite pixel still, which is what keeps `fillRect` drawing.
+      if (Number.isFinite(off)) return off;
+      return rangeMin < rangeMax ? -Number.MAX_VALUE : Number.MAX_VALUE;
     }
 
-    const [domainMin, domainMax] = this.domain;
     const [rangeMin, rangeMax] = this.range;
-
-    const logMin = Math.log(domainMin);
-    const logMax = Math.log(domainMax);
-    const ratio = (Math.log(value) - logMin) / (logMax - logMin);
-
-    return rangeMin + ratio * (rangeMax - rangeMin);
+    return lerp(rangeMin, rangeMax, this.logRatio(value));
   }
 
   invert(screenValue: number): number {
-    const [domainMin, domainMax] = this.domain;
+    const [domainMin] = this.domain;
     const [rangeMin, rangeMax] = this.range;
 
-    const ratio = (screenValue - rangeMin) / (rangeMax - rangeMin);
-    const logValue =
-      Math.log(domainMin) + ratio * (Math.log(domainMax) - Math.log(domainMin));
+    const ratio = unlerp(rangeMin, rangeMax, screenValue);
+    // log(value / min), run backwards. One formula wherever it is finite — a second one is used only past
+    // the point where the first leaves the doubles, so the two never meet where both are finite and could
+    // disagree by a rounding (a switch in the middle of the range is where a monotone axis stops being one).
+    // The ends of the range are the ends of the domain by definition — no arithmetic to round there.
+    if (ratio === 0) return domainMin;
+    if (ratio === 1) return this.domain[1];
+    const over = ratio * this.logOverMin(this.domain[1]);
+    const grown = Math.exp(over);
+    let value: number;
+    if (Number.isFinite(grown) && grown > 0) {
+      value = domainMin * grown;
+    } else {
+      // `exp(over)` left the doubles — over the top, or under the bottom to 0 — while `min × exp(over)` need
+      // not have (a `min` under 1, or over it): the exponent is taken in steps of the largest double, `min ×
+      // MAX_VALUE × … × exp(rest)` upward or `min ÷ MAX_VALUE ÷ … × exp(rest)` downward, each step a finite
+      // factor — the largest double first, so a subnormal `min` is an ordinary number before the remainder
+      // multiplies it (a subnormal product keeps only a few of its digits); past the doubles for real, this
+      // is infinite, or zero, honestly.
+      const steps = Math.floor(Math.abs(over) / LOG_MAX_VALUE);
+      const upward = over > 0;
+      value = domainMin;
+      for (let step = 0; step < steps && Number.isFinite(value) && value > 0; step++) {
+        value = upward ? value * Number.MAX_VALUE : value / Number.MAX_VALUE;
+      }
+      // Past the doubles already: the remainder of an exponent this large is no number to multiply by.
+      if (!Number.isFinite(value) || value === 0) return value;
+      value *= Math.exp(upward ? over - steps * LOG_MAX_VALUE : over + steps * LOG_MAX_VALUE);
+    }
+    // Inside the range the answer is inside the domain by definition: a rounding that puts it past an end
+    // — a domain of two adjacent doubles, where an ulp is the whole domain — is that end. A bound, not a
+    // second formula: it changes nothing where the value is already inside.
+    if (ratio >= 0 && ratio <= 1) return Math.min(this.domain[1], Math.max(domainMin, value));
+    return value;
+  }
 
-    return Math.exp(logValue);
+  /**
+   * Where the value sits between the domain's ends, in log space, 0 at
+   * `min` and 1 at `max`: `log(value / min) / log(max / min)`, each
+   * logarithm taken where it keeps its digits (see `logOverMin`). Two
+   * plain logarithms subtracted keep only the digits they do not share —
+   * for a domain narrower than its own `min` (`[100, 101]`, or two
+   * adjacent doubles, which `setDomain` accepts) that is few, and for
+   * adjacent doubles none: `0 / 0`, a `NaN` pixel the canvas drops.
+   */
+  private logRatio(value: number): number {
+    return this.logOverMin(value) / this.logOverMin(this.domain[1]);
+  }
+
+  /**
+   * `log(value / min)` for a positive value, as `log1p` of the relative
+   * offset — which keeps every digit near `min`, where a difference of two
+   * logarithms keeps almost none — wherever that is finite. It leaves the
+   * doubles at two ends only, and only there is another form used, so the
+   * forms never meet where both are finite and could disagree by a
+   * rounding: an offset ratio past the doubles (a value above `min` times
+   * the largest double) is measured from the largest double instead, and
+   * a value so far below `min` that the ratio rounds to −1 falls to the
+   * difference of logarithms, which has all its digits there.
+   */
+  private logOverMin(value: number): number {
+    return logOver(this.domain[0], value);
   }
 
   /**
@@ -217,10 +328,9 @@ export class LogScale implements Scale {
     // magnitude. Taking it here, in the module that owns the range
     // invariant, is what spares every caller a sign contract.
     const span = Math.abs(to - from);
-    // Difference of logs, not log of the ratio — `max / min` overflows to
-    // Infinity past ~600 decades (1e300 / 1e-300), and an infinite decade
-    // count silently produced zero ticks. Caught by a mutation run.
-    const decades = Math.log10(max) - Math.log10(min); // > 0 — the domain contract is min < max
+    // `log(max / min)` taken where it keeps its digits — a difference of logarithms overflows in the ratio
+    // past ~600 decades and cancels to nothing for two adjacent doubles; both are legal domains.
+    const decades = logOver(min, max) / Math.LN10; // > 0 — the domain contract is min < max
     const pxPerDecade = span / decades;
 
     /**
@@ -252,22 +362,37 @@ export class LogScale implements Scale {
      * the run; the survivors are exactly a prefix, kept while the gap
      * still clears the spacing.
      */
-    const fits = Math.max(1, Math.floor(span / minTickSpacing));
-    const linearStep = niceInterval((max - min) / fits);
-    const linearFirst = Math.ceil(min / linearStep) * linearStep;
+    // How many ticks the axis's height holds — at least one, and at most as many as `values()` ever emits: a
+    // range two largest-doubles tall has infinite height, and a step derived from an infinite count is none.
+    const fits = Math.min(MAX_GEOMETRY_TICKS, Math.max(1, Math.floor(span / minTickSpacing)));
+    // A domain's span is positive, so a raw step of 0 is one that underflowed at the bottom of the doubles —
+    // the smallest double is the step there (a domain of two adjacent subnormals has two places).
+    const rawStep = (max - min) / fits;
+    const linearStep = niceInterval(rawStep > 0 ? rawStep : Number.MIN_VALUE);
+    // The first multiple of the step at or above `min` — `min / step` can underflow to 0 for a tiny `min`
+    // under a huge step, and its multiple would then sit below the domain; and where the step is under the
+    // doubles' own spacing (a domain of adjacent doubles) no multiple above `min` is a different number from
+    // one below it, or the one multiple between the two places is past the top, so no multiple of the step
+    // lies in the domain at all — then the domain's own end is the first place.
+    let linearFirst = Math.ceil(min / linearStep) * linearStep;
+    if (linearFirst < min) linearFirst += linearStep;
+    if (linearFirst < min || linearFirst > max) linearFirst = min;
     let linearCount = 0;
-    let previousLog = 0;
+    let previousValue = 0;
+    let previousPixel = 0;
     for (let index = 0; linearCount < MAX_GEOMETRY_TICKS; index++) {
       const value = linearFirst + index * linearStep;
       if (value > max) break;
-      const logValue = Math.log10(value);
-      // Gaps only shrink from here on, so the first miss ends the prefix.
-      // This also ends a run whose step underflowed to no progress.
-      if (linearCount > 0 && (logValue - previousLog) * pxPerDecade < minTickSpacing) {
+      // Gaps only shrink from here on, so the first miss ends the prefix — the gap measured on the axis
+      // itself, in pixels, which is also what ends a run whose step is absorbed into its values (a step
+      // under the doubles' spacing at the top of the range makes no progress at all).
+      const pixel = this.scale(value);
+      if (linearCount > 0 && (value <= previousValue || Math.abs(pixel - previousPixel) < minTickSpacing)) {
         break;
       }
       linearCount++;
-      previousLog = logValue;
+      previousValue = value;
+      previousPixel = pixel;
     }
 
     // `stepAt` clamps to the visible domain's decade range — one rule
@@ -287,6 +412,8 @@ export class LogScale implements Scale {
       linearCount,
       mantissas,
       skip,
+      minTickSpacing,
+      pixelOf: (value) => this.scale(value),
       stepFloor,
       stepCeiling,
     };
@@ -371,17 +498,41 @@ export class LogScale implements Scale {
     // `min <= 0` branch above tried to eliminate** — 0 re-enters the log
     // axis and `toPixel` returns `-Infinity`. If there's nowhere to go
     // down, only open upward.
-    if (min === max) return min / 2 > 0 ? [min / 2, max * 2] : [min, max * 2];
+    // Nor upward past the doubles: at the top of the range the upper bound stays where it is.
+    if (min === max) return [min / 2 > 0 ? min / 2 : min, Number.isFinite(max * 2) ? max * 2 : max];
 
-    const factor = Math.pow(max / min, ratio);
-    // For a denormalized number, `min / factor` can underflow to 0 too —
+    // `f = (max / min) ^ ratio` as `exp(ratio · (log max − log min))` — the ratio of the ends overflows past
+    // some 600 decades where their logarithms' difference is a small number. Where `f` itself is past the
+    // doubles (a large ratio over a wide domain) each end is padded on its own in log space instead, so an
+    // end whose padding is an ordinary number still gets it — the one seam is where `f` leaves the doubles.
+    const decades = logOver(min, max);
+    const factor = Math.exp(ratio * decades);
+    // For a denormalized number, the lower end can underflow to 0 —
     // the same hole the two branches above (`min <= 0`'s floor, and
     // `min === max`) already close. If it becomes 0, `setDomain` below
     // rejects it on the render path, throwing every frame. If there's
-    // nowhere to go down, the lower bound is left unchanged.
-    const lower = min / factor;
-    return [lower > 0 ? lower : min, max * factor];
+    // nowhere to go down, the lower bound is left unchanged — and if
+    // there's nowhere to go up (the padded top past the doubles), the
+    // upper one is.
+    const lower = Number.isFinite(factor) ? min / factor : Math.exp(Math.log(min) - ratio * decades);
+    const upper = Number.isFinite(factor) ? max * factor : Math.exp(Math.log(max) + ratio * decades);
+    return [lower > 0 ? lower : min, Number.isFinite(upper) ? upper : max];
   }
+}
+
+/**
+ * The rounding that cleans a label is cosmetic; a tick is a place on the
+ * axis, and must stay inside the domain — where the rounded value would
+ * not (two adjacent doubles, or a value a hair inside an end), the exact
+ * one is kept.
+ */
+function inDomain(plan: TickPlan, shown: number, exact: number): number {
+  return shown >= plan.domainMin && shown <= plan.domainMax ? shown : exact;
+}
+
+/** Whether two ticks' places on the axis are the requested gap apart, within the pixels' own rounding. */
+function clearsGap(plan: TickPlan, value: number, previous: number): boolean {
+  return Math.abs(plan.pixelOf(value) - plan.pixelOf(previous)) >= plan.minTickSpacing * (1 - TICK_GAP_SLACK);
 }
 
 /** Materializes the winning candidate — only the frame pass pays this. */
@@ -392,10 +543,15 @@ function collectTicks(plan: TickPlan): number[] {
     for (let index = 0; index < plan.linearCount; index++) {
       // Multiplication instead of accumulating addition — error doesn't
       // build up. `withoutFloatNoise` keeps 2 × 10⁻⁷ from reaching a
-      // toString label as 2.0000000000000002e-7.
-      values.push(
-        withoutFloatNoise(plan.linearFirst + index * plan.linearStep),
-      );
+      // toString label as 2.0000000000000002e-7 — and where two ticks
+      // agree to fifteen digits, that rounding would make them one; the
+      // second is dropped, the ticks stay ascending.
+      const exact = plan.linearFirst + index * plan.linearStep;
+      const value = inDomain(plan, withoutFloatNoise(exact), exact);
+      // The tick that is emitted — after its label's rounding — is the one whose place must clear the last
+      // tick's by the requested gap; the plan judged the exact candidates, and a rounding can move one.
+      if (values.length > 0 && (value <= values[values.length - 1] || !clearsGap(plan, value, values[values.length - 1]))) continue;
+      values.push(value);
     }
     return values;
   }
@@ -406,7 +562,12 @@ function collectTicks(plan: TickPlan): number[] {
     for (const mantissa of plan.mantissas) {
       const value = mantissa * 10 ** k;
       if (value >= plan.domainMin && value <= plan.domainMax) {
-        values.push(withoutFloatNoise(value));
+        // The rung's place on the axis, in pixels, must clear the last tick's by the requested gap — the
+        // decade density chose the ladder from the axis's height, but a range of two adjacent doubles has
+        // height and no places in between.
+        const shown = inDomain(plan, withoutFloatNoise(value), value);
+        if (values.length > 0 && (shown <= values[values.length - 1] || !clearsGap(plan, shown, values[values.length - 1]))) continue;
+        values.push(shown);
         // The outer check alone lets a decade's worth of mantissas
         // overshoot the cap (measured: 1,002).
         if (values.length >= MAX_GEOMETRY_TICKS) return values;

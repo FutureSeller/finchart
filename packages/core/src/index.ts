@@ -47,6 +47,7 @@ export type { Disposer, Padding, Point, PlotArea, Scope } from "./primitives";
 // ---- data: points, accessors, decimation, computed nodes ----
 export {
   computation,
+  reuseUnchanged,
   defaultCoordinates,
   isGap,
   validateSeriesData,

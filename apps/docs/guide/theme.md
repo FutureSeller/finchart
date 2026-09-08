@@ -25,7 +25,11 @@ moment the cascade changes, but a canvas repaints only when asked —
 ```
 
 **The priority is config override > CSS variable > default.** With no value it
-falls to the default. What happens to a value that can't be read **depends on
+falls to the default. One kind of value sits outside the three tiers: a
+histogram point's own `color` is a literal the producer chose, so that bar has
+stepped out of the theme on purpose. A point's `tone` is different — it does
+not name a colour, it picks a slot (`--chart-histogram-up` / `-down`) and stays
+inside the theme. What happens to a value that can't be read **depends on
 where it is drawn:**
 
 | | Canvas (candles, lines, grid, crosshair…) | DOM (axis labels, tooltip, legend) |
@@ -67,10 +71,11 @@ sentence was **true of only four**:
 
 ## The variables it reads
 
-`style-vars.test.ts` machine-checks the table below against the source — in
-the table but not in the code, or in the code but not in the table, and the
-test catches it. To land a typo you would have to make the same mistake in
-both files.
+`style-vars.test.ts` holds this page against the source in both directions —
+a variable this page (or any demo) names that nothing reads, and a variable the
+source declares that this page never mentions. The table's rows themselves are
+not parsed; the page is read as one bag of names. To land a typo you would have
+to make the same mistake in both files.
 
 | Variable | Target |
 |---|---|
@@ -84,7 +89,7 @@ both files.
 | `--chart-baseline-top`, `--chart-baseline-bottom` | baseline's upper/lower **line color** (above/below the baseline value) |
 | `--chart-baseline-top-fill`, `--chart-baseline-bottom-fill` | baseline's upper/lower **fill color** |
 | `--chart-baseline-line-width` | stroke width (px) of baseline's upper/lower **data line** — **not the baseline itself.** The line set by the `baseline` option is not drawn |
-| `--chart-histogram`, `--chart-histogram-bar-ratio` | histogram |
+| `--chart-histogram`, `--chart-histogram-up`, `--chart-histogram-down`, `--chart-histogram-bar-ratio` | histogram — a bar that carries a `tone` wears `-up` / `-down`, a bar without one wears `--chart-histogram` |
 | `--chart-grid`, `--chart-grid-width`, `--chart-grid-dash` | grid |
 | `--chart-pane-divider`, `--chart-pane-divider-width` | pane border (when there is more than one pane) |
 | `--chart-crosshair`, `--chart-crosshair-width`, `--chart-crosshair-dash` | crosshair line |
@@ -95,6 +100,8 @@ both files.
 | `--chart-legend` | legend (DOM) |
 | `--chart-band` | band and channel fill (`@finchart/indicators`) |
 | `--chart-profile`, `--chart-profile-poc` | Volume Profile bars and POC (`@finchart/indicators`) |
+| `--chart-kagi-up-width`, `--chart-kagi-down-width` | **stroke width** (px) of a Kagi line's yang (thick) and yin (thin) strokes — its colours are `--chart-candle-up` / `--chart-candle-down` (`@finchart/indicators`) |
+| `--chart-pnf-width` | **stroke width** (px) of a Point & Figure chart's X's and O's — its colours are `--chart-candle-up` / `--chart-candle-down` (`@finchart/indicators`) |
 | `--chart-drawing`, `--chart-drawing-width`, `--chart-drawing-dash`, `--chart-drawing-label` | drawing tools (`@finchart/tools`) — the label is the text on a measure's box, the box wears `--chart-drawing` |
 
 ### Kinds of value — the name says it
@@ -122,7 +129,8 @@ The defaults for the six series, the chart, and the axis label are
 `DEFAULT_PLOT_STYLE`·`AXIS_LABEL_SPEC` are all public. No need to open the source.
 
 The extension packages are the same — `VOLUME_PROFILE_STYLE_SPEC`·
-`BAND_STYLE_SPEC` in `@finchart/indicators`, `DRAWING_STYLE_SPEC` in
+`BAND_STYLE_SPEC`·`KAGI_STYLE_SPEC`·`POINT_AND_FIGURE_STYLE_SPEC` in
+`@finchart/indicators`, `DRAWING_STYLE_SPEC` in
 `@finchart/tools`. **Invent** a value and nobody in code review catches that a
 stroke width shifted a little.
 The gap that remains is on the decoration side (crosshair, badge, price line,
@@ -276,8 +284,13 @@ pick the colors again. Only the colors change —
 widths, ratios, and dashes are not the theme's.
 
 **Color vision is not verified.** Up/down is this library's primary encoding,
-that encoding is nothing but color, and both the defaults and the palette below
-are red-green. WCAG contrast after a deuteranopia simulation (Viénot 1999):
+for the candle, bar, baseline and histogram that encoding is nothing but color,
+and both the defaults and the palette below are red-green. Two of the
+price-axis transforms in `@finchart/indicators` carry a second channel — the
+Kagi line is thick for yang and thin for yin (`--chart-kagi-up-width` /
+`--chart-kagi-down-width`), and a Point & Figure column is X's or O's — so
+they read without color (until a box's cell is too small for a glyph and the
+run becomes a bar); their colors are the candle's, so the table below is their table. WCAG contrast after a deuteranopia simulation (Viénot 1999):
 
 | Palette | up / down | normal | deuteranopia |
 |---|---|---|---|
@@ -291,6 +304,7 @@ are red-green. WCAG contrast after a deuteranopia simulation (Viénot 1999):
   --chart-candle-up: #2563eb;   --chart-candle-down: #ea580c;
   --chart-bar-up: #2563eb;      --chart-bar-down: #ea580c;
   --chart-baseline-top: #2563eb; --chart-baseline-bottom: #ea580c;
+  --chart-histogram-up: #2563eb; --chart-histogram-down: #ea580c;
 }
 ```
 
@@ -321,6 +335,8 @@ the consumer**, and moving the defaults breaks apps already tuned to our colors.
   --chart-baseline-top-fill: rgba(52, 211, 153, 0.15);
   --chart-baseline-bottom-fill: rgba(248, 113, 113, 0.15);
   --chart-histogram: rgba(100, 116, 139, 0.5);
+  --chart-histogram-up: #22c55e;
+  --chart-histogram-down: #f87171;
   --chart-area-bottom: rgba(96, 165, 250, 0.02);
 
   /* decorations — badge and tooltip are an inverted pair of back and text */
@@ -341,11 +357,50 @@ the consumer**, and moving the defaults breaks apps already tuned to our colors.
 }
 ```
 
-**Eleven** of these values have been through real use — the dogfooding screen
-(`apps/examples/src/theme.css`) carries that many. The rest (baseline, area,
-profile, and so on) **have not been on a screen yet**. Going forward the
+The values the dogfooding screen (`apps/examples/src/theme.css`) carries have
+been through real use. The rest (baseline, area, profile, and so on) **have not
+been on a screen yet**. Going forward the
 `apps/examples/src/trading.ts` screen switches to dark by this road and
 verifies these values.
+
+## Histogram up and down
+
+A histogram bar can carry a `tone` — `"up"` or `"down"` — and the theme picks
+the colour: `--chart-histogram-up` and `--chart-histogram-down`, which fall
+back to the candle's colours. What counts as up is the producer's to say: a
+volume bar follows its candle, an indicator's bar follows the bar before it.
+A bar without a tone wears `--chart-histogram`, and a bar with one never
+reads it — an app that themed only `--chart-histogram` should set the two
+slots as well.
+
+Resolution follows CSS specificity: the most local explicit value wins.
+`point.color`, then a slot override (`style: { up, down }`), then one
+explicit series colour (`style: { color }` — a consumer who asked for one
+colour keeps it, toned input or not), then the slot's variable. The plain
+`--chart-histogram` is the last step only for a bar without a tone.
+
+The two variables are read from the chart's container, so they are
+chart-wide — every histogram in the chart, a volume pane and a MACD pane
+alike, wears them. To let one pane recede (volume under price is the
+classic case) while the indicator bars stay solid, give that series its own
+pair: `histogramSeries({ style: { up, down } })` beats the variables for
+that series only.
+
+To make the histogram speak the candle's language under your own palette,
+alias the slot instead of copying the value — a custom property may hold
+`var()`, the reader sees the computed result:
+
+```css
+.my-chart {
+  --chart-histogram-up: var(--chart-candle-up);
+  --chart-histogram-down: var(--chart-candle-down);
+}
+```
+
+Two things a toned series does not do: registered without a `color`, it
+shows no swatch in the legend or tooltip (a two-colour series has no one
+colour to show — read it by name and value), and the fallback of a leaf never
+holds `var()` — the canvas can't read it.
 
 ## Styling your own extension
 

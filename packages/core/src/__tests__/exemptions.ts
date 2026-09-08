@@ -99,6 +99,7 @@ export const EXEMPT: Record<string, Exemption> = {
   defaultCoordinates: { tag: "delegated", note: "accessor — finiteness is checked by the data door (chokepoint 6)" },
   isGap: { tag: "safe", note: "a predicate — returns a boolean no matter what comes in. There is no place for it to throw" },
   tailDelta: { tag: "safe", note: "a check — only pointer-compares two arrays. It never reads a number, and when it cannot tell, null is the answer itself (the full path)" },
+  reuseUnchanged: { tag: "safe", note: "an identity pass — compares points as plain data and never reads a number as a number; anything it cannot judge is handed on as is, for the data door to name" },
   // "Takes no numbers" was only half true — the number it carries
   // (pointsPerPixel) passes through with no check. That number is checked
   // by the wiring's door (presets's requirePositive).
@@ -312,6 +313,7 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
   defaultCoordinates: { tag: "delegated", note: "accessor — the data door checks the point's shape" },
   isGap: { tag: "safe", note: "a predicate — takes one argument and returns a boolean for any value" },
   tailDelta: { tag: "safe", note: "a check — only compares identity, so there is no good or bad value; falls back to null when it does not know" },
+  reuseUnchanged: { tag: "safe", note: "an identity pass — a value of any shape is simply not judged and comes back as is; nothing to throw about" },
 
   // Extensions — installed onto the stage, and each one's value is checked at its own door.
   crosshair: { tag: "assembly", note: "extension — surfaces at install time" },

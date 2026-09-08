@@ -105,17 +105,19 @@ export class SimpleDataManager<
     this.decimation = options.decimation;
     this.coordinates = options.coordinates;
     /**
-     * This is where the two gates meet.
+     * The gate every budget passes, whoever set it.
      *
-     * `presets.ts` blocks the wiring's `maxPoints`/`pointsPerPixel` with
-     * `requirePositive`, but a per-registration
-     * `DecimationPolicy.pointsPerPixel` skips that gate and comes straight
-     * here — only one of the two siblings was locked.
+     * `presets.ts` checks the wiring's `maxPoints`/`pointsPerPixel` and a
+     * registration's own `DecimationPolicy.pointsPerPixel` with
+     * `requirePositive` before it builds a manager; a manager built by any
+     * other wiring gets the same check here, so no path reaches the
+     * fields below unguarded.
      *
-     * `pointsPerPixel: NaN` turns off decimation entirely, and `0` or `-1`
-     * leaves only 2 points, collapsing the chart into a straight line. The
-     * manager constructor is the one chokepoint both paths must pass
-     * through, which is why the check lives here.
+     * Unguarded, `NaN`, `0` and `-1` all end the same way: the per-pixel
+     * threshold floors them to a budget of one (`byWidth >= 1` fails for
+     * all three), and M4 keeps only the two endpoints, collapsing the chart
+     * into a straight line. The manager constructor is the one chokepoint
+     * all paths share, which is why the check lives here too.
      */
     if (options.maxPoints !== undefined) {
       requirePositive(options.maxPoints, "maxPoints");

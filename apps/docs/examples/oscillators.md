@@ -1,8 +1,8 @@
 ---
-description: "RSI, Stochastic, CCI and Williams %R, each in its own pane with a fixed value range."
+description: "RSI, MFI and Stochastic RSI sharing one 0–100 pane, Williams %R and CCI in their own — the definition decides each axis."
 ---
 
-# Oscillators — RSI · Stochastic · CCI · %R
+# Oscillators — RSI · MFI · Stochastic RSI · CCI · %R
 
 <script setup>
 import * as mod from "../../examples/src/cases/oscillators";

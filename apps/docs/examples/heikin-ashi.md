@@ -2,7 +2,7 @@
 description: "A derived series computed from the source candles, proving the derive contract on a transform every trader recognizes."
 ---
 
-# Heikin-Ashi — a derived series, proven
+# Heikin-Ashi — the proof of derived series
 
 <script setup>
 import * as mod from "../../examples/src/cases/heikin-ashi";

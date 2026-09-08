@@ -2,7 +2,7 @@
 description: "The smallest trading screen — one candle pane, one volume pane, a crosshair."
 ---
 
-# Candles + Volume
+# Candles + volume
 
 <script setup>
 import * as mod from "../../examples/src/cases/candles-volume";

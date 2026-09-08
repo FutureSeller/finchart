@@ -16,9 +16,9 @@ scenario `pnpm size` measures on every CI run — minified, gzipped, with every
 | --- | ---: |
 | The quick start — one candlestick chart | 27.5 KB |
 | ...plus a volume pane, axes, crosshair, legend and tooltip | 31 KB |
-| ...plus four indicators (MA, MACD, RSI, Bollinger) | 35 KB |
-| ...plus every drawing tool | 43.5 KB |
-| The same screen through `@finchart/react` | 44.5 KB |
+| ...plus four indicators (MA, MACD, RSI, Bollinger) | 36 KB |
+| ...plus every drawing tool | 44 KB |
+| The same screen through `@finchart/react` | 45 KB |
 
 <!-- bundle-budgets:end -->
 
@@ -67,12 +67,15 @@ Two things stay even when you go all the way down to explicit wiring. Not
 because they are small enough to forgive — each has a contract as its
 justification:
 
-- **The decimation default** (~1 KB) — `M4Decimation`, the default policy of
-  `createPlotDeps`. The moment a derived series (an indicator) attaches, 100k
-  points lean on it. Take it out and "I attached an indicator and it got slow"
+- **The decimation default** (~1 KB) — `M4Decimation`, the strategy
+  `createPlotDeps` falls back to when neither the registration nor the series
+  names one. The moment a derived series (an indicator) attaches, 100k points
+  lean on it. Take it out and "I attached an indicator and it got slow"
   becomes the default behavior — the frame budget (16.7ms at 60Hz) stands on
-  this default. If you have a policy of your own, swap it in with
-  `createDecimation`.
+  this default. If you have a strategy of your own, swap it in with
+  `createDecimation`; that replaces only this fallback — a density
+  (`pointsPerPixel`) resolves on its own, and a registration's or series'
+  own fields still win.
 - **The axis-drag consumer** (900 B) — part of the plot's input contract. The
   input stack is first-class even headless (you feed synthetic input through
   `routeInput` — [Testing your chart](/guide/testing)), so it lives on the plot

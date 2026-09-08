@@ -45,8 +45,17 @@ tells you the answer: follow the error message and you land on the missing
 `attach*`.
 
 An aside: because of this rule, an alphabetical read of the API Reference
-bunches all 17 `attach*` functions up near A — a structural fact the naming
+bunches all 35 `attach*` functions up near A — a structural fact the naming
 rule produced, not a broken list.
+
+**An indicator's identifier is what the trading literature calls it,**
+in camel case — the abbreviation when that is the name (`macd`, `rsi`,
+`mfi`, `cci`), the words when those are (`ichimoku`, `momentum`, `elderRay`,
+`awesomeOscillator`), and the mix when the literature mixes (`parabolicSar`,
+`williamsR`). The legend label is a different thing: the short form
+a chart legend shows, with the parameters attached — `RSI(14)`, `MTM(12,6)`,
+`AO(5,34)`, `Elder-Ray(13) Bull` — so an identifier reads like the manual
+and a label like the screen.
 
 ## The rest of the names are inferred the same way
 

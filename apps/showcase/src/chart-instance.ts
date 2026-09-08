@@ -78,8 +78,7 @@ export const INDICATOR_KEYS: readonly IndicatorKey[] = [
 const volumeOf = (bar: OHLC): HistogramPoint => ({
   x: bar.x,
   y: bar.volume ?? null,
-  color:
-    bar.close >= bar.open ? "rgba(38, 166, 154, 0.5)" : "rgba(239, 83, 80, 0.5)",
+  tone: bar.close >= bar.open ? "up" : "down",
 });
 
 export interface ChartInstance {
@@ -207,7 +206,8 @@ export function makeChart(
   });
   const volumePane = plot.addPane({ flex: 0.22, minHeight: 48 });
   const volume: SeriesHandle<HistogramPoint> = volumePane.addSeries({
-    series: histogramSeries(),
+    // The volume pane recedes under price — its own translucent pair on the series (a variable is chart-wide).
+    series: histogramSeries({ style: { up: "rgba(38, 166, 154, 0.5)", down: "rgba(239, 83, 80, 0.5)" } }),
     data: feed.bars().map(volumeOf),
     name: "Volume",
   });

@@ -107,8 +107,7 @@ export interface FocusSnapshot {
 const volumeOf = (bar: OHLC): HistogramPoint => ({
   x: bar.x,
   y: bar.volume ?? null,
-  color:
-    bar.close >= bar.open ? "rgba(38, 166, 154, 0.5)" : "rgba(239, 83, 80, 0.5)",
+  tone: bar.close >= bar.open ? "up" : "down",
 });
 
 const PRICE_LINE_STYLE = { dashArray: "2 3" };
@@ -165,7 +164,8 @@ export function FullChart({
   const series =
     madeSeries.current[settings.chartType] ??
     (madeSeries.current[settings.chartType] = makeSeries(settings.chartType));
-  const [volumeSeries] = useState(() => histogramSeries());
+  // The volume pane recedes under price — its own translucent pair on the series (a variable is chart-wide).
+  const [volumeSeries] = useState(() => histogramSeries({ style: { up: "rgba(38, 166, 154, 0.5)", down: "rgba(239, 83, 80, 0.5)" } }));
 
   const [feed] = useState(() =>
     createFeed({ seed: spec.seed, anchor: spec.anchor }),

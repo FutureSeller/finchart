@@ -57,7 +57,7 @@ function toVolumePoint(candle: OHLC): HistogramPoint {
   return {
     x: candle.x,
     y: candle.volume ?? null,
-    color: candle.close >= candle.open ? "rgba(22, 163, 74, 0.45)" : "rgba(220, 38, 38, 0.45)",
+    tone: candle.close >= candle.open ? "up" : "down",
   };
 }
 
@@ -127,7 +127,10 @@ export function mount(container: HTMLElement): () => void {
   const volumeHandle = plot
     .addPane({ flex: 0.3, minHeight: 60, axis: { format: (v) => volumeFmt.format(v) } })
     .addSeries({
-      series: histogramSeries(),
+      // The volume pane recedes under price: a green/red pair at 45%, the same in
+      // both modes, on the series — a CSS variable is chart-wide and would wash
+      // an indicator's bars too.
+      series: histogramSeries({ style: { up: "rgba(22, 163, 74, 0.45)", down: "rgba(220, 38, 38, 0.45)" } }),
       data: initial.map(toVolumePoint),
       name: "Volume",
     });

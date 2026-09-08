@@ -703,6 +703,7 @@ describe("Z1 — the shape axis", () => {
       validateSeriesData: { index: 0, rest: () => [] },
       validateSeriesPoint: { index: 0, rest: () => [] },
       tailDelta: { index: 0, rest: () => [[]] },
+      reuseUnchanged: { index: 1, rest: () => [{ out: [] }] },
       applyColor: { index: 2, rest: () => [rejectingColor(), "fillStyle"] },
       applyFont: { index: 1, rest: () => [rejectingFont(), undefined, "11px sans-serif"] },
       isLinearGradientParams: { index: 0, rest: () => [undefined] },

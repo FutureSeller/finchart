@@ -57,9 +57,10 @@ export interface PlotDepsOptions {
   /**
    * How to build the decimation strategy. Default is M4 — for every pixel
    * column it picks first, last, min, and max, so extremes never get lost.
-   * **Only applies to registrations that don't specify a policy** — a
+   * **Only fills a registration whose policy names no `strategy`** — a
    * strategy tied to a point type, like candles, comes with the series
-   * itself. `createDecimation: (coords) => new LttbDecimation(coords)`
+   * itself, and a registration that sets only `pointsPerPixel` still takes
+   * its strategy from here. `createDecimation: (coords) => new LttbDecimation(coords)`
    */
   createDecimation?: DecimationFactory;
   /**
@@ -187,8 +188,9 @@ export function createPlotDeps(
   /**
    * Keeps how every registration builds the same policy (ceiling, tiers)
    * in one place. Manager instances can't be shared — each holds different
-   * data. If a registration doesn't specify a policy, this default (M4 +
-   * `pointsPerPixel`) wins; if it does, that wins instead.
+   * data. The registration's policy wins field by field: its `strategy`
+   * over this M4 default, its `pointsPerPixel` over the wiring's — and a
+   * field it leaves unset comes from here.
    */
   const createDataManager: DataManagerFactory = <P extends BaseDataPoint>(
     coords: CoordinateAccessor<P>,

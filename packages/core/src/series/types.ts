@@ -71,8 +71,14 @@ export function screenXAt<T extends BaseDataPoint>(
  * A data representation that can be swapped out on the same stage (Plot).
  *
  * The grid, axes, pan/zoom, and layers belong to Plot, so they stay put
- * even when the series changes. A series is responsible for exactly two
- * things — how much of the y axis it occupies, and how it draws.
+ * even when the series changes. A series answers four things — how much
+ * of the y axis it occupies, how it draws, and (optionally) how its points
+ * are thinned and how their coordinates are read. The optional two are
+ * resolved registration first, then the series, then the fallback: a
+ * registration's `coordinates` wins over the series', and plain `x`/`y`
+ * reads when neither says; a registration's `decimation` fields win over
+ * the series' field by field, and the wiring's policy fills what neither
+ * sets.
  */
 export interface Series<T extends BaseDataPoint = BaseDataPoint> {
   /**

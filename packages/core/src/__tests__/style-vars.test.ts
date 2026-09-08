@@ -204,6 +204,8 @@ describe("the set of style variables", () => {
         "--chart-grid-width",
         "--chart-histogram",
         "--chart-histogram-bar-ratio",
+        "--chart-histogram-down",
+        "--chart-histogram-up",
         "--chart-label",
         "--chart-label-font-family",
         "--chart-label-font-size",
@@ -547,6 +549,27 @@ describe("the set of style variables", () => {
     expect(
       [...used].filter((name) => !repoVars.has(name) && !externals.has(name)),
       "a variable an example sets but nothing reads",
+    ).toEqual([]);
+  });
+
+  /**
+   * The theming guide's table is the consumer's list. The scan above holds
+   * one direction — a variable the guide names but nothing reads. This is
+   * the other: a variable the source declares that the guide never
+   * mentions. The table's rows are not parsed (their shape is ours to
+   * change); the guide is read as one bag of names.
+   */
+  it("should mention every declared variable in the theming guide", () => {
+    const guide = readFileSync(
+      resolve(SRC, "../../../apps/docs/guide/theme.md"),
+      "utf8",
+    );
+    const mentioned = new Set([...guide.matchAll(VAR_PATTERN)].map((m) => m[0]));
+
+    expect(mentioned.size).toBeGreaterThan(20); // an empty read would pass the check below for free
+    expect(
+      [...repoVars].filter((name) => !mentioned.has(name)).sort(),
+      "a variable the source declares but the theming guide never mentions",
     ).toEqual([]);
   });
 
