@@ -198,14 +198,14 @@ describe("periodAnchor", () => {
 
   /**
    * **The same x meets the same door wherever it sits in the tape.** What
-   * a `BarStart` answers for stops short of the ends of what a `Date`
-   * holds, so an x can be a perfectly good instant and still be outside
-   * it — and refusing it only when there is a bar behind would make the
-   * very same x pass as the first bar and throw as the second.
+   * a session answers for stops three days short of the ends of what a
+   * `Date` holds, so an x can be a perfectly good instant and still be
+   * outside it — and refusing it only when there is a bar behind would
+   * make the very same x pass as the first bar and throw as the second.
    */
   it("refuses an out-of-domain instant on the first bar too", () => {
     const opens = periodAnchor({ barStart: sessionStart({ timeZone: "Asia/Seoul" }) });
-    // A good `Date`, and past the reach a bar start answers for.
+    // A good `Date`, and past the reach a session answers for.
     const edge: OHLC = { x: 8.64e15 - 3 * DAY + 1, open: 1, high: 1, low: 1, close: 1 };
     const later: OHLC = { x: edge.x + DAY, open: 1, high: 1, low: 1, close: 1 };
 

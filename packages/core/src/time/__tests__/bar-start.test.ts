@@ -69,18 +69,23 @@ describe("chokepoint 9 — fixedBars, the width and the instant it is asked abou
  * **A bar start answers for an instant, and `NaN` is not one.** All three
  * laws are silently true of `NaN` — it compares false against everything —
  * so a producer that passed it through would advertise a contract it does
- * not keep. The reach stops three days inside what a `Date` holds, because
- * a session names the midnight two days out to know where its own ends.
+ * not keep. How far in a producer can be asked is its own: a session
+ * stops three days inside what a `Date` holds, because it names the
+ * midnight two days out to know where its own ends, and a fixed grid,
+ * which asks no clock anything, reaches the edge.
  */
 describe("the instants a bar start answers for", () => {
-  const REACH = 8.64e15 - 3 * DAY;
+  /** The last instant a `Date` can hold — what an instant is, for every producer. */
+  const LAST = 8.64e15;
+  /** Where a session stops asking: three days inside, because it asks about the midnight two days out. */
+  const SESSION_REACH = LAST - 3 * DAY;
   const producers: [string, BarStart][] = [
     ["fixedBars", fixedBars({ interval: HOUR })],
     ["sessionStart", sessionStart({ timeZone: "Asia/Seoul" })],
   ];
 
-  it.each(producers)("%s refuses what it cannot answer for", (_name, barStart) => {
-    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 8.64e15, -8.64e15]) {
+  it.each(producers)("%s refuses what is not an instant at all", (_name, barStart) => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, LAST + 1, -LAST - 1]) {
       expect(() => barStart(bad)).toThrow(ContractError);
     }
 
@@ -110,13 +115,63 @@ describe("the instants a bar start answers for", () => {
     }
   });
 
-  it.each(producers)("%s keeps the laws at the far edges", (_name, barStart) => {
-    for (const edge of [REACH, -REACH + 3 * DAY]) {
+  /**
+   * **How far in a producer can be asked is the producer's own.** A session
+   * asks a clock about the midnight two days out and looks a day back, so
+   * it stops three days inside what a `Date` holds — asked at the very
+   * edge it would put a reading to a clock that no clock can be asked. A
+   * fixed grid asks no clock anything: its reach is every instant a `Date`
+   * holds, and a shared door that stopped three days short would be
+   * lending it a limit that is not its own.
+   */
+  it("reaches as far as it can ask, which differs by producer", () => {
+    const fixed = fixedBars({ interval: HOUR });
+    expect(fixed(LAST)).toBe(LAST);
+    expect(fixed(-LAST)).toBe(-LAST);
+
+    const session = sessionStart({ timeZone: "Asia/Seoul" });
+    for (const edge of [LAST, -LAST, SESSION_REACH + 1]) {
+      expect(() => session(edge)).toThrow(ContractError);
+      expect(() => session(edge)).toThrow(/three days/);
+    }
+  });
+
+  /**
+   * **Where the grid does not divide the edge, the laws hold on either side
+   * of where it gives out.** An hour divides 8.64e15, so at the edge it
+   * answers the edge itself and floors nothing; seven milliseconds and a
+   * day less one do not, and it is there that flooring can land an answer
+   * outside — so the first instant answered for is on the grid, the one
+   * before it is refused, and at the far end the answer is the last grid
+   * point inside.
+   */
+  it.each([
+    [7, -8_639_999_999_999_998, 8_639_999_999_999_998],
+    [86_399_999, -8_639_999_986_399_999, 8_639_999_986_399_999],
+  ])("fixedBars({ interval: %i }) gives out where its grid does", (interval, opensAt, closesAt) => {
+    const barStart = fixedBars({ interval });
+
+    expect(barStart(opensAt)).toBe(opensAt);
+    expect(() => barStart(opensAt - 1)).toThrow(ContractError);
+    expect(barStart(opensAt + interval - 1)).toBe(opensAt);
+    expect(barStart(opensAt + interval)).toBe(opensAt + interval);
+
+    expect(barStart(LAST)).toBe(closesAt);
+    expect(barStart(closesAt)).toBe(closesAt);
+    expect(barStart(closesAt - 1)).toBe(closesAt - interval);
+  });
+
+  it.each([
+    ["fixedBars", fixedBars({ interval: HOUR }), [LAST, -LAST], LAST],
+    ["sessionStart", sessionStart({ timeZone: "Asia/Seoul" }), [SESSION_REACH, -SESSION_REACH + 3 * DAY], SESSION_REACH],
+  ] as const)("%s keeps the laws at its own far edges", (_name, barStart, edges, bound) => {
+    for (const edge of edges) {
       const start = barStart(edge);
 
       expect(start).toBeLessThanOrEqual(edge);
+      // The answer is inside the reach too, so the laws apply to it again.
       expect(barStart(start)).toBe(start);
-      expect(Math.abs(start)).toBeLessThanOrEqual(REACH);
+      expect(Math.abs(start)).toBeLessThanOrEqual(bound);
     }
   });
 
@@ -140,16 +195,20 @@ describe("the instants a bar start answers for", () => {
   it("refuses what it would refuse cold, once it is warm", () => {
     const barStart = sessionStart({ timeZone: "UTC" });
 
-    expect(barStart(REACH)).toBe(Math.floor(REACH / DAY) * DAY);
-    expect(() => barStart(REACH + 1)).toThrow(ContractError);
+    expect(barStart(SESSION_REACH)).toBe(Math.floor(SESSION_REACH / DAY) * DAY);
+    expect(() => barStart(SESSION_REACH + 1)).toThrow(ContractError);
   });
 
   it.each([
-    ["fixedBars", fixedBars({ interval: 7 * 60 * 1000 })],
-    ["sessionStart", sessionStart({ timeZone: "Asia/Seoul" })],
-  ])("%s refuses an instant whose bar began before time", (_name, barStart) => {
-    expect(() => barStart(-REACH)).toThrow(ContractError);
-    expect(() => barStart(-REACH)).toThrow(/outside the reach a bar start answers for/);
+    // A seven-minute grid does not divide the edge, so the bar holding the
+    // first instant began before it.
+    ["fixedBars", fixedBars({ interval: 7 * 60 * 1000 }), -LAST + 1, /began at .* before the earliest instant a Date can hold/],
+    // Seoul's midnight stands before UTC's, so the session
+    // holding the earliest instant it may be asked about opened outside.
+    ["sessionStart", sessionStart({ timeZone: "Asia/Seoul" }), -SESSION_REACH, /opened at .* outside the instants a session answers for/],
+  ] as const)("%s refuses an instant whose bar began before it can answer", (_name, barStart, at, said) => {
+    expect(() => barStart(at)).toThrow(ContractError);
+    expect(() => barStart(at)).toThrow(said);
   });
 
   /**
@@ -170,9 +229,8 @@ describe("the instants a bar start answers for", () => {
           return false;
         }
       };
-      let refused = -REACH;
-      let answered = -REACH + 2 * DAY;
-      if (answers(refused)) return refused;
+      let refused = -LAST - 1;
+      let answered = -SESSION_REACH + 2 * DAY;
       while (answered - refused > 1) {
         const middle = Math.floor((refused + answered) / 2);
         if (answers(middle)) answered = middle;
@@ -182,9 +240,9 @@ describe("the instants a bar start answers for", () => {
     };
 
     expect([1, 7, 86_399_999].map((interval) => opensAt(fixedBars({ interval })))).toEqual([
-      -8_639_999_740_800_000,
-      -8_639_999_740_799_994,
-      -8_639_999_727_200_002,
+      -8_640_000_000_000_000, // every instant: the edge is on a 1 ms grid
+      -8_639_999_999_999_998, // two in: the bar holding the first two began before the edge
+      -8_639_999_986_399_999, // where a grid of a day less a millisecond first stands inside the edge
     ]);
     expect(
       ["UTC", "Asia/Seoul", "Asia/Kathmandu"].map((timeZone) =>

@@ -21,7 +21,8 @@ const HOUR_MS = 60 * MINUTE_MS;
 const DAY = 24 * HOUR_MS;
 
 /** The widest instant a `Date` — and so `Intl` — will read. */
-const LAST_INSTANT = 8.64e15;
+/** The last instant a `Date` can hold, either side of the epoch. */
+export const LAST_INSTANT = 8.64e15;
 
 const SECOND = 1000;
 

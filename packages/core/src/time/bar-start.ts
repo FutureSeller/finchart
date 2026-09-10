@@ -1,20 +1,14 @@
 import { ContractError, describe } from "../primitives";
-
-const DAY = 24 * 60 * 60 * 1000;
-
-/**
- * The last instant a `Date` can hold, less the three days a producer may
- * have to look past the one it was asked about: a session names the
- * midnight two days out to know where its own ends, and a bar start
- * reaches a day back. Asking about the very edge of what a `Date` holds
- * would make a producer name a reading no clock can be asked to read.
- */
-const REACH = 8.64e15 - 3 * DAY;
+import { LAST_INSTANT } from "./zone";
 
 /**
- * The instants a producer can even put to a clock. It is a pre-check, not
- * the whole door: which instants a producer actually answers for depends
- * on the grid it lays, and the producer says so itself.
+ * What every producer asks of an x before it does anything of its own: a
+ * number, down to the millisecond, and an instant a `Date` can hold. It is
+ * a pre-check, not the whole door. **How far in a producer can be asked is
+ * the producer's own** — a session asks a clock about the midnight two
+ * days out and stops three days inside, a fixed grid asks no clock
+ * anything and reaches the edge — and each says so itself, because a
+ * shared limit would be one producer's lent to the others.
  */
 export function requireInstant(ms: number, label: string): number {
   /**
@@ -37,25 +31,21 @@ export function requireInstant(ms: number, label: string): number {
    */
   const whole = Math.floor(ms);
   if (!isInstant(whole)) {
-    throw new ContractError(
-      `${label} needs an instant within three days of what a Date can hold, got ${describe(ms)}`,
-    );
+    throw new ContractError(`${label} needs an instant a Date can hold, got ${describe(ms)}`);
   }
   return whole;
 }
 
 /**
- * True where a value is one of the instants a `BarStart` answers for:
- * a whole millisecond, and inside the reach.
- *
- * **The answers are whole milliseconds**, so this is what an answer is
- * checked against. A fraction handed *in* is taken down to the millisecond
- * beneath it before anything reads a clock — down, not toward zero, which
- * is what `Date` would do and what would put half a millisecond before the
- * epoch into the day that had not started yet.
+ * True where a value is an instant at all: a whole millisecond that a
+ * `Date` can hold. **The answers are whole milliseconds**, so this is what
+ * an answer is checked against. A fraction handed *in* is taken down to
+ * the millisecond beneath it before anything reads a clock — down, not
+ * toward zero, which is what `Date` would do and what would put half a
+ * millisecond before the epoch into the day that had not started yet.
  */
 export function isInstant(ms: number): boolean {
-  return Number.isInteger(ms) && Math.abs(ms) <= REACH;
+  return Number.isInteger(ms) && Math.abs(ms) <= LAST_INSTANT;
 }
 
 /**

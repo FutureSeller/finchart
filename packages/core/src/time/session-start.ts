@@ -1,6 +1,20 @@
 import { ContractError, requireObject } from "../primitives";
-import { isInstant, requireInstant, type BarStart } from "./bar-start";
-import { Zone } from "./zone";
+import { requireInstant, type BarStart } from "./bar-start";
+import { LAST_INSTANT, Zone } from "./zone";
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * How far in a session can be asked. It puts readings to a clock a day
+ * back and two days out — the midnight it opens on, the next day's to know
+ * where it ends, and the one after when the clock has replayed a date —
+ * and asked at the very edge of what a `Date` holds it would name a
+ * reading no clock can be asked to read. So it stops three days inside,
+ * and its answers stop there too: a session's start is asked about again
+ * as a bar's x, and an answer outside the reach would be one the laws are
+ * not true of.
+ */
+const REACH = LAST_INSTANT - 3 * DAY;
 
 /**
  * Where a session starts, for a market whose session is a calendar day in
@@ -45,6 +59,11 @@ export function sessionStart(options: { timeZone: string }): BarStart {
     // the stretch a previous call wrote, and answering it from there would
     // make the same reader accept what a new one refuses.
     const at = requireInstant(ms, "sessionStart");
+    if (Math.abs(at) > REACH) {
+      throw new ContractError(
+        `sessionStart answers for instants at least three days inside what a Date can hold — it asks the clock about the midnight two days out — got ${ms}`,
+      );
+    }
     if (at >= from && at < until) return from;
 
     const midnight = { ...zone.parts(at), hour: 0, minute: 0, second: 0 };
@@ -87,9 +106,9 @@ export function sessionStart(options: { timeZone: string }): BarStart {
      * nothing would notice: asking again would land on an instant the
      * producer does not answer for.
      */
-    if (!isInstant(opened)) {
+    if (Math.abs(opened) > REACH) {
       throw new ContractError(
-        `sessionStart: the session holding ${ms} opened at ${opened}, outside the reach a bar start answers for`,
+        `sessionStart: the session holding ${ms} opened at ${opened}, outside the instants a session answers for — at least three days inside what a Date can hold`,
       );
     }
 
