@@ -35,7 +35,11 @@ export interface ConflatedOptions<T extends BaseDataPoint> {
    * right for the common feed shape (each tick carries the whole current
    * bar, already accumulated). A feed that sends partial updates keeps
    * what it needs here — e.g. `high: Math.max(pending.high, incoming.high)`.
-   * Building bars from raw trades is aggregation's job, not this one's.
+   *
+   * Building bars from raw trades is aggregation's job, not this one's:
+   * `barAggregator` folds trades into a bar, and the bars it makes are what
+   * arrives here. Handing raw trades to this instead would merge them
+   * last-wins and throw away that frame's high and low.
    */
   merge?: (pending: T, incoming: T) => T;
 }

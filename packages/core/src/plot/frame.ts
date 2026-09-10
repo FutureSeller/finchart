@@ -376,8 +376,28 @@ function strategyTicks(
  * promoted label ("December") can lose out to the label for the first
  * trading day's midnight after it — promotion is decided at the step
  * stage, so it can't be undone here.
+ *
+ * **Snapping is where the requested spacing has to be met again.** A
+ * strategy is asked for boundaries at a spacing it works out from the
+ * window's average width per unit of time, but bars are not spread evenly
+ * over that window: ninety of them inside one day and one a day after
+ * that pull the boundaries of a whole fortnight onto a handful of
+ * neighbouring bars. So a snapped tick that stands closer than the
+ * requested distance to the one before it is dropped, and the earlier of
+ * the pair is the one kept — it is the one whose own boundary the bar sits
+ * nearest to.
+ *
+ * The same limitation applies here as above, and for the same reason: the
+ * label was chosen before the snap, so the tick dropped can be the
+ * promoted one — a "Feb" losing to the 31st of January in front of it.
+ * Choosing by rank would need the snap to happen before the labels do,
+ * which is a strategy's business, not a frame's.
  */
-function snapTicksToBars(ticks: Tick[], scale: Scale): Tick[] {
+function snapTicksToBars(
+  ticks: Tick[],
+  scale: Scale,
+  minTickSpacing: number,
+): Tick[] {
   const byBar = new Map<number, { label: string; distance: number }>();
 
   for (const { value, label } of ticks) {
@@ -387,11 +407,15 @@ function snapTicksToBars(ticks: Tick[], scale: Scale): Tick[] {
     if (!seen || distance < seen.distance) byBar.set(bar, { label, distance });
   }
 
-  return [...byBar.entries()].map(([bar, { label }]) => ({
-    value: bar,
-    label,
-    position: scale.scale(bar),
-  }));
+  const out: Tick[] = [];
+  let last = Number.NEGATIVE_INFINITY;
+  for (const [bar, { label }] of byBar) {
+    const position = scale.scale(bar);
+    if (Math.abs(position - last) < minTickSpacing) continue;
+    last = position;
+    out.push({ value: bar, label, position });
+  }
+  return out;
 }
 
 /** The y domain is the value itself — there's no other space to map it into. */
@@ -418,7 +442,9 @@ function xTicks(
     domainOf: (value) => x.toDomain(value),
   });
   if (strategy) {
-    return x.rebuild === undefined ? strategy : snapTicksToBars(strategy, xScale);
+    return x.rebuild === undefined
+      ? strategy
+      : snapTicksToBars(strategy, xScale, options.minTickSpacing);
   }
 
   /**

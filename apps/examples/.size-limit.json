@@ -1,6 +1,6 @@
 [
   {
-    "name": "the quick start — one candlestick chart, core + dom · 27.5 KB gzip (27264B measured)",
+    "name": "the quick start — one candlestick chart, core + dom · 27.5 KB gzip (27324B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -13,7 +13,7 @@
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 31 KB gzip (30769B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 32 KB gzip (31948B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -22,11 +22,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }"
     },
-    "limit": "31 KB",
+    "limit": "32 KB",
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 36 KB gzip (35548B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 37 KB gzip (36738B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -37,11 +37,11 @@
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }",
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }"
     },
-    "limit": "36 KB",
+    "limit": "37 KB",
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 44 KB gzip (43840B measured)",
+    "name": "+ every drawing tool · 45.5 KB gzip (45042B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -54,11 +54,11 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "44 KB",
+    "limit": "45.5 KB",
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 45 KB gzip (44602B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 45 KB gzip (44656B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

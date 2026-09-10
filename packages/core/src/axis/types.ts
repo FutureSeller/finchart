@@ -7,7 +7,20 @@ export interface AxisConfig {
   min?: number;
   max?: number;
   tickInterval?: number;
-  /** Minimum pixels a single tick occupies. Omit for the per-orientation default. */
+  /**
+   * Minimum pixels a single tick occupies. Omit for the per-orientation
+   * default.
+   *
+   * It picks the step, and it is also the floor the drawn ticks are held
+   * to. A calendar step's real length varies — the day a clock moves
+   * forward is an hour short, February is shorter than the thirty days a
+   * ladder has to call a month, and where a clock jumped by hours two
+   * neighbouring boundaries can stand a third of a step apart. So a
+   * boundary that would land closer than this to the one before it is
+   * dropped instead of drawn. Ordinary requests lose nothing; a request
+   * pinned exactly at a step's nominal length loses about one label in
+   * ninety.
+   */
   minTickSpacing?: number;
   /**
    * The automatic interval never gets tighter than this. Ignored if

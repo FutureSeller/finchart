@@ -9,7 +9,7 @@
  */
 import { browserDeps, PlotBuilder } from "@finchart/dom";
 import "./theme.css";
-import { BELOW_SERIES, barIndexX, candleSeries, crosshair, priceFormat, priceLine, timeTicks, watermark, type OHLC, type Plot, type PluginApi, type SeriesHandle } from "@finchart/core";
+import { BELOW_SERIES, barIndexX, candleSeries, crosshair, priceFormat, priceLine, sessionStart, timeTicks, type OHLC, type Plot, type PluginApi, type SeriesHandle, watermark } from "@finchart/core";
 import { legend, tooltip } from "@finchart/dom";
 import {
   attachBollingerBands,
@@ -18,6 +18,7 @@ import {
   attachMovingAverage,
   attachRsi,
   attachVwap,
+  periodAnchor,
 } from "@finchart/indicators";
 import { drawingTools, type DrawingToolsApi } from "@finchart/tools";
 import { sessionShading, shadingRenderer } from "./session-shading";
@@ -372,7 +373,7 @@ button("VWAP", (self) => {
           attachVwap({
             source: price,
             color: "#0ea5e9",
-            anchor: (candle) => candle.x % 86_400_000 === 0, // x is a number
+            anchor: periodAnchor({ barStart: sessionStart({ timeZone: "UTC" }) }),
           }),
         ),
       ),

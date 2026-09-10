@@ -267,6 +267,43 @@ describe("axis labels", () => {
     // is Monday midnight (1/12).
     expect(xLabels(labels)).toEqual(["1/7", "1/8", "1/9", "1/12", "1/13"]);
   });
+
+  /**
+   * **Bars are not spread evenly over the window the strategy is asked
+   * about.** A single day holding ninety bars, followed by nine days
+   * holding one each, is almost the whole index and almost none of the
+   * elapsed time — so calendar boundaries days apart snap onto
+   * neighbouring bars a few pixels from each other. The requested spacing
+   * is a promise about the drawing, so it has to be met again after the
+   * snap, in pixels.
+   */
+  it("should not let snapped ticks crowd each other", () => {
+    const DAY_MS = 24 * 3600 * 1000;
+    const EPOCH = Date.UTC(2026, 0, 1);
+    const packed = Array.from({ length: 91 }, (_, i) => candleAt(i / 91));
+    const daily = Array.from({ length: 9 }, (_, i) => candleAt(2 + i));
+    const { plot, labels } = mounted([...packed, ...daily]);
+    plot.applyOptions({
+      axis: {
+        x: {
+          minTickSpacing: 100,
+          ticks: timeTicks({
+            timeZone: "UTC",
+            locale: "en",
+            epochOf: (days) => EPOCH + days * DAY_MS,
+            xOfEpoch: (msValue) => (msValue - EPOCH) / DAY_MS,
+          }),
+        },
+      },
+    });
+    plot.render();
+
+    const positions = labels.input().x.map((tick) => tick.position);
+    expect(positions.length).toBeGreaterThan(1);
+    for (let i = 1; i < positions.length; i++) {
+      expect(Math.abs(positions[i] - positions[i - 1])).toBeGreaterThanOrEqual(100);
+    }
+  });
 });
 
 /**

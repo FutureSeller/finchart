@@ -9,7 +9,8 @@ import { chartHost } from "./stage";
 export const title = "Pivot Points — the period is the consumer's knowledge";
 export const description =
   "The previous period's high, low, and close draw this period's pivot (P) with its resistances (R) and supports (S) — the consumer states where a period ends through the anchor predicate (the core has no notion of a session; the same contract as VWAP). " +
-  "This demo takes the top of every hour as the boundary over one-minute bars. The hole at a period's first bar is what breaks the horizontal segments apart.";
+  "This demo takes the top of every hour as the boundary over one-minute bars, which is what a predicate of your own is for. For the ordinary case — a session that is a calendar day somewhere — `periodAnchor({ barStart: sessionStart({ timeZone }) })` is the one to reach for. " +
+  "The hole at a period's first bar is what breaks the horizontal segments apart.";
 
 export function mount(container: HTMLElement): () => void {
   const host = chartHost(container, 480);

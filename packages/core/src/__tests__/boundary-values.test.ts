@@ -9,7 +9,7 @@
  * their own packages — if the core imported those packages, the dependency
  * direction would invert.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -1379,6 +1379,69 @@ describe("self-completeness — a new door cannot open without a judgment call",
     // Failing here means a new name landed on the public surface.
     // It must be registered in GUARDED (it is a chokepoint) or EXEMPT (no amplifier, plus a reason).
     expect(unclassified).toEqual([]);
+  });
+
+  /**
+   * **A chokepoint number is the name of a block, not a decoration.** The
+   * tables cite them so a reader can go and find the door being described;
+   * a number that names nothing sends them looking for a test that was
+   * never written. Numbering is easy to invent by accident — the count
+   * looks like it continues from the last one — so the citation is checked
+   * against the blocks that actually exist.
+   */
+  it("should cite only chokepoints that name a block", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const cited = new Set(
+      [...Object.values(GUARDED), ...Object.values(SHAPE_GUARDED)].flatMap((note) =>
+        [...note.matchAll(/chokepoints? ([\d/b]+)/g)].flatMap((found) =>
+          found[1].split("/").filter((part) => part !== ""),
+        ),
+      ),
+    );
+
+    const blocks = new Set<string>();
+    const walk = (at: string): void => {
+      for (const entry of readdirSync(at, { withFileTypes: true })) {
+        const path = resolve(at, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (entry.name.endsWith(".test.ts")) {
+          for (const found of readFileSync(path, "utf8").matchAll(
+            /describe\("chokepoint ([\d/b]+) /g,
+          )) {
+            blocks.add(found[1]);
+          }
+        }
+      }
+    };
+    walk(resolve(here, ".."));
+
+    expect([...cited].filter((number) => !blocks.has(number)).sort()).toEqual([]);
+  });
+
+  /**
+   * **A note that names a test file is a pointer, and a stale pointer is
+   * worse than no pointer at all** — it reads as coverage while naming a
+   * file that may not mention the export any more. The table itself only
+   * checks that a name appears in it, so the claim a note makes about
+   * where the guarding happens is checked here rather than taken on trust.
+   */
+  it("should point at a file that names what it guards", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const broken = [...Object.entries(GUARDED), ...Object.entries(SHAPE_GUARDED)].flatMap(
+      ([name, note]) => {
+        const at = /guarded in ([\w./-]+\.test\.ts)/.exec(note)?.[1];
+        if (at === undefined) return [];
+        let source: string;
+        try {
+          source = readFileSync(resolve(here, "..", at), "utf8");
+        } catch {
+          return [`${name}: no such file — ${at}`];
+        }
+        return source.includes(name) ? [] : [`${name}: ${at} never mentions it`];
+      },
+    );
+
+    expect(broken).toEqual([]);
   });
 
   it("should not list names that left the public surface", () => {

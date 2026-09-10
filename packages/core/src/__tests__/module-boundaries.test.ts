@@ -8,13 +8,17 @@ const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** A module may only import layers below itself — this prevents circular dependencies. */
 const ALLOWED_DEPENDENCIES: Record<string, readonly string[]> = {
   primitives: [],
-  data: ["primitives"],
+  // Calendar arithmetic, one wall clock at a time. A leaf of its own
+  // because both of its readers — the axis's boundaries and the data's bar
+  // starts — sit in layers that cannot read each other.
+  time: ["primitives"],
+  data: ["primitives", "time"],
   scale: ["primitives"],
   render: ["primitives"],
   interaction: ["primitives"],
   // The grid draws from a LineStyle it receives — it only uses render's types
   // and knows nothing about the renderer itself.
-  axis: ["primitives", "scale", "render"],
+  axis: ["primitives", "time", "scale", "render"],
   // A series only knows how to draw itself — grid, axis, and interaction
   // belong to Plot, and a series knows nothing about them.
   series: ["primitives", "data", "scale", "render"],

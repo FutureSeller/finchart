@@ -46,6 +46,7 @@ export type { Disposer, Padding, Point, PlotArea, Scope } from "./primitives";
 
 // ---- data: points, accessors, decimation, computed nodes ----
 export {
+  barAggregator,
   computation,
   reuseUnchanged,
   defaultCoordinates,
@@ -81,6 +82,7 @@ export type {
   SeriesDataIssueCode,
   Source,
   TailChange,
+  Trade,
   Viewport,
 } from "./data";
 
@@ -156,6 +158,14 @@ export type {
   TextSize,
   TextStyle,
 } from "./render";
+
+// ---- time: where a bar starts ----
+// Calendar arithmetic on one wall clock. A `BarStart` is the whole
+// vocabulary — a week, a quarter, or a session that crosses midnight is a
+// few lines of the consumer's own, because no library can ship every
+// venue's calendar.
+export { fixedBars, sessionStart } from "./time";
+export type { BarStart } from "./time";
 
 // ---- axis: tick strategy and the label surface ----
 // Label placement constants and token specs are assembly vocabulary for a label implementation (@finchart/dom, or a custom one).

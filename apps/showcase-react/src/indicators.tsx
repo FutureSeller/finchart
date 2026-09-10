@@ -1,3 +1,4 @@
+import { sessionStart } from "@finchart/core";
 /**
  * Indicators — this is where the two lanes part.
  *
@@ -19,6 +20,7 @@ import {
   bandSeries,
   bollingerBands,
   movingAverage,
+  periodAnchor,
   vwap,
 } from "@finchart/indicators";
 import { ChartLine, ChartSeries, usePlugin } from "@finchart/react";
@@ -56,8 +58,6 @@ export function IndicatorToggles({
 
 const MA_PERIOD = 20;
 const BOLL_PERIOD = 20;
-/** Where a session begins is the consumer's knowledge — this tape starts a new day at UTC midnight. */
-const DAY = 86_400_000;
 
 const BOLL_BAND_SERIES = bandSeries();
 
@@ -75,7 +75,7 @@ export function OverlayIndicators({
     () => ({
       ma: movingAverage(source, { period: MA_PERIOD }),
       boll: bollingerBands(source, { period: BOLL_PERIOD }),
-      vwap: vwap(source, { anchor: (bar) => bar.x % DAY === 0 }),
+      vwap: vwap(source, { anchor: periodAnchor({ barStart: sessionStart({ timeZone: "UTC" }) }) }),
     }),
     [source],
   );

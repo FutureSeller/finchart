@@ -790,6 +790,30 @@ export function ichimoku(
 
 // --- VWAP ---
 
+/**
+ * **Where a new period opens.** Given a bar, its index, and the bar before
+ * it — `null` where there is nothing behind, which is what `vwap` passes
+ * at index 0. `pivotPoints` opens its first period without asking at all,
+ * so a predicate written for it is never called with `null`.
+ *
+ * The third argument is what makes a session boundary answerable: "did a
+ * new one open here" is a comparison between two bars, not a property of
+ * one, and without it every consumer closed over the array to index it
+ * again. `periodAnchor` turns any rule about where a bar starts into one
+ * of these, so a venue's own calendar needs the rule and nothing else.
+ *
+ * **A predicate may declare fewer parameters than it is given** — one or
+ * two is ordinary TypeScript and nothing about that changed. What changed
+ * is what an indicator passes: code that reads this type back out and
+ * calls it with two arguments, or assigns it to a two-parameter type, has
+ * to name the third now.
+ */
+export type AnchorPredicate = (
+  point: OHLC,
+  index: number,
+  previous: OHLC | null,
+) => boolean;
+
 export interface VwapOptions {
   /**
    * Resets accumulation on the candle where this is true — session
@@ -797,7 +821,7 @@ export interface VwapOptions {
    * break caused by missing volume: the new accumulation doesn't depend
    * on that candle.
    */
-  anchor?: (point: OHLC, index: number) => boolean;
+  anchor?: AnchorPredicate;
 }
 
 export type Vwap = Computation<{ vwap: LineDataPoint[] }>;
@@ -824,7 +848,7 @@ export function vwap(source: Source<OHLC>, options: VwapOptions = {}): Vwap {
 
       for (let index = 0; index < data.length; index++) {
         const candle = data[index];
-        if (anchor?.(candle, index)) {
+        if (anchor?.(candle, index, index === 0 ? null : data[index - 1])) {
           weighted = 0;
           total = 0;
           broken = false;
@@ -2664,7 +2688,7 @@ export interface PivotPointsOptions {
    * session) boundaries are the consumer's knowledge; core and the
    * indicator don't invent them.
    */
-  anchor: (point: OHLC, index: number) => boolean;
+  anchor: AnchorPredicate;
 }
 
 export type PivotPoints = Computation<{
@@ -2720,7 +2744,7 @@ export function pivotPoints(
 
       for (let index = 0; index < data.length; index++) {
         const candle = data[index];
-        const opens = index === 0 || anchor(candle, index);
+        const opens = index === 0 || anchor(candle, index, data[index - 1]);
 
         if (opens) {
           // Closes the previous period — its H, L, C become this period's levels.
