@@ -13,7 +13,7 @@
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 32 KB gzip (31948B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 32 KB gzip (31984B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -26,7 +26,7 @@
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 37 KB gzip (36738B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 37 KB gzip (36772B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 45.5 KB gzip (45042B measured)",
+    "name": "+ every drawing tool · 45.5 KB gzip (45077B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

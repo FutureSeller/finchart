@@ -812,3 +812,74 @@ describe("timeTicks — the cost of a jump", () => {
     ]);
   });
 });
+
+/**
+ * **A year label is a number, and before year 1 a number is not enough.**
+ * These run the `en-US` Gregorian formatter, where a year without its era
+ * is the year within that era: 1 BCE and 1 CE both come out "1" — two
+ * ticks a year apart wearing the same word — and every earlier year a
+ * positive number that reads as a later one.
+ *
+ * The era is asked for only below year 1, which is why the ordinary axis
+ * is left alone: asked for everywhere, this formatter would put "AD" on
+ * every ordinary Gregorian year label of every chart anyone actually draws.
+ */
+describe("timeTicks — years before 1", () => {
+  /** January 1st of an astronomical year, the numbering `zone.parts` uses. */
+  const januaryOf = (year: number) => {
+    const at = new Date(0);
+    at.setUTCFullYear(year, 0, 1);
+    at.setUTCHours(0, 0, 0, 0);
+    return at.getTime();
+  };
+
+  it("tells the years either side of the era apart", () => {
+    const ticks = timeTicks(UTC).ticks(context(januaryOf(-2), januaryOf(3)));
+
+    expect(ticks.map((tick) => tick.label)).toEqual([
+      "3 BC",
+      "2 BC",
+      "1 BC",
+      "1",
+      "2",
+      "3",
+    ]);
+  });
+
+  /**
+   * **The era is read off the zone's own year, not UTC's.** Seoul's clock
+   * ran 8:27:52 ahead then, so its year 1 opens while UTC is still in year
+   * 0 — the two axes put the boundary at different instants and label them
+   * from their own calendars, and both are right.
+   */
+  it("reads the era off the zone's year", () => {
+    const ticks = timeTicks({ timeZone: "Asia/Seoul", locale: "en-US" }).ticks(
+      context(januaryOf(-2), januaryOf(3)),
+    );
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["2 BC", "1 BC", "1", "2", "3"]);
+    // The third of these is the instant that tells the two clocks apart:
+    // Seoul is opening year 1 while UTC still has 8:27:52 of year 0 to go,
+    // and UTC's year formatter would render that instant "1 BC".
+    expect(ticks.map((tick) => new Date(tick.value).toISOString())).toEqual([
+      "-000002-12-31T15:32:08.000Z",
+      "-000001-12-31T15:32:08.000Z",
+      "0000-12-31T15:32:08.000Z",
+      "0001-12-31T15:32:08.000Z",
+      "0002-12-31T15:32:08.000Z",
+    ]);
+  });
+
+  it("leaves an ordinary year unadorned", () => {
+    const ticks = timeTicks(UTC).ticks(context(januaryOf(2023), januaryOf(2028)));
+
+    expect(ticks.map((tick) => tick.label)).toEqual([
+      "2023",
+      "2024",
+      "2025",
+      "2026",
+      "2027",
+      "2028",
+    ]);
+  });
+});

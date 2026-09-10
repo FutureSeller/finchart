@@ -430,8 +430,15 @@ class Labels {
   private readonly time: Intl.DateTimeFormat;
   private readonly second: Intl.DateTimeFormat;
 
+  private readonly beforeEra: Intl.DateTimeFormat;
+
   constructor(locale?: string, timeZone?: string) {
     this.year = new Intl.DateTimeFormat(locale, { timeZone, year: "numeric" });
+    this.beforeEra = new Intl.DateTimeFormat(locale, {
+      timeZone,
+      year: "numeric",
+      era: "short",
+    });
     this.month = new Intl.DateTimeFormat(locale, { timeZone, month: "short" });
     this.day = new Intl.DateTimeFormat(locale, {
       timeZone,
@@ -454,6 +461,27 @@ class Labels {
   }
 
   /**
+   * **Before year 1 the number alone names two years.** In the Gregorian
+   * calendar a year formatted without its era is the year within that
+   * era, so 1 BCE and 1 CE both come out "1", and every year before that
+   * wears a positive number belonging to a later one — an axis drawn
+   * across the boundary read 3, 2, 1, 1, 2, 3.
+   *
+   * So a year below 1 is formatted with the era asked for, and a year
+   * from 1 on without it: a present-day axis holds no second year "2026"
+   * could mean, and in English every ordinary year label would only be
+   * wearing "AD".
+   *
+   * That is the whole rule. The year it turns on is the zone's, and
+   * `Zone` reads its clock in one fixed locale, so the decision is
+   * Gregorian whatever calendar the label's locale selects. What asking
+   * for an era then does to a label in that calendar is not decided here.
+   */
+  private yearLabel(ms: number, parts: ZonedParts): string {
+    return parts.year >= 1 ? this.year.format(ms) : this.beforeEra.format(ms);
+  }
+
+  /**
    * The basis for promotion isn't an exact boundary, it's the largest unit
    * that changed from the previous tick. On a weekly step, a tick may
    * never land on the 1st of the month — but "the month's first tick"
@@ -466,12 +494,12 @@ class Labels {
     if (previous === null) {
       // The first tick has nothing to compare against — it speaks at the level of its own boundary.
       if (midnight && parts.day === 1 && parts.month === 1) {
-        return this.year.format(ms);
+        return this.yearLabel(ms, parts);
       }
       if (midnight && parts.day === 1) return this.month.format(ms);
       if (midnight) return this.day.format(ms);
     } else if (parts.year !== previous.year) {
-      return this.year.format(ms);
+      return this.yearLabel(ms, parts);
     } else if (parts.month !== previous.month) {
       return this.month.format(ms);
     } else if (midnight || parts.day !== previous.day) {
