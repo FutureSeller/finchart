@@ -19,6 +19,7 @@ function context(
     minTickSpacing,
     xOf: (value) => value,
     domainOf: (x) => x,
+    positionOf: (value) => ((value - minMs) / (maxMs - minMs)) * span,
   };
 }
 
@@ -126,6 +127,7 @@ describe("timeTicks — a different x unit", () => {
       minTickSpacing: 80,
       xOf: (value) => value,
       domainOf: (x) => x,
+      positionOf: (value) => (value / 60) * 800,
     });
 
     // The values are back in the day-count coordinate system — weekly
@@ -794,6 +796,24 @@ describe("timeTicks — the cost of a jump", () => {
   });
 
   /**
+   * **A landing that came to rest exactly on a grid reading is one tick,
+   * not two.** New York's clock lands on 03:00 and every rung's grid
+   * stands on 03:00; the point is the one kept. Asked for a spacing no
+   * screen resolves, nothing downstream would tell the two apart, so the
+   * walk has to name the instant once itself.
+   */
+  it("names an instant once where the landing and the grid coincide", () => {
+    const landed = ms("2026-03-08T07:00Z");
+    const ticks = timeTicks({ timeZone: "America/New_York", locale: "en-US" }).ticks(
+      context(landed, landed + 1000 * 1000, 800, 1e-7),
+    );
+
+    const values = ticks.map((tick) => tick.value);
+    expect(values[0]).toBe(landed);
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  /**
    * And the reason a jump may not measure past a change of clock. Algiers
    * gave back an hour in 1916; this window starts inside the hour it
    * repeated and ends three minutes after the repeat is over. Measured
@@ -814,31 +834,59 @@ describe("timeTicks — the cost of a jump", () => {
 });
 
 /**
- * **The cap counts what is drawn, not what was considered.** A thousand
- * ticks is the most an axis will hold, and it is a thousand after the
- * spacing rule has had its say — a request dense enough to reach it does
- * not lose the last few to boundaries that were never going to be drawn,
- * and a landing considered last is judged against the grid point beside
- * it, not against the edge of what was looked at.
+ * **The cap bounds what a rung offers; spacing then chooses among it.** A
+ * rung offers about `span / minTickSpacing` boundaries, so a thousand is
+ * reached only by an axis asking for a thousand labels, and there the
+ * offer stops — the spacing rule then keeps fewer, and a landing offered
+ * last is judged only against what was offered with it. Counting only
+ * what survives would need the offer to be resumable — asked for more as
+ * room is found, with a later heavy boundary able to unseat an earlier
+ * choice — which is more machinery than an axis asking for a thousand
+ * labels is worth.
  */
-describe("timeTicks — the thousand-tick cap", () => {
-  it("fills the cap after spacing, not before", () => {
+/**
+ * **Which of two crowded equals is kept is a fact about time, not about
+ * pixels.** A vertical axis usually runs its range downward, so a choice
+ * made by pixel order would keep the later of every crowded pair there
+ * and the earlier everywhere else.
+ */
+describe("timeTicks — an axis that runs the other way", () => {
+  it.each([
+    ["upward", (value: number, span: number, min: number, max: number) => ((value - min) / (max - min)) * span],
+    ["downward", (value: number, span: number, min: number, max: number) => span - ((value - min) / (max - min)) * span],
+  ])("keeps the earlier of two crowded equals, %s", (_name, positionOf) => {
+    const min = ms("2026-01-15T00:00Z");
+    const max = ms("2026-04-15T00:00Z");
+    const ticks = timeTicks(UTC).ticks({
+      ...context(min, max, 900, 300),
+      positionOf: (value) => positionOf(value, 900, min, max),
+    });
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["Feb", "Apr"]);
+  });
+});
+
+describe("timeTicks — the thousand-boundary cap", () => {
+  it("offers a thousand, and spacing keeps what fits", () => {
     const min = ms("2026-01-01T00:00Z");
     const ticks = timeTicks({ timeZone: "America/New_York", locale: "en-US" }).ticks(
       context(min, min + 1100 * 24 * 3600 * 1000, 1100, 1),
     );
 
-    expect(ticks).toHaveLength(1000);
-    expect(ticks[ticks.length - 1].value).toBe(ms("2028-09-29T04:00Z"));
+    // Three of the thousand offered stood a twenty-three-hour day apart.
+    expect(ticks).toHaveLength(997);
+    expect(ticks[ticks.length - 1].value).toBe(ms("2028-09-26T04:00Z"));
   });
 
-  it("judges a landing at the cap against its neighbour", () => {
+  it("judges a landing offered last against what was offered with it", () => {
     const ticks = timeTicks({ timeZone: "Africa/Monrovia", locale: "en-US" }).ticks(
       context(62_693_970_000, 63_596_670_000, 1003, 1),
     );
 
+    // The landing is the thousandth boundary offered; the grid point it
+    // would give way to was not, so it stands.
     expect(ticks).toHaveLength(1000);
-    expect(ticks[ticks.length - 1].value).toBe(ms("1972-01-07T00:45:00Z"));
+    expect(ticks[ticks.length - 1].value).toBe(ms("1972-01-07T00:44:30Z"));
   });
 });
 

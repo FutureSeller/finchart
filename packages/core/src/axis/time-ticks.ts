@@ -46,8 +46,11 @@ const FIXED_STEPS = [
 
 const MONTH_STEPS = [1, 3, 6] as const;
 
-/** The most a strategy will ever return. A label past this is unreadable anyway. */
+/** The most boundaries a rung will offer. A label past this is unreadable anyway. */
 const MAX_BOUNDARIES = 1000;
+
+/** How much closer than asked a pair may stand: a millionth of a pixel, which no screen resolves. */
+const PIXEL_SLACK = 1e-6;
 
 export function timeTicks(options: TimeTicksOptions = {}): TickStrategy {
   const epochOf = options.epochOf ?? ((x: number) => x);
@@ -56,23 +59,145 @@ export function timeTicks(options: TimeTicksOptions = {}): TickStrategy {
   const labels = new Labels(options.locale, options.timeZone);
 
   return {
-    ticks({ min, max, span, minTickSpacing, xOf, domainOf }) {
+    ticks({ min, max, span, minTickSpacing, xOf, domainOf, positionOf, snap }) {
       if (!(max > min) || !(span > 0)) return [];
 
       const window = windowOf(epochOf(xOf(min)), epochOf(xOf(max)), span, minTickSpacing);
       if (window === null) return [];
 
-      const boundaries = boundariesFor(window, zone);
+      /**
+       * **Candidates, then placement, then labels — in that order, because
+       * each step needs the one before it.** A boundary's label is decided
+       * by the largest unit it crosses *from the tick before it*, so it
+       * cannot be written until it is known which ticks survive; and which
+       * survive cannot be decided until it is known where each is drawn,
+       * which in a bar-index coordinate system is not where it falls.
+       */
+      const candidates = boundariesFor(window, zone).map((candidate) => {
+        const parts = zone.parts(candidate.at);
+        return {
+          ...candidate,
+          parts,
+          rank: rankOf(parts),
+          value: domainOf(xOfEpoch(candidate.at)),
+        };
+      });
+      const placed = place(candidates, snap, positionOf, minTickSpacing);
 
       let previous: ZonedParts | null = null;
-      return boundaries.map((ms) => {
-        const parts = zone.parts(ms);
-        const label = labels.of(ms, parts, previous);
+      return placed.map(({ at, parts, value }) => {
+        const label = labels.of(at, parts, previous);
         previous = parts;
-        return { value: domainOf(xOfEpoch(ms)), label };
+        return { value, label };
       });
     },
   };
+}
+
+/**
+ * A boundary the calendar offers, before anything has chosen among them.
+ * A landing is the instant a clock came to rest after skipping a stretch
+ * that held a boundary; it stands for that stretch, but it is not a
+ * boundary itself, so where it would crowd one it gives way.
+ */
+interface Candidate {
+  readonly at: number;
+  readonly landing: boolean;
+}
+
+interface Placed extends Candidate {
+  readonly parts: ZonedParts;
+  readonly rank: number;
+  readonly value: number;
+}
+
+/**
+ * **What a boundary is worth is a property of the boundary, not of its
+ * neighbours.** Midnight on the 1st of January stands for a year, on any
+ * other 1st for a month, on any other day for a day, and anything else for
+ * a time of day. The label a tick wears is decided later and relatively —
+ * the first tick of March wears "Mar" even on a weekly rung that never
+ * lands on the 1st — but which of two crowded ticks to keep is decided
+ * here, and here a boundary's own weight is the honest measure.
+ */
+function rankOf(parts: ZonedParts): number {
+  if (parts.hour !== 0 || parts.minute !== 0 || parts.second !== 0) return 0;
+  if (parts.day !== 1) return 1;
+  return parts.month === 1 ? 3 : 2;
+}
+
+/**
+ * **The heaviest boundary takes its place first; the rest stand where
+ * there is room.** Two rules, and both prefer weight:
+ *
+ * - **One tick per bar.** Where the domain is a bar index, boundaries
+ *   with no bar of their own — the weekend's midnights — land on the first
+ *   bar after them, and several can land on one. The heaviest survives;
+ *   between equals, the one whose own boundary the bar sits nearest.
+ * - **No pair closer than asked.** A boundary that would draw closer to a
+ *   placed one than the caller's spacing is not drawn. Placing by weight
+ *   makes this a choice rather than an accident of order: a month's name
+ *   is placed before the day in front of it can take the room.
+ *
+ * Between equals the earlier is kept, and a landing gives way to a real
+ * boundary — it stands where a tick would, or not at all.
+ */
+function place(
+  candidates: Placed[],
+  snap: ((value: number) => number) | undefined,
+  positionOf: (value: number) => number,
+  minTickSpacing: number,
+): Placed[] {
+  let pool = candidates;
+  if (snap !== undefined) {
+    const byBar = new Map<number, { readonly held: Placed; readonly distance: number }>();
+    for (const candidate of candidates) {
+      const bar = snap(candidate.value);
+      const distance = bar - candidate.value;
+      const seen = byBar.get(bar);
+      if (
+        seen === undefined ||
+        outranks(candidate, seen.held) ||
+        (!outranks(seen.held, candidate) && distance < seen.distance)
+      ) {
+        byBar.set(bar, { held: { ...candidate, value: bar }, distance });
+      }
+    }
+    pool = [...byBar.values()].map((entry) => entry.held);
+  }
+
+  // Between equals the earlier *in time* is kept — by value, not by
+  // pixel, because an axis whose range runs the other way (a vertical one
+  // usually does) would otherwise keep the later of every crowded pair.
+  const ordered = pool
+    .map((candidate) => ({ candidate, position: positionOf(candidate.value) }))
+    .sort(
+      (a, b) =>
+        (outranks(a.candidate, b.candidate) ? -1 : outranks(b.candidate, a.candidate) ? 1 : 0) ||
+        a.candidate.value - b.candidate.value,
+    );
+
+  // A pair may stand up to a millionth of a pixel closer than asked. That
+  // is an absolute allowance, not a rounding rule: it is there because a
+  // position is a float — two days over a ten-day window at 500px is
+  // 100px in arithmetic and 99.99999999999999 in a double — and it is
+  // harmless because no screen resolves the difference, on ten pixels or
+  // a hundred thousand. (A spacing below the allowance makes the room
+  // negative, which keeps everything; nothing draws that close anyway.)
+  const room = minTickSpacing - PIXEL_SLACK;
+  const taken: number[] = [];
+  const out: Placed[] = [];
+  for (const { candidate, position } of ordered) {
+    if (taken.some((at) => Math.abs(at - position) < room)) continue;
+    taken.push(position);
+    out.push(candidate);
+  }
+  return out.sort((a, b) => a.value - b.value);
+}
+
+/** Heavier first; between equals a real boundary before a landing. */
+function outranks(a: Placed, b: Placed): boolean {
+  return a.rank > b.rank || (a.rank === b.rank && !a.landing && b.landing);
 }
 
 /**
@@ -145,8 +270,8 @@ function windowOf(
   };
 }
 
-/** The tightest calendar boundaries that satisfy the minimum interval (ms). */
-function boundariesFor(window: TickWindow, zone: Zone): number[] {
+/** The tightest calendar rung that satisfies the minimum interval (ms), and every boundary it offers. */
+function boundariesFor(window: TickWindow, zone: Zone): Candidate[] {
   const { holds, apart } = window;
   /**
    * **A step is picked by its name, and a calendar name is approximate.**
@@ -154,23 +279,23 @@ function boundariesFor(window: TickWindow, zone: Zone): number[] {
    * shorter than the thirty days the ladder has to call a month, and where
    * a clock jumped by hours two neighbouring boundaries can stand a third
    * of a step apart — a two-hour move leaves one hour between two
-   * three-hour boundaries. So the name is not the promise: a boundary that
-   * would draw closer to the last one than the caller asked for is not
-   * drawn at all.
+   * three-hour boundaries. So the name is not the promise: every boundary
+   * the rung offers is a candidate, and the ones that would draw closer
+   * than the caller asked for are chosen among afterwards, by weight.
    *
    * Advancing the ladder instead — picking a step by the shortest form it
    * can take — was measured to cost 37% of all labels, because a request
    * anywhere near a step's nominal length moves the whole chart up a rung.
-   * Dropping the crowded boundary costs nothing on ordinary requests and
-   * one label in ninety on requests pinned exactly at a step's name.
+   * Choosing among crowded boundaries costs nothing on ordinary requests
+   * and one label in ninety on requests pinned exactly at a step's name.
    */
   for (const step of FIXED_STEPS) {
     // The fixed ladder is the only rung whose grid hangs off the window
     // rather than off the calendar, so it is the only one given `opensAt`.
-    if (step >= apart) return fixedBoundaries(window.opensAt, holds, step, apart, zone);
+    if (step >= apart) return fixedBoundaries(window.opensAt, holds, step, zone);
   }
   for (const months of MONTH_STEPS) {
-    if (months * 30 * DAY >= apart) return monthBoundaries(holds, months, apart, zone);
+    if (months * 30 * DAY >= apart) return monthBoundaries(holds, months, zone);
   }
   return yearBoundaries(holds, apart, zone);
 }
@@ -179,20 +304,19 @@ function boundariesFor(window: TickWindow, zone: Zone): number[] {
  * Second-to-week intervals — aligned to **midnight in that time zone**.
  * A week aligns to Monday midnight.
  *
- * **What the grid gives is the calendar's; what is drawn is the axis's.**
- * How midnight and Monday become readings, how a clock's runs lay a grid
- * of them, and what a stretch the clock skipped is worth — those are the
- * calendar's, and live in `time/grid`. Left here is the one question that
- * is about pixels: whether a point would draw closer to the last one than
- * the caller asked for.
+ * **What the grid gives is the calendar's; what is drawn is decided
+ * later.** How midnight and Monday become readings, how a clock's runs lay
+ * a grid of them, and what a stretch the clock skipped is worth — those
+ * are the calendar's, and live in `time/grid`. Nothing about pixels is
+ * asked here: every point and landing the grid offers is a candidate, and
+ * `place` chooses among them where they would crowd.
  */
 function fixedBoundaries(
   opensAt: PhaseOrigin,
   holds: TickWindow["holds"],
   step: number,
-  minStepMs: number,
   zone: Zone,
-): number[] {
+): Candidate[] {
   /**
    * **Phase comes from the window the caller gave.** Which day the grid
    * hangs off is a phase, and a window whose edge sits half a millisecond
@@ -203,31 +327,23 @@ function fixedBoundaries(
   let anchor = dayStartOf(zone, opensAt.epochMs);
   if (step === WEEK) anchor = weekStartOf(anchor);
 
-  const out: number[] = [];
+  const out: Candidate[] = [];
   let last = Number.NEGATIVE_INFINITY;
   readingGrid(zone, anchor, step, holds.first, holds.last, {
     point(at) {
-      // A reading the clock skipped can leave two neighbouring points far
-      // closer in real time than the step they were laid on.
-      if (at > last && at - last >= minStepMs) {
-        last = at;
-        out.push(at);
-      }
+      // A landing that came to rest exactly on a grid reading names the
+      // same instant as the point that follows it; the point is the one
+      // kept, being the boundary itself.
+      if (at === last && out[out.length - 1].landing) out.pop();
+      else if (at <= last) return true;
+      last = at;
+      out.push({ at, landing: false });
       return out.length < MAX_BOUNDARIES;
     },
-    landing(at, resumesAt) {
-      /**
-       * **A landing stands where a tick would, or not at all.** The stretch
-       * it speaks for is worth a mark, but not one crowded against a real
-       * tick: at Monrovia the clock resumes half a minute before the grid
-       * does, and two labels that close are one smudge. When the grid
-       * picks up that soon it says the same thing on its own.
-       */
-      const crowded = at - last < minStepMs || (resumesAt !== null && resumesAt - at < minStepMs);
-      if (at > last && !crowded) {
-        last = at;
-        out.push(at);
-      }
+    landing(at) {
+      if (at <= last) return true;
+      last = at;
+      out.push({ at, landing: true });
       return out.length < MAX_BOUNDARIES;
     },
   });
@@ -238,11 +354,10 @@ function fixedBoundaries(
 function monthBoundaries(
   holds: TickWindow["holds"],
   step: number,
-  minStepMs: number,
   zone: Zone,
-): number[] {
+): Candidate[] {
   const { first: minMs, last: maxMs } = holds;
-  const out: number[] = [];
+  const out: Candidate[] = [];
   const parts = zone.parts(minMs);
   // Aligns to months that are multiples of step — a 3-month step lands on Jan/Apr/Jul/Oct.
   let year = parts.year;
@@ -277,16 +392,11 @@ function monthBoundaries(
     }
   }
 
-  let last = Number.NEGATIVE_INFINITY;
-
   for (let i = 0; i < MAX_BOUNDARIES; i++) {
     if (year > lastYear || (year === lastYear && month > lastMonth)) break;
     const ms = zone.toUtc({ year, month, day: 1, hour: 0, minute: 0, second: 0 });
     if (ms > maxMs) break;
-    if (ms >= minMs && ms - last >= minStepMs) {
-      last = ms;
-      out.push(ms);
-    }
+    if (ms >= minMs) out.push({ at: ms, landing: false });
     month += step;
     if (month > 12) {
       month -= 12;
@@ -298,19 +408,19 @@ function monthBoundaries(
 
 function yearBoundaries(
   holds: TickWindow["holds"],
-  minStepMs: number,
+  apart: number,
   zone: Zone,
-): number[] {
+): Candidate[] {
   const { first: minMs, last: maxMs } = holds;
   // 1·2·5×10ⁿ years — the numeric ladder returns only here (a year count is just a number).
-  const rawYears = minStepMs / (365 * DAY);
+  const rawYears = apart / (365 * DAY);
   const magnitude = 10 ** Math.floor(Math.log10(Math.max(rawYears, 1)));
   const normalized = rawYears / magnitude;
   const stepYears =
     (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) *
     magnitude;
 
-  const out: number[] = [];
+  const out: Candidate[] = [];
   /**
    * **Only Januarys a zone can be asked to read.** The alignment can land
    * below the window — a hundred-thousand-year step, which the whole range
@@ -334,8 +444,6 @@ function yearBoundaries(
   if (year < firstJanuary) {
     year += Math.ceil((firstJanuary - year) / stepYears) * stepYears;
   }
-  let last = Number.NEGATIVE_INFINITY;
-
   for (let i = 0; i < MAX_BOUNDARIES && year <= lastJanuary; i++) {
     const ms = zone.toUtc({
       year,
@@ -346,10 +454,7 @@ function yearBoundaries(
       second: 0,
     });
     if (ms > maxMs) break;
-    if (ms >= minMs && ms - last >= minStepMs) {
-      last = ms;
-      out.push(ms);
-    }
+    if (ms >= minMs) out.push({ at: ms, landing: false });
     year += stepYears;
   }
   return out;

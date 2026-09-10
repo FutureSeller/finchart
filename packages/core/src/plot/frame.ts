@@ -334,7 +334,11 @@ function strategyTicks(
   scale: Scale,
   options: AxisOptions,
   minTickSpacing: number,
-  space: { xOf(value: number): number; domainOf(value: number): number },
+  space: {
+    xOf(value: number): number;
+    domainOf(value: number): number;
+    snap?: (value: number) => number;
+  },
 ): Tick[] | null {
   if (!options.ticks) return null;
 
@@ -349,73 +353,14 @@ function strategyTicks(
       minTickSpacing,
       xOf: space.xOf,
       domainOf: space.domainOf,
+      positionOf: (value) => scale.scale(value),
+      snap: space.snap,
     })
     .map(({ value, label }) => ({
       value,
       label,
       position: scale.scale(value),
     }));
-}
-
-/**
- * In a bar-index coordinate system, a calendar boundary (a strategy's
- * tick) can fall **between** bars — midnight on a weekend interpolates to
- * 1/3 or 2/3 of the way through the gap between Friday's and Monday's
- * bars. Left as-is, ticks for dates with no bar pile two onto a single gap
- * and overlap, and the date under a bar reads as belonging to its
- * neighbor instead.
- *
- * So a tick is placed on **the boundary's own day, or the first bar after
- * it** (`ceil`) — "December" lands on December's first trading day even
- * if the 1st is a Sunday (the convention in financial charts). When
- * several land on the same bar, whichever is closest to the boundary
- * survives — on Monday's bar, Monday midnight's label wins over Sunday
- * midnight's.
- *
- * Known limitation: in a date step, if a month's 1st falls on a weekend, a
- * promoted label ("December") can lose out to the label for the first
- * trading day's midnight after it — promotion is decided at the step
- * stage, so it can't be undone here.
- *
- * **Snapping is where the requested spacing has to be met again.** A
- * strategy is asked for boundaries at a spacing it works out from the
- * window's average width per unit of time, but bars are not spread evenly
- * over that window: ninety of them inside one day and one a day after
- * that pull the boundaries of a whole fortnight onto a handful of
- * neighbouring bars. So a snapped tick that stands closer than the
- * requested distance to the one before it is dropped, and the earlier of
- * the pair is the one kept — it is the one whose own boundary the bar sits
- * nearest to.
- *
- * The same limitation applies here as above, and for the same reason: the
- * label was chosen before the snap, so the tick dropped can be the
- * promoted one — a "Feb" losing to the 31st of January in front of it.
- * Choosing by rank would need the snap to happen before the labels do,
- * which is a strategy's business, not a frame's.
- */
-function snapTicksToBars(
-  ticks: Tick[],
-  scale: Scale,
-  minTickSpacing: number,
-): Tick[] {
-  const byBar = new Map<number, { label: string; distance: number }>();
-
-  for (const { value, label } of ticks) {
-    const bar = Math.ceil(value - 1e-9);
-    const distance = bar - value;
-    const seen = byBar.get(bar);
-    if (!seen || distance < seen.distance) byBar.set(bar, { label, distance });
-  }
-
-  const out: Tick[] = [];
-  let last = Number.NEGATIVE_INFINITY;
-  for (const [bar, { label }] of byBar) {
-    const position = scale.scale(bar);
-    if (Math.abs(position - last) < minTickSpacing) continue;
-    last = position;
-    out.push({ value: bar, label, position });
-  }
-  return out;
 }
 
 /** The y domain is the value itself — there's no other space to map it into. */
@@ -437,15 +382,25 @@ function xTicks(
   // A strategy, if present, takes over both placement and labeling. The
   // default arithmetic and `format` aren't used — mixing them halfway
   // would leave nobody sure who owns the label.
+  /**
+   * In a bar-index coordinate system, a calendar boundary can fall
+   * **between** bars — midnight on a weekend interpolates to 1/3 or 2/3 of
+   * the way through the gap between Friday's and Monday's bars. Left as-is,
+   * ticks for dates with no bar pile two onto a single gap and overlap, and
+   * the date under a bar reads as belonging to its neighbor instead. So the
+   * strategy is told which bar a boundary is drawn on: the boundary's own
+   * day, or the first bar after it (`ceil`) — "December" lands on
+   * December's first trading day even if the 1st is a Sunday, the
+   * convention in financial charts. Which of several boundaries landing on
+   * one bar survives is the strategy's to decide, because only it knows
+   * that one of them is the month's name.
+   */
   const strategy = strategyTicks(xScale, options, options.minTickSpacing, {
     xOf: (value) => x.fromDomain(value),
     domainOf: (value) => x.toDomain(value),
+    snap: x.rebuild === undefined ? undefined : (value) => Math.ceil(value - 1e-9),
   });
-  if (strategy) {
-    return x.rebuild === undefined
-      ? strategy
-      : snapTicksToBars(strategy, xScale, options.minTickSpacing);
-  }
+  if (strategy) return strategy;
 
   /**
    * In a bar-index coordinate system, the label **recovers the x that

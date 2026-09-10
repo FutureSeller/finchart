@@ -307,6 +307,112 @@ describe("axis labels", () => {
 });
 
 /**
+ * **A calendar boundary is chosen by what it stands for, before it is
+ * labelled.** The strategy used to label its boundaries first, and the
+ * frame then snapped them onto bars and thinned them by pixel — so where
+ * two landed on one bar the closer won, and where two crowded the earlier
+ * won, and neither rule knew that one of the pair was the month's name.
+ */
+describe("bar-index ticks keep the promoted label", () => {
+  const DAY_MS = 24 * 3600 * 1000;
+
+  /**
+   * February 2026 opens on a Sunday. Saturday's, Sunday's and Monday's
+   * midnights all snap onto Monday's bar, and Monday's own midnight stands
+   * closest — so "2/2" used to win the bar over "Feb".
+   */
+  it("keeps the month's name on the first bar after a weekend 1st", () => {
+    const EPOCH = Date.UTC(2026, 0, 26); // Monday
+    // Mon–Fri twice, with the weekend of the 31st and the 1st between.
+    const tradingDays = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11];
+    const { plot, labels } = mounted(tradingDays.map(candleAt));
+    plot.applyOptions({
+      axis: {
+        x: {
+          // Close enough for the day rung, wide enough that nothing crowds.
+          minTickSpacing: 40,
+          ticks: timeTicks({
+            timeZone: "UTC",
+            locale: "en",
+            epochOf: (days) => EPOCH + days * DAY_MS,
+            xOfEpoch: (ms) => (ms - EPOCH) / DAY_MS,
+          }),
+        },
+      },
+    });
+    plot.render();
+
+    expect(labels.xTexts()).toEqual([
+      "1/26", "1/27", "1/28", "1/29", "1/30",
+      "Feb", "2/3", "2/4", "2/5", "2/6",
+    ]);
+  });
+
+  /**
+   * Ninety-one bars inside the 30th of January and one a day after that:
+   * the 31st and the 1st are neighbouring bars a few pixels apart, so the
+   * pair crowds and the earlier used to be kept — "1/31" over "Feb".
+   */
+  it("keeps the month's name when it crowds the day before it", () => {
+    const EPOCH = Date.UTC(2026, 0, 30); // Friday
+    const packed = Array.from({ length: 91 }, (_, i) => candleAt(i / 91));
+    const daily = Array.from({ length: 9 }, (_, i) => candleAt(1 + i));
+    const { plot, labels } = mounted([...packed, ...daily]);
+    plot.applyOptions({
+      axis: {
+        x: {
+          minTickSpacing: 60,
+          ticks: timeTicks({
+            timeZone: "UTC",
+            locale: "en",
+            epochOf: (days) => EPOCH + days * DAY_MS,
+            xOfEpoch: (ms) => (ms - EPOCH) / DAY_MS,
+          }),
+        },
+      },
+    });
+    plot.render();
+
+    // The month's name takes the bar; the days either side of it, all a
+    // few pixels away, give way to it rather than the other way round.
+    expect(labels.xTexts()).toEqual(["1/30", "Feb"]);
+  });
+
+  /**
+   * **Where the clock landed exactly on a grid reading, the tick is the
+   * reading, not the landing.** New York's clock skips 02:00 and comes
+   * to rest on 03:00, which a quarter-hour grid stands on too. A landing
+   * gives way to a real boundary when the two crowd — but this one *is*
+   * the boundary, and must not give way to the 04:00 beside it.
+   */
+  it("keeps a landing that is itself a boundary over the tick after it", () => {
+    const HOUR_MS = 3600 * 1000;
+    const EPOCH = Date.UTC(2026, 2, 8, 5); // 00:00 EST, the day the clock moves
+    // A hundred bars inside 01:00–02:00 EST, then one an hour: 03:00, 04:00,
+    // 05:00 EDT — so the last three are neighbouring bars a few pixels apart.
+    const packed = Array.from({ length: 100 }, (_, i) => candleAt(1 + i / 100));
+    const hourly = [2, 3, 4].map(candleAt);
+    const { plot, labels } = mounted([...packed, ...hourly]);
+    plot.applyOptions({
+      axis: {
+        x: {
+          minTickSpacing: 60,
+          ticks: timeTicks({
+            timeZone: "America/New_York",
+            locale: "en-US",
+            epochOf: (hours) => EPOCH + hours * HOUR_MS,
+            xOfEpoch: (ms) => (ms - EPOCH) / HOUR_MS,
+          }),
+        },
+      },
+    });
+    plot.render();
+
+    expect(labels.xTexts()).toEqual(["01:00", "01:15", "01:30", "01:45", "03:00"]);
+  });
+});
+
+/**
  * The index is derived from the data, so it must never go stale first.
  * "Skip the rebuild if x hasn't moved" saves work on reindex, but a new bar
  * must always be counted.
