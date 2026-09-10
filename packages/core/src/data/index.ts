@@ -34,6 +34,8 @@ export {
 
 export { lowerBoundBy, upperBoundBy } from "./search";
 export { OhlcAggregation } from "./aggregation";
+export { barAggregator } from "./aggregate";
+export type { Trade } from "./aggregate";
 export {
   LttbDecimation,
   M4Decimation,

@@ -10,17 +10,18 @@
 import type { OHLC, Plot, PluginApi, Series, SeriesHandle } from "@finchart/core";
 import {
   AreaSeries,
+  LineSeries,
+  OHLCAccessor,
   barIndexX,
   barSeries,
   candleSeries,
   crosshair,
-  LineSeries,
-  OHLCAccessor,
   paneMaximize,
   priceLine,
+  sessionStart,
   timeTicks,
-  watermark,
   type HistogramPoint,
+  watermark,
 } from "@finchart/core";
 import { histogramSeries } from "@finchart/core";
 import { browserDeps, legend, PlotBuilder, tooltip } from "@finchart/dom";
@@ -30,6 +31,7 @@ import {
   attachMovingAverage,
   attachRsi,
   attachVwap,
+  periodAnchor,
 } from "@finchart/indicators";
 import { drawingTools, type DrawingToolsApi } from "@finchart/tools";
 import { createFeed } from "./feed";
@@ -298,7 +300,7 @@ export function makeChart(
           source: price,
           color: "#0ea5e9",
           // Where a session begins is the consumer's knowledge — this tape starts a new day at UTC midnight.
-          anchor: (bar) => bar.x % 86_400_000 === 0,
+          anchor: periodAnchor({ barStart: sessionStart({ timeZone: "UTC" }) }),
         }),
       ),
   };

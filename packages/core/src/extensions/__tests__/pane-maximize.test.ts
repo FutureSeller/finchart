@@ -137,6 +137,7 @@ describe("paneMaximize", () => {
     expect(max.serialize()).toBeNull();
   });
 
+  describe("chokepoint 4 — load() takes a payload from a URL or localStorage", () => {
   it("round-trips through serialize/load", () => {
     const { plot, added } = setup();
     plot.mainPane.applyOptions({ flex: 2 });
@@ -170,6 +171,7 @@ describe("paneMaximize", () => {
     expect(max.load(JSON.stringify({ version: 1, targetIndex: 99, flex: [] }))).toBe(
       false,
     );
+  });
   });
 
   /**

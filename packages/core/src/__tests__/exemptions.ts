@@ -182,6 +182,22 @@ export const EXEMPT: Record<string, Exemption> = {
  * - Amplified — becomes a loop boundary or a layout
  */
 export const GUARDED: Record<string, string> = {
+  barAggregator:
+    "chokepoint 11 — a trade's price and volume, checked here because folding "
+    + "erases them: a price that is not a number lands only on the close and the "
+    + "next trade overwrites it, while its volume stays in the sum, so the data "
+    + "door is handed a bar that adds up wrong and looks well formed "
+    + "(guarded in data/__tests__/aggregate.test.ts)",
+  fixedBars:
+    "chokepoint 9 — interval becomes the grid every bar is floored onto, and "
+    + "a bar's x is stored. **The returned function is a second door** and "
+    + "takes the number that matters: a bar's own x (both throw; guarded in "
+    + "time/__tests__/bar-start.test.ts)",
+  sessionStart:
+    "chokepoint 10 — the door is the function it returns, not the options: it "
+    + "takes a bar's x and answers the x a session is stored under. `NaN` "
+    + "keeps all three of a BarStart's laws silently, so it is refused at the "
+    + "call (guarded in time/__tests__/bar-start.test.ts)",
   LinearScale: "chokepoint 1 — the domain becomes the boundary of the axis-tick loop (amplified)",
   LogScale: "chokepoint 1 — the domain becomes the boundary of the axis-tick loop (amplified)",
   // An export with multiple doors can sit in this table with a checkmark
@@ -208,6 +224,9 @@ export const GUARDED: Record<string, string> = {
  * or the reverse.
  */
 export const SHAPE_GUARDED: Record<string, string> = {
+  barAggregator: "the options object and its barStart, which would otherwise fail at the first trade",
+  fixedBars: "interval, where an exchange's bar width arrives as a string",
+  sessionStart: "timeZone, which must be given — a missing one used to mean the runtime's",
   createPlotModel: "the size object and its dimensions. Layout arithmetic runs directly on it",
   Plot: "the constructor's size, and the data doors (setData, append, prepend, updateLast)",
   markers: "where garbage coordinates used to get drawn as-is",

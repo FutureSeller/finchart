@@ -198,13 +198,15 @@ describe("flicker during resize", () => {
     expect(layers.data.height).toBe(768);
   });
 
-  it("should reject a non-finite dimension", () => {
-    const observer = fakeObserver();
-    const { plot } = mount(observer.observeSize, heldScheduler());
+  describe("chokepoint 3 — setViewport's dimensions", () => {
+    it("should reject a non-finite dimension", () => {
+      const observer = fakeObserver();
+      const { plot } = mount(observer.observeSize, heldScheduler());
 
-    expect(() => plot.setViewport({ width: NaN })).toThrow(ContractError);
-    expect(() =>
-      plot.setViewport({ height: JSON.parse('{"v":1e999}').v }),
-    ).toThrow(ContractError);
+      expect(() => plot.setViewport({ width: NaN })).toThrow(ContractError);
+      expect(() =>
+        plot.setViewport({ height: JSON.parse('{"v":1e999}').v }),
+      ).toThrow(ContractError);
+    });
   });
 });
