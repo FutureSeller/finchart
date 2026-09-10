@@ -57,17 +57,37 @@ export interface TickStrategyContext {
   xOf: (value: number) => number;
   /** The data's x → domain value. For mapping a boundary back into the domain. */
   domainOf: (x: number) => number;
+  /**
+   * Where a domain value is drawn along the axis, in pixels — the frame's
+   * own scale, so a strategy thins what will actually be drawn rather than
+   * an estimate of it made from the window's average density.
+   */
+  positionOf: (value: number) => number;
+  /**
+   * In a bar-index coordinate system, the bar a boundary is drawn on: its
+   * own, or the first after it — "December" lands on December's first
+   * trading day even when the 1st is a Sunday. Absent where the domain is
+   * continuous and a boundary is drawn where it falls.
+   */
+  snap?: (value: number) => number;
 }
 
 /**
- * The contract that decides both tick placement and labels together.
- * `format` only changes the label, but for a time axis placement itself is
- * the problem — ticks need to land on calendar boundaries, not on
- * multiples of 1·2·5×10ⁿ. When a strategy is present, the axis's default
- * arithmetic and `format` go unused.
+ * The contract that decides tick placement, which ticks survive, and their
+ * labels, together. `format` only changes the label, but for a time axis
+ * placement itself is the problem — ticks need to land on calendar
+ * boundaries, not on multiples of 1·2·5×10ⁿ. When a strategy is present,
+ * the axis's default arithmetic and `format` go unused, and the frame
+ * draws what the strategy returns without choosing among it.
  *
- * It doesn't emit `position` — the axis fills that in via the scale, so
- * the strategy stays pure, with no knowledge of pixel space.
+ * **The choosing is the strategy's because only it knows what a tick is
+ * worth.** A frame that snapped ticks onto bars and thinned them by pixel
+ * after they were labelled kept whichever was closer or earlier, and
+ * dropped "Feb" for the 31st of January in front of it. So the context
+ * carries what the frame alone knows — where a value is drawn, and which
+ * bar a boundary lands on — and the strategy places, selects, and only
+ * then labels, so a boundary that stands for a month outranks one that
+ * stands for a day. It doesn't emit `position`; the axis fills that in.
  */
 export interface TickStrategy {
   ticks(context: TickStrategyContext): { value: number; label: string }[];
