@@ -814,6 +814,56 @@ describe("timeTicks — the cost of a jump", () => {
 });
 
 /**
+ * **The cap counts what is drawn, not what was considered.** A thousand
+ * ticks is the most an axis will hold, and it is a thousand after the
+ * spacing rule has had its say — a request dense enough to reach it does
+ * not lose the last few to boundaries that were never going to be drawn,
+ * and a landing considered last is judged against the grid point beside
+ * it, not against the edge of what was looked at.
+ */
+describe("timeTicks — the thousand-tick cap", () => {
+  it("fills the cap after spacing, not before", () => {
+    const min = ms("2026-01-01T00:00Z");
+    const ticks = timeTicks({ timeZone: "America/New_York", locale: "en-US" }).ticks(
+      context(min, min + 1100 * 24 * 3600 * 1000, 1100, 1),
+    );
+
+    expect(ticks).toHaveLength(1000);
+    expect(ticks[ticks.length - 1].value).toBe(ms("2028-09-29T04:00Z"));
+  });
+
+  it("judges a landing at the cap against its neighbour", () => {
+    const ticks = timeTicks({ timeZone: "Africa/Monrovia", locale: "en-US" }).ticks(
+      context(62_693_970_000, 63_596_670_000, 1003, 1),
+    );
+
+    expect(ticks).toHaveLength(1000);
+    expect(ticks[ticks.length - 1].value).toBe(ms("1972-01-07T00:45:00Z"));
+  });
+});
+
+/**
+ * **A week's tick is a Monday.** The weekly rung is the one whose phase is
+ * not a midnight but a particular midnight, and nothing else on the axis
+ * would notice if it drifted to whatever weekday the window happened to
+ * open on — the ticks would still be seven days apart.
+ */
+describe("timeTicks — the weekly rung", () => {
+  it.each(["Asia/Seoul", "America/New_York", "UTC"])("stands on Mondays in %s", (timeZone) => {
+    // Ninety days at 800px, 60px apart: 6.75 days between ticks, past the two-day rung.
+    const ticks = timeTicks({ timeZone, locale: "en-US" }).ticks(
+      context(ms("2026-01-01T00:00Z"), ms("2026-04-01T00:00Z"), 800, 60),
+    );
+
+    expect(ticks.length).toBeGreaterThanOrEqual(10);
+    for (const tick of ticks) {
+      const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(tick.value);
+      expect(weekday).toBe("Mon");
+    }
+  });
+});
+
+/**
  * **A year label is a number, and before year 1 a number is not enough.**
  * These run the `en-US` Gregorian formatter, where a year without its era
  * is the year within that era: 1 BCE and 1 CE both come out "1" — two
