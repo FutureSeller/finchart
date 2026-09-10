@@ -1,3 +1,4 @@
+import { dayStartOf, readingGrid, weekStartOf } from "../time/grid";
 import { Zone, type ZonedParts } from "../time/zone";
 import type { TickStrategy } from "./types";
 
@@ -178,8 +179,12 @@ function boundariesFor(window: TickWindow, zone: Zone): number[] {
  * Second-to-week intervals — aligned to **midnight in that time zone**.
  * A week aligns to Monday midnight.
  *
- * The offset can shift at a DST boundary, so this corrects it back at
- * every tick — midnight is still midnight even on a 23- or 25-hour day.
+ * **What the grid gives is the calendar's; what is drawn is the axis's.**
+ * How midnight and Monday become readings, how a clock's runs lay a grid
+ * of them, and what a stretch the clock skipped is worth — those are the
+ * calendar's, and live in `time/grid`. Left here is the one question that
+ * is about pixels: whether a point would draw closer to the last one than
+ * the caller asked for.
  */
 function fixedBoundaries(
   opensAt: PhaseOrigin,
@@ -188,119 +193,47 @@ function fixedBoundaries(
   minStepMs: number,
   zone: Zone,
 ): number[] {
-  const { first: minMs, last: maxMs } = holds;
-  /**
-   * **The grid is a grid of readings, laid one run of the clock at a time.**
-   * Its phase is a reading — that day's midnight, or that week's Monday —
-   * because on the wall-clock axis a day is always a day and no reading has
-   * to be resolved into an instant to be counted. Anchoring on an instant
-   * instead would let a skipped midnight set the phase for the whole window.
-   */
   /**
    * **Phase comes from the window the caller gave.** Which day the grid
    * hangs off is a phase, and a window whose edge sits half a millisecond
    * before a midnight belongs to the day before it — narrowing that edge
    * up to the midnight moves the anchor a day, and a two-day rung then
    * draws the odd days where it drew the even ones.
-   *
-   * Down to the containing millisecond first, because a clock read through
-   * `Date` truncates toward zero rather than down, and a window opening
-   * just before the epoch belongs to the day that ended there.
    */
-  const parts = zone.parts(Math.floor(opensAt.epochMs));
-  let anchor = zone.localOf({ ...parts, hour: 0, minute: 0, second: 0 });
-  if (step === WEEK) {
-    /**
-     * Counted, not read through `Date`: the wall-clock axis reaches past
-     * what a `Date` can encode, and asking one there answers `NaN`. The
-     * epoch was a Thursday, so a whole day count of 0 is day 3 of a week
-     * beginning on Monday, and `Math.floor` carries that back through
-     * negative days where a remainder would not.
-     */
-    const days = Math.floor(anchor / DAY);
-    anchor -= (((days + 3) % 7) + 7) % 7 * DAY;
-  }
+  let anchor = dayStartOf(zone, opensAt.epochMs);
+  if (step === WEEK) anchor = weekStartOf(anchor);
 
-  /**
-   * Inside a run the clock keeps a fixed distance from time, so the whole
-   * run's worth of ticks is arithmetic — no reading has to be asked about,
-   * and the ones that fall outside the window are never counted rather than
-   * counted and dropped.
-   *
-   * **Only what advances is emitted.** Where the clock moved forward it
-   * skipped readings, and those answer the instants the run after them
-   * answers too; the second telling of each is dropped here. Where it moved
-   * back it repeated readings, and the run boundary already gives those to
-   * their first turn, so nothing is dropped there — the second turn is
-   * simply not part of any run.
-   */
   const out: number[] = [];
   let last = Number.NEGATIVE_INFINITY;
-  // Null until a run has been seen: the first one follows nothing, and
-  // reading it as following a skipped stretch would invent a tick where the
-  // scan happened to start.
-  let skippedFrom: number | null = null;
-  // A day either side: a run's readings reach past the window's instants by
-  // the distance the clock stands from time, and no clock stands a day off.
-  for (const run of zone.runs(minMs - DAY, maxMs + DAY)) {
-    /**
-     * **The readings a clock skipped are worth one tick between them, not
-     * one each.** They name no instant of their own, so the honest answer
-     * for the whole stretch is the moment the clock landed on — the run's
-     * own first reading, less its distance from time. Giving each of them
-     * an answer instead would crowd out the real grid that follows: at
-     * Monrovia's forty-four-and-a-half-minute move, nine readings that
-     * never happened would stand where nine that did belong.
-     */
-    const from = Math.max(run.from, minMs + run.offset);
-    const to = Math.min(run.to - 1, maxMs + run.offset);
-    const first = Math.ceil((from - anchor) / step);
-    const beyond = Math.floor((to - anchor) / step);
-    // The run's first tick *inside the window* — what the mark for a skipped
-    // stretch would actually stand next to. A grid point past the window is
-    // not drawn and cannot crowd anything.
-    const opens = to >= from && first <= beyond ? anchor + first * step - run.offset : null;
-
-    if (
-      out.length < MAX_BOUNDARIES &&
-      skippedFrom !== null &&
-      run.from > skippedFrom &&
-      firstOnGrid(skippedFrom, anchor, step) < run.from
-    ) {
-      const landed = run.from - run.offset;
-      /**
-       * **It stands where a tick would, or not at all.** The stretch it
-       * speaks for is worth a mark, but not one crowded against a real
-       * tick: at Monrovia the clock resumes half a minute before the grid
-       * does, and two labels that close are one smudge. When the grid picks
-       * up that soon it says the same thing on its own.
-       */
-      const crowded =
-        landed - last < minStepMs || (opens !== null && opens - landed < minStepMs);
-      if (landed >= minMs && landed <= maxMs && landed > last && !crowded) {
-        last = landed;
-        out.push(landed);
+  readingGrid(zone, anchor, step, holds.first, holds.last, {
+    point(at) {
+      // A reading the clock skipped can leave two neighbouring points far
+      // closer in real time than the step they were laid on.
+      if (at > last && at - last >= minStepMs) {
+        last = at;
+        out.push(at);
       }
-    }
-    skippedFrom = run.to;
-
-    if (to < from) continue;
-    for (let k = first; k <= beyond && out.length < MAX_BOUNDARIES; k++) {
-      const ms = anchor + k * step - run.offset;
-      // A reading the clock skipped can leave two neighbouring boundaries
-      // far closer in real time than the step they were laid on.
-      if (ms <= last || ms - last < minStepMs) continue;
-      last = ms;
-      out.push(ms);
-    }
-  }
+      return out.length < MAX_BOUNDARIES;
+    },
+    landing(at, resumesAt) {
+      /**
+       * **A landing stands where a tick would, or not at all.** The stretch
+       * it speaks for is worth a mark, but not one crowded against a real
+       * tick: at Monrovia the clock resumes half a minute before the grid
+       * does, and two labels that close are one smudge. When the grid
+       * picks up that soon it says the same thing on its own.
+       */
+      const crowded = at - last < minStepMs || (resumesAt !== null && resumesAt - at < minStepMs);
+      if (at > last && !crowded) {
+        last = at;
+        out.push(at);
+      }
+      return out.length < MAX_BOUNDARIES;
+    },
+  });
   return out;
 }
 
-/** The first reading at or after `from` that the grid stands on. */
-function firstOnGrid(from: number, anchor: number, step: number): number {
-  return anchor + Math.ceil((from - anchor) / step) * step;
-}
 
 function monthBoundaries(
   holds: TickWindow["holds"],
