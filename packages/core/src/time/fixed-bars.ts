@@ -34,9 +34,11 @@ export function fixedBars(options: { interval: number }): BarStart {
   return (ms) => {
     const at = requireInstant(ms, "fixedBars");
     const start = Math.floor(at / interval) * interval;
+    // No clock is asked, so the reach is every instant a `Date` holds —
+    // except that the bar holding the earliest of them began before it.
     if (!isInstant(start)) {
       throw new ContractError(
-        `fixedBars: the bar holding ${ms} began at ${start}, outside the reach a bar start answers for`,
+        `fixedBars: the bar holding ${ms} began at ${start}, before the earliest instant a Date can hold`,
       );
     }
     return start;
