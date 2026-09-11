@@ -74,6 +74,29 @@ export interface SeriesHandle<
   updateLast(point: T): void;
 
   /**
+   * A snapshot, merged by x. **Every x you hand over becomes yours**: what
+   * the series held at that x is replaced by what you hand over at it,
+   * and an x it did not hold is put where it belongs. **An x you do not
+   * name keeps what it had** — a sparse correction is not a deletion, and
+   * a snapshot that ends before the live tail does not cut the tail. So a
+   * reconnect gap and the previous bar's corrected volume are one call,
+   * and the history `prepend` brought in keeps its objects.
+   *
+   * An x before the first point held is history, and history comes in
+   * through `prepend` — this throws `DataError` there, because the
+   * history loader keeps a cursor at the first point it delivered and
+   * cannot see a prepend it did not make. Removing a bar is `setData`'s
+   * job; this cannot. Leaves the domain alone the way `append` does.
+   *
+   * **Which bars a snapshot may speak for is yours to decide** — the
+   * chart cannot tell a closed bar from one still forming, or a snapshot
+   * from before a tick from one after it. Hand over closed bars; the bar
+   * in progress is the tick's. A `conflated` feed holds one pending tick:
+   * `flush()` it first, or its delivery lands on top of the snapshot.
+   */
+  upsert(points: T[]): void;
+
+  /**
    * Swaps out **only the drawn representation** — the data, the derivation,
    * and whatever holds this handle (an indicator's source, live
    * `updateLast`) all stay put. This is the door for switching chart type,
@@ -99,7 +122,7 @@ export interface SeriesHandle<
   readonly xRange: Range | null;
 
   /**
-   * Whether this handle is **still attached to the pane**. The five write
+   * Whether this handle is **still attached to the pane**. The six write
    * doors throw on a detached handle, so this is where to ask before that.
    *
    * ```ts
@@ -190,7 +213,7 @@ export function createSeriesHandle<
      *
      * For the same reason, **detachment is also checked before the empty
      * array.** Put it after, and only `append([])` slips through quietly,
-     * making *"the five write doors throw"* false — streaming that mixes
+     * making *"the six write doors throw"* false — streaming that mixes
      * in empty chunks happens to be exactly this door's consumer.
      */
     prepend: (points) => {
@@ -211,6 +234,13 @@ export function createSeriesHandle<
       live("updateLast");
       // Only the spot that picked the branch knows whether x moved — carry that answer through as is.
       const xValues = entry.updateLast(point);
+      host.notify({ data: true, refit: false, xValues });
+    },
+    upsert: (points) => {
+      requireDataArray(points, "upsert(points)");
+      live("upsert");
+      if (points.length === 0) return;
+      const xValues = entry.upsert(points);
       host.notify({ data: true, refit: false, xValues });
     },
     swapSeries: (next) => {

@@ -23,6 +23,7 @@ When you add a new method, the default must be "touches nothing".
 | `handle.prepend(points)` | prepends | — | — | — | once |
 | `handle.append(points)` | appends | — | — | — | once |
 | `handle.updateLast(point)` | replaces the last point (same x) or appends (larger x) | —¹ | — | — | once |
+| `handle.upsert(points)` | merges by x — replaces the bars it names, adds the ones it does not hold, keeps the rest | —¹ | — | — | once |
 | `handle.dispose()` | removes that registration | — | fit | — | once |
 | `pane.syncSeries(specs)` | replaced by each spec's `data` | — | fit | — | once |
 | `mainPane.setSeries(reg)` | only that one registration remains | — | fit | — | once |
@@ -45,9 +46,11 @@ When you add a new method, the default must be "touches nothing".
 `—` means it doesn't touch it. Read-only calls (`getOptions`, `getSeries`,
 `handle.xRange`, `pane.xRange()`, `on`) touch nothing, so they aren't in the table.
 
-¹ One exception — if `shiftVisibleRangeOnNewBar` is on and **you were looking
+¹ Two exceptions — if `shiftVisibleRangeOnNewBar` is on and **you were looking
 at the last bar**, the window shifts right with the new bar the moment it
-arrives (off by default).
+arrives (off by default); and the first data a chart ever gets is fitted,
+whichever door it came through — unless a visible range was supplied before
+the data arrived, which wins.
 
 ² Options **don't touch the points being drawn**, so the value axis isn't
 refit on the spot (the branch where `PaneChange.data` is false). A pane with
@@ -229,8 +232,8 @@ and they draw over each other, with the later one on top.
   from an imperative list to `syncSeries`, call `clearSeries()` first; to empty
   a declarative list and return to imperative control, call `syncSeries([])`.
   **The roles split: `syncSeries` owns the list, the handle owns the data.**
-- **The five write doors on a detached handle** (`setData`, `prepend`, `append`,
-  `updateLast`, `swapSeries`) throw a `ContractError`. Letting them pass quietly
+- **The six write doors on a detached handle** (`setData`, `prepend`, `append`,
+  `updateLast`, `upsert`, `swapSeries`) throw a `ContractError`. Letting them pass quietly
   moved the chart for real — `setData`'s refit **re-fitted the x window against
   the remaining series** and the pan you had set jumped. Two doors detach a
   handle: a `dispose()` you called yourself, or imperative `setSeries()`

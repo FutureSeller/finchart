@@ -27,6 +27,10 @@ function fakeEntry(): TypedEntry<{ x: number }> & { calls: string[] } {
       calls.push("updateLast");
       return false;
     },
+    upsert: () => {
+      calls.push("upsert");
+      return true;
+    },
     read: () => [],
   };
 }
@@ -94,6 +98,7 @@ describe("createSeriesHandle", () => {
     expect(() => handle.prepend([{ x: 1 }])).toThrow(/prepend/);
     expect(() => handle.append([{ x: 1 }])).toThrow(/append/);
     expect(() => handle.updateLast({ x: 1 })).toThrow(/updateLast/);
+    expect(() => handle.upsert([{ x: 1 }])).toThrow(/upsert/);
     expect(() => handle.swapSeries({} as never)).toThrow(/swapSeries/);
   });
 
@@ -102,6 +107,7 @@ describe("createSeriesHandle", () => {
     const { handle, detach } = setup();
     detach();
     expect(() => handle.append([])).toThrow(ContractError);
+    expect(() => handle.upsert([])).toThrow(ContractError);
   });
 
   it("should check the shape before liveness", () => {
@@ -109,6 +115,8 @@ describe("createSeriesHandle", () => {
     detach();
     // @ts-expect-error a null chunk — the shape guard must speak first
     expect(() => handle.append(null)).toThrow(/append\(points\)/);
+    // @ts-expect-error the same for the reconciliation door
+    expect(() => handle.upsert(null)).toThrow(/upsert\(points\)/);
   });
 
   it("should keep read, xRange and dispose safe after detaching", () => {

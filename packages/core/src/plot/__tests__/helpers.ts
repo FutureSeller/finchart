@@ -67,6 +67,7 @@ function noHandle<T extends BaseDataPoint>(): SeriesHandle<T> {
     prepend: missing,
     append: missing,
     updateLast: missing,
+    upsert: missing,
     swapSeries: missing,
     get xRange(): never {
       return missing();
