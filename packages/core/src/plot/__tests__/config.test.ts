@@ -13,7 +13,8 @@ import {
   PLOT_CONFIG_DEFAULTS,
   resolveConfig,
 } from "../config";
-import type { PlotConfig } from "../types";
+import { createPlotModel } from "../model";
+import type { PlotConfig, PlotOptionsPatch } from "../types";
 
 function base(): PlotConfig {
   return {
@@ -96,6 +97,36 @@ describe("mergeOptions", () => {
   });
 });
 
+describe("mergeOptions — clearing a bar-spacing override", () => {
+  it("should drop the key on null so the x mapping's own default is read again", () => {
+    const held = mergeOptions(resolveConfig(base()), { minBarSpacing: 3, maxBarSpacing: 40 });
+    expect(held.minBarSpacing).toBe(3);
+    const cleared = mergeOptions(held, { minBarSpacing: null });
+    expect(Object.hasOwn(cleared, "minBarSpacing")).toBe(false);
+    expect(cleared.maxBarSpacing).toBe(40);
+    const both = mergeOptions(cleared, { maxBarSpacing: null });
+    expect(Object.hasOwn(both, "maxBarSpacing")).toBe(false);
+  });
+
+  it("should keep the standing value on undefined and take a number as before", () => {
+    const held = mergeOptions(resolveConfig(base()), { minBarSpacing: 3 });
+    expect(mergeOptions(held, { minBarSpacing: undefined }).minBarSpacing).toBe(3);
+    expect(mergeOptions(held, { minBarSpacing: 7 }).minBarSpacing).toBe(7);
+  });
+
+  it("should never let null itself reach the resolved config", () => {
+    const next = mergeOptions(resolveConfig(base()), { minBarSpacing: null, maxBarSpacing: null });
+    expect(next.minBarSpacing).toBeUndefined();
+    expect(next.maxBarSpacing).toBeUndefined();
+    expect(Object.hasOwn(next, "minBarSpacing")).toBe(false);
+  });
+
+  it("should keep absence through copyConfig", () => {
+    const next = copyConfig(mergeOptions(resolveConfig(base()), { minBarSpacing: null }));
+    expect(Object.hasOwn(next, "minBarSpacing")).toBe(false);
+  });
+});
+
 describe("copyConfig", () => {
   it("should copy every nested spot so a later edit stays out", () => {
     const source = resolveConfig(base());
@@ -172,6 +203,42 @@ describe("checkPlotNumbers", () => {
     expect(() =>
       checkPlotNumbers({ minBarSpacing: 100, maxBarSpacing: 0 }),
     ).not.toThrow();
+  });
+});
+
+describe("checkPlotNumbers — null clears a spacing override", () => {
+  it("should pass null alone and null beside a number", () => {
+    expect(() => checkPlotNumbers({ minBarSpacing: null })).not.toThrow();
+    expect(() => checkPlotNumbers({ minBarSpacing: null, maxBarSpacing: 5 })).not.toThrow();
+    expect(() => checkPlotNumbers({ minBarSpacing: 5, maxBarSpacing: null })).not.toThrow();
+  });
+
+  it("should still reject min above max when both are positive numbers", () => {
+    expect(() => checkPlotNumbers({ minBarSpacing: 9, maxBarSpacing: 5 })).toThrow(ContractError);
+  });
+
+  it("should still reject anything that is not a number, on either key — only null and undefined skip the guard", () => {
+    for (const junk of ['"9"', '"oops"', "false", "{}", "[]", "NaN"]) {
+      const value = junk === "NaN" ? "null" : junk;
+      const asMin: PlotOptionsPatch = JSON.parse(`{"minBarSpacing": ${value}, "maxBarSpacing": 5}`);
+      const asMax: PlotOptionsPatch = JSON.parse(`{"minBarSpacing": 1, "maxBarSpacing": ${value}}`);
+      if (junk === "NaN") {
+        asMin.minBarSpacing = Number.NaN;
+        asMax.maxBarSpacing = Number.NaN;
+      }
+      expect(() => checkPlotNumbers(asMin), `min ${junk}`).toThrow(ContractError);
+      expect(() => checkPlotNumbers(asMax), `max ${junk}`).toThrow(ContractError);
+    }
+  });
+
+  it("should refuse null at the constructor's door — there is nothing to clear there", () => {
+    const patch: PlotOptionsPatch = JSON.parse('{"minBarSpacing": null}');
+    expect(() => checkPlotNumbers(patch, "construct")).toThrow(ContractError);
+    expect(() => checkPlotNumbers({ maxBarSpacing: null }, "construct")).toThrow(ContractError);
+    expect(() => checkPlotNumbers({ minBarSpacing: null })).not.toThrow();
+    // Through the real door, so the resolved config never carries a null.
+    const config: PlotConfig = JSON.parse('{"maxBarSpacing": null}');
+    expect(() => createPlotModel({ size: { width: 400, height: 300 }, config })).toThrow(ContractError);
   });
 });
 

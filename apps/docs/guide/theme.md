@@ -264,7 +264,9 @@ import { observeTheme } from "@finchart/dom";
 const stop = observeTheme(container, () => plot.requestRender());
 ```
 
-In React, that call is the body of a `useEffect` and `stop` is its cleanup.
+In React it is a prop — `<ChartContainer followTheme>` makes that call for the
+container element and stops it on unmount; pass `{ attributes: [...] }` to
+watch a different attribute list.
 
 It is deliberately **not** wired by `browserDeps`: a page with one fixed
 palette should not carry a `MutationObserver` it never uses. Import it when a

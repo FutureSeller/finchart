@@ -108,7 +108,19 @@ export function checkViewportSize(size: ViewportDimensions): void {
  * of its own — a floor above the ceiling (both positive, min > max) can't
  * be satisfied by any spacing, so zooming would dead-end either way.
  */
-export function checkPlotNumbers(options: PlotOptionsPatch): void {
+/**
+ * Which door the numbers come through. `null` on a bar-spacing key clears
+ * an override — that is a patch's word, and only a patch's: the constructor
+ * has nothing to clear, so there `null` is a wrong shape and is refused
+ * before `resolveConfig` could copy it into a config that promises
+ * number-or-absent.
+ */
+export type PlotNumbersDoor = "patch" | "construct";
+
+export function checkPlotNumbers(
+  options: PlotOptionsPatch,
+  door: PlotNumbersDoor = "patch",
+): void {
   const { padding, paneGap, rightOffset, minBarSpacing, maxBarSpacing, axis } =
     options;
 
@@ -126,21 +138,28 @@ export function checkPlotNumbers(options: PlotOptionsPatch): void {
   // `minHeight`, and `valuePadding`.
   if (paneGap !== undefined) requireNonNegative(paneGap, "paneGap");
   if (rightOffset !== undefined) requireFinite(rightOffset, "rightOffset");
-  if (minBarSpacing !== undefined) {
-    requireNonNegative(minBarSpacing, "minBarSpacing");
+  // `null` is "clear the override", so there is no number to check — but
+  // only null and undefined skip the guard; a string or a boolean still has
+  // to fail it, the way it did before null was allowed. The ordering check
+  // likewise only has something to say when both are values.
+  if (door === "construct" && (minBarSpacing === null || maxBarSpacing === null)) {
+    throw new ContractError(
+      "minBarSpacing/maxBarSpacing: null clears an override through applyOptions — leave the key out of the constructor's config instead",
+    );
   }
-  if (maxBarSpacing !== undefined) {
-    requireNonNegative(maxBarSpacing, "maxBarSpacing");
-  }
+  const min = minBarSpacing ?? undefined;
+  const max = maxBarSpacing ?? undefined;
+  if (min !== undefined) requireNonNegative(min, "minBarSpacing");
+  if (max !== undefined) requireNonNegative(max, "maxBarSpacing");
   if (
-    minBarSpacing !== undefined &&
-    maxBarSpacing !== undefined &&
-    minBarSpacing > 0 &&
-    maxBarSpacing > 0 &&
-    minBarSpacing > maxBarSpacing
+    min !== undefined &&
+    max !== undefined &&
+    min > 0 &&
+    max > 0 &&
+    min > max
   ) {
     throw new ContractError(
-      `minBarSpacing(${minBarSpacing}) must not exceed maxBarSpacing(${maxBarSpacing})`,
+      `minBarSpacing(${min}) must not exceed maxBarSpacing(${max})`,
     );
   }
 
@@ -299,9 +318,13 @@ export function mergeOptions(
   current: ResolvedPlotConfig,
   patch: PlotOptionsPatch,
 ): ResolvedPlotConfig {
-  const { padding, axis, style, ...flat } = patch;
+  // The two spacing fields come out before the spread: they are the only
+  // ones that can be `null`, and `definedOnly` drops undefined alone — spread
+  // through, `null` would land in the resolved config and show up in
+  // `getOptions()`. They are settled below, key by key.
+  const { padding, axis, style, minBarSpacing, maxBarSpacing, ...flat } = patch;
 
-  return {
+  const next: ResolvedPlotConfig = {
     ...current,
     ...definedOnly(flat),
     padding: { ...current.padding, ...definedOnly(padding) },
@@ -311,4 +334,26 @@ export function mergeOptions(
     },
     style: style ? { grid: style.grid } : current.style,
   };
+  settleSpacing(next, "minBarSpacing", minBarSpacing);
+  settleSpacing(next, "maxBarSpacing", maxBarSpacing);
+  return next;
+}
+
+/**
+ * `null` clears — the key is removed so the x mapping's own default is read
+ * again (`x-viewport.ts` reads it with `??`); a number is the new standing
+ * value; `undefined` was not given and changes nothing. The resolved config
+ * stays number-or-absent, which is what everything downstream reads.
+ */
+function settleSpacing(
+  config: ResolvedPlotConfig,
+  key: "minBarSpacing" | "maxBarSpacing",
+  value: number | null | undefined,
+): void {
+  if (value === undefined) return;
+  if (value === null) {
+    delete config[key];
+    return;
+  }
+  config[key] = value;
 }

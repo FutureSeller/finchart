@@ -1,4 +1,4 @@
-import type { BaseDataPoint, Pane, PaneOptions, Plot } from '@finchart/core';
+import type { BaseDataPoint, Pane, PaneOptions, Plot, Scale } from '@finchart/core';
 import { createContext, useContext } from 'react';
 import type { SeriesCollector } from './series-collector';
 
@@ -10,9 +10,17 @@ import type { SeriesCollector } from './series-collector';
  * `<ChartPane>` didn't just use it, an empty pane would sit at the top
  * taking up space for nothing.
  */
+/**
+ * What `<ChartPane>` hands over at mount. `yScale` is a factory, read once
+ * per acquisition — the same vocabulary as `deps.mainPaneYScale`.
+ */
+export interface PaneAcquisition extends PaneOptions {
+  yScale?: () => Scale;
+}
+
 export interface ChartApi<T extends BaseDataPoint = BaseDataPoint> {
   plot: Plot;
-  acquirePane(options: PaneOptions): Pane;
+  acquirePane(options: PaneAcquisition): Pane;
   releasePane(pane: Pane): void;
   /**
    * The owner of that pane's series list. One per pane, so the container

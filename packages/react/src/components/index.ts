@@ -1,5 +1,5 @@
 export { ChartContainer } from './chart-container';
-export type { ChartContainerProps, PlotHandleRef } from './chart-container';
+export type { ChartContainerProps, PlotHandleRef, PlotOptions } from './chart-container';
 export { ChartData } from './chart-data';
 export type { ChartDataProps } from './chart-data';
 export { ChartPane } from './chart-pane';
@@ -26,5 +26,5 @@ export type { SyncXProps } from './sync-x';
 export { XAxis, YAxis } from './axes';
 export type { XAxisProps, YAxisProps } from './axes';
 export { useChartPlot } from './chart-context';
-export type { ChartApi } from './chart-context';
+export type { ChartApi, PaneAcquisition } from './chart-context';
 export type { SeriesCollector } from './series-collector';

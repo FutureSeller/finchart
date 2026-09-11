@@ -1,4 +1,4 @@
-import type { OHLC } from '@finchart/core';
+import type { CandleSeriesStyleOverrides, OHLC } from '@finchart/core';
 import { CandleSeries } from '@finchart/core';
 import { ChartSeries } from './chart-series';
 
@@ -7,14 +7,13 @@ export interface ChartCandlesProps {
   data?: OHLC[];
   /** Display name — the legend and tooltip refer to it by this. */
   name?: string;
-  /** When the close is higher than the open. Falls back to the CSS variable (`--chart-candle-up`) when omitted. */
-  up?: string;
-  /** When the close is lower than the open. Falls back to the CSS variable (`--chart-candle-down`) when omitted. */
-  down?: string;
-  /** Wick width (px). */
-  wickWidth?: number;
-  /** The fraction of the slot width the body takes up (0–1). */
-  bodyRatio?: number;
+  /**
+   * The candles' look, in the imperative lane's override shape — the same
+   * `CandleSeriesStyleOverrides` that `candleSeries(style)` takes:
+   * `{ up, down, wickWidth, bodyRatio }`. Omitted fields fall back to the
+   * CSS variables (`--chart-candle-up`, `--chart-candle-down`, …).
+   */
+  style?: CandleSeriesStyleOverrides;
 }
 
 /**
@@ -28,26 +27,6 @@ export interface ChartCandlesProps {
  * something from the source and draw that, reach for `<ChartLine
  * derive={...}>` or `<ChartSeries>`.
  */
-export function ChartCandles({
-  data,
-  name,
-  up,
-  down,
-  wickWidth,
-  bodyRatio,
-}: ChartCandlesProps) {
-  return (
-    <ChartSeries<OHLC>
-      data={data}
-      name={name}
-      series={
-        new CandleSeries({
-          ...(up !== undefined && { up }),
-          ...(down !== undefined && { down }),
-          ...(wickWidth !== undefined && { wickWidth }),
-          ...(bodyRatio !== undefined && { bodyRatio }),
-        })
-      }
-    />
-  );
+export function ChartCandles({ data, name, style }: ChartCandlesProps) {
+  return <ChartSeries<OHLC> data={data} name={name} series={new CandleSeries(style ?? {})} />;
 }

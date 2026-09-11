@@ -18,6 +18,7 @@ export { ChartContainer } from "./components/chart-container";
 export type {
   ChartContainerProps,
   PlotHandleRef,
+  PlotOptions,
 } from "./components/chart-container";
 export { ChartData } from "./components/chart-data";
 export type { ChartDataProps } from "./components/chart-data";

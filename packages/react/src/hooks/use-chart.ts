@@ -10,8 +10,10 @@ import type {
   SeriesHandle,
   XDomainChangePayload,
 } from '@finchart/core';
-import type { BrowserDeps } from '@finchart/dom';
-import { PlotBuilder } from '@finchart/dom';
+import type { BrowserDeps, ThemeObserverOptions } from '@finchart/dom';
+import { observeTheme, PlotBuilder } from '@finchart/dom';
+import { shallowEqual } from '../shallow-equal';
+import { baselineOf, type PlotOptions, type PlotOptionsBaseline, pickPlotOptions } from './plot-options';
 
 export interface UsePlotOptions<T extends BaseDataPoint> {
   /**
@@ -39,6 +41,26 @@ export interface UsePlotOptions<T extends BaseDataPoint> {
   gridStyle?: Partial<LineStyle>;
   /** Gap between panes (px). The divider sits here. */
   paneGap?: number;
+  /**
+   * The plot options that have no prop of their own (`padding`,
+   * `resizablePanes`, `shiftVisibleRangeOnNewBar`, `axisDrag`, `rightOffset`,
+   * `minBarSpacing`, `maxBarSpacing`). A key that is missing reverts to what
+   * the plot was built with. Applied before the first series registers, so
+   * `rightOffset` is in place for the first fit whatever the JSX order.
+   * `axis`, `style.grid`, `showGrid` and `paneGap` are not here on purpose —
+   * each has one door already.
+   */
+  options?: PlotOptions;
+  /**
+   * Redraw when the theme moves — `prefers-color-scheme`, or a `class` /
+   * `data-theme` / `style` change on the container or an ancestor it had
+   * at mount (an `attributes` list replaces that default). Off by default,
+   * the way `browserDeps` leaves `observeTheme` out: a fixed palette should
+   * not hold a MutationObserver and a media-query listener it never needs.
+   * A theme applied by restructuring the DOM above the chart, or a swapped
+   * stylesheet, is out of reach — call `plot.requestRender()` yourself then.
+   */
+  followTheme?: boolean | ThemeObserverOptions;
   /**
    * Fires while the pointer moves over the chart — during a mouse pan too,
    * and during a drag a drawing tool owns if the tool moves the crosshair
@@ -106,6 +128,8 @@ export function usePlot<T extends BaseDataPoint>({
   showGrid = true,
   gridStyle,
   paneGap,
+  options,
+  followTheme,
   onCrosshair,
   onXDomainChange,
   state,
@@ -118,7 +142,10 @@ export function usePlot<T extends BaseDataPoint>({
 
   // The initial values, used only at creation. Later changes are each
   // applied by the effects below.
-  const initial = useRef({ deps, width, height, showGrid, gridStyle });
+  const initial = useRef({ deps, width, height, showGrid, gridStyle, options });
+  // The values `options` reverts to — read off the plot once it exists.
+  const baseline = useRef<PlotOptionsBaseline | null>(null);
+  const appliedOptions = useRef(options);
   /** What's already been applied to the chart. Keeps the effect right after mount from redoing the same work. */
   const applied = useRef({ series, data });
 
@@ -135,18 +162,35 @@ export function usePlot<T extends BaseDataPoint>({
 
     const plot = builder.build(container);
     plotRef.current = plot;
+    // Everything between `build` and the cleanup being handed back runs
+    // with a live plot and no one to destroy it: a refused initial option
+    // or payload throws out of this effect before React has the cleanup, so
+    // the plot's interactions and observers would stay attached to a
+    // container React is about to forget. Tear it down here and rethrow —
+    // the error still reaches the boundary, the resources do not leak.
+    try {
+      // Before any series: `rightOffset` is read by the first fit.
+      baseline.current = baselineOf(plot.getOptions());
+      appliedOptions.current = start.options;
+      plot.applyOptions(pickPlotOptions(baseline.current, start.options));
 
-    /**
-     * The series is mounted here rather than in the builder — **because a
-     * handle is needed.** The builder path is for a chart that's set up
-     * once and left alone, so it doesn't hand back a handle.
-     */
-    const registration = applied.current;
-    if (registration.series) {
-      handleRef.current = plot.mainPane.addSeries({
-        series: registration.series,
-        data: registration.data,
-      });
+      /**
+       * The series is mounted here rather than in the builder — **because a
+       * handle is needed.** The builder path is for a chart that's set up
+       * once and left alone, so it doesn't hand back a handle.
+       */
+      const registration = applied.current;
+      if (registration.series) {
+        handleRef.current = plot.mainPane.addSeries({
+          series: registration.series,
+          data: registration.data,
+        });
+      }
+    } catch (error) {
+      plot.destroy();
+      plotRef.current = null;
+      handleRef.current = null;
+      throw error;
     }
 
     return () => {
@@ -234,6 +278,36 @@ export function usePlot<T extends BaseDataPoint>({
   useEffect(() => {
     plotRef.current?.applyOptions({ style: { grid: gridStyle ?? {} } });
   }, [gridStyle]);
+
+  useEffect(() => {
+    // By value: an inline literal with the same values is not a change.
+    if (shallowEqual(appliedOptions.current, options)) return;
+    appliedOptions.current = options;
+    const built = baseline.current;
+    if (!built) return;
+    plotRef.current?.applyOptions(pickPlotOptions(built, options));
+  }, [options]);
+
+  // Its own effect, so the prop can be turned on and off while the plot
+  // lives. The attribute list is keyed by value — an inline array with the
+  // same names does not resubscribe.
+  const themeOn = followTheme !== undefined && followTheme !== false;
+  const themeAttributes = typeof followTheme === 'object' ? followTheme.attributes : undefined;
+  const themeAttributesRef = useRef(themeAttributes);
+  themeAttributesRef.current = themeAttributes;
+  const themeKey = themeAttributes ? themeAttributes.join(',') : null;
+  useEffect(() => {
+    if (!themeOn) return;
+    const container = containerRef.current;
+    const plot = plotRef.current;
+    if (!container || !plot) return;
+    const attributes = themeAttributesRef.current;
+    return observeTheme(
+      container,
+      () => plot.requestRender(),
+      attributes ? { attributes } : {},
+    );
+  }, [themeOn, themeKey]);
 
   /**
    * Swaps the data. **This is the imperative path, so it re-fits both

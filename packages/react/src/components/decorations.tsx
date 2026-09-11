@@ -6,6 +6,7 @@ import type {
 } from '@finchart/core';
 import { markers, priceLine, span, watermark } from '@finchart/core';
 import { useContext, useEffect, useRef } from 'react';
+import { shallowEqual } from '../shallow-equal';
 import { PaneContextValue, useChartApi } from './chart-context';
 
 /**
@@ -52,38 +53,6 @@ function useStable<T>(value: T): T {
   const held = useRef(value);
   if (!shallowEqual(held.current, value)) held.current = value;
   return held.current;
-}
-
-/** Is this a plain object — not an array, function, or null. The kind that gets one level deeper. */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function shallowEqual(a: unknown, b: unknown, depth = 1): boolean {
-  if (Object.is(a, b)) return true;
-  if (typeof a !== 'object' || a === null) return false;
-  if (typeof b !== 'object' || b === null) return false;
-
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-    return a.every((item, index) => Object.is(item, b[index]));
-  }
-
-  if (!isPlainObject(a) || !isPlainObject(b)) return false;
-
-  const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
-  return keys.every((key) => {
-    const left = a[key];
-    const right = b[key];
-    if (Object.is(left, right)) return true;
-    // Just one level further — a nested option like `style` gets caught here by value.
-    if (depth > 0 && isPlainObject(left) && isPlainObject(right)) {
-      return shallowEqual(left, right, depth - 1);
-    }
-    return false;
-  });
 }
 
 /*

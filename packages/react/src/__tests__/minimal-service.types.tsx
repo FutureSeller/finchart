@@ -79,9 +79,7 @@ export const minimalService = (
       <ChartLine
         derive={sma20}
         deriveKey={[20]}
-        color="#f59e0b"
-        width={1.5}
-        pointRadius={0}
+        style={{ line: { color: "#f59e0b", width: 1.5 }, point: { radius: 0 } }}
       />
     </ChartPane>
 

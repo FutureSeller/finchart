@@ -1,9 +1,9 @@
 [
   {
-    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 3.9 KB gzip (3626B measured)",
+    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 4.3 KB gzip (4174B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "3.9 KB",
+    "limit": "4.3 KB",
     "ignore": [
       "@finchart/core",
       "@finchart/dom",
@@ -13,10 +13,10 @@
     "gzip": true
   },
   {
-    "name": "one chart — ChartContainer + ChartCandles · 2.1 KB gzip (1885B measured)",
+    "name": "one chart — ChartContainer + ChartCandles · 2.7 KB gzip (2558B measured)",
     "path": "dist/index.mjs",
     "import": "{ ChartContainer, ChartCandles }",
-    "limit": "2.1 KB",
+    "limit": "2.7 KB",
     "ignore": [
       "@finchart/core",
       "@finchart/dom",

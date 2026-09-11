@@ -271,7 +271,7 @@ export class Plot
     // Both the constructor and applyOptions pass through this — only one
     // getting fixed is exactly the accident this guard exists to prevent
     // (see the checkPlotNumbers docstring).
-    checkPlotNumbers(config);
+    checkPlotNumbers(config, "construct");
     checkViewportSize(size);
 
     this.deps = deps;

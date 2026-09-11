@@ -60,7 +60,7 @@ const sma20 = (source: OHLC[]): LineDataPoint[] =>
 
   <ChartPane>
     <ChartCandles name="Price" />
-    <ChartLine derive={sma20} deriveKey={[20]} color="#f59e0b" width={1.5} pointRadius={0} />
+    <ChartLine derive={sma20} deriveKey={[20]} style={{ line: { color: "#f59e0b", width: 1.5 }, point: { radius: 0 } }} />
   </ChartPane>
 
   <ChartPane flex={0.25} minHeight={48}>
@@ -75,6 +75,13 @@ array), `derive` + `deriveKey` (compute them from the source, as above), or
 the common one: `movingAverage(source, { period: 20 }).out.ma` from
 `@finchart/indicators` is exactly the shape `input` wants, and that's how
 bands and a middle line end up **sharing one calculation**.
+
+**A series' look is the imperative lane's override shape.** `style` on
+`<ChartLine>` is what `lineSeries(style)` takes — `{ line: { color, width,
+dashArray }, point: { radius, color } }` — and `<ChartCandles style>` is
+`candleSeries(style)`'s `{ up, down, wickWidth, bodyRatio }`. What you learn
+in one lane holds in the other, and a field the core adds is reachable here
+the same day. Omitted fields fall back to the CSS variables.
 
 **Live updates are just a new array in `data`** — no imperative calls, no
 refs. Preserving the viewport and following the newest bar mean the same thing
@@ -132,7 +139,7 @@ The only DOM is `<ChartContainer>`'s single div. For every other component,
 Canvas series aren't DOM elements, so they don't appear in DevTools and you
 can't target one with a CSS selector. That's why theming (the default color
 for every line) goes through CSS variables, while a one-off like "this
-indicator is orange" is a `color` prop. A series' identity follows React's
+indicator is orange" is the `style` prop's `line.color`. A series' identity follows React's
 `key` semantics exactly — same slot, same series.
 
 Naming: the `Chart*` prefix marks structure and series (`ChartContainer`,
@@ -177,6 +184,24 @@ const tools = usePlugin((plot, pane) => pane.use(drawingTools({ plot })), []);
 // tools?.begin("trend") — the api arrives after commit
 ```
 
+**A series handle is a `Source`.** When a pane is driven imperatively, the
+handle `pane.addSeries(...)` returns is what an indicator reads — hand it to
+`attach*` directly and the indicator sees everything the handle holds,
+history brought in by `prepend` or `infiniteHistory` included (`useDataSource`
+reads a React array, so an indicator on it sees only that array). The handle
+is `null` before commit, and `usePlugin` lets `install` say "not yet" by
+returning `null`, so the second hook installs on the render after the first
+one's api arrives:
+
+```tsx
+const price = usePlugin((_, pane) => pane.addSeries({ series: candleSeries(), data }), []);
+const rsi = usePlugin((plot) => price && plot.use(attachRsi({ source: price })), [price]);
+```
+
+The first hook's `data` is the initial seed — with `[]` for `deps` a later
+array is not re-applied; feed the handle with `price.append(...)` /
+`price.upsert(...)` instead.
+
 **A pane has one owner.** If a pane contains even one `<ChartSeries>`, the
 declarative lane owns that pane's series list — add an `addSeries` or an
 `attach*` indicator (which uses `addSeries` internally) imperatively on top,
@@ -207,6 +232,43 @@ The split: **`plotRef` for event handlers** (by the time someone clicks, the
 chart has settled), **`onPlot` for wiring** (it has to react to charts coming
 and going). The `onPlot` callback needs a stable reference — a `useState`
 setter is enough.
+
+## Plot options, the value scale, and the theme
+
+**Every plot option has one door.** `showGrid`, `gridStyle` and `paneGap`
+are props; `axis` is `<XAxis>`/`<YAxis>`; the rest — `padding`,
+`resizablePanes`, `shiftVisibleRangeOnNewBar`, `axisDrag`, `rightOffset`,
+`minBarSpacing`, `maxBarSpacing` — go through `options`, and a key you drop
+reverts to what the plot was built with (`minBarSpacing`/`maxBarSpacing` go
+back to the x mapping's own default). `options` is applied before the first
+series registers, so `rightOffset` shapes the first fit whatever the JSX
+order — no `useChartPlot` + `useEffect` shim needed:
+
+```tsx
+<ChartContainer deps={deps} data={bars} options={{ shiftVisibleRangeOnNewBar: true, rightOffset: 5 }}>
+```
+
+**A pane's value scale is a prop.** `<ChartPane yScale={() => new LogScale()}>`
+— a factory read once per acquisition (twice under StrictMode's replay), like
+`deps.mainPaneYScale`, so an inline arrow is fine and the factory must be pure. `autoScale` and `invert` are props too; both are
+directives applied when they change, and an axis drag turning a fixed range
+on flips `autoScale` off on the pane the way a divider drag moves `flex`.
+Two things saved `state` does not carry: the scale kind (persist it
+alongside, and drop `valueDomain` when it differs — a domain the scale
+cannot hold is a `ContractError` at the error boundary around the container),
+and a `valueDomain` restored before the first data arrives, which the first
+fit overwrites (restore after data, or through a later `state` change). And
+one thing a scale swap does not announce: when the new scale cannot hold the
+fixed range and refits to the data, no `stateChange` fires — read the domain
+off the pane if you persist it at that moment.
+
+**The theme is a prop.** Canvas colors are CSS variables read at draw time,
+so a theme switch changes the axis labels at once and the candles only on the
+next redraw. `<ChartContainer followTheme>` redraws on `prefers-color-scheme`
+and on a `class` / `data-theme` / `style` change on the container or any
+ancestor it had at mount — the shape next-themes and `data-theme` apps
+produce. Off by
+default; a fixed palette should not hold an observer.
 
 ## Imperative configuration: `useChartPlot`
 

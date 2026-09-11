@@ -90,25 +90,21 @@ export function OverlayIndicators({
             name="BOLL"
           />
           {/* The center line shares the bands' node — sma isn't folded twice */}
-          <ChartLine input={nodes.boll.out.middle} color="#8b5cf6" width={1} pointRadius={0} />
+          <ChartLine input={nodes.boll.out.middle} style={{ line: { color: "#8b5cf6", width: 1 }, point: { radius: 0 } }} />
         </>
       ) : null}
       {active.has("MA20") ? (
         <ChartLine
           name={`MA${MA_PERIOD}`}
           input={nodes.ma.out.ma}
-          color="#f59e0b"
-          width={1.5}
-          pointRadius={0}
+          style={{ line: { color: "#f59e0b", width: 1.5 }, point: { radius: 0 } }}
         />
       ) : null}
       {active.has("VWAP") ? (
         <ChartLine
           name="VWAP"
           input={nodes.vwap.out.vwap}
-          color="#0ea5e9"
-          width={1.5}
-          pointRadius={0}
+          style={{ line: { color: "#0ea5e9", width: 1.5 }, point: { radius: 0 } }}
         />
       ) : null}
     </>

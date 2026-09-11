@@ -189,11 +189,10 @@ export function App() {
     if (window) anchor.setVisibleRange(window.min, window.max);
   }, [plots]);
 
-  // --- Theme — colors are CSS variables, so redrawing is the whole change ---
+  // --- Theme — colors are CSS variables; each chart redraws itself (`followTheme`) ---
   useEffect(() => {
     document.body.classList.toggle("light", light);
-    for (const plot of plots) plot?.requestRender();
-  }, [light, plots]);
+  }, [light]);
 
   // A functional update — read the render-time closure instead and, when
   // successive toggles batch into one frame, the later one overwrites the

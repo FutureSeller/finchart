@@ -421,9 +421,7 @@ export function App() {
           {indicators && (
             <ChartLine
               name="MA(20)"
-              color={MA_COLOR}
-              width={1.5}
-              pointRadius={0}
+              style={{ line: { color: MA_COLOR, width: 1.5 }, point: { radius: 0 } }}
               derive={movingAverage(MA_PERIOD)}
               deriveKey={[MA_PERIOD]}
             />
@@ -434,9 +432,7 @@ export function App() {
           <ChartPane flex={1} minHeight={60}>
             <YAxis format={(v) => v.toFixed(1)} />
             <ChartLine
-              color={MOMENTUM_COLOR}
-              width={1.5}
-              pointRadius={0}
+              style={{ line: { color: MOMENTUM_COLOR, width: 1.5 }, point: { radius: 0 } }}
               derive={momentum(MOM_PERIOD)}
               deriveKey={[MOM_PERIOD]}
             />

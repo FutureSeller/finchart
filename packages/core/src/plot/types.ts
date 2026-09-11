@@ -176,8 +176,16 @@ export interface PlotOptionsPatch {
   shiftVisibleRangeOnNewBar?: boolean;
   axisDrag?: boolean;
   rightOffset?: number;
-  minBarSpacing?: number;
-  maxBarSpacing?: number;
+  /**
+   * **`null` clears the override.** The default for these two is not a
+   * number the chart owns — it is whatever the x mapping decides
+   * (`barSpacingDefaults`), so there is no value to write back to get it.
+   * `null` removes the standing value and the mapping is read again;
+   * `undefined` is "not given" like every other field here. `0` is a
+   * value: "no limit on this side".
+   */
+  minBarSpacing?: number | null;
+  maxBarSpacing?: number | null;
   /** **Field merge, per axis.** Giving only `x` leaves `y` untouched. */
   axis?: { x?: XAxisOptions; y?: YAxisOptions };
   /**

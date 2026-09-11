@@ -381,6 +381,9 @@ importers:
       '@finchart/dom':
         specifier: workspace:*
         version: link:../dom
+      '@finchart/indicators':
+        specifier: workspace:*
+        version: link:../indicators
       '@finchart/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig

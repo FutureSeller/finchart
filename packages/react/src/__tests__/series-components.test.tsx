@@ -99,7 +99,7 @@ describe('<ChartCandles>', () => {
 
     mount(
       <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartCandles up="#00ff00" down="#ff0000" />
+        <ChartCandles style={{ up: "#00ff00", down: "#ff0000" }} />
       </ChartContainer>,
     );
 
@@ -116,7 +116,7 @@ describe('<ChartLine>', () => {
 
     mount(
       <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartLine coordinates={new OHLCAccessor()} color="#f59e0b" width={1.5} />
+        <ChartLine coordinates={new OHLCAccessor()} style={{ line: { color: "#f59e0b", width: 1.5 } }} />
       </ChartContainer>,
     );
 
@@ -132,7 +132,7 @@ describe('<ChartLine>', () => {
 
     mount(
       <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartLine coordinates={new OHLCAccessor()} pointRadius={0} />
+        <ChartLine coordinates={new OHLCAccessor()} style={{ point: { radius: 0 } }} />
       </ChartContainer>,
     );
 
@@ -144,12 +144,58 @@ describe('<ChartLine>', () => {
     expect(circles).toHaveLength(0);
   });
 
+  /**
+   * The `style` prop is the imperative lane's override shape, not a mirror
+   * of it — so a field the mirror never had (`dashArray`) is reachable.
+   */
+  it('should pass a style field that has no flat prop through — dashArray', () => {
+    const { deps, ref, drawn } = setup();
+
+    mount(
+      <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
+        <ChartLine coordinates={new OHLCAccessor()} style={{ line: { dashArray: '4 2' } }} />
+      </ChartContainer>,
+    );
+
+    expect(lines(drawn())[0].style.dashArray).toBe('4 2');
+  });
+
+  /** `color` used to feed the legend swatch as well as the stroke; the swatch now reads `style.line.color`. */
+  it('should register the line color as the legend swatch', () => {
+    const { deps, ref, plot } = setup();
+
+    mount(
+      <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
+        <ChartLine name="MA" coordinates={new OHLCAccessor()} style={{ line: { color: '#123456' } }} />
+      </ChartContainer>,
+    );
+
+    const sample = plot().mainPane.probe(1).find((entry) => entry.name === 'MA');
+    expect(sample?.color).toBe('#123456');
+  });
+
+  it('should register the swatch on the derive and input branches too', () => {
+    const { deps, ref, plot } = setup();
+    const source = { read: () => [{ x: 0, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 3 }] };
+
+    mount(
+      <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
+        <ChartLine name="D" derive={closes} deriveKey={[]} style={{ line: { color: '#00d' } }} />
+        <ChartLine name="I" input={source} style={{ line: { color: '#010' } }} />
+      </ChartContainer>,
+    );
+
+    const samples = plot().mainPane.probe(1);
+    expect(samples.find((entry) => entry.name === 'D')?.color).toBe('#00d');
+    expect(samples.find((entry) => entry.name === 'I')?.color).toBe('#010');
+  });
+
   it('should draw what derive returned', () => {
     const { deps, ref, drawn } = setup();
 
     mount(
       <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartLine derive={closes} deriveKey={[]} color="#7c3aed" pointRadius={0} />
+        <ChartLine derive={closes} deriveKey={[]} style={{ line: { color: "#7c3aed" }, point: { radius: 0 } }} />
       </ChartContainer>,
     );
 
@@ -168,7 +214,7 @@ describe('<ChartLine>', () => {
       <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
         <ChartPane>
           <ChartCandles />
-          <ChartLine derive={closes} deriveKey={[]} color={MA_COLOR} pointRadius={0} />
+          <ChartLine derive={closes} deriveKey={[]} style={{ line: { color: MA_COLOR }, point: { radius: 0 } }} />
         </ChartPane>
       </ChartContainer>,
     );
