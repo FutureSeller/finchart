@@ -140,6 +140,7 @@ export default defineConfig({
           text: "Advanced",
           items: [
             { text: "Drawing Tools", link: "/guide/interaction" },
+            { text: "Live Feeds", link: "/guide/live-feed" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Reducing Bundle Size", link: "/guide/explicit-wiring" },
           ],
