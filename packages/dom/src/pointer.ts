@@ -54,6 +54,15 @@ export interface PointerInteractionsOptions {
    * blank) or `Number(localStorage.getItem(...))`.
    */
   zoomSpeed?: number;
+  /**
+   * When the wheel zooms. `"always"` (the default) takes every wheel event
+   * over the chart — a trackpad's two-finger scroll zooms, and the page
+   * behind does not scroll. `"modifier"` zooms only with Ctrl or ⌘ held —
+   * which is also what a trackpad pinch sends — and lets a plain wheel or
+   * two-finger scroll reach the page. A chart that is one block of a
+   * scrolling page wants the second.
+   */
+  wheel?: "always" | "modifier";
 }
 
 /**
@@ -110,6 +119,8 @@ export class PointerInteractions implements InteractionHandler {
   /** Owns the document listeners of the drag in flight. One per gesture. */
   private dragScope: Scope | null = null;
   private readonly options: Required<PointerInteractionsOptions>;
+  /** Whether the pointer is over the element — a drag that left ends outside. */
+  private inside = false;
 
   constructor(
     private readonly element: HTMLElement,
@@ -123,6 +134,7 @@ export class PointerInteractions implements InteractionHandler {
       kineticScroll: options.kineticScroll ?? false,
       keyboard: options.keyboard ?? true,
       zoomSpeed: options.zoomSpeed ?? 1.1,
+      wheel: options.wheel ?? "always",
     };
   }
 
@@ -134,10 +146,21 @@ export class PointerInteractions implements InteractionHandler {
     const scope = createScope();
     this.connection = scope;
 
-    // Keeps touch drags from being consumed by page scroll.
-    element.style.touchAction = "none";
+    /**
+     * **The chart takes horizontal gestures and leaves vertical ones to the
+     * page.** A pan is `clientX` only; with `none` here a vertical swipe
+     * over a chart that is one block of a phone's page did nothing and
+     * scrolled nothing. `pan-y` hands the vertical swipe to the browser —
+     * which then cancels the pointer, so the crosshair is cleared on
+     * `pointercancel` the same as on leaving. What this gives up on touch
+     * is dragging the value axis vertically; a mouse is unaffected.
+     */
+    element.style.touchAction = "pan-y";
     listen(scope, element, "pointerdown", this.onPointerDown);
     listen(scope, element, "pointermove", this.onHover);
+    listen(scope, element, "pointerenter", this.onEnter);
+    listen(scope, element, "pointerleave", this.onLeave);
+    listen(scope, element, "pointercancel", this.onLeave);
     listen(scope, element, "wheel", this.onWheel, { passive: false });
     listen(scope, element, "dblclick", this.onDoubleClick);
     listen(scope, element, "click", this.onClick);
@@ -204,6 +227,7 @@ export class PointerInteractions implements InteractionHandler {
   }
 
   private onPointerDown = (event: PointerEvent): void => {
+    this.inside = true;
     const pointerId = this.pointerIdOf(event);
 
     // A new finger touching down ends any inertia already flowing.
@@ -356,6 +380,7 @@ export class PointerInteractions implements InteractionHandler {
         pointerId,
       });
       this.stopDragListening();
+      this.afterDrag();
       return;
     }
 
@@ -376,6 +401,9 @@ export class PointerInteractions implements InteractionHandler {
       this.startInertia();
     }
     this.stopDragListening();
+    // After the listeners are off: a subscriber to the departure may throw,
+    // and cleanup must not depend on it not throwing.
+    this.afterDrag();
   };
 
   /**
@@ -460,6 +488,36 @@ export class PointerInteractions implements InteractionHandler {
     if (!this.options.crosshair) return;
     this.target.crosshair(point);
   };
+
+  private onEnter = (): void => {
+    this.inside = true;
+  };
+
+  /**
+   * **The cursor left, so the crosshair is nowhere.** A tooltip or legend
+   * left holding the last value on a live chart reads as the current
+   * price. Not mid-drag: the drag goes on through the document — a mouse
+   * pan keeps the crosshair under the pointer, a tool may move it itself —
+   * so the clearing waits for the drag to end, and happens then only if
+   * the pointer is still outside. Saying it once is the plot's job, at the
+   * one door every emitter goes through; a cancel followed by a leave
+   * both arrive here and the plot hears one departure.
+   */
+  private onLeave = (): void => {
+    this.inside = false;
+    if (this.panPointers.size > 0 || this.stackPointers.size > 0) return;
+    this.clearCrosshair();
+  };
+
+  private clearCrosshair(): void {
+    if (!this.target || !this.options.crosshair) return;
+    this.target.crosshair(null);
+  }
+
+  /** After either kind of drag ends: a drag that ended outside is the departure, held back until now. */
+  private afterDrag(): void {
+    if (this.panPointers.size === 0 && this.stackPointers.size === 0 && !this.inside) this.clearCrosshair();
+  }
 
   private onDoubleClick = (event: MouseEvent): void => {
     if (!this.target) return;
@@ -558,6 +616,9 @@ export class PointerInteractions implements InteractionHandler {
     }
 
     if (!this.options.zoom) return;
+    // Asked to zoom only with a modifier, a plain wheel is the page's —
+    // and a trackpad pinch arrives as a wheel with Ctrl, so it still zooms.
+    if (this.options.wheel === "modifier" && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
 
     // Scrolling up (deltaY < 0) zooms in.

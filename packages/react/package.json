@@ -20,7 +20,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
+    "build": "tsdown src/index.ts --format esm --dts && node scripts/assert-client-banner.mjs",
     "dev": "tsdown src/index.ts --format esm --dts --watch",
     "lint": "oxlint src",
     "type-check": "tsc --noEmit -p tsconfig.test.json",

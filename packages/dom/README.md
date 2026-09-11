@@ -34,6 +34,29 @@ const plot = PlotBuilder.create(browserDeps({ autoSize: true }), candleSeries())
 Headless consumers (servers, workers, tests) don't install this package —
 `createPlotModel` from `@finchart/core` is all they need.
 
+## Touch and trackpad
+
+The chart takes horizontal gestures and leaves vertical ones to the page:
+the container is `touch-action: pan-y`, so a vertical swipe over a chart that
+sits in a scrolling page scrolls the page. What that gives up on touch is
+dragging the value axis vertically; a mouse is unaffected.
+
+The wheel zooms on every event by default, which means a trackpad's
+two-finger scroll zooms the chart instead of scrolling the page. On a page
+with content around the chart, gate it on a modifier:
+
+```ts
+browserDeps({ pointer: { wheel: "modifier" } });
+```
+
+Then a plain wheel or two-finger scroll reaches the page, and Ctrl + wheel
+zooms — which is how Chromium, Firefox and WebKit encode a trackpad pinch,
+so pinching still zooms. ⌘ + wheel is accepted as a shortcut as well.
+
+When the pointer leaves the chart (or the browser takes over a touch
+gesture), the crosshair is cleared: the `crosshair` event fires once with
+`null`, and the tooltip and legend follow it.
+
 ## Support matrix
 
 - **Node 18+** — where the headless path (SSR, workers, tests) runs.

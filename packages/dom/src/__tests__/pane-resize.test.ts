@@ -53,6 +53,20 @@ const heightOf = (pane: { area: { top: number; bottom: number } }) =>
   pane.area.bottom - pane.area.top;
 
 describe("divider placement", () => {
+  /**
+   * The container leaves vertical touch gestures to the page; a divider is
+   * dragged vertically, so it reserves the gesture on itself — allowed
+   * gestures are what every element on the way down permits.
+   */
+  it("should keep the vertical gesture for itself", () => {
+    const { plot, layers } = setup({}, 1);
+    plot.render();
+
+    for (const divider of dividers(layers.overlay)) {
+      expect(divider.style.touchAction).toBe("none");
+    }
+  });
+
   it("should put one divider between each pair of panes", () => {
     const { layers } = setup({}, 2);
 

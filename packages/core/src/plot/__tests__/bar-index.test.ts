@@ -126,8 +126,8 @@ describe("bar-index mapping", () => {
     plot.render();
 
     let seen: number | null = null;
-    plot.on("crosshair", ({ x }) => {
-      seen = x;
+    plot.on("crosshair", (payload) => {
+      seen = payload === null ? null : payload.x;
     });
 
     // The pixel where the candle at index 3 (x=5) sits. Axis slices shift the

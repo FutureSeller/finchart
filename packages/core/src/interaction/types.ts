@@ -29,7 +29,8 @@ export interface InteractionTarget {
   /** Zooms holding a screen x fixed (for a wheel event, at the cursor). */
   zoomAtPixel(factor: number, screenX: number): void;
 
-  crosshair(position: Point): void;
+  /** The cursor's position, or `null` when it has left the chart. */
+  crosshair(position: Point | null): void;
 
   /**
    * A set of input echoes — the same character as `crosshair`: they never

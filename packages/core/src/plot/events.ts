@@ -79,7 +79,15 @@ export interface PlotEvents {
    * count every frame.
    */
   render: Record<string, never>;
-  crosshair: CrosshairPayload;
+  /**
+   * The cursor over the chart — and **`null` once, when it leaves**. A
+   * tooltip, a legend or a synced sibling holding the last value after the
+   * pointer left would show a value that is no longer under anything; on a
+   * live chart that reads as the current price. `null` is the cursor being
+   * nowhere, which is different from a payload with `pane: null` — that
+   * one is the cursor over a margin or a gap, still at a position.
+   */
+  crosshair: CrosshairPayload | null;
   /** Click set — the payload is the same shape as crosshair. */
   click: CrosshairPayload;
   dblclick: CrosshairPayload;

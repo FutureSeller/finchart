@@ -144,3 +144,56 @@ describe("after destroy", () => {
     expect(layers.context.calls.length).toBe(quiet);
   });
 });
+
+
+/**
+ * **The crosshair can be nowhere.** `crosshair(null)` is the door for the
+ * pointer leaving: subscribers get `null` once, and a tooltip or legend
+ * holding the last value lets go of it.
+ */
+describe("crosshair(null)", () => {
+  it("emits null to every subscriber", () => {
+    const { plot } = mount();
+    const heard: unknown[] = [];
+    plot.on("crosshair", (payload) => heard.push(payload));
+
+    plot.crosshair({ x: 100, y: 100 });
+    plot.crosshair(null);
+
+    expect(heard).toHaveLength(2);
+    expect(heard[0]).not.toBeNull();
+    expect(heard[1]).toBeNull();
+  });
+
+  /**
+   * Said once. Every emitter passes through this door — the pointer
+   * interactions, a drawing tool, a consumer — and a browser tells one
+   * departure twice (`pointercancel`, then `pointerleave`). A position in
+   * between makes the next `null` a new departure.
+   */
+  it("says null once until a position is heard again", () => {
+    const { plot } = mount();
+    const heard: unknown[] = [];
+    plot.on("crosshair", (payload) => heard.push(payload));
+
+    plot.crosshair(null);
+    plot.crosshair(null);
+    plot.crosshair({ x: 100, y: 100 });
+    plot.crosshair(null);
+    plot.crosshair(null);
+
+    expect(heard.map((payload) => payload === null)).toEqual([true, false, true]);
+  });
+
+  it("does not count a refused position as a position", () => {
+    const { plot } = mount();
+    const heard: unknown[] = [];
+    plot.on("crosshair", (payload) => heard.push(payload));
+
+    plot.crosshair(null);
+    expect(() => plot.crosshair({ x: Number.NaN, y: 0 })).toThrow();
+    plot.crosshair(null);
+
+    expect(heard).toEqual([null]);
+  });
+});

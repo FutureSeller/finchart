@@ -47,6 +47,10 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
     element.style.height = `${THICKNESS}px`;
     element.style.cursor = "row-resize";
     element.style.pointerEvents = "auto";
+    // The container leaves vertical touch gestures to the page (`pan-y`);
+    // a divider is dragged vertically, so it reserves the gesture itself —
+    // the allowed gestures are what every element on the way down permits.
+    element.style.touchAction = "none";
     return element;
   }
 

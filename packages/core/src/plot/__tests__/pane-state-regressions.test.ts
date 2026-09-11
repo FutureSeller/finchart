@@ -545,7 +545,7 @@ describe("points that had been missed", () => {
     expect(model.plot.mainPane.area.right).toBe(0);
 
     const seen: Array<unknown> = [];
-    model.plot.on("crosshair", (payload) => seen.push(payload.pane));
+    model.plot.on("crosshair", (payload) => seen.push(payload === null ? "left" : payload.pane));
     model.plot.crosshair({ x: 0, y: 0 });
 
     expect(seen).toHaveLength(1);

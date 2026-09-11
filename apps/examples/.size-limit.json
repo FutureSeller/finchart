@@ -1,6 +1,6 @@
 [
   {
-    "name": "the quick start — one candlestick chart, core + dom · 28 KB gzip (27846B measured)",
+    "name": "the quick start — one candlestick chart, core + dom · 28.5 KB gzip (28041B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -9,11 +9,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps }"
     },
-    "limit": "28 KB",
+    "limit": "28.5 KB",
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 33 KB gzip (32886B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 33.5 KB gzip (33076B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -22,11 +22,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }"
     },
-    "limit": "33 KB",
+    "limit": "33.5 KB",
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 38 KB gzip (37665B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 38 KB gzip (37865B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 46 KB gzip (45972B measured)",
+    "name": "+ every drawing tool · 46.5 KB gzip (46177B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -54,11 +54,11 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "46 KB",
+    "limit": "46.5 KB",
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 45.5 KB gzip (45173B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 45.5 KB gzip (45361B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

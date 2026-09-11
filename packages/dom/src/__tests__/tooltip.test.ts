@@ -94,6 +94,17 @@ describe("tooltip", () => {
     expect(tooltipBox().style.display).toBe("none");
   });
 
+  it("should hide when the cursor leaves the chart", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    plot.use(tooltip());
+    plot.crosshair(paneCenter());
+    expect(tooltipBox().style.display).toBe("block");
+
+    plot.crosshair(null);
+
+    expect(tooltipBox().style.display).toBe("none");
+  });
+
   it("should refresh on render so setData replaces stale values", () => {
     const { plot, handle, tooltipBox, paneCenter } = mounted();
     plot.use(tooltip());

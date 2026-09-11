@@ -690,19 +690,24 @@ const off = plot.on("xDomainChange", (payload) => { ... });   // disposer
 |---|---|---|
 | `render` | after the picture actually went out | nothing |
 | `xDomainChange` | when the x range you're looking at changed | `startX`, `endX`, `dataRange` |
-| `crosshair` | when the cursor passes — **during a pan drag too**⁵ | `position`, `x`, `pane`, `value` |
-| `click` · `dblclick` · `contextmenu` | when you press on what's under the cursor | the same `CrosshairPayload` |
+| `crosshair` | when the cursor passes — **during a pan drag too**⁵ — and **once with `null` when it leaves** | `position`, `x`, `pane`, `value`, or `null` |
+| `click` · `dblclick` · `contextmenu` | when you press on what's under the cursor | a `CrosshairPayload` — never `null` |
 | `stateChange` | when a piece of the view state changed | the whole new `ChartState` snapshot |
 
 ⁵ The crosshair stays under the pointer during a pan too (since 2026-08-14) —
 anything subscribing to `crosshair`, a tooltip for instance, keeps getting
 updates mid-pan. **Exceptions**: touch pan (a crosshair under your finger tells
-you nothing), pinch, and a drag a consumer ate (there's no reason for a
-crosshair to wedge itself over what a tool has grabbed) stay quiet as before.
+you nothing) and pinch stay quiet. A drag a tool consumed is the tool's: the
+default pointer handler says nothing during it, and the tool may move the
+crosshair itself (the drawing tools do while drafting).
 
 **The three click events are the same echo as `crosshair`** — the payload is the
-same type (`CrosshairPayload`), so the *crosshair* section below applies
-verbatim. They arrive even if you never mounted a crosshair.
+same shape (`CrosshairPayload`), so the *crosshair* section below applies
+verbatim, except that a click is always somewhere: only `crosshair` can be
+`null`. The plot says `null` once — a departure told twice, as a browser's
+`pointercancel` then `pointerleave`, is one — and the default pointer
+interactions say it when the pointer leaves the chart, or when a drag that
+left is released outside. They arrive even if you never mounted a crosshair.
 
 `xDomainChange` **doesn't wait for a frame.** The range you're looking at is
 state, and state changes synchronously.

@@ -102,7 +102,9 @@ describe("interaction wiring", () => {
     const { plot, interactions } = plotWith();
 
     const seen: { x: number; y: number }[] = [];
-    plot.on("crosshair", ({ position }) => seen.push(position));
+    plot.on("crosshair", (payload) => {
+      if (payload !== null) seen.push(payload.position);
+    });
     interactions.handleCrosshair({ x: 12, y: 34 });
 
     expect(seen).toEqual([{ x: 12, y: 34 }]);
