@@ -194,10 +194,14 @@ export const GUARDED: Record<string, string> = {
     + "takes the number that matters: a bar's own x (both throw; guarded in "
     + "time/__tests__/bar-start.test.ts)",
   sessionStart:
-    "chokepoint 10 — the door is the function it returns, not the options: it "
-    + "takes a bar's x and answers the x a session is stored under. `NaN` "
-    + "keeps all three of a BarStart's laws silently, so it is refused at the "
-    + "call (guarded in time/__tests__/bar-start.test.ts)",
+    "chokepoint 10 — the door that matters is the function it returns: it "
+    + "takes a bar's x and answers the x a session is stored under (the "
+    + "options are checked too, but a time zone is a name, not a number). "
+    + "A `NaN` answer violates idempotence and backward-only: `f(f(x)) === f(x)` "
+    + "and `f(x) <= x` are false, and their logical negations are true. An "
+    + "opposite comparison such as `f(x) > x` is also false, so it cannot "
+    + "detect that violation; non-finite inputs are refused at the call "
+    + "(guarded in time/__tests__/bar-start.test.ts)",
   LinearScale: "chokepoint 1 — the domain becomes the boundary of the axis-tick loop (amplified)",
   LogScale: "chokepoint 1 — the domain becomes the boundary of the axis-tick loop (amplified)",
   // An export with multiple doors can sit in this table with a checkmark

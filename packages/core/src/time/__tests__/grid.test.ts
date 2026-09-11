@@ -5,7 +5,6 @@ import { Zone } from "../zone";
 interface Seen {
   readonly at: number;
   readonly landing: boolean;
-  readonly resumesAt?: number | null;
 }
 
 /** Everything the walk names, in the order it names it, up to `limit`. */
@@ -13,7 +12,7 @@ function collect(zone: Zone, anchor: number, step: number, first: number, last: 
   const seen: Seen[] = [];
   readingGrid(zone, anchor, step, first, last, {
     point: (at) => seen.push({ at, landing: false }) < limit,
-    landing: (at, resumesAt) => seen.push({ at, landing: true, resumesAt }) < limit,
+    landing: (at) => seen.push({ at, landing: true }) < limit,
   });
   return seen;
 }
@@ -73,7 +72,7 @@ describe("readingGrid — the grid a clock lays, one run at a time", () => {
    * stretch is worth the instant the clock landed on, flagged, and the
    * reading 03:00 that names the same instant is not told twice.
    */
-  it("tells a skipped stretch as one landing, with the point it stands beside", () => {
+  it("tells a skipped stretch as one landing, and the grid reading it landed on as itself", () => {
     const zone = new Zone("America/New_York");
     const first = ms("2026-03-08T05:00Z");
     const last = ms("2026-03-08T09:00Z");
@@ -83,7 +82,7 @@ describe("readingGrid — the grid a clock lays, one run at a time", () => {
       { at: ms("2026-03-08T05:00Z"), landing: false }, // 00:00 EST
       { at: ms("2026-03-08T06:00Z"), landing: false }, // 01:00 EST
       // 02:00 skipped → landed exactly on 03:00 EDT, which the grid also stands on
-      { at: ms("2026-03-08T07:00Z"), landing: true, resumesAt: ms("2026-03-08T07:00Z") },
+      { at: ms("2026-03-08T07:00Z"), landing: true },
       { at: ms("2026-03-08T07:00Z"), landing: false }, // 03:00 EDT, told as itself too
       { at: ms("2026-03-08T08:00Z"), landing: false }, // 04:00 EDT
       { at: ms("2026-03-08T09:00Z"), landing: false }, // 05:00 EDT
@@ -117,7 +116,7 @@ describe("readingGrid — the grid a clock lays, one run at a time", () => {
     const points = collect(zone, dayStartOf(zone, first), 15 * MINUTE, first, last);
 
     expect(points).toEqual([
-      { at: ms("1972-01-07T00:44:30Z"), landing: true, resumesAt: ms("1972-01-07T00:45Z") },
+      { at: ms("1972-01-07T00:44:30Z"), landing: true },
       { at: ms("1972-01-07T00:45Z"), landing: false },
       { at: ms("1972-01-07T01:00Z"), landing: false },
       { at: ms("1972-01-07T01:15Z"), landing: false },
@@ -159,7 +158,7 @@ describe("readingGrid — the grid a clock lays, one run at a time", () => {
     const first = ms("2026-03-08T07:00Z");
     const points = collect(zone, dayStartOf(zone, first), HOUR, first, first + 2 * HOUR);
 
-    expect(points[0]).toEqual({ at: first, landing: true, resumesAt: first });
+    expect(points[0]).toEqual({ at: first, landing: true });
   });
 
   it("leaves out a landing that falls before the window", () => {

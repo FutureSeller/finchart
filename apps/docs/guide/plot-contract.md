@@ -523,6 +523,41 @@ were looking at survives a height change, and with nothing to refit it's cheap.
 - The grid is drawn per pane as well. A vertical line crossing the gap between
   panes would make two separate regions read as one.
 
+#### Writing a tick strategy
+
+`axis.x.ticks` (or `axis.y.ticks`) takes a `TickStrategy`: one method,
+`ticks(context)`, returning `{ value, label }[]`. When a strategy is present it
+owns placement, selection and labels together — the axis's own arithmetic and
+`format` go unused, and **the frame draws what the strategy returns without
+choosing among it.** `timeTicks` is the one shipped; a strategy of your own
+gets the same context:
+
+| Field | What it is |
+| --- | --- |
+| `min`, `max` | The visible domain, in scale space. |
+| `span`, `minTickSpacing` | The pixels available, and the least a pair of ticks may stand apart. |
+| `xOf(value)`, `domainOf(x)` | Domain ↔ data x. In a bar-index coordinate system the domain is the bar index, and these recover the bar's x and the index a boundary falls on. |
+| `positionOf(value)` | Where a domain value is drawn, in pixels — the frame's own scale, so a strategy thins what will actually be drawn. |
+| `snap(value)` | **Bar-index coordinates only.** The bar a boundary is drawn on: its own, or the first after it. Absent where the domain is continuous. |
+
+Do the three steps in this order, because each needs the one before it:
+
+1. **Candidates** — every boundary your rule offers inside `[min, max]`.
+2. **Place and choose** — if `snap` is present, land each candidate on
+   `snap(value)` and keep one per bar; then keep no pair closer than
+   `minTickSpacing` by `positionOf`. Choose by what a boundary stands for, not
+   by which came first: `timeTicks` places a year before a month, a month
+   before a day, a day before a time of day, and the earlier among equals.
+3. **Label** the survivors, in order. A label that depends on the tick before
+   it — "Mar" on the first tick of a month — can only be decided once it is
+   known which ticks survived.
+
+A strategy that skips step 2 in bar-index coordinates draws a tick for every
+boundary, including the weekend midnights that have no bar of their own; the
+frame no longer snaps them for you. Step 2 can be omitted where the domain is
+continuous and the boundaries already meet the requested pixel spacing; return
+the candidates with their labels.
+
 ## Decorations
 
 Things drawn on the chart that **aren't a rendering of the data.** One criterion
