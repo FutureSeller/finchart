@@ -196,15 +196,27 @@ const eth = plot.mainPane.addSeries({ series: lineSeries(), data: ethPrices });
 btc.append([tick]);       // only btc grows. the domain stays put
 ```
 
-**Loading more history** — fetch more once the visible range gets close to the
-left edge. `prepend` doesn't touch the domain, so the view doesn't jump, and
-calling it from inside the handler doesn't retrigger itself.
+**Loading more history** — `infiniteHistory` fetches older bars as the view
+approaches the left edge and `prepend`s them; the cursor, the threshold and the
+in-flight dedup are its. `from` is the first x you already hold.
 
 ```ts
-plot.on("xDomainChange", async ({ startX, dataRange }) => {
-  if (!dataRange || startX - dataRange.min > THRESHOLD) return;
-  btc.prepend(await loadBefore(dataRange.min));
+const loader = infiniteHistory(plot, (page) => btc.prepend(page), loadBefore, {
+  from: btcCandles[0].x,
 });
+```
+
+**Reconciling a snapshot** — a REST snapshot of recent bars goes in through
+`upsert`, merged by x: the bars it names are corrected or added, the ones it
+does not name stay. Hand over closed bars only — the bar in progress is the
+tick's — and only from the first bar you hold: older ones are history, and
+history comes in through `prepend`. The [live feed guide](https://github.com/finchart/finchart/blob/main/apps/docs/guide/live-feed.md) has the
+whole wiring — trades → `barAggregator` → `conflated` → `updateLast`, and what
+to do on reconnect.
+
+```ts
+const first = btc.xRange?.min ?? Number.NEGATIVE_INFINITY;
+btc.upsert(snapshot.filter((bar) => bar.x >= first && bar.x + INTERVAL <= Date.now()));
 ```
 
 **Changing colors** — just put CSS variables on the container.
