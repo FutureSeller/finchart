@@ -11,15 +11,17 @@ export interface AxisConfig {
    * Minimum pixels a single tick occupies. Omit for the per-orientation
    * default.
    *
-   * It picks the step, and it is also the floor the drawn ticks are held
-   * to. A calendar step's real length varies — the day a clock moves
-   * forward is an hour short, February is shorter than the thirty days a
-   * ladder has to call a month, and where a clock jumped by hours two
-   * neighbouring boundaries can stand a third of a step apart. So a
-   * boundary that would land closer than this to the one before it is
-   * dropped instead of drawn. Ordinary requests lose nothing; a request
-   * pinned exactly at a step's nominal length loses about one label in
-   * ninety.
+   * It picks the step. For `timeTicks` it is also the floor the drawn
+   * ticks are held to (to within a millionth of a pixel): a calendar
+   * step's real length varies — the day a clock moves forward is an hour
+   * short, February is shorter than the thirty days a ladder has to call a
+   * month, and where a clock jumped by hours two neighbouring boundaries
+   * can stand a third of a step apart — so among boundaries that would
+   * stand closer than this the strategy keeps the one standing for the
+   * bigger unit; among equals the earlier, or where several land on one
+   * bar the one whose own boundary the bar sits nearest. The axis's own
+   * arithmetic uses this to choose an automatic step; it does not enforce a
+   * drawn-spacing floor, and an explicit `tickInterval` is drawn as asked.
    */
   minTickSpacing?: number;
   /**

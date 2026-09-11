@@ -202,7 +202,7 @@ describe("ticks", () => {
 
     expect(ticks.x).toHaveLength(1);
     expect(ticks.x[0].label).toBe("forty-two");
-    // The axis fills in position from the scale — the strategy doesn't know about pixels.
+    // The axis fills in position from the scale — a strategy is handed `positionOf` to choose with, but does not emit one.
     expect(ticks.x[0].position).toBeTypeOf("number");
   });
 
@@ -265,7 +265,7 @@ describe("y-axis tick strategy", () => {
       axis: ax({ y: { ticks: fixed([[50, "mid"]]) } }),
     });
 
-    // The axis fills in position from the scale — the strategy doesn't know about pixels.
+    // The axis fills in position from the scale — a strategy is handed `positionOf` to choose with, but does not emit one.
     expect(ticks.y[0].ticks[0].position).toBeCloseTo(list[0].yScale.scale(50));
   });
 

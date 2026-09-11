@@ -12,12 +12,11 @@ export interface GridVisitor {
   point(at: number): boolean;
   /**
    * The instant the clock landed on after skipping a stretch of readings
-   * that held one the grid stands on, and — if the grid stands anywhere
-   * inside the window in the run that begins there — the instant of its
-   * first point in that run. A landing may name the same instant as that
-   * point: the clock landed exactly on a grid reading.
+   * that held one the grid stands on. A landing may name the same instant
+   * as the point that follows it: the clock landed exactly on a grid
+   * reading.
    */
-  landing(at: number, resumesAt: number | null): boolean;
+  landing(at: number): boolean;
 }
 
 /**
@@ -40,9 +39,8 @@ export interface GridVisitor {
  * each.** They name no instant of their own, so the honest answer for the
  * whole stretch is the moment the clock landed on — the run's own first
  * reading, less its distance from time — and only where the stretch held a
- * reading the grid stands on. It is told apart from a grid point, and told
- * with the grid point it stands next to, because whoever draws it may not
- * want the two crowded together.
+ * reading the grid stands on. It is told apart from a grid point, because
+ * whoever draws it may not want it standing where a real one would.
  *
  * Instants come in non-decreasing order, each grid reading once; a landing
  * may share its instant with the grid point that follows it. `first` and
@@ -73,10 +71,6 @@ export function readingGrid(
     const to = Math.min(run.to - 1, last + run.offset);
     const k0 = Math.ceil((from - anchor) / step);
     const k1 = Math.floor((to - anchor) / step);
-    // The run's first point *inside the window* — what a landing would
-    // stand next to. A grid point past the window is not drawn and cannot
-    // crowd anything.
-    const resumesAt = to >= from && k0 <= k1 ? anchor + k0 * step - run.offset : null;
 
     if (
       skippedFrom !== null &&
@@ -84,7 +78,7 @@ export function readingGrid(
       firstOnGrid(skippedFrom, anchor, step) < run.from
     ) {
       const landed = run.from - run.offset;
-      if (landed >= first && landed <= last && !visit.landing(landed, resumesAt)) return;
+      if (landed >= first && landed <= last && !visit.landing(landed)) return;
     }
     skippedFrom = run.to;
 
