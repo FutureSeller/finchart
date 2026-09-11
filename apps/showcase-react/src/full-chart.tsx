@@ -227,9 +227,10 @@ export function FullChart({
   // The core hands over the position (`probe`'s `index`): search by hand and
   // the rule diverges from the core's "nearest point", so **the tooltip and the
   // header name different bars.**
-  const onCrosshair = useCallback((payload: CrosshairPayload) => {
+  const onCrosshair = useCallback((payload: CrosshairPayload | null) => {
     const data = barsRef.current;
-    const [sample] = payload.pane?.probe(payload.x) ?? [];
+    // `null` is the cursor leaving — the header lets go of the hovered bar.
+    const [sample] = payload?.pane?.probe(payload.x) ?? [];
     setHover(sample ? (data[sample.index] ?? null) : null);
   }, []);
 

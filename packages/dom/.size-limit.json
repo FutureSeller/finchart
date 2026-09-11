@@ -1,16 +1,16 @@
 [
   {
-    "name": "the whole browser shell — browserDeps + PlotBuilder (@finchart/core is a peer, so excluded) · 5.45 KB gzip (5400B measured)",
+    "name": "the whole browser shell — browserDeps + PlotBuilder (@finchart/core is a peer, so excluded) · 5.6 KB gzip (5545B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "5.45 KB",
+    "limit": "5.6 KB",
     "ignore": [
       "@finchart/core"
     ],
     "gzip": true
   },
   {
-    "name": "legend and tooltip only — a consumer of the DOM overlay extensions · 1.3 KB gzip (1227B measured)",
+    "name": "legend and tooltip only — a consumer of the DOM overlay extensions · 1.3 KB gzip (1222B measured)",
     "path": "dist/index.mjs",
     "import": "{ legend, tooltip }",
     "limit": "1.3 KB",

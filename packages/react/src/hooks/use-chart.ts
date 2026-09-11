@@ -40,10 +40,15 @@ export interface UsePlotOptions<T extends BaseDataPoint> {
   /** Gap between panes (px). The divider sits here. */
   paneGap?: number;
   /**
-   * Fires while the pointer moves over the chart. Doesn't fire while
-   * dragging. Comes with which pane it's over and that pane's value.
+   * Fires while the pointer moves over the chart — during a mouse pan too,
+   * and during a drag a drawing tool owns if the tool moves the crosshair
+   * itself; not during a touch pan or a pinch — and **with `null` when it
+   * leaves**, once (a drag released outside counts as leaving then): clear
+   * the hover state you keep from it there, or a live chart shows a value
+   * that is no longer under anything. Comes with which pane it's over and
+   * that pane's value.
    */
-  onCrosshair?: (crosshair: CrosshairPayload) => void;
+  onCrosshair?: (crosshair: CrosshairPayload | null) => void;
   /**
    * Fires when the visible x range changes. Infinite scroll listens for
    * this.

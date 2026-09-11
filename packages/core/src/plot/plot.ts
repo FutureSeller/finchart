@@ -164,6 +164,8 @@ export class Plot
 {
   /** What the chart announces → `events.ts`. Cleared first on destroy. */
   private readonly events = eventChannel<PlotEvents>();
+  /** Whether the last thing said about the crosshair was `null` — so it is not said twice. */
+  private crosshairGone = false;
   private readonly scheduler: RenderScheduler;
   private readonly layers: ChartLayers;
   private readonly renderer: Renderer;
@@ -1016,8 +1018,29 @@ export class Plot
    * over is found first. If it's over padding or a pane gap, there's
    * nothing to read.
    */
-  crosshair(position: Point): void {
-    this.events.emit("crosshair", this.pointPayload(position, "crosshair(position)"));
+  /**
+   * The cursor's position, or `null` for "it left" — the one of the four
+   * pointer doors that can be nowhere, because a tooltip left showing the
+   * last value on a live chart reads as the current price.
+   *
+   * **`null` is said once.** Every emitter passes through here — the
+   * default pointer interactions, a drawing tool moving the crosshair
+   * itself, a consumer calling this by hand — and a departure told twice
+   * (a browser's `pointercancel` followed by its `pointerleave`, say) is
+   * one departure. A position in between makes the next `null` new again.
+   */
+  crosshair(position: Point | null): void {
+    if (position === null) {
+      if (this.crosshairGone) return;
+      this.crosshairGone = true;
+      this.events.emit("crosshair", null);
+      return;
+    }
+    // The payload first: a position that is refused emits nothing, so it
+    // must not make the next `null` new either.
+    const payload = this.pointPayload(position, "crosshair(position)");
+    this.crosshairGone = false;
+    this.events.emit("crosshair", payload);
   }
 
   /**
@@ -1058,11 +1081,11 @@ export class Plot
 
   /**
    * All four pass through this one door — the **public path for composing
-   * coordinates**, which doesn't go through the router. The
-   * most common way in is a consumer trying to clear the crosshair on
-   * `pointerleave` by passing `null`, which used to leak an internal field
-   * name through `Cannot read properties of null (reading 'x')`. `label`
-   * says which of the four doors this is.
+   * coordinates**, which doesn't go through the router. `null` used to
+   * arrive here from a consumer clearing the crosshair on `pointerleave`
+   * and leak an internal field name through `Cannot read properties of
+   * null (reading 'x')`; `crosshair(null)` is a real door now and never
+   * reaches this. `label` says which of the four doors this is.
    */
   private pointPayload(position: Point, door: string): CrosshairPayload {
     const point = requirePoint(position, door);

@@ -10,7 +10,7 @@ function recordingTarget() {
   const pixelPans: number[] = [];
   const zooms: Array<{ factor: number; center: number }> = [];
   const pixelZooms: Array<{ factor: number; screenX: number }> = [];
-  const crosshairs: Point[] = [];
+  const crosshairs: Array<Point | null> = [];
   const fits: number[] = [];
   const clicks: Point[] = [];
   const menus: Point[] = [];
@@ -368,11 +368,12 @@ describe("PointerInteractions crosshair", () => {
 });
 
 describe("PointerInteractions lifecycle", () => {
-  it("should allow touch dragging", () => {
+  it("should take horizontal touch drags and leave vertical ones to the page", () => {
     new PointerInteractions(element).connect(target.target);
 
-    // Without this, touch dragging would be swallowed by page scrolling.
-    expect(element.style.touchAction).toBe("none");
+    // A pan is horizontal; `none` swallowed the vertical swipe that should
+    // have scrolled the page a chart sits in.
+    expect(element.style.touchAction).toBe("pan-y");
   });
 
   it("should stop responding after disconnect", () => {
@@ -913,5 +914,220 @@ describe("PointerInteractions click trio (2.5)", () => {
     );
 
     expect(target.menus).toEqual([{ x: 40, y: 50 }]);
+  });
+});
+
+
+/**
+ * **The cursor left, so the crosshair is nowhere.** A tooltip or legend
+ * left holding the last value on a live chart reads as the current price,
+ * so leaving the element — or the browser taking the gesture over — tells
+ * the target the crosshair is `null`. Not mid-drag: the pointer leaving the
+ * element while dragging is ordinary, and the drag goes on.
+ */
+describe("leaving the chart", () => {
+  it("clears the crosshair on pointerleave", () => {
+    new PointerInteractions(element).connect(target.target);
+    element.dispatchEvent(new MouseEvent("pointermove", { clientX: 80, clientY: 40, bubbles: true }));
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+
+    expect(target.crosshairs.at(-1)).toBeNull();
+    expect(target.crosshairs.length).toBe(2);
+  });
+
+  it("clears the crosshair when the browser cancels the pointer", () => {
+    new PointerInteractions(element).connect(target.target);
+    element.dispatchEvent(new MouseEvent("pointercancel", { bubbles: true }));
+
+    expect(target.crosshairs).toEqual([null]);
+  });
+
+  it("does not clear it mid-drag — the drag goes on through the document", () => {
+    new PointerInteractions(element).connect(target.target);
+    down(100);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+
+    expect(target.crosshairs).toEqual([]);
+    up();
+  });
+
+  it("tells the target on a cancel and again on the leave that follows — the plot makes them one", () => {
+    // With nothing to drag, a browser taking the gesture over sends both;
+    // saying `null` once is the plot's, at the door every emitter uses.
+    new PointerInteractions(element, { pan: false, zoom: false }).connect(target.target);
+    element.dispatchEvent(new MouseEvent("pointermove", { clientX: 80, clientY: 40, bubbles: true }));
+    element.dispatchEvent(new MouseEvent("pointercancel", { bubbles: true }));
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+
+    expect(target.crosshairs).toEqual([{ x: 30, y: 20 }, null, null]);
+  });
+
+  /**
+   * A drag a tool owns goes through the stack, not the pan — and ends the
+   * same way: released outside, that is the departure.
+   */
+  it("clears when a tool-owned drag that left the chart is released outside", () => {
+    const grabbing = recordingTarget();
+    grabbing.target.routeInput = (event: InputEvent) => event.type === "pointerdown";
+    new PointerInteractions(element).connect(grabbing.target);
+    element.dispatchEvent(new MouseEvent("pointermove", { clientX: 80, clientY: 40, bubbles: true }));
+    down(100);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    move(140);
+    up();
+
+    expect(grabbing.crosshairs.at(-1)).toBeNull();
+  });
+
+  it("clears again after the pointer came back and left again", () => {
+    new PointerInteractions(element).connect(target.target);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    element.dispatchEvent(new MouseEvent("pointerenter", { bubbles: false }));
+    element.dispatchEvent(new MouseEvent("pointermove", { clientX: 80, clientY: 40, bubbles: true }));
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+
+    expect(target.crosshairs).toEqual([null, { x: 30, y: 20 }, null]);
+  });
+
+  /**
+   * A drag that leaves the element goes on through the document — a mouse
+   * pan keeps the crosshair under the pointer meanwhile — and where it is
+   * released outside, that is the departure, held back until then.
+   */
+  it("clears when a drag that left the chart is released outside", () => {
+    new PointerInteractions(element).connect(target.target);
+    element.dispatchEvent(new MouseEvent("pointermove", { clientX: 80, clientY: 40, bubbles: true }));
+    down(100);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    move(140);
+    expect(target.crosshairs.at(-1)).not.toBeNull();
+
+    up();
+
+    expect(target.crosshairs.at(-1)).toBeNull();
+  });
+
+  /**
+   * The departure is announced after the drag's document listeners are
+   * off — a subscriber that throws on it must not leave the document
+   * listening, or the next unrelated release would start a pan's inertia.
+   */
+  it("cleans the drag up even when the departure's subscriber throws", () => {
+    const listening = trackListeners(document);
+    const throwing = recordingTarget();
+    throwing.target.crosshair = (position) => {
+      if (position === null) throw new Error("subscriber failed");
+    };
+    new PointerInteractions(element).connect(throwing.target);
+    down(100);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    move(140);
+    // The throw leaves the listener as an uncaught error on the window —
+    // expected here, and swallowed so the runner does not count it.
+    const failed: string[] = [];
+    const swallow = (event: ErrorEvent): void => {
+      failed.push(event.message);
+      event.preventDefault();
+    };
+    window.addEventListener("error", swallow);
+    try {
+      up();
+    } finally {
+      window.removeEventListener("error", swallow);
+    }
+
+    expect(failed).toEqual(["subscriber failed"]);
+    expect(listening()).toEqual([]);
+  });
+
+  it("starts no inertia from a later unrelated release, even with kinetic scroll on", () => {
+    const throwing = recordingTarget();
+    throwing.target.crosshair = (position) => {
+      if (position === null) throw new Error("subscriber failed");
+    };
+    new PointerInteractions(element, { kineticScroll: true }).connect(throwing.target);
+    down(100);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    move(140);
+    const swallow = (event: ErrorEvent): void => event.preventDefault();
+    window.addEventListener("error", swallow);
+    try {
+      up();
+    } finally {
+      window.removeEventListener("error", swallow);
+    }
+    const pansAfterRelease = throwing.pixelPans.length;
+
+    // A release the chart has nothing to do with: a stale document listener
+    // would have read it as the end of a pan and started to coast.
+    up();
+
+    expect(throwing.pixelPans.length).toBe(pansAfterRelease);
+  });
+
+  it("does not clear when a drag that left the chart comes back before release", () => {
+    new PointerInteractions(element).connect(target.target);
+    down(100);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    element.dispatchEvent(new MouseEvent("pointerenter", { bubbles: false }));
+    up();
+
+    expect(target.crosshairs).not.toContain(null);
+  });
+
+  it("says nothing when the crosshair is off", () => {
+    new PointerInteractions(element, { crosshair: false }).connect(target.target);
+    element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+
+    expect(target.crosshairs).toEqual([]);
+  });
+});
+
+/**
+ * **Horizontal gestures are the chart's, vertical ones the page's.** With
+ * `touch-action: none` a vertical swipe over a chart in a scrolling page
+ * did nothing and scrolled nothing.
+ */
+describe("touch-action", () => {
+  it("leaves vertical panning to the page", () => {
+    new PointerInteractions(element).connect(target.target);
+    expect(element.style.touchAction).toBe("pan-y");
+  });
+});
+
+/**
+ * **A plain wheel is the page's when asked.** `wheel: "modifier"` zooms
+ * only with Ctrl or ⌘ held — a trackpad pinch sends exactly that — and
+ * lets two-finger scrolling reach the page; the default takes every event.
+ */
+describe("wheel", () => {
+  const wheel = (init: WheelEventInit) => {
+    const event = new WheelEvent("wheel", { deltaY: -100, clientX: 80, bubbles: true, cancelable: true, ...init });
+    element.dispatchEvent(event);
+    return event;
+  };
+
+  it("zooms on every wheel by default and keeps it from the page", () => {
+    new PointerInteractions(element).connect(target.target);
+    const event = wheel({});
+
+    expect(target.pixelZooms).toHaveLength(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("lets a plain wheel reach the page under wheel: modifier", () => {
+    new PointerInteractions(element, { wheel: "modifier" }).connect(target.target);
+    const event = wheel({});
+
+    expect(target.pixelZooms).toEqual([]);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it.each([{ ctrlKey: true }, { metaKey: true }])("zooms with a modifier held — %o", (held) => {
+    new PointerInteractions(element, { wheel: "modifier" }).connect(target.target);
+    const event = wheel(held);
+
+    expect(target.pixelZooms).toHaveLength(1);
+    expect(event.defaultPrevented).toBe(true);
   });
 });

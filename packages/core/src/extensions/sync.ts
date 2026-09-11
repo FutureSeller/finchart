@@ -99,7 +99,7 @@ export function syncCrosshair(
   };
 
   const subs = members.map((member, self) =>
-    member.on("crosshair", ({ pane, x }) => paint(self, pane ? x : null)),
+    member.on("crosshair", (payload) => paint(self, payload?.pane ? payload.x : null)),
   );
 
   return () => {

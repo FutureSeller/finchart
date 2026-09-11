@@ -31,7 +31,7 @@ function recordingTarget() {
     panByPixels: () => undefined,
     zoom: () => undefined,
     zoomAtPixel: (factor, screenX) => void pixelZooms.push({ factor, screenX }),
-    crosshair: (_position: Point) => undefined,
+    crosshair: (_position: Point | null) => undefined,
   };
   return { target, pixelZooms };
 }

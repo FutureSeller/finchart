@@ -11,6 +11,16 @@ pnpm add @finchart/react @finchart/core @finchart/dom react react-dom
 60-second example below imports from both directly, so **your app depends on
 them directly** too.
 
+**It is a client module.** The bundle carries `"use client"`: the package
+creates a React context at module scope, which only a client module may do,
+and the directive marks the boundary, so importing it from a server file
+(Next.js App Router's default) no longer fails at the module. A chart still
+needs a Client Component of your own around it: `deps={browserDeps()}` is a
+function, and this function cannot cross the server–client boundary as a prop —
+create it in a small `"use client"` component and render that from the
+server. The hooks (`usePlot`, `useChartPlot`, `usePlugin`) are client-only,
+as hooks are. SSR is fine: nothing here touches the DOM at import time.
+
 ## 60 seconds — one production-shaped chart
 
 Candles, a volume pane, a moving average, a crosshair, a tooltip, a legend,

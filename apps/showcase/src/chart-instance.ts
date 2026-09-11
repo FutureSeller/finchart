@@ -265,8 +265,10 @@ export function makeChart(
   // The core hands over the position (`probe`'s `index`) — search by hand and
   // the rule diverges from the core's "nearest point", so the tooltip and the
   // header name different bars.
-  plot.on("crosshair", ({ pane, x }) => {
-    const [sample] = pane?.probe(x) ?? [];
+  plot.on("crosshair", (payload) => {
+    // `null` is the cursor leaving — the header lets go of the hovered bar
+    // then, or it would keep showing a value from before the pointer left.
+    const [sample] = payload?.pane?.probe(payload.x) ?? [];
     hover = sample ? (price.read()[sample.index] ?? null) : null;
     notify();
   });

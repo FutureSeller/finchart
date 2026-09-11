@@ -24,7 +24,10 @@ function twoPanes() {
   plot.fitDomains();
 
   const seen: CrosshairPayload[] = [];
-  plot.on("crosshair", (payload) => seen.push(payload));
+  // `null` is the cursor leaving — not a position, so not what these read.
+  plot.on("crosshair", (payload) => {
+    if (payload !== null) seen.push(payload);
+  });
 
   return { plot, xScale, yScale, lower, seen };
 }

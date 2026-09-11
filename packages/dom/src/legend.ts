@@ -107,8 +107,8 @@ export function legend(
       box.replaceChildren(...rows);
     };
 
-    const offCrosshair = plot.on("crosshair", ({ x, pane: hovered }) => {
-      cursorX = hovered ? x : null;
+    const offCrosshair = plot.on("crosshair", (payload) => {
+      cursorX = payload?.pane ? payload.x : null;
       refresh();
     });
     // Data and series changes arrive via render — the list and the last value both refresh there.

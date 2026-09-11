@@ -988,9 +988,11 @@ describe("Z1 — the shape axis", () => {
     /**
      * Four public paths that synthesize a coordinate — they do not pass
      * through the router, so input validation never reaches them. `null`
-     * is the first value a consumer trying to clear the crosshair on
-     * `pointerleave` tries, and that used to be a raw `TypeError` leaking
-     * an internal field name.
+     * was the first value a consumer trying to clear the crosshair on
+     * `pointerleave` tried, and it used to be a raw `TypeError` leaking an
+     * internal field name; for `crosshair` it is now the door for exactly
+     * that (the cursor being nowhere), so that one door is asked about
+     * every hostile value but `null`.
      */
     it.each([
       ["crosshair", (p: PlotLike, at: unknown) => p.crosshair(at as never)],
@@ -1002,9 +1004,10 @@ describe("Z1 — the shape axis", () => {
         (p: PlotLike, at: unknown) =>
           p.claimFocusArea(() => p.mainPane.area).contestedAt(at as never),
       ],
-    ])("plot.%s(hostile coordinates)", (_door, call) => {
+    ])("plot.%s(hostile coordinates)", (door, call) => {
       const { model } = twoSeriesStage();
       for (const bad of [null, undefined, 42, { x: 1 }, { x: Number.NaN, y: 0 }]) {
+        if (door === "crosshair" && bad === null) continue;
         expect(() => call(model.plot, bad)).toThrow(publicApi.ContractError);
       }
     });

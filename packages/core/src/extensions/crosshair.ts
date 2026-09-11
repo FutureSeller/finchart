@@ -284,8 +284,8 @@ export function crosshair(
     // side of the layer split.
     const removeDecoration = plot.addDecoration(line, { zIndex: options.zIndex });
 
-    const unsubscribe = plot.on("crosshair", ({ position, pane }) => {
-      line.follow(pane ? position : null);
+    const unsubscribe = plot.on("crosshair", (payload) => {
+      line.follow(payload?.pane ? payload.position : null);
       plot.requestRender();
     });
 

@@ -54,7 +54,7 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
   gridStyle?: Partial<LineStyle>;
   /** Gap between panes (px). The divider sits here. */
   paneGap?: number;
-  onCrosshair?: (crosshair: CrosshairPayload) => void;
+  onCrosshair?: (crosshair: CrosshairPayload | null) => void;
   /**
    * Fires when the visible x range changes. Infinite scroll listens for
    * this.
