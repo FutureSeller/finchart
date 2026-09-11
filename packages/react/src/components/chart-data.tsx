@@ -20,7 +20,7 @@ export interface ChartDataProps<T extends BaseDataPoint> {
  * <ChartContainer deps={deps} data={btc}>
  *   <ChartCandles />              // the container's data
  *   <ChartData value={eth}>
- *     <ChartLine color="#888" />  // this data
+ *     <ChartLine style={{ line: { color: "#888" } }} />  // this data
  *   </ChartData>
  * </ChartContainer>
  * ```

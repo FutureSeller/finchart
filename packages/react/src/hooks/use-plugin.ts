@@ -28,9 +28,23 @@ import { PaneContextValue, useChartApi } from '../components/chart-context';
  * install function itself — though StrictMode round-trips install/dispose
  * once (the dispose contract covers this), so that
  * initialization has to be safe to run twice.
+ *
+ * **`install` may return `null` — "nothing to install for these `deps`."**
+ * Nothing is mounted, nothing is disposed, and the state stays `null` until
+ * `deps` change. That is how one plugin waits for another's api, which is
+ * itself `null` before commit: a series handle is a `Source`, so an
+ * indicator that reads one is installed on the render after the handle
+ * arrives —
+ *
+ * ```tsx
+ * const price = usePlugin((_, pane) => pane.addSeries({ series: candleSeries(), data }), []);
+ * const rsi = usePlugin((plot) => price && plot.use(attachRsi({ source: price })), [price]);
+ * ```
+ *
+ * A failure is still a throw; `null` never means "it went wrong."
  */
 export function usePlugin<TApi extends { dispose(): void }>(
-  install: (plot: Plot, pane: Pane) => TApi,
+  install: (plot: Plot, pane: Pane) => TApi | null,
   deps: readonly unknown[],
 ): TApi | null {
   const { plot } = useChartApi('usePlugin');
@@ -45,6 +59,7 @@ export function usePlugin<TApi extends { dispose(): void }>(
   useEffect(() => {
     const installed = latestInstall.current(plot, target);
     setApi(installed);
+    if (installed === null) return;
 
     return () => {
       setApi(null);

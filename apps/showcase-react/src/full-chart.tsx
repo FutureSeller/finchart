@@ -51,7 +51,7 @@ import { DrawingToolsHost } from "./rail";
 import {
   CROSSHAIR_FORMAT,
   DEPS,
-  StageOptions,
+  STAGE_OPTIONS,
   StillWatermark,
   TickPriceLine,
   X_TICKS,
@@ -273,13 +273,15 @@ export function FullChart({
         role="img"
         ariaLabel={`${spec.symbol} chart`}
         paneGap={12}
+        options={STAGE_OPTIONS}
+        // The palette is CSS variables toggled on <body>; the canvas redraws when they move.
+        followTheme
         plotRef={plotRef}
         onPlot={onPlot}
         onCrosshair={onCrosshair}
         onXDomainChange={onXDomainChange}
         style={{ width: "100%", height: "100%" }}
       >
-        <StageOptions />
         {/* `format` is the default wording for badges and the ghost cursor — the axis owns the wording */}
         <XAxis ticks={X_TICKS} format={CROSSHAIR_FORMAT.x} />
         <YAxis position="right" format={won} />

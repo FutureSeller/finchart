@@ -4,16 +4,22 @@ import type {
   CrosshairPayload,
   LineStyle,
   Pane,
-  PaneOptions,
   Plot,
   PlotDeps,
+  Scale,
   XDomainChangePayload,
 } from '@finchart/core';
-import type { BrowserDeps } from '@finchart/dom';
+import type { BrowserDeps, ThemeObserverOptions } from '@finchart/dom';
 import type { AriaRole, CSSProperties, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PlotOptions } from '../hooks/plot-options';
 import { usePlot } from '../hooks/use-chart';
-import { ChartDataProvider, ChartProvider, type ChartApi } from './chart-context';
+import {
+  ChartDataProvider,
+  ChartProvider,
+  type ChartApi,
+  type PaneAcquisition,
+} from './chart-context';
 import {
   createSeriesCollector,
   type SeriesCollector,
@@ -28,6 +34,8 @@ import {
  * difference: both the `MutableRefObject` that 18's `useRef<Plot |
  * null>(null)` returns and 19's `RefObject` satisfy this shape.
  */
+export type { PlotOptions } from '../hooks/plot-options';
+
 export interface PlotHandleRef {
   current: Plot | null;
 }
@@ -54,6 +62,26 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
   gridStyle?: Partial<LineStyle>;
   /** Gap between panes (px). The divider sits here. */
   paneGap?: number;
+  /**
+   * The plot options that have no prop of their own — `padding`,
+   * `resizablePanes`, `shiftVisibleRangeOnNewBar`, `axisDrag`,
+   * `rightOffset`, `minBarSpacing`, `maxBarSpacing`. A key that is missing
+   * reverts to what the plot was built with; `minBarSpacing`/`maxBarSpacing`
+   * go back to the x mapping's own default. Applied before the first
+   * series registers, so `rightOffset` shapes the first fit whatever the
+   * JSX order. `axis` is `<XAxis>`/`<YAxis>`'s, `style.grid` is `gridStyle`,
+   * `showGrid` and `paneGap` are props — one door per value.
+   */
+  options?: PlotOptions;
+  /**
+   * Redraw when the theme moves — `prefers-color-scheme`, or a `class` /
+   * `data-theme` / `style` change on the container or an ancestor it had
+   * at mount; an `attributes` list replaces that default. Off by default:
+   * a fixed palette should not hold a MutationObserver it never needs. A
+   * theme applied by restructuring the DOM above the chart, or a swapped
+   * stylesheet, is out of reach — call `plot.requestRender()` yourself then.
+   */
+  followTheme?: boolean | ThemeObserverOptions;
   onCrosshair?: (crosshair: CrosshairPayload | null) => void;
   /**
    * Fires when the visible x range changes. Infinite scroll listens for
@@ -134,6 +162,8 @@ export function ChartContainer<T extends BaseDataPoint>({
   showGrid = true,
   gridStyle,
   paneGap,
+  options,
+  followTheme,
   onCrosshair,
   onXDomainChange,
   state,
@@ -155,6 +185,8 @@ export function ChartContainer<T extends BaseDataPoint>({
     showGrid,
     gridStyle,
     paneGap,
+    options,
+    followTheme,
     onCrosshair,
     onXDomainChange,
     state,
@@ -233,6 +265,16 @@ export function ChartContainer<T extends BaseDataPoint>({
   }, [onPlot, plotRef]);
 
   const mainPaneTaken = useRef(false);
+  // The main pane's scale before a `<ChartPane yScale>` replaced it — put
+  // back on release, so a keyed swap to a pane without `yScale` returns to
+  // what was there. This is a weaker ownership than a pane's series list
+  // has: the core *refuses* a second series owner, but it cannot tell a
+  // wrapper's `setYScale` from a consumer's, so a swap made while the pane
+  // holds the main pane is allowed and then overwritten on release. What
+  // comes back is the instance, not its old domain — `setYScale` writes the
+  // current range onto it (`replantScale`), falling back to the instance's
+  // own when that range does not fit.
+  const previousScale = useRef<Scale | null>(null);
   const collectors = useRef(new Map<Pane, SeriesCollector<T>>());
 
   const api = useMemo<ChartApi<T> | null>(() => {
@@ -242,13 +284,18 @@ export function ChartContainer<T extends BaseDataPoint>({
     return {
       plot,
 
-      acquirePane(options: PaneOptions): Pane {
+      acquirePane(options: PaneAcquisition): Pane {
         structure.current += 1;
-
-        if (mainPaneTaken.current) return plot.addPane(options);
-
+        const { yScale, ...pane } = options;
+        if (mainPaneTaken.current) {
+          return plot.addPane(yScale ? { ...pane, yScale: yScale() } : pane);
+        }
         mainPaneTaken.current = true;
-        plot.mainPane.applyOptions(options);
+        plot.mainPane.applyOptions(pane);
+        if (yScale) {
+          previousScale.current = plot.mainPane.yScale;
+          plot.mainPane.setYScale(yScale());
+        }
         return plot.mainPane;
       },
 
@@ -258,6 +305,11 @@ export function ChartContainer<T extends BaseDataPoint>({
 
         if (pane === plot.mainPane) {
           mainPaneTaken.current = false;
+          const previous = previousScale.current;
+          if (previous) {
+            previousScale.current = null;
+            plot.mainPane.setYScale(previous);
+          }
           return;
         }
         plot.removePane(pane);

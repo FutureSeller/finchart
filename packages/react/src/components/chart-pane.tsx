@@ -1,4 +1,4 @@
-import type { Pane } from '@finchart/core';
+import type { Pane, PaneOptions, Scale } from '@finchart/core';
 import { PANE_OPTION_DEFAULTS } from '@finchart/core';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -24,6 +24,28 @@ export interface ChartPaneProps {
   minHeight?: number;
   /** Padding that keeps the value axis from hugging the data. Defaults to 0.1 */
   valuePadding?: number;
+  /**
+   * Whether the value axis follows the data. Defaults to true. A directive,
+   * not a lock: the user turning a fixed range on (an axis drag,
+   * `setValueDomain`) turns this off on the pane, the way a divider drag
+   * moves `flex` — the prop is applied when it changes, and only then.
+   */
+  autoScale?: boolean;
+  /** Flip the value axis so larger values sit lower. Defaults to false. */
+  invert?: boolean;
+  /**
+   * The value scale, as a factory — read **once per acquisition**, like
+   * `deps.mainPaneYScale`; a later identity change is ignored, so an inline
+   * `() => new LogScale()` is fine and the factory must be pure. On the main
+   * pane the scale it replaces is kept and put back when this pane goes —
+   * the instance, carrying whatever range the pane shows at that moment —
+   * and a `mainPane.setYScale` made while this pane holds it is overwritten
+   * by that restore. A restored `state` whose `valueDomain` the scale cannot hold is a
+   * `ContractError` at the boundary around the container — scale kind is not
+   * part of saved state, so persist it alongside and drop the domain when it
+   * differs.
+   */
+  yScale?: () => Scale;
   children?: ReactNode;
 }
 
@@ -42,6 +64,9 @@ export function ChartPane({
   flex = PANE_OPTION_DEFAULTS.flex,
   minHeight = PANE_OPTION_DEFAULTS.minHeight,
   valuePadding = PANE_OPTION_DEFAULTS.valuePadding,
+  autoScale = PANE_OPTION_DEFAULTS.autoScale,
+  invert = PANE_OPTION_DEFAULTS.invert,
+  yScale,
   stateKey,
   children,
 }: ChartPaneProps) {
@@ -63,7 +88,7 @@ export function ChartPane({
       '<ChartPane stateKey> is identity and cannot change after mount; change the React key to replace the pane.',
     );
   }
-  const initialOptions = useRef({ flex, minHeight, valuePadding, stateKey });
+  const initialOptions = useRef({ flex, minHeight, valuePadding, autoScale, invert, stateKey, yScale });
 
   useEffect(() => {
     const acquired = api.acquirePane(initialOptions.current);
@@ -75,19 +100,21 @@ export function ChartPane({
     };
   }, [api]);
 
-  // After that, only props that actually changed get applied —
+  // After that, only the field that actually changed gets applied —
   // recreating the pane every time a value changes would unregister
-  // every series inside it along with it. The first pass was already
-  // done by `acquire`.
-  const applied = useRef(false);
+  // every series inside it along with it, and writing every prop back on
+  // any change would undo what the user did in between: a divider drag
+  // (`flex`), a fixed range (`autoScale`). The first pass was `acquire`'s.
+  const applied = useRef<PaneFields | null>(null);
   useEffect(() => {
     if (!pane) return;
-    if (!applied.current) {
-      applied.current = true;
-      return;
-    }
-    pane.applyOptions({ flex, minHeight, valuePadding });
-  }, [pane, flex, minHeight, valuePadding]);
+    const next: PaneFields = { flex, minHeight, valuePadding, autoScale, invert };
+    const last = applied.current;
+    applied.current = next;
+    if (!last) return;
+    const patch = changedFields(last, next);
+    if (patch) pane.applyOptions(patch);
+  }, [pane, flex, minHeight, valuePadding, autoScale, invert]);
 
   // Children claim their slot here during the render phase, and it goes to the pane after commit.
   const collector = pane ? api.seriesCollector(pane) : null;
@@ -101,4 +128,33 @@ export function ChartPane({
   if (!pane) return null;
 
   return <PaneProvider value={pane}>{children}</PaneProvider>;
+}
+
+type PaneFields = Required<Pick<PaneOptions, 'flex' | 'minHeight' | 'valuePadding' | 'autoScale' | 'invert'>>;
+
+/** The fields whose prop value moved since the last pass — `null` when none did. */
+function changedFields(last: PaneFields, next: PaneFields): PaneOptions | null {
+  const patch: PaneOptions = {};
+  let any = false;
+  if (last.flex !== next.flex) {
+    patch.flex = next.flex;
+    any = true;
+  }
+  if (last.minHeight !== next.minHeight) {
+    patch.minHeight = next.minHeight;
+    any = true;
+  }
+  if (last.valuePadding !== next.valuePadding) {
+    patch.valuePadding = next.valuePadding;
+    any = true;
+  }
+  if (last.autoScale !== next.autoScale) {
+    patch.autoScale = next.autoScale;
+    any = true;
+  }
+  if (last.invert !== next.invert) {
+    patch.invert = next.invert;
+    any = true;
+  }
+  return any ? patch : null;
 }

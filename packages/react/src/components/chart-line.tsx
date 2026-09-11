@@ -1,18 +1,26 @@
-import type { BaseDataPoint, CoordinateAccessor, DataView, LineDataPoint, Source } from '@finchart/core';
+import type {
+  BaseDataPoint,
+  CoordinateAccessor,
+  DataView,
+  LineDataPoint,
+  LineSeriesStyleOverrides,
+  Source,
+} from '@finchart/core';
 import { defaultCoordinates, LineSeries } from '@finchart/core';
 import { ChartSeries } from './chart-series';
 
 interface LineLook {
   /** Display name — the legend and tooltip refer to it by this. */
   name?: string;
-  /** Line color. Falls back to the CSS variable (`--chart-line`) or the default when omitted. */
-  color?: string;
-  /** Line width (px). */
-  width?: number;
-  /** Point radius (px). 0 draws no points. */
-  pointRadius?: number;
-  /** Point color. Left unset, it goes its own way from the line color — falls back to the CSS variable (`--chart-point`). */
-  pointColor?: string;
+  /**
+   * The line's look, in the imperative lane's override shape — the same
+   * `LineSeriesStyleOverrides` that `lineSeries(style)` takes, so what you
+   * learn in one lane holds in the other: `{ line: { color, width,
+   * dashArray }, point: { radius, color } }`. `line.color` is also the
+   * legend swatch. Omitted fields fall back to the CSS variables
+   * (`--chart-line`, `--chart-point-radius`, …).
+   */
+  style?: LineSeriesStyleOverrides;
 }
 
 interface PlainLineProps<TSource extends BaseDataPoint> extends LineLook {
@@ -73,13 +81,14 @@ function coordinatesOf<T extends BaseDataPoint>(
  *
  * ```tsx
  * // sma20: (source: DataView<OHLC>) => LineDataPoint[] — a derivation is just a function (see README)
- * <ChartLine color="#f59e0b" derive={sma20} deriveKey={[20]} />
+ * <ChartLine style={{ line: { color: "#f59e0b" } }} derive={sma20} deriveKey={[20]} />
  * ```
  *
  * **Color is an argument.** Keep the theme (the default color for every
  * line) in a CSS variable, but give something that varies per series —
  * "this indicator is orange" — here instead: there's no element on the
- * canvas, so CSS has no way to pick out a single series.
+ * canvas, so CSS has no way to pick out a single series. The shape is the
+ * imperative lane's — `style` here is what `lineSeries(style)` takes.
  *
  * A new series object gets built every render, but the derivation cache
  * survives it → see `<ChartSeries>`.
@@ -88,14 +97,9 @@ export function ChartLine<
   TSource extends BaseDataPoint,
   TPoint extends BaseDataPoint = TSource,
 >(props: ChartLineProps<TSource, TPoint>) {
-  const { color, width, pointRadius, pointColor } = props;
-  const style = {
-    line: { ...(color !== undefined && { color }), ...(width !== undefined && { width }) },
-    point: {
-      ...(pointColor !== undefined && { color: pointColor }),
-      ...(pointRadius !== undefined && { radius: pointRadius }),
-    },
-  };
+  const { style } = props;
+  // The registration's color is the legend swatch — the stroke color doubles as it.
+  const color = style?.line?.color;
 
   if (props.input) {
     return (

@@ -939,8 +939,7 @@ click — which is why you have to turn it on explicitly.
     <ChartCandles />
     {showMa && (
       <ChartLine
-        color="#f59e0b"
-        pointRadius={0}
+        style={{ line: { color: "#f59e0b" }, point: { radius: 0 } }}
         derive={movingAverage(period)}
         deriveKey={[period]}
       />
@@ -962,8 +961,8 @@ core series for you, and `<ChartSeries series={...}>` is the escape hatch for a
 
 | What to use | When |
 |---|---|
-| `<ChartCandles up down wickWidth bodyRatio>` | OHLC as candles |
-| `<ChartLine color width pointRadius coordinates derive deriveKey>` | points as a line, indicators included |
+| `<ChartCandles style>` | OHLC as candles — `style` is `candleSeries(style)`'s `{ up, down, wickWidth, bodyRatio }` |
+| `<ChartLine style coordinates derive deriveKey input>` | points as a line, indicators included — `style` is `lineSeries(style)`'s `{ line: { color, width, dashArray }, point: { radius, color } }` |
 | `<ChartSeries series={...}>` | when you wrote the drawing yourself |
 
 Things that aren't series have components too. **They mount in two different

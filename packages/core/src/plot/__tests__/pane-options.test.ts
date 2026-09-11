@@ -14,10 +14,33 @@ describe("settleOptions", () => {
     expect(settings.flex).toBe(PANE_OPTION_DEFAULTS.flex);
     expect(settings.minHeight).toBe(PANE_OPTION_DEFAULTS.minHeight);
     expect(settings.valuePadding).toBe(PANE_OPTION_DEFAULTS.valuePadding);
-    expect(settings.autoScale).toBe(true);
-    expect(settings.invert).toBe(false);
+    expect(settings.autoScale).toBe(PANE_OPTION_DEFAULTS.autoScale);
+    expect(settings.invert).toBe(PANE_OPTION_DEFAULTS.invert);
     expect(settings.stateKey).toBeNull();
     expect(settings.axis).toEqual({});
+  });
+});
+
+describe("PANE_OPTION_DEFAULTS", () => {
+  it("should carry every option a wrapper has to put back when a prop disappears", () => {
+    // A React prop that is removed reverts to the default. The wrapper reads
+    // the default from here rather than copying the literal, so the two can't
+    // drift — which is why the two booleans live in this set too.
+    expect(PANE_OPTION_DEFAULTS).toEqual({
+      flex: 1,
+      minHeight: 40,
+      valuePadding: 0.1,
+      autoScale: true,
+      invert: false,
+    });
+  });
+});
+
+describe("settleOptions — the booleans", () => {
+  it("should keep an explicit false / true rather than the default", () => {
+    const settings = settleOptions({ autoScale: false, invert: true });
+    expect(settings.autoScale).toBe(false);
+    expect(settings.invert).toBe(true);
   });
 });
 

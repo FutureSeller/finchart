@@ -51,6 +51,8 @@ export const PANE_OPTION_DEFAULTS = {
   flex: 1,
   minHeight: 40,
   valuePadding: 0.1,
+  autoScale: true,
+  invert: false,
 } as const;
 
 /**
@@ -109,11 +111,11 @@ export function settleOptions(options: PaneOptions): PaneSettings {
   checkPaneNumbers(options);
   return {
     valuePadding: options.valuePadding ?? PANE_OPTION_DEFAULTS.valuePadding,
-    autoScale: options.autoScale ?? true,
+    autoScale: options.autoScale ?? PANE_OPTION_DEFAULTS.autoScale,
     flex: options.flex ?? PANE_OPTION_DEFAULTS.flex,
     minHeight: options.minHeight ?? PANE_OPTION_DEFAULTS.minHeight,
     axis: options.axis ?? {},
-    invert: options.invert ?? false,
+    invert: options.invert ?? PANE_OPTION_DEFAULTS.invert,
     stateKey: options.stateKey ?? null,
   };
 }

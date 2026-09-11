@@ -40,6 +40,7 @@
     "@arethetypeswrong/cli": "catalog:",
     "@finchart/core": "workspace:*",
     "@finchart/dom": "workspace:*",
+    "@finchart/indicators": "workspace:*",
     "@finchart/tsconfig": "workspace:*",
     "@size-limit/preset-small-lib": "catalog:",
     "@testing-library/dom": "^10.4.1",
