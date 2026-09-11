@@ -23,7 +23,9 @@ import {
   headDelta,
   isGap,
   lowerBoundBy,
+  mergeByX,
   mergePolicy,
+  scanSeriesData,
   tailDelta,
 } from "../data";
 import {
@@ -344,6 +346,12 @@ export interface TypedEntry<TSource extends BaseDataPoint> extends Entry {
    * (when unsure, recounting is the safe side).
    */
   updateLast(point: TSource): boolean;
+  /**
+   * A snapshot merged by x. **Returns true if the set of x values
+   * changed** — a same-x correction of a few bars leaves the bar-index
+   * mapping as it was, a gap filled or a tail extended does not.
+   */
+  upsert(points: TSource[]): boolean;
   /**
    * The drawn points. Where an indicator's input lives.
    *
@@ -1202,6 +1210,98 @@ function entryOf<
       // change even when the last source x stayed put. The result is
       // already in hand, so comparing settles it — one O(n) pass is
       // cheaper than a full sort at O(N log N).
+      return xValuesDiffer(previousPoints, points, coordinates);
+    },
+
+    upsert: (incoming) => {
+      const own = owned(origin);
+      const door = "upsert(points)";
+      requireDataArray(incoming, door);
+      if (incoming.length === 0) return false;
+      requireDataPoint(incoming[0], 0, door);
+      const sourceXOf = (point: TSource): number =>
+        own.sourceX ? own.sourceX(coordinates, point) : point.x;
+
+      /**
+       * **The past comes in through one door.** An x before the first
+       * point held would be a prepend by another name, and the history
+       * loader keeps its own cursor at the first point it delivered —
+       * it advances only on its own deliveries and cannot see a prepend
+       * it did not make, so a page it fetches next would land behind a
+       * first point it never learned about and be refused. Refusing here
+       * keeps that cursor true.
+       */
+      const from = sourceXOf(incoming[0]);
+      requireFiniteX(from, 0, door);
+      // A derivation's retained source was never validated for shape —
+      // it may hold whatever the derivation chose to skip — so the one
+      // point read here is checked before it is read.
+      if (source.length > 0) requireDataPoint(source[0], 0, door);
+      if (source.length > 0 && from < sourceXOf(source[0])) {
+        throw new DataError(
+          `${door} reaches before the first point held (x=${sourceXOf(source[0])}, got ${describe(from)}) — the past comes in through prepend`,
+        );
+      }
+
+      if (own.identity) {
+        const previous = points;
+        const getX = (point: TPoint): number => coordinates.getX(point);
+        const start = lowerBoundBy(previous, from, getX);
+        if (manager.merge !== undefined) {
+          manager.merge(incoming as unknown as TPoint[]);
+        } else {
+          /**
+           * **A manager without the door must accept exactly what one with
+           * it accepts.** `setData` validates the merged array, and a
+           * point that is whitespace inside a whole array is a broken
+           * endpoint of a chunk — so the chunk is walked as a chunk first,
+           * seeded like `append`'s, and only then handed over merged.
+           */
+          scanSeriesData(
+            incoming as unknown as TPoint[],
+            coordinates,
+            null,
+            start > 0 ? { lastX: getX(previous[start - 1]) } : undefined,
+            door,
+          );
+          manager.setData(mergeByX(previous, incoming as unknown as TPoint[], getX).points);
+        }
+        points = manager.read();
+        source = points as unknown as TSource[];
+        // Only what lies from `start` on can have moved: everything before
+        // it is the same objects in the same order.
+        const moved = xValuesDiffer(previous, points, coordinates, start, start);
+        if (moved) xsOf = null;
+        else if (xsOf === previous) xsOf = points;
+        return moved;
+      }
+
+      /**
+       * **A derivation's source is not proven sorted** — `load` validates
+       * what it draws, not what it was handed, and a derivation may sort
+       * or drop what it reads. A merge needs order on both sides, so both
+       * are walked here, whole, before anything is placed: an x that is
+       * not finite or not in order has no place to merge into.
+       */
+      const assertSorted = (list: readonly TSource[], what: string): void => {
+        let last = Number.NEGATIVE_INFINITY;
+        for (let i = 0; i < list.length; i++) {
+          requireDataPoint(list[i], i, door);
+          const x = sourceXOf(list[i]);
+          requireFiniteX(x, i, door);
+          if (!continuesAfter(x, last, false)) {
+            throw new DataError(
+              `${door}: ${what} is not sorted by x at index ${i} (${describe(x)} after ${last}), so there is no place to merge into`,
+            );
+          }
+          last = x;
+        }
+      };
+      assertSorted(source, "this derivation's source");
+      assertSorted(incoming, "the chunk");
+
+      const previousPoints = points;
+      load(mergeByX(source, incoming, sourceXOf).points);
       return xValuesDiffer(previousPoints, points, coordinates);
     },
 

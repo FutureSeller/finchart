@@ -97,6 +97,8 @@ export function scanSeriesData<T extends BaseDataPoint>(
   coordinates: CoordinateAccessor<T>,
   report: ((issue: SeriesDataIssue) => void) | null,
   seam?: SeamContext,
+  /** The door the chunk came through, for the error to name. */
+  label = "data",
 ): boolean {
   const watchGaps = coordinates.gapless !== true;
   const uniqueX = coordinates.uniqueX === true;
@@ -113,7 +115,7 @@ export function scanSeriesData<T extends BaseDataPoint>(
     const point = points[i];
 
     // The per-point rules — the same body the tick path runs on one point.
-    const x = checkPoint(point, i, coordinates, "data", report, i === 0 || i === last);
+    const x = checkPoint(point, i, coordinates, label, report, i === 0 || i === last);
     // A broken shape (collect mode) skips the reads that would blow up on it.
     if (x === null) continue;
     const finiteX = Number.isFinite(x);
@@ -152,11 +154,11 @@ export function scanSeriesData<T extends BaseDataPoint>(
           i,
           previousIndex === -1
             ? repeated
-              ? `data must hold one point per x, but index ${i} repeats the existing tail x=${previousX}`
-              : `data must continue after the existing tail x=${previousX}, but index ${i} is ${x}`
+              ? `${label} must hold one point per x, but index ${i} repeats the existing tail x=${previousX}`
+              : `${label} must continue after the existing tail x=${previousX}, but index ${i} is ${x}`
             : repeated
-              ? `data must hold one point per x, but index ${i} repeats index ${previousIndex} (${x})`
-              : `data must be sorted by x, but index ${i} (${x}) comes before index ${previousIndex} (${previousX})`,
+              ? `${label} must hold one point per x, but index ${i} repeats index ${previousIndex} (${x})`
+              : `${label} must be sorted by x, but index ${i} (${x}) comes before index ${previousIndex} (${previousX})`,
         );
       }
       previousX = x;

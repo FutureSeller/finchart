@@ -334,6 +334,15 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
    */
   adoptHeadRetainingTail?(head: T[], retainedFrom: number): void;
   /**
+   * The reconciliation door, optional the way the landing doors are: a
+   * manager without it is handed the merged array through `setData`,
+   * which is correct and costs a full validation. With it, `points` are
+   * merged by x — every x they name is theirs, every x they do not name
+   * keeps what it had — and only the incoming chunk and its seam are
+   * checked. `points` must be sorted the way `append`'s are.
+   */
+  merge?(points: T[]): void;
+  /**
    * @deprecated Legacy caller-owned landing door. Its arguments are still
    * `next` and `grownBy`; implementations may adopt `next` wholesale. New
    * entry paths never use it because that shape cannot prove a retained body

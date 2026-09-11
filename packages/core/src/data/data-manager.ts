@@ -4,6 +4,7 @@ import { ContractError,
   requirePositive,
 } from "../primitives";
 import { isGap } from "./accessors";
+import { mergeByX } from "./merge-by-x";
 import { lowerBoundBy, upperBoundBy } from "./search";
 import type { SeamContext } from "./validate";
 import { checkPoint, continuesAfter, scanSeriesData } from "./validate";
@@ -210,6 +211,33 @@ export class SimpleDataManager<
     this.afterIncrement();
   }
 
+  /**
+   * Merges by x — see the `DataManager` contract. The incoming chunk is
+   * walked the way `append`'s is, seeded with the held point just before
+   * where the chunk begins; that seed is strictly below the chunk's first x
+   * by construction (a lower bound), so the seam can only be asked about a
+   * gap, never about order. The held array is sorted by every door it came
+   * through, so nothing of it is re-checked.
+   */
+  merge(points: T[]): void {
+    if (points.length === 0) return;
+
+    // The first point is read before the chunk is walked, because where
+    // the chunk begins decides the seam it is walked against.
+    const from = checkPoint(points[0], 0, this.coordinates, "upsert(points)", null, true);
+    const start = lowerBoundBy(this.data, from, (point) => this.coordinates.getX(point));
+    const chunkHasGap = this.assertChunkSorted(
+      points,
+      start > 0 ? { lastX: this.coordinates.getX(this.data[start - 1]) } : undefined,
+      "upsert(points)",
+    );
+
+    this.data = mergeByX(this.data, points, (point) => this.coordinates.getX(point)).points;
+    // Conservative: a gap the chunk opened is known, one it closed is not.
+    if (this.gapFree) this.gapFree = !chunkHasGap;
+    this.afterIncrement();
+  }
+
   replaceLast(point: T): void {
     if (this.data.length === 0) {
       this.append([point]);
@@ -304,8 +332,8 @@ export class SimpleDataManager<
    * The return value is "does this chunk have a gap." For a `gapless`
    * accessor, `getY` isn't read at all.
    */
-  private assertChunkSorted(points: readonly T[], seam?: SeamContext): boolean {
-    return scanSeriesData(points, this.coordinates, null, seam);
+  private assertChunkSorted(points: readonly T[], seam?: SeamContext, label?: string): boolean {
+    return scanSeriesData(points, this.coordinates, null, seam, label);
   }
 
   /**

@@ -33,6 +33,7 @@ export {
 } from "./accessors";
 
 export { lowerBoundBy, upperBoundBy } from "./search";
+export { mergeByX } from "./merge-by-x";
 export { OhlcAggregation } from "./aggregation";
 export { barAggregator } from "./aggregate";
 export type { Trade } from "./aggregate";
