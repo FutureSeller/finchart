@@ -7,18 +7,20 @@ import type { AxisSlices } from "./layout";
  * What this consumer **actually uses** from a pane — reading the value axis
  * and re-fitting the value range. It doesn't ask for the whole `Pane` for
  * the same reason as `capabilities.ts`: what an extension needs is the few
- * pieces it uses, not the entire type. With only two requirements, a
+ * pieces it uses, not the entire type. With so few requirements, a
  * standalone test can stand on an object literal.
  */
 export interface ValueAxisTarget {
   readonly yScale: Scale;
   /** Sets the value range directly. **Turns off `autoScale`.** */
   setValueDomain(min: number, max: number): void;
+  /** Back to following the data — a double-click on the axis strip. */
+  resetValueAxis(): void;
 }
 
 /**
  * What axis dragging borrows from Plot. **This much is enough for the
- * consumer to stand alone** — fake these four without a `Plot` and you have
+ * consumer to stand alone** — fake these five without a `Plot` and you have
  * a standalone test.
  */
 export interface AxisDragTarget {
@@ -151,6 +153,20 @@ export function axisDragConsumer(target: AxisDragTarget): InputConsumer {
 
   return {
     handle: (event) => {
+      // A double-click on a y-axis strip hands that pane's axis back to the
+      // data — the undo for a drag that pulled it away. Consumed, so neither
+      // the public `dblclick` nor the whole-chart reset sees it: an axis
+      // gesture stays on its axis. No slices (axisDrag off) means no gesture.
+      if (event.type === "dblclick") {
+        const slices = target.slices();
+        if (!slices || !inside(slices.y, event.point)) return false;
+        const pane = target.paneAt(event.point.y);
+        if (!pane) return false;
+        pane.resetValueAxis();
+        target.requestRender();
+        return true;
+      }
+
       if (event.type === "pointerdown") {
         const grabbed = grab(event.point);
         // A touch can land without a preceding move — sync the indicator at the moment of grab too.

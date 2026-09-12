@@ -106,6 +106,11 @@ export class XViewport {
    * Asks "is there a range to fit to", not "is data empty" — the chart has
    * no way to answer the latter once data has been handed off to a
    * registration.
+   *
+   * A window restored before the data (`restore`, `setVisibleRange`) is
+   * applied in place of the fit — if it touches the data's x range at all
+   * (an endpoint in common counts). One that misses the data entirely is
+   * dropped and the ordinary fit runs.
    */
   fit(): void {
     const range = this.deps.dataRange();
@@ -120,8 +125,14 @@ export class XViewport {
     if (this.pending) {
       const { min, max } = this.pending;
       this.pending = null;
-      this.setDomain(this.deps.x.toDomain(min), this.deps.x.toDomain(max));
-      return;
+      // A window that does not touch the data at all — a state saved on
+      // another symbol's history — would show an empty screen. Touching at
+      // an endpoint counts; a window with no point inside it (sparse data)
+      // is still the caller's window. Otherwise the ordinary fit below.
+      if (max >= range.min && min <= range.max) {
+        this.setDomain(this.deps.x.toDomain(min), this.deps.x.toDomain(max));
+        return;
+      }
     }
 
     // The domain is the mapping's own space — for bar index, x becomes the

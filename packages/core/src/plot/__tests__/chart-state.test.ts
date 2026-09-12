@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";
-import { barIndexX } from "../../scale";
+import { barIndexX, LinearScale } from "../../scale";
+import { manualScheduler } from "../../render";
 import { candleSeries, lineSeries } from "../../series";
 import { testBrowserDeps, testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import type { ChartState } from "../state";
@@ -346,5 +347,266 @@ describe("setValueDomain", () => {
       autoScale: false,
       valueDomain: { min: 0, max: 100 },
     });
+  });
+});
+
+/** The thrown value itself — `toThrow(error)` compares messages, not identity. */
+function caught(run: () => void): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+describe("fitDomains and the value axis mode", () => {
+  it("an explicit fitDomains hands every pane back to autoScale — the axis follows the next bar", () => {
+    const { plot, handle, yScale } = mounted();
+    const second = plot.addPane();
+    second.setValueDomain(0, 100);
+    plot.mainPane.setValueDomain(0, 100);
+    expect(plot.mainPane.autoScale).toBe(false);
+
+    plot.fitDomains();
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(second.autoScale).toBe(true);
+
+    // The axis follows what is visible again: bring the new bar into view and the range covers it.
+    handle.append([{ x: 150, y: 999 }]);
+    plot.setVisibleRange(0, 150);
+    plot.render();
+    expect(yScale.getDomain()[1]).toBeGreaterThanOrEqual(999);
+  });
+
+  it("an explicit fitDomains still fits x — the window you scrolled to is gone", () => {
+    const { plot } = mounted();
+    const whole = plot.getState().xDomain;
+    plot.setVisibleRange(50, 60);
+    expect(plot.getState().xDomain).not.toEqual(whole);
+    plot.fitDomains();
+    expect(plot.getState().xDomain).toEqual(whole);
+  });
+
+  it("rings stateChange once for the whole fit, and a listener that removes a pane does not hide the next one", () => {
+    const { plot, seen } = mounted();
+    const whole = plot.getState().xDomain;
+    const a = plot.addPane();
+    const b = plot.addPane();
+    for (const pane of [plot.mainPane, a, b]) pane.setValueDomain(0, 100);
+    // x narrowed too — the x fit inside must not ring on its own, ahead of the mode flips.
+    plot.setVisibleRange(50, 60);
+    const before = seen.length;
+    // A mirror that, on seeing `a` follow the data again, drops the pane — the stack is `[main, a, b]`.
+    plot.on("stateChange", () => {
+      if (a.autoScale && plot.panes.includes(a)) plot.removePane(a);
+    });
+
+    plot.fitDomains();
+
+    expect(plot.panes).toEqual([plot.mainPane, b]);
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(b.autoScale).toBe(true);
+    // One for the fit (x and three panes together); the removal rings its own afterwards.
+    expect(seen.length - before).toBe(2);
+    const fit = seen[before];
+    expect(fit?.xDomain).toEqual(whole);
+    expect(fit?.panes.map((pane) => pane.autoScale)).toEqual([true, true, true]);
+  });
+
+  it("a listener that throws on the fit's notification does not undo the fit — every pane is reset and the error is the listener's own", () => {
+    const { plot } = mounted();
+    const a = plot.addPane();
+    for (const pane of [plot.mainPane, a]) pane.setValueDomain(0, 100);
+    plot.setVisibleRange(50, 60);
+    const boom = new Error("mirror failed");
+    plot.on("stateChange", () => {
+      throw boom;
+    });
+
+    expect(caught(() => plot.fitDomains())).toBe(boom);
+
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(a.autoScale).toBe(true);
+    expect(plot.getState().xDomain).not.toEqual({ min: 50, max: 60 });
+  });
+
+  it("a listener that throws mid-fit (xDomainChange) does not stop it — y is fitted and the panes reset, the error is still its own", () => {
+    // A manual scheduler: nothing renders on its own, so what the fit did is all there is.
+    const { deps, yScale } = testBrowserDepsWithScales({ createScheduler: manualScheduler() });
+    const { plot } = mountPlot({ deps, series: lineSeries(), data });
+    const whole = plot.getState().xDomain;
+    const a = plot.addPane();
+    // A manual range nowhere near the data: only the fit itself can move it before the next frame.
+    for (const pane of [plot.mainPane, a]) pane.setValueDomain(1000, 2000);
+    plot.setVisibleRange(50, 60);
+    const boom = new Error("x mirror failed");
+    plot.on("xDomainChange", () => {
+      throw boom;
+    });
+
+    expect(caught(() => plot.fitDomains())).toBe(boom);
+
+    expect(plot.getState().xDomain).toEqual(whole);
+    // Before any render — the y fit ran despite the x listener.
+    expect(yScale.getDomain()[1]).toBeLessThan(1000);
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(a.autoScale).toBe(true);
+    plot.destroy();
+  });
+
+  it("every failure along the way comes out together, in order, after the one notification", () => {
+    const { plot } = mounted();
+    const a = plot.addPane();
+    for (const pane of [plot.mainPane, a]) pane.setValueDomain(0, 100);
+    plot.setVisibleRange(50, 60);
+    const xBoom = new Error("x");
+    const paneBoom = new Error("pane");
+    const stateBoom = new Error("state");
+    let notified = 0;
+    plot.on("xDomainChange", () => {
+      throw xBoom;
+    });
+    a.subscribe((change) => {
+      if (change.state) throw paneBoom;
+    });
+    plot.on("stateChange", () => {
+      notified += 1;
+      throw stateBoom;
+    });
+
+    const error = caught(() => plot.fitDomains());
+
+    expect(error).toBeInstanceOf(AggregateError);
+    const errors = error instanceof AggregateError ? error.errors : [];
+    expect(errors).toHaveLength(3);
+    expect(errors[0]).toBe(xBoom);
+    expect(errors[1]).toBe(paneBoom);
+    expect(errors[2]).toBe(stateBoom);
+    expect(notified).toBe(1);
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(a.autoScale).toBe(true);
+  });
+
+  it("a pane subscriber that throws on its own reset does not stop the next pane's", () => {
+    const { plot } = mounted();
+    const a = plot.addPane();
+    for (const pane of [plot.mainPane, a]) pane.setValueDomain(0, 100);
+    const boom = new Error("pane mirror failed");
+    plot.mainPane.subscribe((change) => {
+      if (change.state) throw boom;
+    });
+
+    expect(caught(() => plot.fitDomains())).toBe(boom);
+
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(a.autoScale).toBe(true);
+  });
+
+  /** A value scale whose `setDomain` runs a hook once armed — the y fit's own collaborator, misbehaving. */
+  class TrapScale extends LinearScale {
+    hook: (() => void) | null = null;
+    override setDomain(min: number, max: number): void {
+      const hook = this.hook;
+      this.hook = null;
+      hook?.();
+      super.setDomain(min, max);
+    }
+  }
+
+  /** Three populated panes, all manual and far from the data, on a manual scheduler so only the fit can move them. */
+  function threeManual() {
+    const { deps } = testBrowserDepsWithScales({ createScheduler: manualScheduler() });
+    const { plot } = mountPlot({ deps, series: lineSeries(), data });
+    scheduled.push(plot);
+    const a = plot.addPane();
+    a.addSeries({ series: lineSeries(), data });
+    const b = plot.addPane();
+    b.addSeries({ series: lineSeries(), data });
+    for (const pane of [plot.mainPane, a, b]) pane.setValueDomain(1000, 2000);
+    return { plot, a, b };
+  }
+  afterEach(() => {
+    for (const plot of scheduled.splice(0)) plot.destroy();
+  });
+  const scheduled: { destroy(): void }[] = [];
+  const fitted = (pane: { yScale: { getDomain(): [number, number] } }) => pane.yScale.getDomain()[1] < 1000;
+
+  it("a y fit that throws does not stop the other panes' fits — nor the resets, and the error is its own", () => {
+    const { plot, a, b } = threeManual();
+    const trap = new TrapScale();
+    a.setYScale(trap);
+    const boom = new Error("a's scale refused");
+    trap.hook = () => {
+      throw boom;
+    };
+
+    expect(caught(() => plot.fitDomains())).toBe(boom);
+
+    expect(fitted(plot.mainPane)).toBe(true);
+    expect(fitted(b)).toBe(true);
+    expect([plot.mainPane.autoScale, a.autoScale, b.autoScale]).toEqual([true, true, true]);
+  });
+
+  it("a y fit that removes a later pane — that pane is neither fitted nor reset, the rest are", () => {
+    const { plot, a, b } = threeManual();
+    const trap = new TrapScale();
+    a.setYScale(trap);
+    trap.hook = () => plot.removePane(b);
+
+    plot.fitDomains();
+
+    expect(plot.panes).toEqual([plot.mainPane, a]);
+    expect(fitted(plot.mainPane)).toBe(true);
+    expect(fitted(a)).toBe(true);
+    expect(b.yScale.getDomain()).toEqual([1000, 2000]);
+    expect(b.autoScale).toBe(false);
+    expect([plot.mainPane.autoScale, a.autoScale]).toEqual([true, true]);
+  });
+
+  it("a pane subscriber that removes panes during the reset — survivors reset, the removed ones are left alone", () => {
+    const { plot } = mounted();
+    const a = plot.addPane();
+    const b = plot.addPane();
+    const c = plot.addPane();
+    for (const pane of [plot.mainPane, a, b, c]) pane.setValueDomain(0, 100);
+    // On its own reset, `a` takes itself and `c` off the chart — `b` must still be reached, `c` must not.
+    a.subscribe((change) => {
+      if (change.state && a.autoScale) {
+        plot.removePane(a);
+        plot.removePane(c);
+      }
+    });
+
+    plot.fitDomains();
+
+    expect(plot.panes).toEqual([plot.mainPane, b]);
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(b.autoScale).toBe(true);
+    expect(c.autoScale).toBe(false);
+  });
+
+  it("the fit data changes take keeps a manual mode — setData refits the range, not the mode", () => {
+    const { plot, handle, yScale } = mounted();
+    const second = plot.addPane();
+    second.setValueDomain(0, 100);
+    plot.mainPane.setValueDomain(0, 100);
+
+    handle.setData([
+      { x: 0, y: 500 },
+      { x: 50, y: 600 },
+    ]);
+    expect(yScale.getDomain()).not.toEqual([0, 100]);
+    expect(plot.mainPane.autoScale).toBe(false);
+    expect(second.autoScale).toBe(false);
+    expect(second.yScale.getDomain()).toEqual([0, 100]);
+  });
+
+  it("the first data keeps a manual mode set before it", () => {
+    const deps = testBrowserDeps();
+    const { plot } = mountPlot({ deps, series: lineSeries() });
+    plot.mainPane.setValueDomain(0, 100);
+    plot.mainPane.addSeries({ series: lineSeries(), data });
+    expect(plot.mainPane.autoScale).toBe(false);
   });
 });

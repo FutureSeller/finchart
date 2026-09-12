@@ -30,3 +30,4 @@ export { legend } from "./legend";
 export type { LegendOptions, LegendPane } from "./legend";
 export { tooltip } from "./tooltip";
 export type { TooltipOptions } from "./tooltip";
+export type { RowFormat } from "./sample-text";

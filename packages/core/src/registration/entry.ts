@@ -41,7 +41,7 @@ import {
 } from "../primitives";
 import type { StyleReader, DrawTarget } from "../render";
 import type { Scale, XMapping } from "../scale";
-import type { Series } from "../series";
+import type { Series, SeriesRow } from "../series";
 
 /** What every branch takes. The point type belongs to the **drawn point**. */
 interface RegistrationBase<TPoint extends BaseDataPoint> {
@@ -280,6 +280,8 @@ export interface Entry {
     max: number | null;
     /** Which index the chosen point sits at in the registration's own points (the derived output, under a transform). */
     index: number;
+    /** What the series registered now says about that point (`Series.describe`) — absent when it says nothing. */
+    rows?: readonly SeriesRow[];
   } | null;
 
   /**
@@ -1078,12 +1080,15 @@ function entryOf<
        * only guard against `null`. Making the declared type true is the right answer.
        */
       const y = coordinates.getY(best);
+      // The series registered *now* — `swapSeries` replaces it — says what rows it has.
+      const rows = series.describe?.(best);
       return {
         x: coordinates.getX(best),
         value: isGap(y) ? null : y,
         min: range?.min ?? null,
         max: range?.max ?? null,
         index,
+        ...(rows !== undefined && { rows }),
       };
     },
 

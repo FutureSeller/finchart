@@ -252,6 +252,7 @@ export type {
   PointStyle,
   Series,
   SeriesContext,
+  SeriesRow,
 } from "./series";
 
 // ---- extensions: built-in extensions on top of the stage ----
@@ -285,6 +286,8 @@ export type {
   PaneMaximizeApi,
   PaneMaximizeOptions,
   PriceLineOptions,
+  PriceLineDecoration,
+  MarkersDecoration,
   SpanOptions,
   TimeCursor,
   WatermarkOptions,

@@ -149,8 +149,9 @@ Switch a plugin off and on again to change one option and an extension that
 holds state — the drawing tools, with the lines you drew — loses all of it.
 Put a reconfigure method of your own on the API that `use` returns and the
 problem never arises — `applyOptions` on `crosshair`, `tooltip` and `legend`
-is that shape. Core forces no name — the extension's author picks one that
-fits their API.
+is that shape, and so are `setOptions`/`applyOptions` on what `priceLine()`
+returns and `setItems` on what `markers()` returns. Core forces no name — the
+extension's author picks one that fits their API.
 
 **Not that every extension should.** The indicators deliberately went the
 other way: what `attachRsi` returns is nothing but `{ node, pane }` plus

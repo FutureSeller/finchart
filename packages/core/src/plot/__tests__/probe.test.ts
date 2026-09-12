@@ -180,3 +180,73 @@ describe("Pane.probe — index", () => {
     expect(pane.probe(1000)[0].index).toBe(line.length - 1);
   });
 });
+
+describe("Pane.probe — rows a series describes for itself", () => {
+  const candles: OHLC[] = [
+    { x: 0, open: 100, high: 110, low: 95, close: 105, volume: 1200 },
+    { x: 1, open: 105, high: 112, low: 101, close: 102 },
+  ];
+
+  it("carries O/H/L/C and V for a candle, V only when the bar has a volume", () => {
+    const pane = mounted();
+    pane.addSeries({ series: candleSeries(), data: candles, name: "price" });
+    const [first] = pane.probe(0);
+    expect(first.rows).toEqual([
+      { label: "O", value: 100 },
+      { label: "H", value: 110 },
+      { label: "L", value: 95 },
+      { label: "C", value: 105 },
+      { label: "V", value: 1200 },
+    ]);
+    const [second] = pane.probe(1);
+    expect(second.rows?.map((row) => row.label)).toEqual(["O", "H", "L", "C"]);
+  });
+
+  it("carries no rows for a series that does not describe itself", () => {
+    const pane = mounted();
+    pane.addSeries({ series: lineSeries(), data: line, name: "BTC" });
+    const [sample] = pane.probe(5);
+    expect(sample.rows).toBeUndefined();
+  });
+
+  it("asks the series that is registered now — after swapSeries, the new one", () => {
+    const pane = mounted();
+    const handle = pane.addSeries({ series: lineSeries(), data: line, name: "BTC" });
+    expect(pane.probe(5)[0].rows).toBeUndefined();
+    // A spread would drop the prototype's draw — attach the description to a real series.
+    handle.swapSeries(
+      Object.assign(lineSeries(), {
+        describe: (point: LineDataPoint) => [{ label: "y²", value: point.y === null ? null : point.y * point.y }],
+      }),
+    );
+    expect(pane.probe(5)[0].rows).toEqual([{ label: "y²", value: 14400 }]);
+  });
+
+  it("describes the output point of a derived registration, not its source", () => {
+    const pane = mounted();
+    pane.addSeries({
+      series: candleSeries(),
+      data: line,
+      derive: (source: DataView<LineDataPoint>) =>
+        source.map((p) => ({ x: p.x, open: p.y ?? 0, high: (p.y ?? 0) + 1, low: (p.y ?? 0) - 1, close: p.y ?? 0 })),
+      name: "as candles",
+    });
+    const [sample] = pane.probe(5);
+    expect(sample.rows?.map((row) => `${row.label}${row.value}`)).toEqual(["O120", "H121", "L119", "C120"]);
+  });
+});
+
+describe("candleSeries().describe", () => {
+  it("names the four prices and the volume", () => {
+    const series = candleSeries();
+    if (!series.describe) throw new Error("a candle describes itself");
+    expect(series.describe({ x: 0, open: 1, high: 2, low: 0.5, close: 1.5, volume: 7 })).toEqual([
+      { label: "O", value: 1 },
+      { label: "H", value: 2 },
+      { label: "L", value: 0.5 },
+      { label: "C", value: 1.5 },
+      { label: "V", value: 7 },
+    ]);
+    expect(series.describe({ x: 0, open: 1, high: 2, low: 0.5, close: 1.5, volume: null })).toHaveLength(4);
+  });
+});

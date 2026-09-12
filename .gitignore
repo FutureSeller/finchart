@@ -43,6 +43,7 @@ e2e/playwright-report/
 
 # vitepress
 **/.vitepress/cache/
+**/.vitepress/.temp/
 
 # typedoc — apps/docs/typedoc.json regenerates this on every build and dev script
 apps/docs/api/

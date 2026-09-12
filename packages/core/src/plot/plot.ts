@@ -550,7 +550,7 @@ export class Plot
     if (change.state) this.emitStateChange();
 
     if (change.refit || !this.xViewport.fitted) {
-      this.fitDomains();
+      this.refit();
       return;
     }
 
@@ -657,15 +657,18 @@ export class Plot
   }
 
   /**
-   * The resolved x notation — `config.axis.x.format`, or a rounded
-   * integer if none is given. x belongs to the chart, so this lives here
+   * The resolved x notation — `config.axis.x.format`, else what the tick
+   * strategy offers (`timeTicks` labels in its zone), else a rounded
+   * integer. x belongs to the chart, so this lives here.
    * The decoration context and the `FormatSource` default that
    * tooltips fall back to both read this. It's an arrow function because it
    * gets carried as a function into the context.
    */
   formatX = (value: number): string => {
-    const format = this.config.axis.x.format;
-    return format ? format(value) : DEFAULT_X_FORMAT(value);
+    // The consumer's notation, then what the tick strategy offers (a time
+    // axis knows its zone and language already), then the rounded number.
+    const { format, ticks } = this.config.axis.x;
+    return format ? format(value) : ticks?.format ? ticks.format(value) : DEFAULT_X_FORMAT(value);
   };
 
   /**
@@ -752,12 +755,70 @@ export class Plot
     this.scheduleRender();
   }
 
-  /** Refits both axes so all data currently held is visible. */
+  /**
+   * Refits both axes so all data currently held is visible, and hands every
+   * pane's value axis back to `autoScale` — "make everything visible" is a
+   * request to see the data, and an axis that then keeps following it is
+   * what the eye expects (the double-click reset lands here). To move x
+   * while keeping a manual value range, use `scrollToRealTime` or
+   * `setVisibleRange` instead.
+   *
+   * One operation, one `stateChange`: the notification rings once, after x
+   * and every pane have moved, never with a half-reset stack. A listener
+   * that throws part-way (`xDomainChange`, a pane subscriber, `stateChange`
+   * itself) does not stop the fit — it completes, and what was thrown comes
+   * out of this call at the end: one error as itself, several as an
+   * `AggregateError`.
+   */
   fitDomains(): void {
+    // One `stateChange` for the whole operation — the x fit rings on its own
+    // otherwise, and a mirror must not see the new window with a
+    // half-flipped stack — and a snapshot of the list: a listener that
+    // removes a pane part-way must not make the loop skip a survivor.
+    //
+    // Listeners ring synchronously in here too (`xDomainChange`, a pane's
+    // subscribers), and one that throws must not stop the fit part-way — a
+    // half-reset stack is worse than a late error. Each step keeps its
+    // failure and the lot is thrown at the end, one alone as itself (the
+    // rule `applyState` follows).
+    const failures: unknown[] = [];
+    const step = (run: () => void): void => {
+      try {
+        run();
+      } catch (error) {
+        failures.push(error);
+      }
+    };
+    step(() =>
+      this.coalesceState(() => {
+        // The same steps as `refit()`, each on its own: an x listener that
+        // throws must not take the y fits down with it.
+        step(() => this.xViewport.fit());
+        const panes = [...this.paneStack.list];
+        for (const pane of panes) {
+          if (!this.paneStack.list.includes(pane)) continue;
+          step(() => pane.fitValueDomain());
+        }
+        for (const pane of panes) {
+          if (!this.paneStack.list.includes(pane)) continue;
+          step(() => pane.applyOptions({ autoScale: true }));
+        }
+        this.scheduleRender();
+      }),
+    );
+    if (failures.length > 0) throw throwable(failures, "fitDomains failed");
+  }
+
+  /**
+   * The fit data changes take — the first data, an imperative `setData` —
+   * which refits both axes but leaves every pane's mode as it was: a data
+   * swap must not release another pane's manual range. Only the public
+   * `fitDomains()` changes modes.
+   */
+  private refit(): void {
     this.xViewport.fit();
-    // An explicit refit also refits a manual value range — "make everything
-    // visible" is the request. This is where it diverges from the path data
-    // changes take (fitValueDomain).
+    // A refit also refits a manual value range — this is where it diverges
+    // from the path incremental data takes (fitValueDomain on render).
     for (const pane of this.paneStack.list) {
       pane.fitValueDomain();
     }
@@ -1152,10 +1213,11 @@ export class Plot
    * pieces at once.
    *
    * The goal is to keep whatever's mirroring state (URL persistence, React)
-   * from seeing an intermediate state. There are two consumers: `applyState`
-   * from outside, and divider drag, which rewrites flex per pane. The
-   * latter runs on every pointermove, so firing once per pane would have the
-   * listener redo that many times' worth of work per frame.
+   * from seeing an intermediate state. Three consumers: `applyState` from
+   * outside, divider drag, which rewrites flex per pane, and `fitDomains`,
+   * which moves x and every pane's mode in one go. The drag runs on every
+   * pointermove, so firing once per pane would have the listener redo that
+   * many times' worth of work per frame.
    */
   private coalesceState(run: () => void): void {
     if (this.applyingState) {
@@ -1167,7 +1229,7 @@ export class Plot
      * **The notification is inside `finally` too.**
      *
      * The emit used to sit **outside** the try/finally, so if `run()` threw
-     * partway through, the exception skipped that line. Both consumers are
+     * partway through, the exception skipped that line. The two original consumers are
      * partial-write loops — `applyState`'s `panes.forEach` and divider
      * drag's per-pane loop — so the panes already applied stay applied
      * while the mirror hears nothing at all. Not late, **never**: the next

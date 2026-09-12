@@ -47,9 +47,9 @@ interface DecorationBase {
   /** Built once per render and shared by everyone. */
   readStyle: StyleReader;
   /**
-   * The resolved x formatting — `config.axis.x.format`, or a rounded
-   * integer if there is none. The axis owns formatting; a decoration falls
-   * back to this only when it has no option of its own.
+   * The resolved x formatting — `config.axis.x.format`, else the tick
+   * strategy's own, else a rounded integer. The axis owns formatting; a
+   * decoration falls back to this only when it has no option of its own.
    */
   formatX: ValueFormat;
 }

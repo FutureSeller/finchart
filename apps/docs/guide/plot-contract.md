@@ -32,7 +32,7 @@ When you add a new method, the default must be "touches nothing".
 | `addPane(o)` / `removePane(p)` | — | — | — | redistributed | once |
 | `addDecoration(d)` / its disposer | — | — | — | — | once |
 | dragging a divider | — | — | — | redistributed | every move |
-| `fitDomains()` | — | fit | fit | — | once |
+| `fitDomains()` | — | fit | fit, and every pane is `autoScale` again | — | once |
 | `scrollToRealTime()` | — | shifts (width preserved, right edge = live) | — | — | once |
 | `applyOptions(patch)` | — | — | — | — | once |
 | `setViewport(size)` | — | — | — | resized | once |
@@ -174,6 +174,12 @@ overlay that's already been torn down.
   every render, so anything you set by hand with `pane.yScale.setDomain()` is
   overwritten on the next frame. To set it yourself, turn it off with
   `autoScale: false` — then it fits once against the whole source data, as before.
+  Two things hand it back: `pane.resetValueAxis()` (a double-click on that
+  pane's y-axis strip does this, when `axisDrag` is on) and `fitDomains()`,
+  which turns it on for every pane — "show me everything" includes following
+  it again. The fit data changes take (the first data, an imperative `setData`)
+  refits the range but leaves the mode alone. To move x while keeping a manual
+  range, `scrollToRealTime()` or `setVisibleRange()`.
 - **Nothing happens after `destroy()`.** Renders and state changes are ignored
   quietly — it doesn't throw because a late event handler calling in mid-unmount
   is the normal path.
@@ -528,8 +534,10 @@ were looking at survives a height change, and with nothing to refit it's cheap.
 
 #### Writing a tick strategy
 
-`axis.x.ticks` (or `axis.y.ticks`) takes a `TickStrategy`: one method,
-`ticks(context)`, returning `{ value, label }[]`. When a strategy is present it
+`axis.x.ticks` (or `axis.y.ticks`) takes a `TickStrategy`: one required method,
+`ticks(context)`, returning `{ value, label }[]`, and an optional `format(value)`
+— the label a decoration gives a data x in the strategy's own clock, which
+the plot reads when no `axis.x.format` is given (`timeTicks` offers one). When a strategy is present it
 owns placement, selection and labels together — the axis's own arithmetic and
 `format` go unused, and **the frame draws what the strategy returns without
 choosing among it.** `timeTicks` is the one shipped; a strategy of your own
@@ -569,7 +577,7 @@ Register a target line as a series and `valueExtent` drags y toward it,
 flattening the price.
 
 ```ts
-const offLine = pane.addDecoration(priceLine());                        // above the series
+const offLine = pane.addDecoration(priceLine({ value: 100 }));                        // above the series
 const offMark = plot.addDecoration(watermark(), { zIndex: BELOW_SERIES }); // below
 ```
 
@@ -628,7 +636,12 @@ computed** — computing them separately would put them out of step with the lab
 The defaults for the crosshair badge, the tooltip, the legend and priceLine all
 read these, so settle the axis format in one place and five surfaces are stamped
 with the same ruler. A decoration's own option (`crosshair({format})` and the
-like) remains as an override.
+like) remains as an override. Which x notation that is resolves in one order:
+the consumer's `axis.x.format`, then what the tick strategy offers —
+`timeTicks({ timeZone, locale })` labels a data x in its own zone and language,
+to the second — then the rounded number. So one `ticks={timeTicks({ timeZone
+})}` sets the clock for the axis, the crosshair badge and the tooltip header at
+once; a `format` of your own still wins.
 
 ### Order = nesting
 
@@ -750,8 +763,20 @@ plot.applyState({ xDomain });      // only the pieces you pass land — the maki
 
 - It **doesn't ring** on a data change (append, prepend, a declarative update) —
   data isn't state.
+- A pane's mode is state too: `resetValueAxis()`, a y-axis double-click and
+  `fitDomains()` ring when a pane's `autoScale` flips (not when it was already
+  on). `fitDomains()` rings **once** for the whole stack, after every pane has
+  flipped — a mirror never sees a half-reset stack. A listener that throws
+  mid-way (`xDomainChange`, a pane subscriber, `stateChange` itself) does not
+  stop the fit either: it completes, and the error comes out of `fitDomains()`
+  at the end — one alone as itself, several as an `AggregateError`.
 - `applyState({ xDomain })` may arrive before the data — it lands in place of the
-  fit, at the first-fit slot.
+  fit, at the first-fit slot, **if it touches the data's x range** (an endpoint
+  in common counts; a window between two sparse points still counts). A window
+  that misses the data entirely — a snapshot from another symbol's history —
+  is dropped and the first fit runs as usual, with no extra event. Key persisted
+  state by symbol and interval so that fallback stays rare. This is only about
+  the pre-data restore; `setVisibleRange` after data is applied as given.
 - During a drag it arrives on every pointermove. If saving is expensive, the
   listener defers it.
 - React assembles the same thing with `<ChartContainer state onStateChange>`.
@@ -810,7 +835,7 @@ const deps = browserDeps({ pointer: { kineticScroll: true, zoomSpeed: 1.2 } });
 | `pan` | `true` | drag to pan (touch included; listens on the document so it never loses the pointer) |
 | `zoom` | `true` | wheel zoom (x under the cursor pinned); two-finger pinch uses the ratio of x distances |
 | `crosshair` | `true` | hover moves the crosshair |
-| `doubleClickReset` | `true` | double-click resets to the full view (`fitDomains`) |
+| `doubleClickReset` | `true` | double-click resets to the full view (`fitDomains`, so every pane is `autoScale` again). On a y-axis strip (with `axisDrag` on) the double-click is the axis drag consumer's instead — that one pane's axis comes back, nothing else moves; that gesture stays even with `doubleClickReset: false` |
 | `kineticScroll` | `false` | it coasts on release — off by default, it gets in the way of precise work |
 | `keyboard` | `true` | toggles **only the floor gestures** (`←→` pan · `+/−` zoom) — see the section below |
 | `zoomSpeed` | `1.1` | the factor per wheel notch |
@@ -967,12 +992,14 @@ core series for you, and `<ChartSeries series={...}>` is the escape hatch for a
 
 Things that aren't series have components too. **They mount in two different
 ways** — a plugin gets only its options swapped, while a decoration is taken off
-and put back when its reference changes.
+and put back when its reference changes. `<PriceLine>` and `<Markers>` are the
+exception: each is built once per pane and handed its new props in place, so a
+value that ticks every frame moves the line, not the registration.
 
 | What to use | What it is |
 |---|---|
 | `<Crosshair vertical horizontal style badges format>` | the crosshair (plugin) |
-| `<Tooltip formatX formatValue>` · `<Legend formatValue>` | cursor value boxes (plugins) |
+| `<Tooltip formatX formatValue formatRow>` · `<Legend formatValue formatRow>` | cursor value boxes (plugins) |
 | `<PriceLine>` · `<Markers items>` · `<Watermark>` · `<Span>` | the standard decorations |
 | `<ChartData value>` | the data the series below it will see |
 

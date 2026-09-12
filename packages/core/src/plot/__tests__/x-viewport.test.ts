@@ -574,3 +574,82 @@ describe("zoom center clamp", () => {
     expect(s.changes.length).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("when a restore arrives before the data and misses it", () => {
+  /** The order for URL restoration on a different symbol — the saved window has no data under it. */
+  it("should fall back to the ordinary fit — the same window a fresh fit gives, right offset and all", () => {
+    const restored = setup({ rightOffset: 2 });
+    restored.viewport.restore({ min: 100, max: 200 });
+    restored.load([10, 20, 30]);
+    restored.viewport.fit();
+
+    const fresh = setup({ rightOffset: 2 });
+    fresh.load([10, 20, 30]);
+    fresh.viewport.fit();
+
+    expect(restored.viewport.visibleRange()).toEqual(fresh.viewport.visibleRange());
+    expect(restored.changes).toEqual(fresh.changes);
+  });
+
+  it("should do the same under bar-index coordinates", () => {
+    const restored = setup({}, "barIndex");
+    restored.viewport.restore({ min: 100, max: 200 });
+    restored.load([10, 20, 30]);
+    restored.viewport.fit();
+
+    const fresh = setup({}, "barIndex");
+    fresh.load([10, 20, 30]);
+    fresh.viewport.fit();
+
+    expect(restored.domain()).toEqual(fresh.domain());
+  });
+
+  it("should fall back for a window wholly before the data too", () => {
+    const restored = setup();
+    restored.viewport.restore({ min: -50, max: 5 });
+    restored.load([10, 20, 30]);
+    restored.viewport.fit();
+
+    const fresh = setup();
+    fresh.load([10, 20, 30]);
+    fresh.viewport.fit();
+
+    expect(restored.viewport.visibleRange()).toEqual(fresh.viewport.visibleRange());
+  });
+
+  it("should keep a window that overlaps the data, even partly", () => {
+    const s = setup();
+    s.viewport.restore({ min: 25, max: 40 });
+    s.load([10, 20, 30]);
+    s.viewport.fit();
+    expect(s.viewport.visibleRange()).toEqual({ min: 25, max: 40 });
+  });
+
+  it("should keep a window that touches the data at an endpoint — either end", () => {
+    const right = setup();
+    right.viewport.restore({ min: 30, max: 50 });
+    right.load([10, 20, 30]);
+    right.viewport.fit();
+    expect(right.viewport.visibleRange()).toEqual({ min: 30, max: 50 });
+
+    const left = setup();
+    left.viewport.restore({ min: -5, max: 10 });
+    left.load([10, 20, 30]);
+    left.viewport.fit();
+    expect(left.viewport.visibleRange()).toEqual({ min: -5, max: 10 });
+  });
+
+  it("should hold the window through empty data — only data can say whether it misses", () => {
+    const s = setup();
+    s.viewport.restore({ min: 15, max: 25 });
+    s.load([]);
+    s.viewport.fit();
+    s.load([]);
+    s.viewport.fit();
+    expect(s.changes).toHaveLength(0);
+
+    s.load([10, 20, 30]);
+    s.viewport.fit();
+    expect(s.viewport.visibleRange()).toEqual({ min: 15, max: 25 });
+  });
+});

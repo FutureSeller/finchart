@@ -1,6 +1,6 @@
 [
   {
-    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 4.3 KB gzip (4174B measured)",
+    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 4.3 KB gzip (4274B measured)",
     "path": "dist/index.mjs",
     "import": "*",
     "limit": "4.3 KB",

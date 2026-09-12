@@ -57,6 +57,8 @@ When the pointer leaves the chart (or the browser takes over a touch
 gesture), the crosshair is cleared: the `crosshair` event fires once with
 `null`, and the tooltip and legend follow it.
 
+A series that describes itself gets its own rows — a candle reads `SOXL: O 105.75 H 106.10 L 104.90 C 105.30 V 800` in the tooltip (`SOXL O …` in the legend) instead of one close. `formatValue` still formats every plain value; give `formatRow` (`(value, { label, sample }) => string`) to read a row by its label, so `V` can be a volume and not a price.
+
 ## Support matrix
 
 - **Node 18+** — where the headless path (SSR, workers, tests) runs.

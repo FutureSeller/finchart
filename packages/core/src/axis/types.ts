@@ -93,6 +93,17 @@ export interface TickStrategyContext {
  */
 export interface TickStrategy {
   ticks(context: TickStrategyContext): { value: number; label: string }[];
+  /**
+   * The label a decoration gives a data x — the crosshair badge, the
+   * tooltip header — in the same clock and language the ticks use. Takes
+   * data x (what the feed holds), not the axis domain. Optional: a strategy
+   * that does not offer one leaves the plot's own x notation in place.
+   * The plot reads it after the consumer's `axis.x.format` and before its
+   * default, so one `timeTicks({ timeZone })` sets the zone for the axis
+   * and every decoration at once. The value axis does not consult it — a
+   * y strategy's `format` is never read.
+   */
+  format?: (value: number) => string;
 }
 
 export type AxisOrientation = "horizontal" | "vertical";

@@ -1,5 +1,7 @@
 import type {
   Marker,
+  MarkersDecoration,
+  PriceLineDecoration,
   PriceLineOptions,
   SpanOptions,
   WatermarkOptions,
@@ -10,14 +12,17 @@ import { shallowEqual } from '../shallow-equal';
 import { PaneContextValue, useChartApi } from './chart-context';
 
 /**
- * The React face of the standard decoration set. All the same shape —
- * mount adds it, unmount removes it.
+ * The React face of the standard decoration set. Mount adds it, unmount
+ * removes it. `<PriceLine>` and `<Markers>` add theirs once per target and
+ * hand changed props to the decoration in place; `<Watermark>` and
+ * `<Span>` still remount when their values change.
  *
- * **Doesn't rebuild when the values are unchanged.** Using the props
- * object that JSX freshly allocates every render as the deps, as-is, would
- * reinstall on every render no matter what the consumer does — a single
- * `<PriceLine price={last} color="red" />` would fire `remove()` +
- * `addDecoration()` + `requestRender()` every tick (60 times a second).
+ * **Doesn't touch the decoration when the values are unchanged.** Using
+ * the props object that JSX freshly allocates every render as the deps,
+ * as-is, would hand the decoration a new snapshot and ask for a frame on
+ * every render no matter what the consumer does — a single
+ * `<PriceLine value={last} />` would validate and request a render 60
+ * times a second for nothing (and `<Watermark>`/`<Span>` would remount).
  * The consumer has nothing to pin, so instead of pushing that contract
  * onto them, **the comparison happens here, by value.**
  */
@@ -29,8 +34,8 @@ import { PaneContextValue, useChartApi } from './chart-context';
  * **Nested objects are compared by value too** — a field like
  * `PriceLineOptions.style` is sometimes `Partial<LineStyle>` (a nested
  * object), and checking only one level would let the most common usage
- * (`<PriceLine style={{ color: 'red' }} />`) leak through as a reinstall
- * on every render.
+ * (`<PriceLine style={{ color: 'red' }} />`) leak through as a redundant
+ * update and render request on every render.
  *
  * **A plain object goes one level deeper.** Two reasons the depth is
  * capped at 1: the nesting in the currently public decoration options is
@@ -45,9 +50,10 @@ import { PaneContextValue, useChartApi } from './chart-context';
  *
  * **Only function props can't be compared by value**
  * (`PriceLineOptions.format`). Whether two closures do the same thing
- * can't be decided, so it falls back to identity — an inline function
- * still reinstalls every time, so the consumer has to pin it with
- * `useCallback` or a module-level constant.
+ * can't be decided, so it falls back to identity — an inline function is
+ * a change every render. For `<PriceLine>` that costs one `setOptions` and
+ * a render request per render, not a reinstall; pinning it with
+ * `useCallback` or a module-level constant makes it free.
  */
 function useStable<T>(value: T): T {
   const held = useRef(value);
@@ -69,16 +75,38 @@ export function PriceLine(props: PriceLineProps) {
   const { plot } = useChartApi('PriceLine');
   const pane = useContext(PaneContextValue);
   const options = useStable(props);
+  // One registration for the life of the component on its target; a changed
+  // value is handed to the decoration in place — the "last price" line
+  // follows every tick without a remove/add pair per tick.
+  // `applied` is the snapshot the decoration currently holds, so the update
+  // effect can skip the commit that installed it. The install effect leaves
+  // `options` out of its deps on purpose: it runs only when the target
+  // changes, and the closure of that render already holds the current
+  // props — the installation bookkeeping writes nothing during render.
+  const installed = useRef<{ line: PriceLineDecoration; applied: PriceLineOptions } | null>(null);
 
   useEffect(() => {
     const target = pane ?? plot.mainPane;
-    const remove = target.addDecoration(priceLine(options));
+    const line = priceLine(options);
+    installed.current = { line, applied: options };
+    const remove = target.addDecoration(line);
     plot.requestRender();
     return () => {
+      installed.current = null;
       remove();
       plot.requestRender();
     };
-  }, [plot, pane, options]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plot, pane]);
+
+  useEffect(() => {
+    const held = installed.current;
+    if (!held || held.applied === options) return;
+    held.applied = options;
+    // Props are a snapshot, not a patch — a label no longer given is gone.
+    held.line.setOptions(options);
+    plot.requestRender();
+  }, [plot, options]);
 
   return null;
 }
@@ -98,16 +126,29 @@ export function Markers({ items }: MarkersProps) {
   const { plot } = useChartApi('Markers');
   const pane = useContext(PaneContextValue);
   const stable = useStable(items);
+  const installed = useRef<{ dots: MarkersDecoration; applied: readonly Marker[] } | null>(null);
 
   useEffect(() => {
     const target = pane ?? plot.mainPane;
-    const remove = target.addDecoration(markers(stable));
+    const dots = markers(stable);
+    installed.current = { dots, applied: stable };
+    const remove = target.addDecoration(dots);
     plot.requestRender();
     return () => {
+      installed.current = null;
       remove();
       plot.requestRender();
     };
-  }, [plot, pane, stable]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plot, pane]);
+
+  useEffect(() => {
+    const held = installed.current;
+    if (!held || held.applied === stable) return;
+    held.applied = stable;
+    held.dots.setItems(stable);
+    plot.requestRender();
+  }, [plot, stable]);
 
   return null;
 }

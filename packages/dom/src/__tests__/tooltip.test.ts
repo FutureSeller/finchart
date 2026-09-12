@@ -2,7 +2,8 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "@finchart/core";
 import { recordingRenderer } from "@finchart/core";
-import { lineSeries } from "@finchart/core";
+import { candleSeries, lineSeries } from "@finchart/core";
+import type { OHLC, SeriesSample } from "@finchart/core";
 import { legend } from "../legend";
 import { tooltip } from "../tooltip";
 import {
@@ -214,5 +215,97 @@ describe("legend", () => {
     // Only the one with a name (BTC).
     expect(box.textContent).not.toBeNull();
     expect(box.children).toHaveLength(1);
+  });
+});
+
+describe("rows a series describes — tooltip and legend", () => {
+  const candles: OHLC[] = [
+    { x: 0, open: 100, high: 110, low: 95, close: 105, volume: 1200 },
+    { x: 5, open: 105, high: 112, low: 101, close: 102, volume: 800 },
+    { x: 10, open: 102, high: 108, low: 99, close: 107, volume: 950 },
+  ];
+
+  it("tooltip draws a candle's O/H/L/C/V after its name", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    plot.mainPane.addSeries({ series: candleSeries(), data: candles, name: "SOXL" });
+    plot.use(tooltip());
+    plot.crosshair(paneCenter());
+    const text = tooltipBox().textContent ?? "";
+    expect(text).toContain("SOXL: O 105");
+    for (const part of ["O 105", "H 112", "L 101", "C 102", "V 800"]) expect(text).toContain(part);
+    // The line series on the same pane keeps its one-line shape.
+    expect(text).toContain("BTC: ");
+  });
+
+  it("formats each row through the row-aware formatRow — the volume can read differently from a price", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    plot.mainPane.addSeries({ series: candleSeries(), data: candles, name: "SOXL" });
+    const seen: string[] = [];
+    plot.use(
+      tooltip({
+        formatValue: (value: number) => {
+          seen.push("-");
+          return value.toFixed(2);
+        },
+        formatRow: (value: number, row: { label: string; sample: SeriesSample }) => {
+          seen.push(row.label);
+          return row.label === "V" ? `${value / 100}k` : value.toFixed(1);
+        },
+      }),
+    );
+    plot.crosshair(paneCenter());
+    const text = tooltipBox().textContent ?? "";
+    expect(text).toContain("V 8k");
+    expect(text).toContain("C 102.0");
+    expect(seen).toContain("V");
+    // The scalar (line) row still formats through formatValue, with no row.
+    expect(seen).toContain("-");
+    expect(text).toContain("BTC: 120.00");
+  });
+
+  it("draws a null row as — and does not call the formatter for it", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    const nulled = Object.assign(lineSeries(), { describe: () => [{ label: "gap", value: null }] });
+    plot.mainPane.addSeries({ series: nulled, data, name: "N" });
+    const calls: unknown[] = [];
+    plot.use(tooltip({ formatValue: (value: number) => { calls.push(value); return String(value); } }));
+    plot.crosshair(paneCenter());
+    expect(tooltipBox().textContent).toContain("gap —");
+    expect(calls).not.toContain(null);
+  });
+
+  it("draws a described series with no name as its rows alone, and hands formatRow the sample it belongs to", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    plot.mainPane.addSeries({ series: candleSeries(), data: candles });
+    const seen: (string | null)[] = [];
+    plot.use(
+      tooltip({
+        formatRow: (value: number, row: { label: string; sample: SeriesSample }) => {
+          seen.push(row.sample.name);
+          return String(value);
+        },
+      }),
+    );
+    plot.crosshair(paneCenter());
+    const text = tooltipBox().textContent ?? "";
+    expect(text).not.toContain("null");
+    expect(text).toContain("O 105 H 112 L 101 C 102 V 800");
+    expect(seen).toContain(null);
+  });
+
+  it("legend draws the rows too, null as —", () => {
+    const { plot, overlay } = mounted();
+    plot.mainPane.addSeries({ series: candleSeries(), data: candles, name: "SOXL" });
+    const nulled = Object.assign(lineSeries(), { describe: () => [{ label: "gap", value: null }] });
+    plot.mainPane.addSeries({ series: nulled, data, name: "N" });
+    plot.use(legend({ formatValue: (value: number) => value.toFixed(0), formatRow: (value: number, row: { label: string }) => (row.label === "V" ? "vol" : value.toFixed(0)) }));
+    plot.render();
+    const box = overlay.querySelector("[data-chart-legend]");
+    if (!(box instanceof HTMLElement)) throw new Error("legend box expected");
+    const text = box.textContent ?? "";
+    expect(text).toContain("SOXL");
+    expect(text).toContain("V vol");
+    expect(text).toContain("C 107");
+    expect(text).toContain("gap —");
   });
 });

@@ -14,6 +14,7 @@ import { ContractError, type PlotArea } from "../primitives";
 import type { DrawTarget, StyleReader } from "../render";
 import type { Scale, XMapping } from "../scale";
 import type { Entry, SeriesId, SeriesSpec } from "../registration";
+import type { SeriesRow } from "../series";
 import { unionOf } from "./range";
 
 type Owner = "imperative" | "declarative";
@@ -37,6 +38,8 @@ export interface SeriesSample {
    */
   min: number | null;
   max: number | null;
+  /** What the series says about that point — a candle's O/H/L/C/V. Absent when the series does not describe itself. */
+  rows?: readonly SeriesRow[];
   /**
    * **Which index the chosen point sits at in the registration's own
    * points** — the array the registration holds, which for a derived
@@ -345,6 +348,7 @@ export class SeriesList {
         min: nearest.min,
         max: nearest.max,
         index: nearest.index,
+        ...(nearest.rows !== undefined && { rows: nearest.rows }),
       });
     }
 
