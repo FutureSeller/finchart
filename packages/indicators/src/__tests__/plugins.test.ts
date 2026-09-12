@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OHLC, PaneHost, Plugin, PluginApi, SeriesHost, Source } from "@finchart/core";
-import { ContractError, candleSeries, createPlotModel } from "@finchart/core";
+import { ContractError, candleSeries, createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import { MOVING_AVERAGE_DEFAULTS, movingAverage } from "../factories";
+import { bollingerBands, cr, MOVING_AVERAGE_DEFAULTS, movingAverage } from "../factories";
 import {
   MFI_LEVELS,
   PSY_LEVELS,
@@ -19,7 +19,12 @@ import {
   attachBbi,
   attachBollingerBands,
   attachBrar,
+  attachCci,
   attachCr,
+  attachDonchianChannels,
+  attachKeltnerChannels,
+  attachSuperTrend,
+  attachWilliamsR,
   attachKdj,
   attachDma,
   attachEmv,
@@ -722,5 +727,284 @@ describe("ownPane.stateKey", () => {
     expect(model.plot.panes[1].stateKey).toBe("rsi");
     expect(model.plot.panes[2].stateKey).toBeNull();
     expect(model.plot.getState().panes.map((pane) => pane.stateKey)).toEqual([undefined, "rsi", undefined]);
+  });
+});
+
+describe("the node door — an attach draws a node you built", () => {
+  it("draws the node handed over and builds none of its own; the name is the label", () => {
+    const { model, price } = pricedModel();
+    const ma = movingAverage(price, { period: 5 });
+    const api = model.plot.mainPane.use(attachMovingAverage({ node: ma, name: "Mine" }));
+    expect(api.node).toBe(ma);
+    model.plot.render();
+    const names = model.plot.mainPane.probe(20).map((sample) => sample.name);
+    expect(names).toContain("Mine");
+    api.dispose();
+  });
+
+  it("shares one calculation between an attach and a line of your own", () => {
+    const { model, price } = pricedModel();
+    const boll = bollingerBands(price, { period: 5 });
+    const api = model.plot.mainPane.use(attachBollingerBands({ node: boll, name: "BB", middle: false }));
+    // The middle line is drawn by hand from the same node — no second SMA anywhere.
+    const own = model.plot.mainPane.addSeries({ series: lineSeries(), input: boll.out.middle, name: "MA(5)" });
+    expect(api.node).toBe(boll);
+    model.plot.render();
+    const names = model.plot.mainPane.probe(20).map((sample) => sample.name);
+    expect(names).toContain("BB Upper");
+    expect(names).toContain("MA(5)");
+    expect(names).not.toContain("BB");
+    own.dispose();
+    api.dispose();
+  });
+
+  it("refuses a node key that is present but undefined — it does not fall back to the source", () => {
+    const { price } = pricedModel();
+    // The type admits this shape (`node?: never` is `node?: undefined` without exact optional types); the runtime refuses it.
+    const shaped = JSON.parse('{"period": 5, "node": null}');
+    shaped.source = price;
+    shaped.node = undefined;
+    expect(() => attachMovingAverage(shaped)).toThrow(ContractError);
+  });
+
+  it("refuses a node without a name, a name-less node cannot say what it is", () => {
+    const { price } = pricedModel();
+    const ma = movingAverage(price, { period: 5 });
+    const nameless: { node: typeof ma; name?: string } = { node: ma };
+    // @ts-expect-error a node comes with a name
+    expect(() => attachMovingAverage(nameless)).toThrow(ContractError);
+  });
+
+  it("refuses a source and a node given together, and a node that is not a computed node", () => {
+    const { price } = pricedModel();
+    const ma = movingAverage(price, { period: 5 });
+    const both = JSON.parse("{}");
+    both.source = price;
+    both.node = ma;
+    both.name = "x";
+    expect(() => attachMovingAverage(both)).toThrow(ContractError);
+    expect(() => attachMovingAverage(JSON.parse('{"node": {"read": 1}, "name": "x"}'))).toThrow(ContractError);
+  });
+
+  it("keeps the source door as it was — the label still comes from the formula", () => {
+    const { model, price } = pricedModel();
+    const api = model.plot.mainPane.use(attachMovingAverage({ source: price, period: 7 }));
+    model.plot.render();
+    expect(model.plot.mainPane.probe(20).map((sample) => sample.name)).toContain("MA(7)");
+    api.dispose();
+  });
+
+  it("leaves Bollinger's middle line out on middle: false", () => {
+    const { model, price } = pricedModel();
+    const before = model.plot.mainPane.getSeries().length;
+    const api = model.plot.mainPane.use(attachBollingerBands({ source: price, period: 5, middle: false }));
+    expect(model.plot.mainPane.getSeries().length - before).toBe(3);
+    api.dispose();
+    const full = model.plot.mainPane.use(attachBollingerBands({ source: price, period: 5 }));
+    expect(model.plot.mainPane.getSeries().length - before).toBe(4);
+    full.dispose();
+  });
+
+  it("names CR's averages by window from a source, by position from a node, and by labels when given", () => {
+    const { model, price } = pricedModel();
+    const fromSource = model.plot.use(attachCr({ source: price, periods: [3, 5, 7, 9] }));
+    model.plot.render();
+    const pane = fromSource.pane;
+    if (!pane) throw new Error("own pane expected");
+    let names = pane.probe(30).map((sample) => sample.name);
+    expect(names).toEqual(expect.arrayContaining(["CR(26) MA(3)", "CR(26) MA(5)", "CR(26) MA(7)", "CR(26) MA(9)"]));
+    fromSource.dispose();
+
+    const node = cr(price, { periods: [3, 5, 7, 9] });
+    const fromNode = model.plot.use(attachCr({ node, name: "Custom" }));
+    model.plot.render();
+    const own = fromNode.pane;
+    if (!own) throw new Error("own pane expected");
+    names = own.probe(30).map((sample) => sample.name);
+    expect(names).toEqual(expect.arrayContaining(["Custom MA1", "Custom MA2", "Custom MA3", "Custom MA4"]));
+    fromNode.dispose();
+
+    const labelled = model.plot.use(attachCr({ node, name: "Custom", labels: ["a", "b", "c", "d"] }));
+    model.plot.render();
+    const third = labelled.pane;
+    if (!third) throw new Error("own pane expected");
+    names = third.probe(30).map((sample) => sample.name);
+    expect(names).toEqual(expect.arrayContaining(["a", "b", "c", "d"]));
+    labelled.dispose();
+  });
+});
+
+// Type locks — the two doors are exclusive and a node comes with a name.
+export const typeLocks = (price: Source<OHLC>, ma: ReturnType<typeof movingAverage>) => [
+  // @ts-expect-error source and node together
+  attachMovingAverage({ source: price, node: ma, name: "x" }),
+  // @ts-expect-error a node does not take the factory's options
+  attachMovingAverage({ node: ma, name: "x", period: 5 }),
+  // @ts-expect-error a node comes with a name
+  attachMovingAverage({ node: ma }),
+];
+
+describe("the source door's labels — every formula that moved into attachInputs", () => {
+  const onPane = (
+    attach: (options: { source: Source<OHLC> }) => Plugin<SeriesHost, PluginApi>,
+  ) => {
+    const { model, price } = pricedModel();
+    model.plot.mainPane.use(attach({ source: price }));
+    model.plot.render();
+    return model.plot.mainPane.probe(30).map((sample) => sample.name ?? "");
+  };
+  const onOwnPane = (
+    attach: (options: { source: Source<OHLC> }) => Plugin<PaneHost, PluginApi & { pane: { probe(x: number): readonly { name: string | null }[] } | null }>,
+  ) => {
+    const { model, price } = pricedModel();
+    const api = model.plot.use(attach({ source: price }));
+    model.plot.render();
+    if (!api.pane) throw new Error("own pane expected");
+    return api.pane.probe(30).map((sample) => sample.name ?? "");
+  };
+  const cases: [string, () => string[]][] = [
+    ["MACD(12,26,9)", () => onOwnPane(attachMacd)],
+    ["BB(20,2)", () => onPane(attachBollingerBands)],
+    ["RSI(14)", () => onOwnPane(attachRsi)],
+    ["ATR(14)", () => onOwnPane(attachAtr)],
+    ["Stoch(14,3,3) %K", () => onOwnPane(attachStochastic)],
+    ["VWAP", () => onPane(attachVwap)],
+    ["OBV", () => onOwnPane(attachObv)],
+    ["Ichimoku(9,26,52) Conversion", () => onPane(attachIchimoku)],
+    ["SAR(0.02,0.2)", () => onPane(attachParabolicSar)],
+    ["CCI(20)", () => onOwnPane(attachCci)],
+    ["%R(14)", () => onOwnPane(attachWilliamsR)],
+    ["DC(20)", () => onPane(attachDonchianChannels)],
+    ["KC(20,2)", () => onPane(attachKeltnerChannels)],
+    ["ST(10,3) Up", () => onPane(attachSuperTrend)],
+  ];
+  it.each(cases)("%s", (expected, names) => {
+    // The head label is a series name of its own (not only a prefix of the parts'), so a
+    // sibling that keeps the prefix cannot stand in for a renamed main line.
+    expect(names(), expected).toContain(expected);
+  });
+
+  it("UO sorts its windows into the label whatever order they were given in", () => {
+    const { model, price } = pricedModel();
+    const api = model.plot.use(attachUltimateOscillator({ source: price, fast: 28, middle: 7, slow: 14 }));
+    model.plot.render();
+    if (!api.pane) throw new Error("own pane expected");
+    expect(api.pane.probe(30).map((sample) => sample.name)).toContain("UO(7,14,28)");
+  });
+});
+
+describe("the node door refuses before it mounts anything", () => {
+  it("rejects a node whose out is null with a ContractError, leaving no pane behind", () => {
+    const { model } = pricedModel();
+    const panes = model.plot.panes.length;
+    const nullOut = JSON.parse('{"node": {"out": null}, "name": "x"}');
+    expect(() => model.plot.use(attachRsi(nullOut))).toThrow(ContractError);
+    expect(model.plot.panes).toHaveLength(panes);
+    expect(() => attachMovingAverage(nullOut)).toThrow(ContractError);
+  });
+
+  it("rejects a node whose drawn branch is not a Source, before its own pane exists", () => {
+    const { model } = pricedModel();
+    const panes = model.plot.panes.length;
+    const badBranch = JSON.parse('{"node": {"out": {"rsi": {}}}, "name": "x"}');
+    expect(() => model.plot.use(attachRsi(badBranch))).toThrow(ContractError);
+    expect(model.plot.panes).toHaveLength(panes);
+    // A node with the wrong branches for this attach — a MACD node under attachRsi — is refused the same way.
+    const { price } = pricedModel();
+    const other = JSON.parse("{}");
+    other.node = { out: { macd: { read: () => [] } } };
+    other.name = "x";
+    expect(() => model.plot.use(attachRsi(other))).toThrow(ContractError);
+    expect(model.plot.panes).toHaveLength(panes);
+    void price;
+  });
+});
+
+/**
+ * The branch list each attach guards is a string list kept next to the
+ * body that reads `node.out.<branch>` — two things maintained by hand. This
+ * ties them: the keys the guard reads during validation are the only ones
+ * the node then has, so a body that reads a branch the guard did not ask
+ * for meets `undefined` and is refused by the core the moment it mounts.
+ */
+describe("the node door guards exactly the branches the attach reads", () => {
+  // Thirty-five signatures in one table, driven by shape, not by type — the
+  // guard under test is what the runtime reads, which is why `any` is honest here.
+  // biome-ignore lint/suspicious/noExplicitAny: the table erases the option and host types on purpose
+  type AnyAttach = (options: any) => Plugin<any, PluginApi>;
+  const attaches: [string, AnyAttach, "plot" | "pane"][] = [
+    ["attachMovingAverage", attachMovingAverage, "pane"],
+    ["attachMacd", attachMacd, "plot"],
+    ["attachBollingerBands", attachBollingerBands, "pane"],
+    ["attachRsi", attachRsi, "plot"],
+    ["attachAtr", attachAtr, "plot"],
+    ["attachStochastic", attachStochastic, "plot"],
+    ["attachStochasticRsi", attachStochasticRsi, "plot"],
+    ["attachMfi", attachMfi, "plot"],
+    ["attachUltimateOscillator", attachUltimateOscillator, "plot"],
+    ["attachAwesomeOscillator", attachAwesomeOscillator, "plot"],
+    ["attachMomentum", attachMomentum, "plot"],
+    ["attachElderRay", attachElderRay, "plot"],
+    ["attachSqueezeMomentum", attachSqueezeMomentum, "plot"],
+    ["attachRoc", attachRoc, "plot"],
+    ["attachTrix", attachTrix, "plot"],
+    ["attachPsy", attachPsy, "plot"],
+    ["attachBbi", attachBbi, "pane"],
+    ["attachDma", attachDma, "plot"],
+    ["attachBrar", attachBrar, "plot"],
+    ["attachCr", attachCr, "plot"],
+    ["attachKdj", attachKdj, "plot"],
+    ["attachVr", attachVr, "plot"],
+    ["attachEmv", attachEmv, "plot"],
+    ["attachPvt", attachPvt, "plot"],
+    ["attachVwap", attachVwap, "pane"],
+    ["attachObv", attachObv, "plot"],
+    ["attachAdx", attachAdx, "plot"],
+    ["attachIchimoku", attachIchimoku, "pane"],
+    ["attachParabolicSar", attachParabolicSar, "pane"],
+    ["attachCci", attachCci, "plot"],
+    ["attachWilliamsR", attachWilliamsR, "plot"],
+    ["attachDonchianChannels", attachDonchianChannels, "pane"],
+    ["attachKeltnerChannels", attachKeltnerChannels, "pane"],
+    ["attachSuperTrend", attachSuperTrend, "pane"],
+    ["attachPivotPoints", attachPivotPoints, "pane"],
+  ];
+  const emptySource: Source<OHLC> = { read: () => [] };
+  const mount = (model: ReturnType<typeof pricedModel>["model"], attach: AnyAttach, host: "plot" | "pane", options: unknown) =>
+    host === "plot" ? model.plot.use(attach(options)) : model.plot.mainPane.use(attach(options));
+  it.each(attaches)("%s", (_name, attach, host) => {
+    const { model } = pricedModel();
+    // Pass 1 — record which branches validation asks for.
+    const asked = new Set<string>();
+    const recording = new Proxy(
+      {},
+      {
+        get: (_target, key) => {
+          if (typeof key === "string") asked.add(key);
+          return emptySource;
+        },
+      },
+    );
+    const probe = JSON.parse('{"name": "x"}');
+    probe.node = { out: recording };
+    mount(model, attach, host, probe).dispose();
+    expect(asked.size).toBeGreaterThan(0);
+    // Pass 2 — a node with exactly those branches mounts.
+    const exact = JSON.parse('{"name": "x"}');
+    exact.node = { out: Object.fromEntries([...asked].map((key) => [key, emptySource])) };
+    mount(model, attach, host, exact).dispose();
+    // Pass 3 — drop each branch in turn: the guard must refuse it *before* anything mounts.
+    // A branch the body reads but the list does not name would register an
+    // input-less series instead (no throw), or throw from the core after an
+    // own pane exists — either way not this.
+    const panes = model.plot.panes.length;
+    const series = model.plot.mainPane.getSeries().length;
+    for (const dropped of asked) {
+      const partial = JSON.parse('{"name": "x"}');
+      partial.node = { out: Object.fromEntries([...asked].filter((key) => key !== dropped).map((key) => [key, emptySource])) };
+      expect(() => mount(model, attach, host, partial), `without ${dropped}`).toThrow(ContractError);
+      expect(model.plot.panes.length, `panes after dropping ${dropped}`).toBe(panes);
+      expect(model.plot.mainPane.getSeries().length, `series after dropping ${dropped}`).toBe(series);
+    }
   });
 });

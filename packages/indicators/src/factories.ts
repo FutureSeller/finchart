@@ -7,7 +7,7 @@ import type {
   OHLC,
   Source,
 } from "@finchart/core";
-import { computation, reuseUnchanged } from "@finchart/core";
+import { computation, ContractError, reuseUnchanged } from "@finchart/core";
 import {
   decayHorizon,
   ema,
@@ -25,6 +25,7 @@ import type { ExtremumFold, LagFold, LinregFold, RecursiveFold, RecursiveState, 
 import {
   assertDisplacement,
   assertFourPeriods,
+  describeValue,
   committable,
   assertPredicate,
   assertRatio,
@@ -692,17 +693,30 @@ export function parabolicSar(
 // --- Ichimoku ---
 
 export interface IchimokuOptions {
-  /** The conversion line's window. Default 9. */
   conversion?: number;
-  /** The base line's window. Default 26. */
   base?: number;
-  /** Leading Span B's window. Default 52. */
   span?: number;
-  /** How far the leading and lagging spans shift. Default 26. */
   displacement?: number;
+  /**
+   * The x of the bar `steps` after the last one. Given, the leading spans
+   * and the cloud run `displacement` bars past the last candle — the cloud
+   * ahead of price, which is what the leading spans are for. Absent, they
+   * stop at the last candle: the x of a bar that does not exist yet is the
+   * feed's to say (one minute, one session, one trading day), not this
+   * package's. Must be deterministic and follow the feed's bar schedule —
+   * a projected x that the next real bar does not land on moves the
+   * projection instead of extending it. Each answer must be finite and
+   * later than the one before it, or the node refuses under this name.
+   * The shift itself is by index — bar units, so a weekend gap is not
+   * counted — and the chart's x range then reaches the projected cloud:
+   * `rightOffset` is room *after* it, and following a new bar
+   * (`shiftVisibleRangeOnNewBar`) tracks the cloud's end — a viewport that
+   * shows the last candle but not the cloud's end is not at the end, so it
+   * does not follow.
+   */
+  ahead?: (lastX: number, steps: number) => number;
 }
 
-/** Single source of truth for defaults — see `MACD_DEFAULTS`. */
 export const ICHIMOKU_DEFAULTS = {
   conversion: 9,
   base: 26,
@@ -710,23 +724,17 @@ export const ICHIMOKU_DEFAULTS = {
   displacement: 26,
 } as const;
 
-export type Ichimoku = Computation<{
+type IchimokuOut = {
   conversion: LineDataPoint[];
   base: LineDataPoint[];
   spanA: LineDataPoint[];
   spanB: LineDataPoint[];
   lagging: LineDataPoint[];
-  /** The cloud — a branch carrying spanA and spanB in one point. `bandSeries` consumes it. */
   cloud: BandPoint[];
-}>;
+};
 
-/**
- * Ichimoku — three midlines of the form (windowed high + low)/2, plus
- * leading and lagging spans shifted by index. The shift is index-based —
- * x carries over from the input unchanged, so it never invents a future
- * x, and no cloud is drawn past the last candle. Branch names use English
- * domain vocabulary (not romanized Japanese).
- */
+export type Ichimoku = Computation<IchimokuOut>;
+
 export function ichimoku(
   source: Source<OHLC>,
   options: IchimokuOptions = {},
@@ -737,53 +745,125 @@ export function ichimoku(
   const spanPeriod = options.span ?? ICHIMOKU_DEFAULTS.span;
   const displacement = options.displacement ?? ICHIMOKU_DEFAULTS.displacement;
   assertDisplacement(displacement, "ichimoku");
+  const ahead = options.ahead;
+  if (ahead !== undefined && typeof ahead !== "function") {
+    throw new ContractError(
+      `ichimoku({ ahead }) must be a function (lastX, steps) => x, got ${describeValue(ahead)}`,
+    );
+  }
+  // How far back a page corrects: a span at output i reads inputs
+  // [i − displacement − (P − 1), i − displacement].
+  const look = Math.max(conversionPeriod, basePeriod, spanPeriod) - 1 + displacement;
+
+  /**
+   * The kernel. `project` says whether to run the spans past the last
+   * candle — the head door computes a prefix on a temporary end and must
+   * not invent a projection there.
+   */
+  const compute = (data: readonly OHLC[], project: boolean): IchimokuOut => {
+    const highs = data.map((candle) => candle.high);
+    const lows = data.map((candle) => candle.low);
+    const midline = (period: number) => {
+      const top = highest(highs, period);
+      const bottom = lowest(lows, period);
+      return top.map((high, index) => {
+        const low = bottom[index];
+        return high === null || low === null ? null : (high + low) / 2;
+      });
+    };
+
+    const conversion = midline(conversionPeriod);
+    const baseline = midline(basePeriod);
+    const rawSpanA = conversion.map((fast, index) => {
+      const slow = baseline[index];
+      return fast === null || slow === null ? null : (fast + slow) / 2;
+    });
+    const rawSpanB = midline(spanPeriod);
+
+    const forward = (values: (number | null)[]) =>
+      values.map((_, index) => {
+        const from = index - displacement;
+        return from < 0 ? null : values[from];
+      });
+    const spanA = forward(rawSpanA);
+    const spanB = forward(rawSpanB);
+    const lagging = data.map((_, index) => {
+      const from = index + displacement;
+      return from < data.length ? data[from].close : null;
+    });
+
+    const leadA = points(data, spanA);
+    const leadB = points(data, spanB);
+    const cloud: BandPoint[] = data.map((point, index) => ({
+      x: point.x,
+      upper: spanA[index],
+      lower: spanB[index],
+    }));
+
+    // The projection: the raw spans the shift has not reached yet, at the
+    // feed's x for the bars after the last one.
+    const n = data.length;
+    if (project && ahead !== undefined && n > 0 && displacement > 0) {
+      const lastX = data[n - 1].x;
+      let previousX = lastX;
+      for (let k = 1; k <= displacement; k++) {
+        const x = ahead(lastX, k);
+        if (!Number.isFinite(x) || x <= previousX) {
+          throw new ContractError(
+            `ichimoku({ ahead }) must answer a finite x later than the one before it — ahead(${lastX}, ${k}) gave ${describeValue(x)} after ${previousX}`,
+          );
+        }
+        previousX = x;
+        const raw = n - displacement + k - 1;
+        const upper = raw < 0 ? null : rawSpanA[raw];
+        const lower = raw < 0 ? null : rawSpanB[raw];
+        leadA.push({ x, y: upper });
+        leadB.push({ x, y: lower });
+        cloud.push({ x, upper, lower });
+      }
+    }
+
+    return {
+      conversion: points(data, conversion),
+      base: points(data, baseline),
+      spanA: leadA,
+      spanB: leadB,
+      lagging: points(data, lagging),
+      cloud,
+    };
+  };
 
   return computation(recomputing({
     inputs: [source],
-    calc: (data) => {
-      const highs = data.map((candle) => candle.high);
-      const lows = data.map((candle) => candle.low);
-      const midline = (period: number) => {
-        const top = highest(highs, period);
-        const bottom = lowest(lows, period);
-        return top.map((high, index) => {
-          const low = bottom[index];
-          return high === null || low === null ? null : (high + low) / 2;
-        });
-      };
-
-      const conversion = midline(conversionPeriod);
-      const baseline = midline(basePeriod);
-      const rawSpanA = conversion.map((fast, index) => {
-        const slow = baseline[index];
-        return fast === null || slow === null ? null : (fast + slow) / 2;
-      });
-      const rawSpanB = midline(spanPeriod);
-
-      const forward = (values: (number | null)[]) =>
-        values.map((_, index) => {
-          const from = index - displacement;
-          return from < 0 ? null : values[from];
-        });
-      const spanA = forward(rawSpanA);
-      const spanB = forward(rawSpanB);
-      const lagging = data.map((_, index) => {
-        const from = index + displacement;
-        return from < data.length ? data[from].close : null;
-      });
-
-      return {
-        conversion: points(data, conversion),
-        base: points(data, baseline),
-        spanA: points(data, spanA),
-        spanB: points(data, spanB),
-        lagging: points(data, lagging),
-        cloud: data.map((point, index) => ({
-          x: point.x,
-          upper: spanA[index],
-          lower: spanB[index],
-        })),
-      };
+    calc: (data) => compute(data, true),
+    /**
+     * A history page corrects the first `count + look` outputs and keeps
+     * the rest — the projection too, unless the history is so short that a
+     * projected span's window reaches into the corrected prefix. This is
+     * not `headLookback`'s interpreter: with a projection the output is not
+     * 1:1 with the input, and the lagging span reads *ahead*, so the prefix
+     * is computed on `displacement` more inputs than it re-emits.
+     */
+    calcFirst: (previous, [data], [change]) => {
+      if (change.kind !== "prepend" || change.corrected > 0) return null;
+      const count = change.count;
+      const n = data.length;
+      const expected = count + look;
+      if (expected >= n) return null;
+      const projected = ahead !== undefined && displacement > 0 ? displacement : 0;
+      // Every branch of the previous output covered the old input 1:1 — plus the projection on the three leading ones.
+      const oldN = n - count;
+      const heads = compute(data.slice(0, Math.min(n, expected + displacement)), false);
+      const land = <T>(head: T[], tail: T[], carried: number): T[] | null =>
+        tail.length === oldN + carried ? head.slice(0, expected).concat(tail.slice(expected - count)) : null;
+      const conversion = land(heads.conversion, previous.conversion, 0);
+      const base = land(heads.base, previous.base, 0);
+      const spanA = land(heads.spanA, previous.spanA, projected);
+      const spanB = land(heads.spanB, previous.spanB, projected);
+      const lagging = land(heads.lagging, previous.lagging, 0);
+      const cloud = land(heads.cloud, previous.cloud, projected);
+      if (!conversion || !base || !spanA || !spanB || !lagging || !cloud) return null;
+      return { conversion, base, spanA, spanB, lagging, cloud };
     },
   }));
 }

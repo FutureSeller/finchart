@@ -1,4 +1,4 @@
-import { requireAttachOptions, requireOptions } from "./kernels";
+import { describeValue, requireAttachOptions, requireOptions } from "./kernels";
 import type {
   Computation,
   LineDataPoint,
@@ -282,10 +282,72 @@ export interface IndicatorNameOption {
   name?: string;
 }
 
-export interface AttachMovingAverageOptions extends MovingAverageOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+/**
+ * The two ways into an `attach*`: from a `source` with the factory's own
+ * options, or from a `node` you built with the factory yourself — the way
+ * the declarative lane shares one calculation between drawings
+ * (`bollingerBands(price).out.middle` under a line of its own). A node
+ * does not carry its formula, so in that mode `name` is yours to give —
+ * the label `MA(20)` cannot be made up from a node. The two are exclusive:
+ * `node?: never` on one side and `source?: never` on the other keep
+ * `{ source, node }` out at compile time, and the runtime refuses a
+ * `node` key that is present but `undefined`.
+ */
+export type AttachFrom<TNode, TFactoryOptions, TLook> =
+  | AttachFromSource<TFactoryOptions, TLook>
+  | (TLook & { node: TNode; name: string; source?: never });
+
+/** The source door's options — what `build` and the label formula read. */
+export type AttachFromSource<TFactoryOptions, TLook> = TFactoryOptions &
+  TLook & { source: Source<OHLC>; node?: never };
+
+/**
+ * Which door was taken, decided once: the node (built from the source, or
+ * handed over) and the legend's head label (the given `name`, or the
+ * formula spelled from the source-mode options). `given` inside `build`
+ * and `formula` is the source door's options — narrowed by the branch,
+ * which is why the factory's fields are readable there and nowhere else.
+ */
+function attachInputs<TNode, TFactoryOptions, TLook extends { name?: string }>(
+  options: AttachFrom<TNode, TFactoryOptions, TLook>,
+  who: string,
+  build: (given: AttachFromSource<TFactoryOptions, TLook>) => TNode,
+  formula: (given: AttachFromSource<TFactoryOptions, TLook>) => string,
+  branches: readonly string[],
+): { node: TNode; label: string } {
+  if ("node" in options) {
+    const node = options.node;
+    if (node === undefined) {
+      throw new ContractError(
+        `${who}({ node }) is undefined — hand over the node you built, or leave the key out and give a source`,
+      );
+    }
+    if (typeof options.name !== "string") {
+      throw new ContractError(`${who}({ node }) needs a name — a node does not carry its formula`);
+    }
+    // Every branch this attach draws must be a Source *before* anything is
+    // mounted — an own pane is created first, and a branch that fails inside
+    // `addSeries` would leave that pane behind with no api to take it back.
+    const out = typeof node === "object" && node !== null ? Reflect.get(node, "out") : undefined;
+    for (const branch of branches) {
+      const source = typeof out === "object" && out !== null ? Reflect.get(out, branch) : undefined;
+      if (typeof source !== "object" || source === null || typeof Reflect.get(source, "read") !== "function") {
+        throw new ContractError(
+          `${who}({ node }) needs node.out.${branch} to be a Source (something with a read method): ${describeValue(source)}`,
+        );
+      }
+    }
+    return { node, label: options.name };
+  }
+  return { node: build(options), label: options.name ?? formula(options) };
+}
+
+export interface AttachMovingAverageLook extends IndicatorNameOption {
   color?: string;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachMovingAverageOptions = AttachFrom<MovingAverage, MovingAverageOptions, AttachMovingAverageLook>;
 
 /**
  * Mounts a moving average on that pane.
@@ -303,15 +365,22 @@ export function attachMovingAverage(
 ): Plugin<SeriesHost, IndicatorApi<MovingAverage>> {
   requireAttachOptions(options, "attachMovingAverage");
   return (pane) => {
-    const node = movingAverage(options.source, {
-      period: options.period,
-      type: options.type,
-    });
+    const { node, label } = attachInputs(
+      options,
+      "attachMovingAverage",
+      (given) => movingAverage(given.source, {
+        period: given.period,
+        type: given.type,
+      }),
+      (given) => `${(given.type ?? MOVING_AVERAGE_DEFAULTS.type) === "ema" ? "EMA" : "MA"}(${given.period})`,
+
+      ["ma"],
+    );
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(options.color)),
       input: node.out.ma,
       // The label follows the formula — writing MA(20) for an EMA would be a lie.
-      name: options.name ?? `${(options.type ?? MOVING_AVERAGE_DEFAULTS.type) === "ema" ? "EMA" : "MA"}(${options.period})`,
+      name: label,
       color: options.color,
     });
 
@@ -319,8 +388,7 @@ export function attachMovingAverage(
   };
 }
 
-export interface AttachMacdOptions extends MacdOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachMacdLook extends OwnedPaneOptions, IndicatorNameOption {
   /**
    * Which pane to mount on. Omit it to create a new pane — MACD's scale
    * differs from price, so overlapping them breaks the value axis. Size
@@ -331,16 +399,26 @@ export interface AttachMacdOptions extends MacdOptions, OwnedPaneOptions, Indica
   colors?: { macd?: string; signal?: string; histogram?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachMacdOptions = AttachFrom<Macd, MacdOptions, AttachMacdLook>;
+
 export function attachMacd(
   options: AttachMacdOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Macd>> {
   requireAttachOptions(options, "attachMacd");
   return (plot) => {
-    const node = macd(options.source, {
-      fast: options.fast,
-      slow: options.slow,
-      signal: options.signal,
-    });
+    const { node, label } = attachInputs(
+      options,
+      "attachMacd",
+      (given) => macd(given.source, {
+        fast: given.fast,
+        slow: given.slow,
+        signal: given.signal,
+      }),
+      (given) => `MACD(${given.fast ?? MACD_DEFAULTS.fast},${given.slow ?? MACD_DEFAULTS.slow},${given.signal ?? MACD_DEFAULTS.signal})`,
+
+      ["histogram", "macd", "signal"],
+    );
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
 
@@ -348,8 +426,6 @@ export function attachMacd(
     const macdColor = options.colors?.macd ?? PRIMARY_COLOR;
     const signalColor = options.colors?.signal ?? SECONDARY_COLOR;
     // The default label reads from the same source as the computation default (the factory's *_DEFAULTS).
-    const label = options.name ?? `MACD(${options.fast ?? MACD_DEFAULTS.fast},${options.slow ?? MACD_DEFAULTS.slow},${options.signal ?? MACD_DEFAULTS.signal})`;
-
     const handles = [
       // The histogram is a bar series that grows from 0.
       pane.addSeries({
@@ -383,11 +459,21 @@ export function attachMacd(
   };
 }
 
-export interface AttachBollingerOptions extends BollingerOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachBollingerLook extends IndicatorNameOption {
   colors?: { middle?: string; edges?: string };
   band?: BandSeriesOptions;
+  /**
+   * Draw the middle line? Default true. It is the SMA of `period` over the
+   * band's input — a simple `attachMovingAverage` of the same period on the
+   * same input and pane sits exactly on top of it; turn this one off, or
+   * draw one line from the shared node. `false` leaves the band and the two
+   * edges.
+   */
+  middle?: boolean;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachBollingerOptions = AttachFrom<BollingerBands, BollingerOptions, AttachBollingerLook>;
 
 /** Mounts the band on that pane — usually `mainPane`, since it shares price's axis. */
 export function attachBollingerBands(
@@ -395,12 +481,17 @@ export function attachBollingerBands(
 ): Plugin<SeriesHost, IndicatorApi<BollingerBands>> {
   requireAttachOptions(options, "attachBollingerBands");
   return (pane) => {
-    const node = bollingerBands(options.source, {
-      period: options.period,
-      multiplier: options.multiplier,
-    });
-    const label = options.name ?? `BB(${options.period ?? BOLLINGER_DEFAULTS.period},${options.multiplier ?? BOLLINGER_DEFAULTS.multiplier})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachBollingerBands",
+      (given) => bollingerBands(given.source, {
+        period: given.period,
+        multiplier: given.multiplier,
+      }),
+      (given) => `BB(${given.period ?? BOLLINGER_DEFAULTS.period},${given.multiplier ?? BOLLINGER_DEFAULTS.multiplier})`,
 
+      ["band", "lower", "middle", "upper"],
+    );
     const handles = [
       // The fill is zIndex -1 — even toggled on late, it sits under the
       // candles. The lines register after it, so they show above the band.
@@ -415,12 +506,16 @@ export function attachBollingerBands(
         name: `${label} Upper`,
         color: options.colors?.edges,
       }),
-      pane.addSeries({
-        series: lineSeries(overlayStyle(options.colors?.middle)),
-        input: node.out.middle,
-        name: label,
-        color: options.colors?.middle,
-      }),
+      ...(options.middle === false
+        ? []
+        : [
+            pane.addSeries({
+              series: lineSeries(overlayStyle(options.colors?.middle)),
+              input: node.out.middle,
+              name: label,
+              color: options.colors?.middle,
+            }),
+          ]),
       pane.addSeries({
         series: lineSeries(overlayStyle(options.colors?.edges)),
         input: node.out.lower,
@@ -486,8 +581,7 @@ function wireOscillatorPane(
   );
 }
 
-export interface AttachRsiOptions extends RsiOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachRsiLook extends OwnedPaneOptions, IndicatorNameOption {
   /**
    * Which pane to mount on. **Omit it and a new pane is created**, wired
    * with a fixed 0-100 axis and reference lines too. A borrowed pane only
@@ -499,12 +593,22 @@ export interface AttachRsiOptions extends RsiOptions, OwnedPaneOptions, Indicato
   levels?: OscillatorLevels | false;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachRsiOptions = AttachFrom<Rsi, RsiOptions, AttachRsiLook>;
+
 export function attachRsi(
   options: AttachRsiOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Rsi>> {
   requireAttachOptions(options, "attachRsi");
   return (plot) => {
-    const node = rsi(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachRsi",
+      (given) => rsi(given.source, { period: given.period }),
+      (given) => `RSI(${given.period ?? RSI_DEFAULTS.period})`,
+
+      ["rsi"],
+    );
     const color = options.color ?? PRIMARY_COLOR;
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
@@ -514,7 +618,7 @@ export function attachRsi(
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(color)),
       input: node.out.rsi,
-      name: options.name ?? `RSI(${options.period ?? RSI_DEFAULTS.period})`,
+      name: label,
       color,
     });
 
@@ -525,8 +629,7 @@ export function attachRsi(
   };
 }
 
-export interface AttachAtrOptions extends AtrOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachAtrLook extends OwnedPaneOptions, IndicatorNameOption {
   /**
    * Omit it to create a new pane — ATR is a volatility measure, on a
    * different scale from price. It's not an oscillator, so the axis
@@ -536,12 +639,22 @@ export interface AttachAtrOptions extends AtrOptions, OwnedPaneOptions, Indicato
   color?: string;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachAtrOptions = AttachFrom<Atr, AtrOptions, AttachAtrLook>;
+
 export function attachAtr(
   options: AttachAtrOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Atr>> {
   requireAttachOptions(options, "attachAtr");
   return (plot) => {
-    const node = atr(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachAtr",
+      (given) => atr(given.source, { period: given.period }),
+      (given) => `ATR(${given.period ?? ATR_DEFAULTS.period})`,
+
+      ["atr"],
+    );
     const color = options.color ?? PRIMARY_COLOR;
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
@@ -549,7 +662,7 @@ export function attachAtr(
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(color)),
       input: node.out.atr,
-      name: options.name ?? `ATR(${options.period ?? ATR_DEFAULTS.period})`,
+      name: label,
       color,
     });
 
@@ -560,10 +673,7 @@ export function attachAtr(
   };
 }
 
-export interface AttachStochasticOptions
-  extends StochasticOptions,
-    OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachStochasticLook extends OwnedPaneOptions, IndicatorNameOption {
   /**
    * Omit it to create a new pane, wired with a fixed 0-100 axis and
    * reference lines too. Size it with `ownPane`.
@@ -574,21 +684,29 @@ export interface AttachStochasticOptions
   levels?: OscillatorLevels | false;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachStochasticOptions = AttachFrom<Stochastic, StochasticOptions, AttachStochasticLook>;
+
 export function attachStochastic(
   options: AttachStochasticOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Stochastic>> {
   requireAttachOptions(options, "attachStochastic");
   return (plot) => {
-    const node = stochastic(options.source, {
-      period: options.period,
-      smooth: options.smooth,
-      signal: options.signal,
-    });
+    const { node, label } = attachInputs(
+      options,
+      "attachStochastic",
+      (given) => stochastic(given.source, {
+        period: given.period,
+        smooth: given.smooth,
+        signal: given.signal,
+      }),
+      (given) => `Stoch(${given.period ?? STOCHASTIC_DEFAULTS.period},${given.smooth ?? STOCHASTIC_DEFAULTS.smooth},${given.signal ?? STOCHASTIC_DEFAULTS.signal})`,
+
+      ["d", "k"],
+    );
 
     const kColor = options.colors?.k ?? PRIMARY_COLOR;
     const dColor = options.colors?.d ?? SECONDARY_COLOR;
-    const label = options.name ?? `Stoch(${options.period ?? STOCHASTIC_DEFAULTS.period},${options.smooth ?? STOCHASTIC_DEFAULTS.smooth},${options.signal ?? STOCHASTIC_DEFAULTS.signal})`;
-
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
       wireOscillatorPane(owned, options.levels, STOCHASTIC_LEVELS),
     );
@@ -615,10 +733,7 @@ export function attachStochastic(
   };
 }
 
-export interface AttachStochasticRsiOptions
-  extends StochasticRsiOptions,
-    OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachStochasticRsiLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, wired with a fixed 0-100 axis and reference lines too. */
   pane?: SeriesHost;
   colors?: { k?: string; d?: string };
@@ -626,24 +741,30 @@ export interface AttachStochasticRsiOptions
   levels?: OscillatorLevels | false;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachStochasticRsiOptions = AttachFrom<StochasticRsi, StochasticRsiOptions, AttachStochasticRsiLook>;
+
 export function attachStochasticRsi(
   options: AttachStochasticRsiOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<StochasticRsi>> {
   requireAttachOptions(options, "attachStochasticRsi");
   return (plot) => {
-    const node = stochasticRsi(options.source, {
-      rsiPeriod: options.rsiPeriod,
-      period: options.period,
-      smooth: options.smooth,
-      signal: options.signal,
-    });
+    const d = STOCHASTIC_RSI_DEFAULTS;
+    const { node, label } = attachInputs(
+      options,
+      "attachStochasticRsi",
+      (given) => stochasticRsi(given.source, {
+        rsiPeriod: given.rsiPeriod,
+        period: given.period,
+        smooth: given.smooth,
+        signal: given.signal,
+      }),
+      (given) => `StochRSI(${given.rsiPeriod ?? d.rsiPeriod},${given.period ?? d.period},${given.smooth ?? d.smooth},${given.signal ?? d.signal})`,
+
+      ["d", "k"],
+    );
     const kColor = options.colors?.k ?? PRIMARY_COLOR;
     const dColor = options.colors?.d ?? SECONDARY_COLOR;
-    const d = STOCHASTIC_RSI_DEFAULTS;
-    const label =
-      options.name ??
-      `StochRSI(${options.rsiPeriod ?? d.rsiPeriod},${options.period ?? d.period},${options.smooth ?? d.smooth},${options.signal ?? d.signal})`;
-
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
       wireOscillatorPane(owned, options.levels, STOCHASTIC_RSI_LEVELS),
     );
@@ -670,8 +791,7 @@ export function attachStochasticRsi(
   };
 }
 
-export interface AttachMfiOptions extends MfiOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachMfiLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, wired with a fixed 0-100 axis and reference lines too. */
   pane?: SeriesHost;
   color?: string;
@@ -679,12 +799,22 @@ export interface AttachMfiOptions extends MfiOptions, OwnedPaneOptions, Indicato
   levels?: OscillatorLevels | false;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachMfiOptions = AttachFrom<Mfi, MfiOptions, AttachMfiLook>;
+
 export function attachMfi(
   options: AttachMfiOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Mfi>> {
   requireAttachOptions(options, "attachMfi");
   return (plot) => {
-    const node = mfi(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachMfi",
+      (given) => mfi(given.source, { period: given.period }),
+      (given) => `MFI(${given.period ?? MFI_DEFAULTS.period})`,
+
+      ["mfi"],
+    );
     const color = options.color ?? PRIMARY_COLOR;
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
@@ -694,7 +824,7 @@ export function attachMfi(
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(color)),
       input: node.out.mfi,
-      name: options.name ?? `MFI(${options.period ?? MFI_DEFAULTS.period})`,
+      name: label,
       color,
     });
 
@@ -705,10 +835,7 @@ export function attachMfi(
   };
 }
 
-export interface AttachUltimateOscillatorOptions
-  extends UltimateOscillatorOptions,
-    OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachUltimateOscillatorLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, wired with a fixed 0-100 axis and reference lines too. */
   pane?: SeriesHost;
   color?: string;
@@ -716,22 +843,34 @@ export interface AttachUltimateOscillatorOptions
   levels?: OscillatorLevels | false;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachUltimateOscillatorOptions = AttachFrom<UltimateOscillator, UltimateOscillatorOptions, AttachUltimateOscillatorLook>;
+
 export function attachUltimateOscillator(
   options: AttachUltimateOscillatorOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<UltimateOscillator>> {
   requireAttachOptions(options, "attachUltimateOscillator");
   return (plot) => {
-    const node = ultimateOscillator(options.source, {
-      fast: options.fast,
-      middle: options.middle,
-      slow: options.slow,
-    });
-    const color = options.color ?? PRIMARY_COLOR;
-    const d = ULTIMATE_OSCILLATOR_DEFAULTS;
-    // The label shows the windows the way the node uses them — shortest first.
-    const [fast, middle, slow] = [options.fast ?? d.fast, options.middle ?? d.middle, options.slow ?? d.slow].sort(
-      (a, b) => a - b,
+    const { node, label } = attachInputs(
+      options,
+      "attachUltimateOscillator",
+      (given) => ultimateOscillator(given.source, {
+        fast: given.fast,
+        middle: given.middle,
+        slow: given.slow,
+      }),
+      (given) => {
+        const d = ULTIMATE_OSCILLATOR_DEFAULTS;
+        // The label shows the windows the way the node uses them — shortest first.
+        const [fast, middle, slow] = [given.fast ?? d.fast, given.middle ?? d.middle, given.slow ?? d.slow].sort(
+          (a, b) => a - b,
+        );
+        return `UO(${fast},${middle},${slow})`;
+      },
+
+      ["uo"],
     );
+    const color = options.color ?? PRIMARY_COLOR;
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
       wireOscillatorPane(owned, options.levels, ULTIMATE_OSCILLATOR_LEVELS),
@@ -740,7 +879,7 @@ export function attachUltimateOscillator(
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(color)),
       input: node.out.uo,
-      name: options.name ?? `UO(${fast},${middle},${slow})`,
+      name: label,
       color,
     });
 
@@ -751,15 +890,15 @@ export function attachUltimateOscillator(
   };
 }
 
-export interface AttachAwesomeOscillatorOptions
-  extends AwesomeOscillatorOptions,
-    OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachAwesomeOscillatorLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane — an unbounded histogram, so the axis stays autoScale. */
   pane?: SeriesHost;
   /** One colour for every bar — overrides the up/down slots the bars' `tone` would pick. */
   color?: string;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachAwesomeOscillatorOptions = AttachFrom<AwesomeOscillator, AwesomeOscillatorOptions, AttachAwesomeOscillatorLook>;
 
 /** Mounts the Awesome Oscillator as a histogram growing from 0; each bar wears its `tone`. */
 export function attachAwesomeOscillator(
@@ -767,15 +906,22 @@ export function attachAwesomeOscillator(
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<AwesomeOscillator>> {
   requireAttachOptions(options, "attachAwesomeOscillator");
   return (plot) => {
-    const node = awesomeOscillator(options.source, { fast: options.fast, slow: options.slow });
     const d = AWESOME_OSCILLATOR_DEFAULTS;
+    const { node, label } = attachInputs(
+      options,
+      "attachAwesomeOscillator",
+      (given) => awesomeOscillator(given.source, { fast: given.fast, slow: given.slow }),
+      (given) => `AO(${given.fast ?? d.fast},${given.slow ?? d.slow})`,
+
+      ["ao"],
+    );
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
 
     const handle = pane.addSeries({
       series: histogramSeries(options.color ? { style: { color: options.color } } : undefined),
       input: node.out.ao,
-      name: options.name ?? `AO(${options.fast ?? d.fast},${options.slow ?? d.slow})`,
+      name: label,
       color: options.color,
     });
 
@@ -786,12 +932,14 @@ export function attachAwesomeOscillator(
   };
 }
 
-export interface AttachMomentumOptions extends MomentumOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachMomentumLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a zero line; the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { momentum?: string; signal?: string };
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachMomentumOptions = AttachFrom<Momentum, MomentumOptions, AttachMomentumLook>;
 
 /** Mounts Momentum and its signal — two lines around a zero line on an own pane. */
 export function attachMomentum(
@@ -799,19 +947,27 @@ export function attachMomentum(
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Momentum>> {
   requireAttachOptions(options, "attachMomentum");
   return (plot) => {
-    const node = momentum(options.source, { period: options.period, signal: options.signal });
     const d = MOMENTUM_DEFAULTS;
-    const label = options.name ?? `MTM(${options.period ?? d.period},${options.signal ?? d.signal})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachMomentum",
+      (given) => momentum(given.source, { period: given.period, signal: given.signal }),
+      (given) => `MTM(${given.period ?? d.period},${given.signal ?? d.signal})`,
+
+      ["momentum", "signal"],
+    );
     return twoLinesAroundZero(plot, options, node, node.out.momentum, node.out.signal, label, options.colors?.momentum, options.colors?.signal);
   };
 }
 
-export interface AttachElderRayOptions extends ElderRayOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachElderRayLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a zero line; the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { bull?: string; bear?: string };
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachElderRayOptions = AttachFrom<ElderRay, ElderRayOptions, AttachElderRayLook>;
 
 /**
  * Mounts Elder-Ray — bull power and bear power as two lines around a zero
@@ -824,11 +980,16 @@ export function attachElderRay(
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<ElderRay>> {
   requireAttachOptions(options, "attachElderRay");
   return (plot) => {
-    const node = elderRay(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachElderRay",
+      (given) => elderRay(given.source, { period: given.period }),
+      (given) => `Elder-Ray(${given.period ?? ELDER_RAY_DEFAULTS.period})`,
+
+      ["bearPower", "bullPower"],
+    );
     const bullColor = options.colors?.bull ?? UP_COLOR;
     const bearColor = options.colors?.bear ?? DOWN_COLOR;
-    const label = options.name ?? `Elder-Ray(${options.period ?? ELDER_RAY_DEFAULTS.period})`;
-
     // The zero line is the reading — only on an own pane, never on a borrowed axis.
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) => {
       owned.addDecoration(priceLine({ value: 0 }));
@@ -856,15 +1017,15 @@ export function attachElderRay(
   };
 }
 
-export interface AttachSqueezeMomentumOptions
-  extends SqueezeMomentumOptions,
-    OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachSqueezeMomentumLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane — an unbounded histogram, so the axis stays autoScale. */
   pane?: SeriesHost;
   /** `momentum` is one colour for every bar (overriding the up/down slots the bars' `tone` would pick); `squeezeOn`/`squeezeOff` colour the marker rows on the zero line. */
   colors?: { momentum?: string; squeezeOn?: string; squeezeOff?: string };
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachSqueezeMomentumOptions = AttachFrom<SqueezeMomentum, SqueezeMomentumOptions, AttachSqueezeMomentumLook>;
 
 /**
  * Mounts Squeeze Momentum — the momentum as a histogram and the two squeeze
@@ -878,19 +1039,22 @@ export function attachSqueezeMomentum(
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<SqueezeMomentum>> {
   requireAttachOptions(options, "attachSqueezeMomentum");
   return (plot) => {
-    const node = squeezeMomentum(options.source, {
-      bbPeriod: options.bbPeriod,
-      bbMultiplier: options.bbMultiplier,
-      kcPeriod: options.kcPeriod,
-      kcMultiplier: options.kcMultiplier,
-    });
     const d = SQUEEZE_MOMENTUM_DEFAULTS;
+    const { node, label } = attachInputs(
+      options,
+      "attachSqueezeMomentum",
+      (given) => squeezeMomentum(given.source, {
+        bbPeriod: given.bbPeriod,
+        bbMultiplier: given.bbMultiplier,
+        kcPeriod: given.kcPeriod,
+        kcMultiplier: given.kcMultiplier,
+      }),
+      (given) => `Squeeze(${given.bbPeriod ?? d.bbPeriod},${given.bbMultiplier ?? d.bbMultiplier},${given.kcPeriod ?? d.kcPeriod},${given.kcMultiplier ?? d.kcMultiplier})`,
+
+      ["momentum", "squeezeOff", "squeezeOn"],
+    );
     const onColor = options.colors?.squeezeOn ?? DOWN_COLOR;
     const offColor = options.colors?.squeezeOff ?? UP_COLOR;
-    const label =
-      options.name ??
-      `Squeeze(${options.bbPeriod ?? d.bbPeriod},${options.bbMultiplier ?? d.bbMultiplier},${options.kcPeriod ?? d.kcPeriod},${options.kcMultiplier ?? d.kcMultiplier})`;
-
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
 
     const handles = [
@@ -911,38 +1075,54 @@ export function attachSqueezeMomentum(
   };
 }
 
-export interface AttachRocOptions extends RocOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachRocLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a zero line; the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { roc?: string; signal?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachRocOptions = AttachFrom<Roc, RocOptions, AttachRocLook>;
+
 /** Mounts ROC and its signal — two lines around a zero line on an own pane. */
 export function attachRoc(options: AttachRocOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Roc>> {
   requireAttachOptions(options, "attachRoc");
   return (plot) => {
-    const node = roc(options.source, { period: options.period, signal: options.signal });
     const d = ROC_DEFAULTS;
-    const label = options.name ?? `ROC(${options.period ?? d.period},${options.signal ?? d.signal})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachRoc",
+      (given) => roc(given.source, { period: given.period, signal: given.signal }),
+      (given) => `ROC(${given.period ?? d.period},${given.signal ?? d.signal})`,
+
+      ["roc", "signal"],
+    );
     return twoLinesAroundZero(plot, options, node, node.out.roc, node.out.signal, label, options.colors?.roc, options.colors?.signal);
   };
 }
 
-export interface AttachTrixOptions extends TrixOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachTrixLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a zero line; the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { trix?: string; signal?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachTrixOptions = AttachFrom<Trix, TrixOptions, AttachTrixLook>;
+
 /** Mounts TRIX and its signal — two lines around a zero line on an own pane. */
 export function attachTrix(options: AttachTrixOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Trix>> {
   requireAttachOptions(options, "attachTrix");
   return (plot) => {
-    const node = trix(options.source, { period: options.period, signal: options.signal });
     const d = TRIX_DEFAULTS;
-    const label = options.name ?? `TRIX(${options.period ?? d.period},${options.signal ?? d.signal})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachTrix",
+      (given) => trix(given.source, { period: given.period, signal: given.signal }),
+      (given) => `TRIX(${given.period ?? d.period},${given.signal ?? d.signal})`,
+
+      ["signal", "trix"],
+    );
     return twoLinesAroundZero(plot, options, node, node.out.trix, node.out.signal, label, options.colors?.trix, options.colors?.signal);
   };
 }
@@ -976,8 +1156,7 @@ function twoLinesAroundZero<N extends Computation<Record<string, LineDataPoint[]
   });
 }
 
-export interface AttachPsyOptions extends PsyOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachPsyLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane with a fixed 0–100 axis and the reference lines. */
   pane?: SeriesHost;
   /** Reference lines. Default `PSY_LEVELS` (75/25); `false` draws none. */
@@ -985,16 +1164,24 @@ export interface AttachPsyOptions extends PsyOptions, OwnedPaneOptions, Indicato
   colors?: { psy?: string; signal?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachPsyOptions = AttachFrom<Psy, PsyOptions, AttachPsyLook>;
+
 /** Mounts PSY and its signal on a 0–100 pane with 75/25 reference lines. */
 export function attachPsy(options: AttachPsyOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Psy>> {
   requireAttachOptions(options, "attachPsy");
   return (plot) => {
-    const node = psy(options.source, { period: options.period, signal: options.signal });
+    const d = PSY_DEFAULTS;
+    const { node, label } = attachInputs(
+      options,
+      "attachPsy",
+      (given) => psy(given.source, { period: given.period, signal: given.signal }),
+      (given) => `PSY(${given.period ?? d.period},${given.signal ?? d.signal})`,
+
+      ["psy", "signal"],
+    );
     const psyColor = options.colors?.psy ?? PRIMARY_COLOR;
     const signalColor = options.colors?.signal ?? SECONDARY_COLOR;
-    const d = PSY_DEFAULTS;
-    const label = options.name ?? `PSY(${options.period ?? d.period},${options.signal ?? d.signal})`;
-
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
       wireOscillatorPane(owned, options.levels, PSY_LEVELS),
     );
@@ -1011,62 +1198,85 @@ export function attachPsy(options: AttachPsyOptions): Plugin<PaneHost, OwnedPane
   };
 }
 
-export interface AttachBbiOptions extends BbiOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachBbiLook extends IndicatorNameOption {
   color?: string;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachBbiOptions = AttachFrom<Bbi, BbiOptions, AttachBbiLook>;
 
 /** Mounts BBI on the price pane — one line, labelled with its four windows. */
 export function attachBbi(options: AttachBbiOptions): Plugin<SeriesHost, IndicatorApi<Bbi>> {
   requireAttachOptions(options, "attachBbi");
   return (pane) => {
-    const node = bbi(options.source, { periods: options.periods });
-    // The factory has already refused anything but four windows.
-    const periods = options.periods ?? BBI_DEFAULTS.periods;
+    const { node, label } = attachInputs(
+      options,
+      "attachBbi",
+      (given) => bbi(given.source, { periods: given.periods }),
+      // The factory has already refused anything but four windows.
+      (given) => `BBI(${(given.periods ?? BBI_DEFAULTS.periods).join(",")})`,
+
+      ["bbi"],
+    );
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(options.color)),
       input: node.out.bbi,
-      name: options.name ?? `BBI(${periods.join(",")})`,
+      name: label,
       color: options.color,
     });
     return pluginApi({ node }, () => handle.dispose());
   };
 }
 
-export interface AttachDmaOptions extends DmaOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachDmaLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a zero line; the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { dma?: string; signal?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachDmaOptions = AttachFrom<Dma, DmaOptions, AttachDmaLook>;
+
 /** Mounts DMA and its signal — two lines around a zero line on an own pane. */
 export function attachDma(options: AttachDmaOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Dma>> {
   requireAttachOptions(options, "attachDma");
   return (plot) => {
-    const node = dma(options.source, { fast: options.fast, slow: options.slow, signal: options.signal });
     const d = DMA_DEFAULTS;
-    const label = options.name ?? `DMA(${options.fast ?? d.fast},${options.slow ?? d.slow},${options.signal ?? d.signal})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachDma",
+      (given) => dma(given.source, { fast: given.fast, slow: given.slow, signal: given.signal }),
+      (given) => `DMA(${given.fast ?? d.fast},${given.slow ?? d.slow},${given.signal ?? d.signal})`,
+
+      ["dma", "signal"],
+    );
     return twoLinesAroundZero(plot, options, node, node.out.dma, node.out.signal, label, options.colors?.dma, options.colors?.signal);
   };
 }
 
-export interface AttachBrarOptions extends BrarOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachBrarLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a line at 100 (the balance point); the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { br?: string; ar?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachBrarOptions = AttachFrom<Brar, BrarOptions, AttachBrarLook>;
+
 /** Mounts BR and AR — two lines around the 100 line on an own pane. */
 export function attachBrar(options: AttachBrarOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Brar>> {
   requireAttachOptions(options, "attachBrar");
   return (plot) => {
-    const node = brar(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachBrar",
+      (given) => brar(given.source, { period: given.period }),
+      (given) => `BRAR(${given.period ?? BRAR_DEFAULTS.period})`,
+
+      ["ar", "br"],
+    );
     const brColor = options.colors?.br ?? PRIMARY_COLOR;
     const arColor = options.colors?.ar ?? SECONDARY_COLOR;
-    const label = options.name ?? `BRAR(${options.period ?? BRAR_DEFAULTS.period})`;
-
     // 100 is where the two sums balance — the reading, like a zero line. Only on an own pane.
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) => {
       owned.addDecoration(priceLine({ value: 100 }));
@@ -1084,37 +1294,53 @@ export function attachBrar(options: AttachBrarOptions): Plugin<PaneHost, OwnedPa
   };
 }
 
-export interface AttachCrOptions extends CrOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachCrLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a line at 100 (the balance point); the axis stays autoScale. */
   pane?: SeriesHost;
-  /** The band and its four averages. The averages share one colour by default — the legend tells them apart by window. */
+  /** The band and its four averages. The averages share one colour by default — the legend tells them apart by name (the window from a source, `MA1`…`MA4` or `labels` from a node). */
   colors?: { cr?: string; ma1?: string; ma2?: string; ma3?: string; ma4?: string };
+  /**
+   * The four averages' legend names. From a source they read `MA(w)` with
+   * each window; from a `node` the windows are not known, so they read
+   * `MA1`…`MA4` unless you name them here.
+   */
+  labels?: [string, string, string, string];
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachCrOptions = AttachFrom<Cr, CrOptions, AttachCrLook>;
 
 /** Mounts CR and its four displaced averages — five lines on an own pane, each average labelled with its window. */
 export function attachCr(options: AttachCrOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Cr>> {
   requireAttachOptions(options, "attachCr");
   return (plot) => {
-    const node = cr(options.source, { period: options.period, periods: options.periods });
-    // The factory has already refused anything but four windows.
-    const periods = options.periods ?? CR_DEFAULTS.periods;
-    const crColor = options.colors?.cr ?? PRIMARY_COLOR;
-    const label = options.name ?? `CR(${options.period ?? CR_DEFAULTS.period})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachCr",
+      (given) => cr(given.source, { period: given.period, periods: given.periods }),
+      (given) => `CR(${given.period ?? CR_DEFAULTS.period})`,
 
+      ["cr", "ma1", "ma2", "ma3", "ma4"],
+    );
+    // The factory has already refused anything but four windows — and a node
+    // carries none, so its averages are named by position unless `labels` says.
+    const windows = "node" in options ? null : (options.periods ?? CR_DEFAULTS.periods);
+    const averageName = (i: 0 | 1 | 2 | 3) =>
+      options.labels?.[i] ?? (windows ? `${label} MA(${windows[i]})` : `${label} MA${i + 1}`);
+    const crColor = options.colors?.cr ?? PRIMARY_COLOR;
     // 100 is where the two sums balance — the reading, like a zero line. Only on an own pane.
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) => {
       owned.addDecoration(priceLine({ value: 100 }));
     });
 
-    const average = (input: Cr["out"]["ma1"], window: number, color: string) =>
-      pane.addSeries({ series: lineSeries(overlayStyle(color)), input, name: `${label} MA(${window})`, color });
+    const average = (input: Cr["out"]["ma1"], name: string, color: string) =>
+      pane.addSeries({ series: lineSeries(overlayStyle(color)), input, name, color });
     const handles = [
       pane.addSeries({ series: lineSeries(overlayStyle(crColor)), input: node.out.cr, name: label, color: crColor }),
-      average(node.out.ma1, periods[0], options.colors?.ma1 ?? SECONDARY_COLOR),
-      average(node.out.ma2, periods[1], options.colors?.ma2 ?? SECONDARY_COLOR),
-      average(node.out.ma3, periods[2], options.colors?.ma3 ?? SECONDARY_COLOR),
-      average(node.out.ma4, periods[3], options.colors?.ma4 ?? SECONDARY_COLOR),
+      average(node.out.ma1, averageName(0), options.colors?.ma1 ?? SECONDARY_COLOR),
+      average(node.out.ma2, averageName(1), options.colors?.ma2 ?? SECONDARY_COLOR),
+      average(node.out.ma3, averageName(2), options.colors?.ma3 ?? SECONDARY_COLOR),
+      average(node.out.ma4, averageName(3), options.colors?.ma4 ?? SECONDARY_COLOR),
     ];
 
     return pluginApi({ node, pane: ownedPaneApi }, () => {
@@ -1126,8 +1352,7 @@ export function attachCr(options: AttachCrOptions): Plugin<PaneHost, OwnedPaneIn
 
 export const KDJ_LEVELS = { overbought: 80, oversold: 20 } as const;
 
-export interface AttachKdjOptions extends KdjOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachKdjLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane with the reference lines; the axis stays autoScale (J runs outside 0–100). */
   pane?: SeriesHost;
   /** Reference lines. Default `KDJ_LEVELS` (80/20); `false` draws none. */
@@ -1135,17 +1360,25 @@ export interface AttachKdjOptions extends KdjOptions, OwnedPaneOptions, Indicato
   colors?: { k?: string; d?: string; j?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachKdjOptions = AttachFrom<Kdj, KdjOptions, AttachKdjLook>;
+
 /** Mounts KDJ — %K, %D and %J on an own pane whose axis is left to autoScale, as CCI's is. */
 export function attachKdj(options: AttachKdjOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Kdj>> {
   requireAttachOptions(options, "attachKdj");
   return (plot) => {
-    const node = kdj(options.source, { period: options.period, smooth: options.smooth, signal: options.signal });
+    const d = KDJ_DEFAULTS;
+    const { node, label } = attachInputs(
+      options,
+      "attachKdj",
+      (given) => kdj(given.source, { period: given.period, smooth: given.smooth, signal: given.signal }),
+      (given) => `KDJ(${given.period ?? d.period},${given.smooth ?? d.smooth},${given.signal ?? d.signal})`,
+
+      ["d", "j", "k"],
+    );
     const kColor = options.colors?.k ?? PRIMARY_COLOR;
     const dColor = options.colors?.d ?? SECONDARY_COLOR;
     const jColor = options.colors?.j ?? LAGGING_COLOR;
-    const d = KDJ_DEFAULTS;
-    const label = options.name ?? `KDJ(${options.period ?? d.period},${options.smooth ?? d.smooth},${options.signal ?? d.signal})`;
-
     // J leaves 0–100 (a rebound from oversold reads near 130), so the axis is not fixed — only the lines are drawn.
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
       wireOscillatorPane(owned, options.levels, KDJ_LEVELS, null),
@@ -1164,23 +1397,30 @@ export function attachKdj(options: AttachKdjOptions): Plugin<PaneHost, OwnedPane
   };
 }
 
-export interface AttachVrOptions extends VrOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachVrLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane; the axis stays autoScale (VR is unbounded above). */
   pane?: SeriesHost;
   colors?: { vr?: string; signal?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachVrOptions = AttachFrom<Vr, VrOptions, AttachVrLook>;
+
 /** Mounts VR and its signal — two lines on an own pane. */
 export function attachVr(options: AttachVrOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Vr>> {
   requireAttachOptions(options, "attachVr");
   return (plot) => {
-    const node = vr(options.source, { period: options.period, signal: options.signal });
+    const d = VR_DEFAULTS;
+    const { node, label } = attachInputs(
+      options,
+      "attachVr",
+      (given) => vr(given.source, { period: given.period, signal: given.signal }),
+      (given) => `VR(${given.period ?? d.period},${given.signal ?? d.signal})`,
+
+      ["signal", "vr"],
+    );
     const vrColor = options.colors?.vr ?? PRIMARY_COLOR;
     const signalColor = options.colors?.signal ?? SECONDARY_COLOR;
-    const d = VR_DEFAULTS;
-    const label = options.name ?? `VR(${options.period ?? d.period},${options.signal ?? d.signal})`;
-
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
 
     const handles = [
@@ -1195,40 +1435,57 @@ export function attachVr(options: AttachVrOptions): Plugin<PaneHost, OwnedPaneIn
   };
 }
 
-export interface AttachEmvOptions extends EmvOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachEmvLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane, with a zero line; the axis stays autoScale. */
   pane?: SeriesHost;
   colors?: { emv?: string; signal?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachEmvOptions = AttachFrom<Emv, EmvOptions, AttachEmvLook>;
+
 /** Mounts EMV and its signal — two lines around a zero line on an own pane. */
 export function attachEmv(options: AttachEmvOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Emv>> {
   requireAttachOptions(options, "attachEmv");
   return (plot) => {
-    const node = emv(options.source, { period: options.period });
-    const label = options.name ?? `EMV(${options.period ?? EMV_DEFAULTS.period})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachEmv",
+      (given) => emv(given.source, { period: given.period }),
+      (given) => `EMV(${given.period ?? EMV_DEFAULTS.period})`,
+
+      ["emv", "signal"],
+    );
     return twoLinesAroundZero(plot, options, node, node.out.emv, node.out.signal, label, options.colors?.emv, options.colors?.signal);
   };
 }
 
-export interface AttachPvtOptions extends OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachPvtLook extends OwnedPaneOptions, IndicatorNameOption {
   /** Omit it to create a new pane — a running sum on its own scale; the axis stays autoScale. */
   pane?: SeriesHost;
   color?: string;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachPvtOptions = AttachFrom<Pvt, unknown, AttachPvtLook>;
+
 /** Mounts PVT — one line on an own pane, like OBV. */
 export function attachPvt(options: AttachPvtOptions): Plugin<PaneHost, OwnedPaneIndicatorApi<Pvt>> {
   requireAttachOptions(options, "attachPvt");
   return (plot) => {
-    const node = pvt(options.source);
+    const { node, label } = attachInputs(
+      options,
+      "attachPvt",
+      (given) => pvt(given.source),
+      () => "PVT",
+
+      ["pvt"],
+    );
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(options.color)),
       input: node.out.pvt,
-      name: options.name ?? "PVT",
+      name: label,
       color: options.color,
     });
     return pluginApi({ node, pane: ownedPaneApi }, () => {
@@ -1238,10 +1495,12 @@ export function attachPvt(options: AttachPvtOptions): Plugin<PaneHost, OwnedPane
   };
 }
 
-export interface AttachVwapOptions extends VwapOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachVwapLook extends IndicatorNameOption {
   color?: string;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachVwapOptions = AttachFrom<Vwap, VwapOptions, AttachVwapLook>;
 
 /** Mounts VWAP on that pane — usually `mainPane`, since it shares price's axis. */
 export function attachVwap(
@@ -1249,11 +1508,18 @@ export function attachVwap(
 ): Plugin<SeriesHost, IndicatorApi<Vwap>> {
   requireAttachOptions(options, "attachVwap");
   return (pane) => {
-    const node = vwap(options.source, { anchor: options.anchor });
+    const { node, label } = attachInputs(
+      options,
+      "attachVwap",
+      (given) => vwap(given.source, { anchor: given.anchor }),
+      () => "VWAP",
+
+      ["vwap"],
+    );
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(options.color)),
       input: node.out.vwap,
-      name: options.name ?? "VWAP",
+      name: label,
       color: options.color,
     });
 
@@ -1261,8 +1527,7 @@ export function attachVwap(
   };
 }
 
-export interface AttachObvOptions extends OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachObvLook extends OwnedPaneOptions, IndicatorNameOption {
   /**
    * Omit it to create a new pane — OBV accumulates volume, on a
    * different scale. Size it with `ownPane`.
@@ -1271,19 +1536,29 @@ export interface AttachObvOptions extends OwnedPaneOptions, IndicatorNameOption 
   color?: string;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachObvOptions = AttachFrom<Obv, unknown, AttachObvLook>;
+
 export function attachObv(
   options: AttachObvOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Obv>> {
   requireAttachOptions(options, "attachObv");
   return (plot) => {
-    const node = obv(options.source);
+    const { node, label } = attachInputs(
+      options,
+      "attachObv",
+      (given) => obv(given.source),
+      () => "OBV",
+
+      ["obv"],
+    );
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
 
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(options.color)),
       input: node.out.obv,
-      name: options.name ?? "OBV",
+      name: label,
       color: options.color,
     });
 
@@ -1294,8 +1569,7 @@ export function attachObv(
   };
 }
 
-export interface AttachAdxOptions extends AdxOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachAdxLook extends OwnedPaneOptions, IndicatorNameOption {
   /**
    * Omit it to create a new pane — DI runs 0 to 100, but that's not a
    * fixed contract, so the axis stays autoScale. Size it with `ownPane`.
@@ -1304,12 +1578,22 @@ export interface AttachAdxOptions extends AdxOptions, OwnedPaneOptions, Indicato
   colors?: { adx?: string; plusDi?: string; minusDi?: string };
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachAdxOptions = AttachFrom<Adx, AdxOptions, AttachAdxLook>;
+
 export function attachAdx(
   options: AttachAdxOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Adx>> {
   requireAttachOptions(options, "attachAdx");
   return (plot) => {
-    const node = adx(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachAdx",
+      (given) => adx(given.source, { period: given.period }),
+      (given) => `ADX(${given.period ?? ADX_DEFAULTS.period})`,
+
+      ["adx", "minusDi", "plusDi"],
+    );
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options);
 
@@ -1317,9 +1601,6 @@ export function attachAdx(
     const adxColor = options.colors?.adx ?? PRIMARY_COLOR;
     const plusColor = options.colors?.plusDi ?? UP_COLOR;
     const minusColor = options.colors?.minusDi ?? DOWN_COLOR;
-    const period = options.period ?? ADX_DEFAULTS.period;
-    const label = options.name ?? `ADX(${period})`;
-
     const handles = [
       pane.addSeries({
         series: lineSeries(overlayStyle(adxColor)),
@@ -1348,8 +1629,7 @@ export function attachAdx(
   };
 }
 
-export interface AttachIchimokuOptions extends IchimokuOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachIchimokuLook extends IndicatorNameOption {
   colors?: {
     conversion?: string;
     base?: string;
@@ -1361,20 +1641,29 @@ export interface AttachIchimokuOptions extends IchimokuOptions, IndicatorNameOpt
   cloud?: BandSeriesOptions;
 }
 
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachIchimokuOptions = AttachFrom<Ichimoku, IchimokuOptions, AttachIchimokuLook>;
+
 /** Mounts Ichimoku on that pane — an overlay on price. */
 export function attachIchimoku(
   options: AttachIchimokuOptions,
 ): Plugin<SeriesHost, IndicatorApi<Ichimoku>> {
   requireAttachOptions(options, "attachIchimoku");
   return (pane) => {
-    const node = ichimoku(options.source, {
-      conversion: options.conversion,
-      base: options.base,
-      span: options.span,
-      displacement: options.displacement,
-    });
-    const label = options.name ?? `Ichimoku(${options.conversion ?? ICHIMOKU_DEFAULTS.conversion},${options.base ?? ICHIMOKU_DEFAULTS.base},${options.span ?? ICHIMOKU_DEFAULTS.span})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachIchimoku",
+      (given) => ichimoku(given.source, {
+        conversion: given.conversion,
+        base: given.base,
+        span: given.span,
+        displacement: given.displacement,
+        ahead: given.ahead,
+      }),
+      (given) => `Ichimoku(${given.conversion ?? ICHIMOKU_DEFAULTS.conversion},${given.base ?? ICHIMOKU_DEFAULTS.base},${given.span ?? ICHIMOKU_DEFAULTS.span})`,
 
+      ["base", "cloud", "conversion", "lagging", "spanA", "spanB"],
+    );
     // If all five lines defaulted to the same color, they'd be
     // indistinguishable — the convention palette: conversion/base take
     // the MACD pair (blue/orange), spans take the direction colors
@@ -1414,10 +1703,12 @@ export function attachIchimoku(
   };
 }
 
-export interface AttachParabolicSarOptions extends ParabolicSarOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachParabolicSarLook extends IndicatorNameOption {
   color?: string;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachParabolicSarOptions = AttachFrom<ParabolicSar, ParabolicSarOptions, AttachParabolicSarLook>;
 
 /**
  * Mounts SAR on that pane as dots — no new series type; lineSeries's
@@ -1429,10 +1720,17 @@ export function attachParabolicSar(
 ): Plugin<SeriesHost, IndicatorApi<ParabolicSar>> {
   requireAttachOptions(options, "attachParabolicSar");
   return (pane) => {
-    const node = parabolicSar(options.source, {
-      step: options.step,
-      max: options.max,
-    });
+    const { node, label } = attachInputs(
+      options,
+      "attachParabolicSar",
+      (given) => parabolicSar(given.source, {
+        step: given.step,
+        max: given.max,
+      }),
+      (given) => `SAR(${given.step ?? PARABOLIC_SAR_DEFAULTS.step},${given.max ?? PARABOLIC_SAR_DEFAULTS.max})`,
+
+      ["sar"],
+    );
     const color = options.color ?? PRIMARY_COLOR;
 
     const handle = pane.addSeries({
@@ -1441,7 +1739,7 @@ export function attachParabolicSar(
         point: { radius: 2.5, color },
       }),
       input: node.out.sar,
-      name: options.name ?? `SAR(${options.step ?? PARABOLIC_SAR_DEFAULTS.step},${options.max ?? PARABOLIC_SAR_DEFAULTS.max})`,
+      name: label,
       color,
     });
 
@@ -1449,19 +1747,28 @@ export function attachParabolicSar(
   };
 }
 
-export interface AttachCciOptions extends CciOptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachCciLook extends OwnedPaneOptions, IndicatorNameOption {
   color?: string;
   /** Reference lines. Default ±100. `false` skips them. */
   levels?: OscillatorLevels | false;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachCciOptions = AttachFrom<Cci, CciOptions, AttachCciLook>;
 
 export function attachCci(
   options: AttachCciOptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<Cci>> {
   requireAttachOptions(options, "attachCci");
   return (plot) => {
-    const node = cci(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachCci",
+      (given) => cci(given.source, { period: given.period }),
+      (given) => `CCI(${given.period ?? CCI_DEFAULTS.period})`,
+
+      ["cci"],
+    );
     const color = options.color ?? PRIMARY_COLOR;
 
     // CCI is unbounded — leave the axis to autoScale (pinning ±100 as
@@ -1473,7 +1780,7 @@ export function attachCci(
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(color)),
       input: node.out.cci,
-      name: options.name ?? `CCI(${options.period ?? CCI_DEFAULTS.period})`,
+      name: label,
       color,
     });
 
@@ -1484,19 +1791,28 @@ export function attachCci(
   };
 }
 
-export interface AttachWilliamsROptions extends WilliamsROptions, OwnedPaneOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachWilliamsRLook extends OwnedPaneOptions, IndicatorNameOption {
   color?: string;
   /** Reference lines. Default −20/−80. `false` skips them. */
   levels?: OscillatorLevels | false;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachWilliamsROptions = AttachFrom<WilliamsR, WilliamsROptions, AttachWilliamsRLook>;
 
 export function attachWilliamsR(
   options: AttachWilliamsROptions,
 ): Plugin<PaneHost, OwnedPaneIndicatorApi<WilliamsR>> {
   requireAttachOptions(options, "attachWilliamsR");
   return (plot) => {
-    const node = williamsR(options.source, { period: options.period });
+    const { node, label } = attachInputs(
+      options,
+      "attachWilliamsR",
+      (given) => williamsR(given.source, { period: given.period }),
+      (given) => `%R(${given.period ?? WILLIAMS_R_DEFAULTS.period})`,
+
+      ["r"],
+    );
     const color = options.color ?? PRIMARY_COLOR;
 
     const { pane, ownedPaneApi, disposeOwned } = ownedPane(plot, options, (owned) =>
@@ -1511,7 +1827,7 @@ export function attachWilliamsR(
     const handle = pane.addSeries({
       series: lineSeries(overlayStyle(color)),
       input: node.out.r,
-      name: options.name ?? `%R(${options.period ?? WILLIAMS_R_DEFAULTS.period})`,
+      name: label,
       color,
     });
 
@@ -1522,11 +1838,13 @@ export function attachWilliamsR(
   };
 }
 
-export interface AttachDonchianOptions extends DonchianOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachDonchianLook extends IndicatorNameOption {
   colors?: { middle?: string; edges?: string };
   band?: BandSeriesOptions;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachDonchianOptions = AttachFrom<DonchianChannels, DonchianOptions, AttachDonchianLook>;
 
 /** Mounts the channel on that pane — usually `mainPane`, since it shares price's axis. */
 export function attachDonchianChannels(
@@ -1534,17 +1852,25 @@ export function attachDonchianChannels(
 ): Plugin<SeriesHost, IndicatorApi<DonchianChannels>> {
   requireAttachOptions(options, "attachDonchianChannels");
   return (pane) => {
-    const node = donchianChannels(options.source, { period: options.period });
-    const label = options.name ?? `DC(${options.period ?? DONCHIAN_DEFAULTS.period})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachDonchianChannels",
+      (given) => donchianChannels(given.source, { period: given.period }),
+      (given) => `DC(${given.period ?? DONCHIAN_DEFAULTS.period})`,
+
+      ["band", "lower", "middle", "upper"],
+    );
     return pluginApi({ node }, wireChannel(pane, node, label, options));
   };
 }
 
-export interface AttachKeltnerOptions extends KeltnerOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachKeltnerLook extends IndicatorNameOption {
   colors?: { middle?: string; edges?: string };
   band?: BandSeriesOptions;
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachKeltnerOptions = AttachFrom<KeltnerChannels, KeltnerOptions, AttachKeltnerLook>;
 
 /** Mounts Keltner Channels on that pane — the same mold as Bollinger. */
 export function attachKeltnerChannels(
@@ -1552,12 +1878,18 @@ export function attachKeltnerChannels(
 ): Plugin<SeriesHost, IndicatorApi<KeltnerChannels>> {
   requireAttachOptions(options, "attachKeltnerChannels");
   return (pane) => {
-    const node = keltnerChannels(options.source, {
-      period: options.period,
-      multiplier: options.multiplier,
-      atrPeriod: options.atrPeriod,
-    });
-    const label = options.name ?? `KC(${options.period ?? KELTNER_DEFAULTS.period},${options.multiplier ?? KELTNER_DEFAULTS.multiplier})`;
+    const { node, label } = attachInputs(
+      options,
+      "attachKeltnerChannels",
+      (given) => keltnerChannels(given.source, {
+        period: given.period,
+        multiplier: given.multiplier,
+        atrPeriod: given.atrPeriod,
+      }),
+      (given) => `KC(${given.period ?? KELTNER_DEFAULTS.period},${given.multiplier ?? KELTNER_DEFAULTS.multiplier})`,
+
+      ["band", "lower", "middle", "upper"],
+    );
     return pluginApi({ node }, wireChannel(pane, node, label, options));
   };
 }
@@ -1605,10 +1937,12 @@ function wireChannel(
   };
 }
 
-export interface AttachSuperTrendOptions extends SuperTrendOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachSuperTrendLook extends IndicatorNameOption {
   colors?: { up?: string; down?: string };
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachSuperTrendOptions = AttachFrom<SuperTrend, SuperTrendOptions, AttachSuperTrendLook>;
 
 /**
  * Mounts SuperTrend on that pane — the two branches, the uptrend support
@@ -1622,14 +1956,19 @@ export function attachSuperTrend(
 ): Plugin<SeriesHost, IndicatorApi<SuperTrend>> {
   requireAttachOptions(options, "attachSuperTrend");
   return (pane) => {
-    const node = superTrend(options.source, {
-      period: options.period,
-      multiplier: options.multiplier,
-    });
+    const { node, label } = attachInputs(
+      options,
+      "attachSuperTrend",
+      (given) => superTrend(given.source, {
+        period: given.period,
+        multiplier: given.multiplier,
+      }),
+      (given) => `ST(${given.period ?? SUPERTREND_DEFAULTS.period},${given.multiplier ?? SUPERTREND_DEFAULTS.multiplier})`,
+
+      ["down", "up"],
+    );
     const upColor = options.colors?.up ?? UP_COLOR;
     const downColor = options.colors?.down ?? DOWN_COLOR;
-    const label = options.name ?? `ST(${options.period ?? SUPERTREND_DEFAULTS.period},${options.multiplier ?? SUPERTREND_DEFAULTS.multiplier})`;
-
     const handles = [
       pane.addSeries({
         series: lineSeries(overlayStyle(upColor)),
@@ -1651,8 +1990,7 @@ export function attachSuperTrend(
   };
 }
 
-export interface AttachPivotPointsOptions extends PivotPointsOptions, IndicatorNameOption {
-  source: Source<OHLC>;
+export interface AttachPivotPointsLook extends IndicatorNameOption {
   /**
    * How many tiers to draw — 1 gives the pivot (P) and the first
    * resistance and support (R1, S1); 3 goes out to the third pair (R3, S3).
@@ -1662,6 +2000,9 @@ export interface AttachPivotPointsOptions extends PivotPointsOptions, IndicatorN
   depth?: 1 | 2 | 3;
   colors?: { p?: string; r?: string; s?: string };
 }
+
+/** From a `source` and the factory's options, or from a `node` you built — then `name` is yours to give. */
+export type AttachPivotPointsOptions = AttachFrom<PivotPoints, PivotPointsOptions, AttachPivotPointsLook>;
 
 /**
  * Mounts Pivot Points on that pane — the period boundary (`anchor`) is
@@ -1673,10 +2014,16 @@ export function attachPivotPoints(
 ): Plugin<SeriesHost, IndicatorApi<PivotPoints>> {
   requireAttachOptions(options, "attachPivotPoints");
   return (pane) => {
-    const node = pivotPoints(options.source, { anchor: options.anchor });
+    const { node, label } = attachInputs(
+      options,
+      "attachPivotPoints",
+      (given) => pivotPoints(given.source, { anchor: given.anchor }),
+      () => "Pivot",
+
+      ["p", "r1", "r2", "r3", "s1", "s2", "s3"],
+    );
     const depth = options.depth ?? PIVOT_POINTS_DEFAULTS.depth;
     // "P" alone can't tell a daily pivot from a weekly one — the head names the indicator.
-    const label = options.name ?? "Pivot";
     const pColor = options.colors?.p ?? SECONDARY_COLOR;
     const rColor = options.colors?.r ?? DOWN_COLOR;
     const sColor = options.colors?.s ?? UP_COLOR;

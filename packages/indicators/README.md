@@ -36,8 +36,17 @@ pnpm add @finchart/indicators @finchart/core
   gap bar, the sum kept and resumed on the next bar against the previous
   close — and the sum starts at 0, which is what a bar with volume but no
   previous close reads.
-- Ichimoku's leading and lagging spans shift by index, not by inventing future
-  x values — so no cloud is drawn past the last candle.
+- Ichimoku's leading and lagging spans shift by index — bar units, so a
+  weekend gap is not counted. The cloud stops at the last candle unless you
+  say what the bars after it are: `ichimoku(source, { ahead: (lastX, steps) =>
+  lastX + steps * 60_000 })` runs the leading spans and the cloud
+  `displacement` bars past it, at the x your feed would give those bars (a
+  session's, a trading day's — the feed knows, this package does not). The
+  chart's x range then reaches the projected cloud: `rightOffset` is room
+  after it, and following a new bar (`shiftVisibleRangeOnNewBar`) tracks the
+  cloud's end — a viewport that shows the last candle but not the cloud's
+  end is not "at the end", so it does not follow; keep the cloud in view or
+  turn the projection off.
 - **Where the readings part from KLineChart**, the source for ROC, TRIX, PSY,
   VR, BBI, DMA, CR, BRAR, EMV, PVT and KDJ. A case the formula leaves
   undefined is `null`, never the 0 the canonical writes: ROC's zero reference
@@ -116,24 +125,43 @@ follows it instead of matching panes by position.
 ## Sharing one calculation — use the factory directly
 
 `attach*` bundles "calculate + draw" into one line. **When several drawings
-need to share one calculation**, use the factory instead and wire its outputs
-(`out.*`) yourself — that way Bollinger's bands and middle line don't run the
-same SMA twice.
+need to share one calculation**, build the node with the factory and hand it
+to the attach — every `attach*` takes `{ node, name }` in place of
+`{ source, ...options }` — and wire the node's other outputs (`out.*`)
+yourself. Bollinger's bands and its middle line then run one SMA, and the
+node is also what `api.node` returns:
 
 ```ts
 const boll = bollingerBands(price, { period: 20 });
-boll.out.band;    // Source — the bands
-boll.out.middle;  // Source — the middle line (shares that one SMA)
+plot.mainPane.use(attachBollingerBands({ node: boll, name: "BB(20,2)", middle: false }));
+plot.mainPane.addSeries({ series: lineSeries(), input: boll.out.middle, name: "MA(20)" });
 ```
+
+A node does not carry its formula, so with `node` the `name` is yours to give
+— `MA(20)` cannot be made up from a node — and the factory's options are not
+taken (they are the node's already). Presentation stays: colours, `pane` /
+`ownPane`, `levels`, the band's style. The two doors are exclusive: `{ source,
+node }` is a type error. CR names its four averages `MA(w)` by window from a
+source and `MA1`…`MA4` from a node (windows unknown) — `labels` names them.
+
+**`MA(n)` and `BB(n)` share the middle line.** Bollinger's middle *is* the
+SMA of its period over its input, so a simple `attachMovingAverage` of the
+same period on the same input and pane sits exactly on top of it (an EMA, or
+a different value accessor, does not) — it looks like the MA is missing. Either turn
+the band's line off (`middle: false`) or draw one line from the shared node,
+as above.
 
 In React these outputs are exactly the shape `<ChartLine input={...}>` and
 `<ChartSeries input={...}>` expect.
 
 To change a parameter, reinstall: `dispose()` and `use()` again with the new
-options. Computed nodes are values, so recreating one is cheap.
+options — and with a `node`, build a new node with the new options first;
+reinstalling the same node changes nothing. Computed nodes are values, so
+recreating one is cheap.
 
-Every `attach*` names its series from the formula — `RSI(14)`, `BB(20,2)
-Upper`, `Pivot R1` — so the legend can read them. Two instances of one
+From a source, every `attach*` names its series from the formula — `RSI(14)`,
+`BB(20,2) Upper`, `Pivot R1` — so the legend can read them; from a node the
+head is the `name` you give (and CR's averages are `MA1`…`MA4` or `labels`). Two instances of one
 indicator on two sources would read the same; pass `name` to replace the head
 of the label (the parts — `Upper`, `Signal`, `R1` — stay appended):
 
@@ -200,7 +228,7 @@ must carry beyond OHLC: `volume` on every bar, or an `anchor` predicate
 | `atr` | recompute + reuse | ✓ | `ATR_DEFAULTS` | — |
 | `adx` | recompute + reuse | ✓ | `ADX_DEFAULTS` | — |
 | `parabolicSar` | recompute + reuse | — | `PARABOLIC_SAR_DEFAULTS` | — |
-| `ichimoku` | recompute + reuse | — | `ICHIMOKU_DEFAULTS` | — |
+| `ichimoku` | recompute + reuse | ✓ | `ICHIMOKU_DEFAULTS` | — |
 | `vwap` | recompute + reuse | — | — | volume |
 | `obv` | recompute + reuse | — | — | volume |
 | `stochastic` | recompute + reuse | ✓ | `STOCHASTIC_DEFAULTS` | — |
@@ -232,12 +260,30 @@ must carry beyond OHLC: `volume` on every bar, or an `anchor` predicate
 This table is held against the source by a repository check — a row that
 disagrees with `factories.ts`, or an indicator without a row, fails the gate.
 
+**A seed that is history: `parabolicSar`, `superTrend`, `obv`, `vwap`.**
+These have no head door because there is no finite horizon to give one —
+SAR seeds from the first two bars, SuperTrend picks its first direction at
+the first bar with a valid ATR and carries it, OBV's level starts at the
+first bar with volume and carries, and an unanchored VWAP accumulates from
+the first bar it sees. A history page (`prepend`, `infiniteHistory`) can therefore change the
+**whole** series: SAR dots and the SuperTrend regime flip, the OBV level
+moves. That is the mathematics, not a defect — the level was arbitrary all
+along and the new one is just as valid. Give `vwap` an `anchor` whose
+boundaries do not move with history (`periodAnchor` over a session start) and
+it resets at every session, so a page changes only the sessions it
+completes; `pivotPoints` is anchored the same way — a period's levels come from the
+period before it, so a page can change the first period you held (its
+levels now have a period before them, and its own extremes gain the bars
+the page completes) and the one after it, nothing later.
+`ichimoku` is the one of the six with a horizon (`max(conversion, base, span)
+− 1 + displacement` bars), so it lands a page through its own door.
+
 Other exports with a row of their own, not computed nodes:
 
 | Export | What it is |
 |---|---|
 | `volumeProfile` | a pane decoration — the traded volume over the visible range, in `VOLUME_PROFILE_DEFAULTS.bins` buckets |
-| `heikinAshi` | a derivation `OHLC[] → OHLC[]` — feed the result to a candle series |
+| `heikinAshi` | a derivation `OHLC[] → OHLC[]` — feed the result to a candle series; `heikinAshiLast` is its tail, the `deriveLast` for that registration (`addSeries({ derive: heikinAshi, deriveLast: heikinAshiLast })`), so a tick folds one bar instead of the whole tape — there is no head door, a page changes bar 0's seed and every open after it |
 | `renko` | a derivation `OHLC[] → RenkoBrick[]` — bricks on their own x axis (brick index), not time; register it with `derive` so ticks go in as candles (the guide's "Price-axis transforms"); a close 2⁴⁷ bricks or more from zero is refused — past that a brick is under the doubles' spacing at that price and could not move the level; a brick over half the largest double is refused too — its two-brick reversal would not fit the doubles |
 | `lineBreak` | a derivation `OHLC[] → LineBreakBlock[]` — three-line break (`LINE_BREAK_DEFAULTS.lines`), blocks on their own x axis like renko's bricks; a reversal needs the close beyond the extreme of the last `lines` lines and opens where the last line opened (Nison's turnaround line) |
 | `kagi` | a derivation `OHLC[] → KagiPoint[]` — one point per vertex on its own x axis, the last point the line's live end; `reversal` (an absolute price distance — a positive finite number, required) turns the line; `tone` is yang/yin (thick/thin), changing at `breakY` where a segment crosses the previous shoulder or waist |

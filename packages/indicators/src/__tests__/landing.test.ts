@@ -18,6 +18,7 @@ import {
   awesomeOscillator,
   elderRay,
   bollingerBands,
+  ichimoku,
   cci,
   donchianChannels,
   keltnerChannels,
@@ -152,6 +153,7 @@ describe("every doored indicator lands within the bound", () => {
     ["cr", (s) => cr(s, {})],
     ["vr", (s) => vr(s, {})],
     ["emv", (s) => emv(s, {})],
+    ["ichimoku", (s) => ichimoku(s, {})],
     // pvt declares no door (a running sum has no bounded lookback) — it lands by recomputing, like obv;
     // so does kdj (its recursions' memory is counted in observations, and a flat stretch holds it).
   ];

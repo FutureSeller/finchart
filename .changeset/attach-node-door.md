@@ -1,0 +1,5 @@
+---
+"@finchart/indicators": minor
+---
+
+Every `attach*` takes `{ node, name }` in place of `{ source, ...options }` — hand over a node you built with the factory and the attach draws it, so one calculation feeds an attach and drawings of your own (`bollingerBands(price)` under `attachBollingerBands({ node, name: "BB(20,2)" })` and a line on `node.out.middle`). A node does not carry its formula, so in that mode `name` is yours to give and the factory's options are not taken; presentation options stay. The two doors are exclusive at the type level, and a `node` key that is present but `undefined` is refused rather than falling back to a source. `attachBollingerBands({ middle: false })` leaves the middle line out — it is the SMA of the band's period, so an `MA(n)` of the same period would sit exactly on it. CR names its averages `MA1`…`MA4` from a node (`labels` to name them). The option types are now `AttachFrom<Node, FactoryOptions, Look>` unions built from each attach's `Attach*Look` presentation interface.
