@@ -11,16 +11,23 @@
  * suite **writes everything inline** — since comparing by value is the
  * component's contract, undisciplined usage is exactly what's under test.
  */
-import type { Plot } from '@finchart/core';
+import type { Pane, Plot } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
-import { useState } from 'react';
+import { createRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChartContainer, Markers, PriceLine } from '../components';
+import { StrictMode } from 'react';
+import { ChartContainer, ChartSeries, Markers, PriceLine } from '../components';
+import { PaneProvider } from '../components/chart-context';
 import type { LineDataPoint } from '@finchart/core';
+import { lineSeries } from '@finchart/core';
 import { layersSpy } from './fake-layers';
+import { rendererSpy } from './recording-renderer';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const data: LineDataPoint[] = [
   { x: 0, y: 100 },
@@ -87,32 +94,49 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
     expect(box.installs).toBe(afterMount);
   });
 
-  it('should reinstall when a value actually changes', async () => {
+  it('should apply a changed value in place — no reinstall, and the drawn line moves', async () => {
     const { box, onPlot } = counting();
-
+    const renderer = rendererSpy();
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createRenderer: renderer.createRenderer,
+      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+    });
+    const ref = createRef<Plot>();
     function Harness() {
       const [value, setValue] = useState(110);
       return (
         <>
-          <button type="button" onClick={() => setValue(value + 1)}>
+          <button type="button" onClick={() => setValue(value + 5)}>
             raise
           </button>
-          <ChartContainer deps={makeDeps()} data={data} onPlot={onPlot}>
+          <ChartContainer deps={deps} data={data} plotRef={ref} onPlot={onPlot} showGrid={false}>
+            <ChartSeries series={lineSeries()} />
             <PriceLine value={value} label="target" />
           </ChartContainer>
         </>
       );
     }
-
+    const plot = () => {
+      if (!ref.current) throw new Error('plot is not mounted');
+      return ref.current;
+    };
     const screen = render(<Harness />);
     const afterMount = box.installs;
-
+    const lineYs = () => {
+      act(() => plot().render());
+      return renderer.committed
+        .filter((c) => c.type === 'drawLine')
+        .map((c) => (c.type === 'drawLine' ? c.points[0]?.y : null));
+    };
+    const yOf = (value: number) => plot().mainPane.yScale.scale(value);
+    expect(lineYs()).toContain(yOf(110));
     await act(async () => {
       screen.getByText('raise').click();
     });
-
-    // If the value changes it reinstalls — what's drawn has to change too.
-    expect(box.installs).toBeGreaterThan(afterMount);
+    // The value changed — what is drawn changes, the decoration does not remount.
+    expect(box.installs).toBe(afterMount);
+    expect(lineYs()).toContain(yOf(115));
   });
 
   it('should not reinstall markers whose items are element-stable', async () => {
@@ -186,9 +210,16 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
     expect(box.installs).toBe(afterMount);
   });
 
-  /** Reinstalls when a value inside actually changes — shows the assertion above isn't a freebie. */
-  it('should reinstall when a nested style value changes', async () => {
+  /** A value inside actually changes and the drawn line shows it — the assertion above isn't a freebie. */
+  it('should apply a nested style change in place, without reinstalling', async () => {
     const { box, onPlot } = counting();
+    const renderer = rendererSpy();
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createRenderer: renderer.createRenderer,
+      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+    });
+    const ref = createRef<Plot>();
 
     function Harness() {
       const [width, setWidth] = useState(1);
@@ -197,20 +228,301 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
           <button type="button" onClick={() => setWidth(width + 1)}>
             thicken
           </button>
-          <ChartContainer deps={makeDeps()} data={data} onPlot={onPlot}>
+          <ChartContainer deps={deps} data={data} plotRef={ref} onPlot={onPlot} showGrid={false}>
+            <ChartSeries series={lineSeries()} />
             <PriceLine value={110} style={{ color: 'red', width }} />
           </ChartContainer>
         </>
       );
     }
+    const plot = () => {
+      if (!ref.current) throw new Error('plot is not mounted');
+      return ref.current;
+    };
+    const redWidths = () => {
+      act(() => plot().render());
+      return renderer.committed
+        .filter((c) => c.type === 'drawLine' && c.style.color === 'red')
+        .map((c) => (c.type === 'drawLine' ? c.style.width : null));
+    };
 
     const screen = render(<Harness />);
     const afterMount = box.installs;
+    expect(redWidths()).toEqual([1]);
+    // The frame is the decoration's to ask for — nobody else knows its options moved.
+    const asked = vi.spyOn(plot(), 'requestRender');
 
     await act(async () => {
       screen.getByText('thicken').click();
     });
 
-    expect(box.installs).toBeGreaterThan(afterMount);
+    expect(box.installs).toBe(afterMount);
+    expect(asked).toHaveBeenCalled();
+    expect(redWidths()).toEqual([2]);
+  });
+});
+
+describe('decorations — one live registration per mounted component', () => {
+  function accounting() {
+    const box = { installs: 0, removes: 0 };
+    const onPlot = (plot: Plot | null) => {
+      if (!plot) return;
+      const pane = plot.mainPane;
+      const original = pane.addDecoration.bind(pane);
+      vi.spyOn(pane, 'addDecoration').mockImplementation((decoration, options) => {
+        box.installs += 1;
+        const remove = original(decoration, options);
+        return () => {
+          box.removes += 1;
+          remove();
+        };
+      });
+    };
+    return { box, onPlot };
+  }
+
+  /** The axis labels are a DOM concern in the browser; here a stub keeps the badges the frame handed it. */
+  function badgeRecorder() {
+    const seen: { badges: string[] } = { badges: [] };
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createAxisLabels: () => ({
+        render: (input) => {
+          seen.badges = input.badges.map((badge) => badge.label);
+        },
+        clear: () => undefined,
+        destroy: () => undefined,
+      }),
+    });
+    return { deps, seen };
+  }
+
+  it('a removed label leaves the badge — props are a snapshot, not a patch', async () => {
+    const { deps, seen } = badgeRecorder();
+    const ref = createRef<Plot>();
+    // The second render has no `label` key at all — the difference between a snapshot and a patch.
+    const ui = (label?: string) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartSeries series={lineSeries()} />
+        {label === undefined ? <PriceLine value={110} /> : <PriceLine value={110} label={label} />}
+      </ChartContainer>
+    );
+    const view = render(ui('Target'));
+    const texts = () => {
+      act(() => ref.current?.render());
+      return seen.badges;
+    };
+    expect(texts()).toContain('Target');
+    view.rerender(ui(undefined));
+    expect(texts()).not.toContain('Target');
+  });
+
+  it('an inline format reaches the badge without reinstalling', async () => {
+    const { box, onPlot } = accounting();
+    const { deps, seen } = badgeRecorder();
+    const ref = createRef<Plot>();
+    const ui = (suffix: string) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref} onPlot={onPlot}>
+        <ChartSeries series={lineSeries()} />
+        <PriceLine value={110} format={(v) => `${v}${suffix}`} />
+      </ChartContainer>
+    );
+    const view = render(ui('a'));
+    const installs = box.installs;
+    const texts = () => {
+      act(() => ref.current?.render());
+      return seen.badges;
+    };
+    expect(texts()).toContain('110a');
+    view.rerender(ui('b'));
+    expect(texts()).toContain('110b');
+    expect(box.installs).toBe(installs);
+  });
+
+  it('a key change is a new registration, the old one released', () => {
+    const { box, onPlot } = accounting();
+    const ui = (key: string) => (
+      <ChartContainer deps={makeDeps()} data={data} onPlot={onPlot}>
+        <PriceLine key={key} value={110} />
+      </ChartContainer>
+    );
+    const view = render(ui('a'));
+    expect(box.installs - box.removes).toBe(1);
+    view.rerender(ui('b'));
+    expect(box.installs).toBe(2);
+    expect(box.installs - box.removes).toBe(1);
+  });
+
+  it('under StrictMode, installs minus removes is one per component — two for the pair', () => {
+    const { box, onPlot } = accounting();
+    render(
+      <StrictMode>
+        <ChartContainer deps={makeDeps()} data={data} onPlot={onPlot}>
+          <PriceLine value={110} />
+          <Markers items={[{ x: 10, price: 110 }]} />
+        </ChartContainer>
+      </StrictMode>,
+    );
+    expect(box.installs - box.removes).toBe(2);
+  });
+
+  it('markers whose items change are re-set in place, not reinstalled — and the new dot is drawn', async () => {
+    const { box, onPlot } = accounting();
+    const renderer = rendererSpy();
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createRenderer: renderer.createRenderer,
+      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+    });
+    const ref = createRef<Plot>();
+    const INK = '#123456';
+    const ui = (items: { x: number; price: number; color: string }[]) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref} onPlot={onPlot}>
+        <ChartSeries series={lineSeries()} />
+        <Markers items={items} />
+      </ChartContainer>
+    );
+    const dots = () => {
+      act(() => ref.current?.render());
+      return renderer.committed.filter(
+        (c) => c.type === 'drawShape' && c.shape.shape === 'circle' && c.shape.fill === INK,
+      ).length;
+    };
+    const view = render(ui([{ x: 10, price: 110, color: INK }]));
+    const installs = box.installs;
+    expect(dots()).toBe(1);
+    if (!ref.current) throw new Error('plot is not mounted');
+    const asked = vi.spyOn(ref.current, 'requestRender');
+    view.rerender(
+      ui([
+        { x: 10, price: 110, color: INK },
+        { x: 50, price: 112, color: INK },
+      ]),
+    );
+    expect(box.installs).toBe(installs);
+    expect(asked).toHaveBeenCalled();
+    expect(dots()).toBe(2);
+  });
+
+  it('a surviving component follows its pane context — off the old target, onto the new, with its latest props', async () => {
+    const { box, onPlot } = accounting();
+    const renderer = rendererSpy();
+    const seen: { badges: string[] } = { badges: [] };
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createRenderer: renderer.createRenderer,
+      createAxisLabels: () => ({
+        render: (input) => {
+          seen.badges = input.badges.map((badge) => badge.label);
+        },
+        clear: () => undefined,
+        destroy: () => undefined,
+      }),
+    });
+    const ref = createRef<Plot>();
+    const INK = '#123456';
+    const plot = () => {
+      if (!ref.current) throw new Error('plot is not mounted');
+      return ref.current;
+    };
+    /** A new pane with its own series (so its axis covers the values), its registrations counted. */
+    function newTarget() {
+      const added = plot().addPane();
+      added.addSeries({ series: lineSeries(), data });
+      const counts = { installs: 0, removes: 0 };
+      const original = added.addDecoration.bind(added);
+      vi.spyOn(added, 'addDecoration').mockImplementation((decoration, options) => {
+        counts.installs += 1;
+        const remove = original(decoration, options);
+        return () => {
+          counts.removes += 1;
+          remove();
+        };
+      });
+      return { pane: added, counts };
+    }
+    const targets: { pane: Pane; counts: { installs: number; removes: number } }[] = [];
+    function Harness() {
+      const [pane, setPane] = useState<Pane | null>(null);
+      const [value, setValue] = useState(110);
+      const move = () => {
+        const target = newTarget();
+        targets.push(target);
+        setPane(target.pane);
+      };
+      return (
+        <>
+          <button type="button" onClick={move}>
+            move
+          </button>
+          <button type="button" onClick={() => setValue((v) => v + 1)}>
+            nudge
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              move();
+              setValue(120);
+            }}
+          >
+            move and raise
+          </button>
+          <ChartContainer deps={deps} data={data} plotRef={ref} onPlot={onPlot} showGrid={false}>
+            <ChartSeries series={lineSeries()} />
+            <PaneProvider value={pane}>
+              <PriceLine value={value} label={`v${value}`} />
+              <Markers items={[{ x: 50, price: value, color: INK }]} />
+            </PaneProvider>
+          </ChartContainer>
+        </>
+      );
+    }
+    const drawn = (pane: Pane) => {
+      act(() => plot().render());
+      const inside = (y: number) => y >= pane.area.top && y <= pane.area.bottom;
+      return {
+        badges: seen.badges,
+        dots: renderer.committed.filter(
+          (c) => c.type === 'drawShape' && c.shape.shape === 'circle' && c.shape.fill === INK && inside(c.shape.cy),
+        ).length,
+      };
+    };
+
+    const screen = render(<Harness />);
+    expect(box.installs).toBe(2);
+
+    // A prop update in place, then a pane-only switch: the reinstall must carry the updated props,
+    // and no update effect runs to repair a stale one.
+    await act(async () => {
+      screen.getByText('nudge').click();
+    });
+    await act(async () => {
+      screen.getByText('move').click();
+    });
+    const [first] = targets;
+    if (!first) throw new Error('no target pane');
+    expect(box.removes).toBe(2);
+    expect(first.counts).toEqual({ installs: 2, removes: 0 });
+    expect(drawn(first.pane).badges).toContain('v111');
+    expect(drawn(first.pane).dots).toBe(1);
+
+    // A later change moves in place on the new target — no reinstall anywhere.
+    await act(async () => {
+      screen.getByText('nudge').click();
+    });
+    expect(first.counts.installs).toBe(2);
+    expect(box.installs).toBe(2);
+    expect(drawn(first.pane).badges).toContain('v112');
+
+    // A pane switch and a prop change in one commit — one reinstall, carrying the new value.
+    await act(async () => {
+      screen.getByText('move and raise').click();
+    });
+    const second = targets[1];
+    if (!second) throw new Error('no second target pane');
+    expect(first.counts).toEqual({ installs: 2, removes: 2 });
+    expect(second.counts).toEqual({ installs: 2, removes: 0 });
+    expect(drawn(second.pane).badges).toContain('v120');
+    expect(drawn(second.pane).badges).not.toContain('v112');
   });
 });

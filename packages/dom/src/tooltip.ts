@@ -1,12 +1,20 @@
 import type { ConfigurablePluginApi, CrosshairPayload, FormatSource, OverlayHost, PlotEventSource, Plugin, StyleSpec } from "@finchart/core";
 import { ContractError, cssVarExpr, pluginApi, styleSpec } from "@finchart/core";
 import { requireOverlayElement } from "./overlay-element";
+import { type RowFormat, sampleText } from "./sample-text";
 
 export interface TooltipOptions {
-  /** The header's x format. Defaults to the axis notation (`config.axis.x.format`). */
+  /** The header's x format. Defaults to the plot's — `axis.x.format`, else the tick strategy's own (`timeTicks` labels in its zone and language), else the rounded number. */
   formatX?: (x: number) => string;
   /** Row value format. Defaults to that pane's y notation (`pane.formatValue`). */
   formatValue?: (value: number) => string;
+  /**
+   * The format for a row a series describes for itself (`Series.describe`
+   * — a candle's O/H/L/C/V), given the row's label and sample, so a volume
+   * can read differently from a price: `(value, { label }) => label === "V"
+   * ? … : …`. Absent, such rows read through `formatValue` like any value.
+   */
+  formatRow?: RowFormat;
   /** Gap from cursor to the box (px). Default 12. */
   offset?: number;
 }
@@ -99,7 +107,8 @@ export function tooltip(
       header.style.opacity = "0.7";
       header.textContent = formatX(samples[0].x);
 
-      const formatValue = current.formatValue ?? pane.formatValue;
+      const formatValue = (value: number) => (current.formatValue ?? pane.formatValue)(value);
+      const formatRow: RowFormat = current.formatRow ?? ((value) => formatValue(value));
       const rows = samples.map((sample) => {
         const row = document.createElement("div");
         if (sample.color) {
@@ -108,12 +117,7 @@ export function tooltip(
           dot.textContent = "● ";
           row.appendChild(dot);
         }
-        const value = sample.value === null ? "—" : formatValue(sample.value);
-        row.appendChild(
-          document.createTextNode(
-            sample.name ? `${sample.name}: ${value}` : value,
-          ),
-        );
+        row.appendChild(document.createTextNode(sampleText(sample, formatValue, formatRow, ": ")));
         return row;
       });
       box.replaceChildren(header, ...rows);

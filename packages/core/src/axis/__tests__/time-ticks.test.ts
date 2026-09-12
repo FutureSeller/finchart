@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContractError } from "../../primitives";
+import { DEFAULT_X_FORMAT } from "../format";
 import { timeTicks } from "../time-ticks";
 import type { TickStrategyContext } from "../types";
 
@@ -173,7 +174,7 @@ describe("timeTicks — a day whose midnight the clock skipped", () => {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
 
     const ticks = strategy.ticks(
@@ -247,7 +248,7 @@ describe("timeTicks — the grid's phase after a skipped reading", () => {
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
 
     const ticks = timeTicks({ timeZone: "America/Santiago", locale: "en-US" }).ticks(
@@ -275,7 +276,7 @@ describe("timeTicks — the grid's phase after a skipped reading", () => {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
 
     const ticks = timeTicks({ timeZone: "Africa/Cairo", locale: "en-US" }).ticks(
@@ -295,7 +296,7 @@ describe("timeTicks — the grid's phase after a skipped reading", () => {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
 
     const ticks = timeTicks({ timeZone: "Asia/Tehran", locale: "en-US" }).ticks(
@@ -339,7 +340,7 @@ describe("timeTicks — where the grid stops", () => {
       timeZone: "Africa/Monrovia",
       minute: "2-digit",
       second: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
     for (const value of values.filter((v) => v >= ms("1972-01-07T00:44:30Z"))) {
       expect(seconds.format(value)).toMatch(/[05]:00$/);
@@ -702,7 +703,7 @@ describe("timeTicks — the start of what a Date can hold", () => {
       timeZone: "Asia/Kathmandu",
       minute: "2-digit",
       second: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
 
     const ticks = timeTicks({ timeZone: "Asia/Kathmandu", locale: "en-US" }).ticks(
@@ -979,5 +980,102 @@ describe("timeTicks — years before 1", () => {
       "2027",
       "2028",
     ]);
+  });
+});
+
+describe("timeTicks.format — the decorations' label, in the strategy's own clock", () => {
+  const at = ms("2026-09-12T02:15:07Z");
+  const intl = (locale: string, timeZone: string) =>
+    new Intl.DateTimeFormat(locale, {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+
+  it("reads like Intl in that locale and zone, seconds included", () => {
+    const strategy = timeTicks({ timeZone: "Asia/Seoul", locale: "en-US" });
+    if (!strategy.format) throw new Error("timeTicks should offer a format");
+    expect(strategy.format(at)).toBe(intl("en-US", "Asia/Seoul").format(at));
+    expect(strategy.format(at)).toContain("07");
+  });
+
+  it("follows the zone — Seoul and UTC do not say the same hour", () => {
+    const seoul = timeTicks({ timeZone: "Asia/Seoul", locale: "en-US" }).format?.(at);
+    const utc = timeTicks(UTC).format?.(at);
+    expect(seoul).not.toBe(utc);
+    expect(utc).toBe(intl("en-US", "UTC").format(at));
+  });
+
+  it("goes through epochOf — a feed whose x is in seconds is read as seconds", () => {
+    const strategy = timeTicks({ ...UTC, epochOf: (x) => x * 1000, xOfEpoch: (t) => t / 1000 });
+    expect(strategy.format?.(at / 1000)).toBe(intl("en-US", "UTC").format(at));
+  });
+
+  it("speaks the locale it was given — German reads the date the German way", () => {
+    const de = timeTicks({ timeZone: "UTC", locale: "de-DE" }).format?.(at);
+    expect(de).toBe(intl("de-DE", "UTC").format(at));
+    expect(de).not.toBe(intl("en-US", "UTC").format(at));
+  });
+
+  it("prints midnight as 00, never 24", () => {
+    const midnight = ms("2026-01-01T00:05:07Z");
+    const label = timeTicks(UTC).format?.(midnight) ?? "";
+    expect(label).toContain("00:05:07");
+    expect(label).not.toContain("24:");
+  });
+
+  it("reads a non-instant as the plain number instead of throwing out of a draw", () => {
+    const strategy = timeTicks(UTC);
+    // The same words a strategy-less plot prints for that x — `DEFAULT_X_FORMAT`.
+    expect(strategy.format?.(Number.NaN)).toBe("NaN");
+    expect(strategy.format?.(Number.POSITIVE_INFINITY)).toBe("Infinity");
+    expect(timeTicks({ ...UTC, epochOf: () => Number.NaN }).format?.(5)).toBe("5");
+  });
+
+  it("reads an instant past what a Date can hold as the plain number — Intl would throw mid-draw", () => {
+    const strategy = timeTicks(UTC);
+    const edge = 8.64e15;
+    // Both ends are instants a Date holds — labelled, not rounded (the far past wears its era).
+    expect(strategy.format?.(edge)).toBe(intl("en-US", "UTC").format(edge));
+    expect(strategy.format?.(-edge)).toBe(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "UTC",
+        era: "short",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }).format(-edge),
+    );
+    expect(strategy.format?.(edge + 1)).toBe(DEFAULT_X_FORMAT(edge + 1));
+    expect(strategy.format?.(-edge - 1)).toBe(DEFAULT_X_FORMAT(-edge - 1));
+    // A converted x lands there too — the bound is checked after `epochOf`.
+    const seconds = timeTicks({ ...UTC, epochOf: (x) => x * 1000, xOfEpoch: (t) => t / 1000 });
+    expect(seconds.format?.(8.64e12 + 1)).toBe(DEFAULT_X_FORMAT(8.64e12 + 1));
+  });
+
+  it("names the era below year 1 — 1 BCE and 1 CE do not read the same, as on the axis", () => {
+    const strategy = timeTicks(UTC);
+    const bce = strategy.format?.(ms("0000-06-01T12:00:00Z")) ?? "";
+    const ce = strategy.format?.(ms("0001-06-01T12:00:00Z")) ?? "";
+    expect(bce).not.toBe(ce);
+    expect(bce).toMatch(/BC/);
+    expect(ce).not.toMatch(/BC|AD/);
+  });
+
+  it("always shows seconds — the precision does not move between instants", () => {
+    const strategy = timeTicks(UTC);
+    const onTheMinute = strategy.format?.(ms("2026-09-12T02:15:00Z")) ?? "";
+    const offTheMinute = strategy.format?.(ms("2026-09-12T02:15:07Z")) ?? "";
+    expect(onTheMinute.length).toBe(offTheMinute.length);
+    expect(onTheMinute).toContain(":00");
   });
 });

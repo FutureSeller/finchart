@@ -160,8 +160,10 @@ Two exceptions:
   deep comparison gets more expensive than the drawing.
 - **Function props** (like `PriceLine`'s `format`): there's no way to tell
   whether two closures do the same thing, so these fall back to identity. An
-  inline `format={(v) => …}` is a new function every render and rebuilds every
-  time — pin it with `useCallback` or a module-level constant.
+  inline `format={(v) => …}` is a new function every render — `PriceLine` hands
+  it to its decoration in place and asks for a frame, so it costs a render per
+  render rather than a rebuild; pin it with `useCallback` or a module-level
+  constant to make it free. `Watermark` and `Span` still rebuild on any change.
 
 ## The two lanes: declarative and imperative
 
@@ -252,7 +254,8 @@ order — no `useChartPlot` + `useEffect` shim needed:
 — a factory read once per acquisition (twice under StrictMode's replay), like
 `deps.mainPaneYScale`, so an inline arrow is fine and the factory must be pure. `autoScale` and `invert` are props too; both are
 directives applied when they change, and an axis drag turning a fixed range
-on flips `autoScale` off on the pane the way a divider drag moves `flex`.
+on flips `autoScale` off on the pane the way a divider drag moves `flex` — and
+a double-click on that axis, or `fitDomains()`, flips it back on.
 Two things saved `state` does not carry: the scale kind (persist it
 alongside, and drop `valueDomain` when it differs — a domain the scale
 cannot hold is a `ContractError` at the error boundary around the container),

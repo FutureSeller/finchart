@@ -164,6 +164,12 @@ export interface PaneApi
   setValueDomain(min: number, max: number): void;
   /** Fits this pane's value axis so every series in it is visible. */
   fitValueDomain(visible?: Viewport | null): void;
+  /**
+   * Hands the value axis back to `autoScale` — the named form of
+   * `applyOptions({ autoScale: true })`. The next render fits it to the
+   * visible range; a y-axis double-click lands here.
+   */
+  resetValueAxis(): void;
 }
 
 /**
@@ -636,6 +642,10 @@ export class Pane implements PaneApi {
     this.yScale.setDomain(min, max);
     this.settings = { ...this.settings, autoScale: false };
     this.notify({ data: false, refit: false, state: true });
+  }
+
+  resetValueAxis(): void {
+    this.applyOptions({ autoScale: true });
   }
 
   /**

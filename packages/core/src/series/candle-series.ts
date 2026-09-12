@@ -5,7 +5,7 @@ import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
 import { slotWidth } from "./slot";
-import type { Series, SeriesContext } from "./types";
+import type { Series, SeriesContext, SeriesRow } from "./types";
 import { screenXAt } from "./types";
 
 export interface CandleSeriesStyle {
@@ -64,6 +64,18 @@ export class CandleSeries implements Series<OHLC> {
 
   /** A candle's value is `close`. `OHLC` has no `y`, so the default accessor can't read it. */
   readonly coordinates = new OHLCAccessor();
+
+  /** O/H/L/C, and V when the bar carries a volume — a gap (`null` or absent) is left out, not shown as a dash. */
+  describe(point: OHLC): readonly SeriesRow[] {
+    const rows: SeriesRow[] = [
+      { label: "O", value: point.open },
+      { label: "H", value: point.high },
+      { label: "L", value: point.low },
+      { label: "C", value: point.close },
+    ];
+    if (typeof point.volume === "number") rows.push({ label: "V", value: point.volume });
+    return rows;
+  }
 
   constructor(
     private overrides: CandleSeriesStyleOverrides = {},

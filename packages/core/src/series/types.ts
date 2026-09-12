@@ -71,10 +71,12 @@ export function screenXAt<T extends BaseDataPoint>(
  * A data representation that can be swapped out on the same stage (Plot).
  *
  * The grid, axes, pan/zoom, and layers belong to Plot, so they stay put
- * even when the series changes. A series answers four things — how much
+ * even when the series changes. A series answers five things — how much
  * of the y axis it occupies, how it draws, and (optionally) how its points
- * are thinned and how their coordinates are read. The optional two are
- * resolved registration first, then the series, then the fallback: a
+ * are thinned, how their coordinates are read, and what a tooltip says
+ * about one of them (`describe`, the series' alone — no registration
+ * overrides it). The two policies are resolved registration first, then
+ * the series, then the fallback: a
  * registration's `coordinates` wins over the series', and plain `x`/`y`
  * reads when neither says; a registration's `decimation` fields win over
  * the series' field by field, and the wiring's policy fills what neither
@@ -111,4 +113,29 @@ export interface Series<T extends BaseDataPoint = BaseDataPoint> {
    * candle knows that.
    */
   readonly coordinates?: CoordinateAccessor<T>;
+
+  /**
+   * The rows a tooltip or legend shows for one of its points — a candle
+   * says O/H/L/C and, when the bar has one, V; a line says nothing here
+   * and the consumer shows its one value — leaving this out, or returning
+   * `[]`, both mean "nothing to say". Called on every probe — a crosshair
+   * move, every tooltip and legend refresh, and the magnet crosshair's own
+   * draw, twice a frame — for every registration on the pane, so it must
+   * be cheap and pure. The point is the one held for drawing — the series'
+   * own `T`, after any derivation — not a pixel-aggregated candle. Values
+   * are numbers; how they read is the consumer's formatter, row by row.
+   * This is the series' answer only — a registration cannot override it.
+   */
+  describe?(point: T): readonly SeriesRow[];
+}
+
+/**
+ * One line of what a series says about a point — a label and a number, or
+ * `null` for a gap. Rows are borrowed, not owned: `probe()` hands a
+ * formatter the series' own objects, so the fields are read-only — a
+ * series may reuse them for the next probe.
+ */
+export interface SeriesRow {
+  readonly label: string;
+  readonly value: number | null;
 }

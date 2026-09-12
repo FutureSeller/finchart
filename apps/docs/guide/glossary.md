@@ -259,7 +259,7 @@ wire, and a branch nobody draws merely keeps its value ready.
 
 ### Fit
 
-Refitting the domain to the data. `fitDomains()`, `fitValueDomain()`.
+Refitting the domain to the data. `fitDomains()` (which also hands every pane back to `autoScale`), `fitValueDomain()`. `resetValueAxis()` only turns the mode back on — the fit itself happens on the next render.
 
 **Only three things fit x** — the first data arrival, imperative
 `handle.setData`, and `fitDomains()`. Incremental adds
@@ -273,19 +273,22 @@ series mounted later would jerk your window out to the union.
 
 ### Series
 
-Knows only **what shape to draw the data in**. Two required answers and two
-optional ones, four in all.
+Knows only **what shape to draw the data in**. Two required answers and three
+optional ones, five in all.
 
 ```ts
 valueExtent(data): Range   // how much y it occupies
 draw(renderer, context)    // how it draws
 decimation?                // how its points are thinned
 coordinates?               // how their coordinates are read
+describe?                  // what a tooltip says about one of its points
 ```
 
-The optional two are where "the side that knows the point type states the
+The optional ones (`describe` is the series' alone — a registration does not
+override it) are where "the side that knows the point type states the
 policy" lives — a candle's value is its close, and only the candle knows that.
-Each is resolved registration first, then series, then fallback: a
+The two policies, `coordinates` and `decimation`, are resolved registration
+first, then series, then fallback: a
 registration's `coordinates` wins over the series', and plain `x` / `y` reads
 when neither says; a registration's `decimation` fields win over the series'
 field by field, and the wiring's policy fills what neither sets.

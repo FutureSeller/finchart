@@ -1,5 +1,11 @@
 import { dayStartOf, readingGrid, weekStartOf } from "../time/grid";
 import { Zone, type ZonedParts } from "../time/zone";
+import { DEFAULT_X_FORMAT } from "./format";
+
+/** The instants a `Date` can hold, in ms either side of the epoch — Intl throws past them. */
+const DATE_RANGE_MS = 8.64e15;
+/** 0002-01-01T00:00:00Z — from here on the zone's year is 1 or more whatever the zone, so no era question arises. */
+const FROM_YEAR_TWO_MS = -62104060800000;
 import type { TickStrategy } from "./types";
 
 /**
@@ -59,6 +65,22 @@ export function timeTicks(options: TimeTicksOptions = {}): TickStrategy {
   const labels = new Labels(options.locale, options.timeZone);
 
   return {
+    /**
+     * A decoration's label — date and time to the second, always: a
+     * crosshair formats an unsnapped cursor x, and a label whose precision
+     * moved with the instant (seconds only when they are not zero) would
+     * change width at every minute boundary of a one-second feed. Coarser
+     * wording is the consumer's `axis.x.format`.
+     */
+    format: (value) => {
+      const ms = epochOf(value);
+      // A decoration formats inside a draw — an x that is not an instant, or
+      // one past the range a Date can hold (Intl throws on those), reads as
+      // the plain number rather than throwing out of the frame.
+      return Number.isFinite(ms) && Math.abs(ms) <= DATE_RANGE_MS
+        ? labels.full(ms, () => zone.parts(ms))
+        : DEFAULT_X_FORMAT(value);
+    },
     ticks({ min, max, span, minTickSpacing, xOf, domainOf, positionOf, snap }) {
       if (!(max > min) || !(span > 0)) return [];
 
@@ -469,8 +491,37 @@ class Labels {
   private readonly second: Intl.DateTimeFormat;
 
   private readonly beforeEra: Intl.DateTimeFormat;
+  /** Behind `full` — a decoration's date and time to the second. */
+  private readonly whole: Intl.DateTimeFormat;
+  /** `whole` with the era, for a year below 1 — the rule `yearLabel` follows. */
+  private readonly wholeBeforeEra: Intl.DateTimeFormat;
 
   constructor(locale?: string, timeZone?: string) {
+    this.whole = new Intl.DateTimeFormat(locale, {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      // `h23`, not `hour12: false` — the latter resolved to the 24-hour cycle
+      // in older engines and printed midnight as "24:00"; this formatter meets
+      // every cursor instant, midnight included, and the tick formatters below
+      // keep the same clock so the axis and the badge never disagree.
+      hourCycle: "h23",
+    });
+    this.wholeBeforeEra = new Intl.DateTimeFormat(locale, {
+      timeZone,
+      era: "short",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
     this.year = new Intl.DateTimeFormat(locale, { timeZone, year: "numeric" });
     this.beforeEra = new Intl.DateTimeFormat(locale, {
       timeZone,
@@ -487,15 +538,27 @@ class Labels {
       timeZone,
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
     this.second = new Intl.DateTimeFormat(locale, {
       timeZone,
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
+  }
+
+  /**
+   * Date and time to the second — what a decoration reads for an x; the
+   * ticks' promoted wording is `of`. A year below 1 wears its era, as the
+   * tick years do (`yearLabel`) — without it 1 BCE and 1 CE read the same.
+   */
+  full(ms: number, partsOf: () => ZonedParts): string {
+    // The zone's year is asked for only where it could be below 1 — a badge
+    // formats on every cursor move, and reading the parts costs an Intl call.
+    if (ms >= FROM_YEAR_TWO_MS || partsOf().year >= 1) return this.whole.format(ms);
+    return this.wholeBeforeEra.format(ms);
   }
 
   /**

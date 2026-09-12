@@ -18,6 +18,8 @@ export { markers, priceLine, span, watermark } from "./standard";
 export type {
   Marker,
   PriceLineOptions,
+  PriceLineDecoration,
+  MarkersDecoration,
   SpanOptions,
   WatermarkOptions,
 } from "./standard";

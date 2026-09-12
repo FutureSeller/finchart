@@ -67,10 +67,9 @@ function range(from: number, to: number): OHLC[] {
   return out;
 }
 
-// `timeTicks()` takes care of the tick (grid) labels only — what the crosshair
-// badge and the tooltip read is a separate `axis.x.format`. Leave it out and
-// the raw epoch ms number shows up as it is (core has no formatter paired with
-// timeTicks yet).
+// `timeTicks()` also gives the crosshair badge and the tooltip header their
+// x label — date and time to the second, in the strategy's zone. This
+// `axis.x.format` is an override: the demo wants the shorter wording.
 const timeFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
   hour: "2-digit",

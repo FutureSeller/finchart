@@ -605,6 +605,42 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     expect(target.fits).toHaveLength(0);
   });
 
+  /** An axis double-click (the y-axis reset) is a consumer's — the public event and the whole-chart fit must both stay quiet. */
+  it("should keep an eaten double click from the public doubleClick as well as the fit", () => {
+    const doubleClicks: Point[] = [];
+    const eaten = {
+      ...target.target,
+      routeInput: (event: InputEvent) => event.type === "dblclick",
+      doubleClick: (position: Point) => void doubleClicks.push(position),
+    };
+    new PointerInteractions(element).connect(eaten);
+
+    element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+
+    expect(doubleClicks).toHaveLength(0);
+    expect(target.fits).toHaveLength(0);
+  });
+
+  it("should still route the double click to the stack when doubleClickReset is off — and a consumed one stays private", () => {
+    const routed: InputEvent[] = [];
+    const doubleClicks: Point[] = [];
+    const eaten = {
+      ...target.target,
+      routeInput: (event: InputEvent) => {
+        routed.push(event);
+        return event.type === "dblclick";
+      },
+      doubleClick: (position: Point) => void doubleClicks.push(position),
+    };
+    new PointerInteractions(element, { doubleClickReset: false }).connect(eaten);
+
+    element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+
+    expect(routed.filter((event) => event.type === "dblclick")).toHaveLength(1);
+    expect(doubleClicks).toHaveLength(0);
+    expect(target.fits).toHaveLength(0);
+  });
+
   it("should make the element focusable and pan with arrows", () => {
     vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
       left: 0,

@@ -128,8 +128,11 @@ plot.addDecoration(sessionShading({ fromHour: 0, toHour: 8 }), {
 });
 
 plot.use(crosshair({ magnet: true, format: { x: timeLabel, y: won } }));
-plot.use(tooltip({ formatX: timeLabel, formatValue: won }));
-plot.use(legend({ formatValue: won }));
+// A candle describes its own rows (O/H/L/C/V); the volume is not a price, so it gets its own notation.
+const volume = new Intl.NumberFormat("en-US", { notation: "compact" });
+const formatRow = (value: number, row: { label: string }) => (row.label === "V" ? volume.format(value) : won(value));
+plot.use(tooltip({ formatX: timeLabel, formatValue: won, formatRow }));
+plot.use(legend({ formatValue: won, formatRow }));
 
 // --- State: symbol, timeframe, data ---
 

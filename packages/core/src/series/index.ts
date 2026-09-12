@@ -1,4 +1,4 @@
-export type { Series, SeriesContext } from "./types";
+export type { Series, SeriesContext, SeriesRow } from "./types";
 
 export {
   DEFAULT_LINE_STYLE,

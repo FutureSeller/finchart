@@ -1,6 +1,7 @@
 import type { ConfigurablePluginApi, DataProbe, OverlayHost, PaneHost, PlotEventSource, Plugin, StyleSpec, ValueCoordinates, ValueFormatSource } from "@finchart/core";
 import { ContractError, cssVarExpr, pluginApi, styleSpec } from "@finchart/core";
 import { requireOverlayElement } from "./overlay-element";
+import { type RowFormat, sampleText } from "./sample-text";
 
 /**
  * What the legend requires from a pane — knowing its position and being
@@ -17,6 +18,8 @@ export interface LegendOptions {
   pane?: LegendPane;
   /** Value format. Defaults to that pane's y notation (`pane.formatValue`). */
   formatValue?: (value: number) => string;
+  /** The format for a row a series describes for itself (a candle's O/H/L/C/V) — see `tooltip`'s `formatRow`. Absent, such rows read through `formatValue`. */
+  formatRow?: RowFormat;
 }
 
 /**
@@ -59,10 +62,12 @@ export function legend(
     const pane = options.pane ?? plot.mainPane;
     let current: Omit<LegendOptions, "pane"> = {
       formatValue: options.formatValue,
+      formatRow: options.formatRow,
     };
     // The default notation is the pane's own — ticks and legend are measured by the same ruler.
-    const formatValue = (value: number) =>
-      (current.formatValue ?? pane.formatValue)(value);
+    const formatValue = (value: number) => (current.formatValue ?? pane.formatValue)(value);
+    const formatRow: RowFormat = (value, row) =>
+      current.formatRow ? current.formatRow(value, row) : formatValue(value);
 
     const document = overlay.ownerDocument;
     const box = document.createElement("div");
@@ -96,11 +101,7 @@ export function legend(
             dot.textContent = "● ";
             row.appendChild(dot);
           }
-          const value =
-            sample.value === null ? "—" : formatValue(sample.value);
-          row.appendChild(
-            document.createTextNode(`${sample.name} ${value}`),
-          );
+          row.appendChild(document.createTextNode(sampleText(sample, formatValue, formatRow, " ")));
           return row;
         });
 

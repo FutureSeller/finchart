@@ -109,6 +109,7 @@ describe("a y-axis drag stops at the range the scale can't accept", () => {
     const pane = {
       yScale: scale,
       setValueDomain: (min: number, max: number) => scale.setDomain(min, max),
+      resetValueAxis: () => undefined,
     };
     return axisDragConsumer({
       slices: () => ({
