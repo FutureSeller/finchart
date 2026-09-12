@@ -114,7 +114,7 @@ export {
 export type { VolumeProfileOptions } from "./volume-profile";
 export { BAND_STYLE_SPEC, bandSeries } from "./band-series";
 export type { BandSeriesOptions } from "./band-series";
-export { heikinAshi } from "./heikin-ashi";
+export { heikinAshi, heikinAshiLast } from "./heikin-ashi";
 export { renko } from "./renko";
 export type { RenkoBrick, RenkoOptions } from "./renko";
 export { LINE_BREAK_DEFAULTS, lineBreak } from "./line-break";
@@ -204,6 +204,43 @@ export type {
   AttachTrixOptions,
   AttachVrOptions,
   AttachMovingAverageOptions,
+  AttachAdxLook,
+  AttachAtrLook,
+  AttachAwesomeOscillatorLook,
+  AttachBbiLook,
+  AttachBollingerLook,
+  AttachBrarLook,
+  AttachCciLook,
+  AttachCrLook,
+  AttachDmaLook,
+  AttachDonchianLook,
+  AttachElderRayLook,
+  AttachEmvLook,
+  AttachIchimokuLook,
+  AttachKdjLook,
+  AttachKeltnerLook,
+  AttachMacdLook,
+  AttachMfiLook,
+  AttachMomentumLook,
+  AttachMovingAverageLook,
+  AttachObvLook,
+  AttachParabolicSarLook,
+  AttachPivotPointsLook,
+  AttachPsyLook,
+  AttachPvtLook,
+  AttachRocLook,
+  AttachRsiLook,
+  AttachSqueezeMomentumLook,
+  AttachStochasticLook,
+  AttachStochasticRsiLook,
+  AttachSuperTrendLook,
+  AttachTrixLook,
+  AttachUltimateOscillatorLook,
+  AttachVrLook,
+  AttachVwapLook,
+  AttachWilliamsRLook,
+  AttachFrom,
+  AttachFromSource,
   AttachObvOptions,
   AttachParabolicSarOptions,
   AttachRsiOptions,

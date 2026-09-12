@@ -108,10 +108,11 @@ describe("reuseUnchanged — the unit", () => {
 
 /**
  * What "the same point" means is narrow on purpose: plain objects with
- * the same own enumerable string keys and the same values. Anything the
- * comparison cannot see must leave the new object in place — a reused
- * object that differs in any way a consumer can read would be identity
- * lying.
+ * the same own enumerable string keys and the same values. That is the
+ * whole of what the comparison reads — a point is a plain record, and a
+ * difference it does not read (a non-enumerable property, a symbol key)
+ * is outside the contract, so two such objects *are* reused as one. The
+ * cases below are the shapes the comparison must not mistake for the same.
  */
 describe("reuseUnchanged — what it may not reuse", () => {
   class Tracked {

@@ -720,11 +720,32 @@ export function assertRatio(value: number, name: string, factory: string): void 
  * position, so the consumer can't tell which option key (`source`) they
  * left out.
  */
-export function requireAttachOptions<T extends { source?: unknown }>(
+export function requireAttachOptions<T extends { source?: unknown; node?: unknown }>(
   options: T,
   name: string,
 ): T {
   requireOptions(options, name);
+  // Two doors, one taken: a `node` key that is present decides for the node
+  // door even when it is undefined — the type keeps `{ source, node }` out,
+  // and here a present-but-undefined node is refused rather than silently
+  // falling back to the source it was probably meant to replace.
+  if ("node" in options) {
+    const node = options.node;
+    // `typeof null === "object"` — an `out` of null is not a record either.
+    const out = typeof node === "object" && node !== null ? Reflect.get(node, "out") : null;
+    if (typeof out !== "object" || out === null) {
+      throw new ContractError(
+        `${name}({ node }) must be a computed node (something with an out record): ${describeValue(node)}`,
+      );
+    }
+    if (options.source !== undefined) {
+      throw new ContractError(`${name}: give a source or a node, not both`);
+    }
+    if (typeof Reflect.get(options, "name") !== "string") {
+      throw new ContractError(`${name}({ node }) needs a name — a node does not carry its formula`);
+    }
+    return options;
+  }
   const source = options.source;
   // `Reflect.get` returns `unknown` — the idiom for reading an unknown shape without an assertion.
   if (
@@ -739,11 +760,6 @@ export function requireAttachOptions<T extends { source?: unknown }>(
   return options;
 }
 
-/**
- * Sibling `vwap`'s anchor is optional (`anchor?.()`), so it's safe, but
- * `pivotPoints`'s is required — omitting it produces a bare
- * `TypeError: anchor is not a function`.
- */
 export function assertPredicate(
   value: unknown,
   name: string,

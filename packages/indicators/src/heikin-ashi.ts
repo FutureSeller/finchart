@@ -1,45 +1,70 @@
-import type { OHLC } from "@finchart/core";
+import type { DataView, OHLC } from "@finchart/core";
 import { requireSourceArray } from "./kernels";
 
+/** The HA bar before this one — all a Heikin-Ashi bar needs from history. */
+interface Seed {
+  open: number;
+  close: number;
+}
+
 /**
- * Heikin-Ashi — a pure transform that turns raw OHLC into smoothed candles.
- *
- * Not a new series type: the result is still `OHLC[]`, so `candleSeries()`
- * draws it as-is — use it as the `derive` material for `pane.addSeries`.
- *
- * ```ts
- * pane.addSeries({ series: candleSeries(), data: candles, derive: heikinAshi });
- * ```
- *
- * Convention:
- * - close = (O+H+L+C)/4
- * - open = for the first candle, (O+C)/2; after that, (previous HA open +
- *   previous HA close)/2 — it's stateful, so open doesn't connect back to
- *   the source
- * - high/low = the range spanning both the candle's own source high/low and
- *   its HA open/close
- *
- * x carries over from the source unchanged — one candle in, one candle out,
- * no new bricks counted. volume passes through unchanged — it isn't
- * something to smooth.
+ * One Heikin-Ashi bar. The close is the raw bar's average; the open is the
+ * midpoint of the *previous HA* bar, or of the raw open/close when there is
+ * no previous bar — that seed is why the derivation has no finite head
+ * door: a page prepended in front changes bar 0's seed, and every open
+ * after it follows.
+ */
+function fold(candle: OHLC, previous: Seed | null): OHLC {
+  const close = (candle.open + candle.high + candle.low + candle.close) / 4;
+  const open =
+    previous === null ? (candle.open + candle.close) / 2 : (previous.open + previous.close) / 2;
+  const high = Math.max(candle.high, open, close);
+  const low = Math.min(candle.low, open, close);
+  return { x: candle.x, open, high, low, close, volume: candle.volume };
+}
+
+/**
+ * Heikin-Ashi: candles smoothed into their own averages. A derivation
+ * `OHLC[] → OHLC[]` — feed the result to a candle series. Its tail is
+ * `heikinAshiLast`.
  */
 export function heikinAshi(source: readonly OHLC[]): OHLC[] {
   requireSourceArray(source, "heikinAshi");
   const out: OHLC[] = [];
-  let prevOpen = 0;
-  let prevClose = 0;
+  let previous: Seed | null = null;
+  for (const candle of source) {
+    const bar = fold(candle, previous);
+    out.push(bar);
+    previous = bar;
+  }
+  return out;
+}
 
-  source.forEach((candle, index) => {
-    const close = (candle.open + candle.high + candle.low + candle.close) / 4;
-    const open =
-      index === 0 ? (candle.open + candle.close) / 2 : (prevOpen + prevClose) / 2;
-    const high = Math.max(candle.high, open, close);
-    const low = Math.min(candle.low, open, close);
-
-    out.push({ x: candle.x, open, high, low, close, volume: candle.volume });
-    prevOpen = open;
-    prevClose = close;
-  });
-
+/**
+ * The tail of `heikinAshi` — `deriveLast` for a candle series fed by it:
+ *
+ * ```ts
+ * pane.addSeries({ series: candleSeries(), data: bars, derive: heikinAshi, deriveLast: heikinAshiLast });
+ * ```
+ *
+ * Returns exactly the changed tail — `count` bars for an append, folded
+ * from the last HA bar held, one for a replace, folded from the HA bar
+ * before it (or from the raw bar's own seed when that is bar 0). The
+ * prefix stays where it is; the door keeps it.
+ */
+export function heikinAshiLast(
+  previous: DataView<OHLC>,
+  source: DataView<OHLC>,
+  change: { kind: "append" | "replace"; count: number },
+): OHLC[] {
+  const count = change.kind === "replace" ? 1 : change.count;
+  const kept = previous.length - (change.kind === "replace" ? 1 : 0);
+  let seed: Seed | null = kept > 0 ? previous[kept - 1] : null;
+  const out: OHLC[] = [];
+  for (let i = source.length - count; i < source.length; i++) {
+    const bar = fold(source[i], seed);
+    out.push(bar);
+    seed = bar;
+  }
   return out;
 }
