@@ -33,6 +33,27 @@ jobs:
       - run: pnpm check:publish
       - run: pnpm exec changeset status
 
+  # The packages declare `engines.node >=20.19` — the shipped dist must run
+  # there, not only on the Node the repository builds with. Build on the
+  # toolchain's Node, then run the consumer-side smokes on the floor.
+  node-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20.19
+      - run: node --version
+      - run: node e2e/node-floor-smoke.mjs
+
   e2e:
     runs-on: ubuntu-latest
     steps:

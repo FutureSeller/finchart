@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "oxlint src",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist .turbo",
     "size": "size-limit"
   },
@@ -29,8 +30,11 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "jsdom": "catalog:",
     "size-limit": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

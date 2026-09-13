@@ -12,7 +12,7 @@ import { styleSpec } from "../render/style-spec";
 import type { Point } from "../primitives";
 import { requireObject } from "../primitives";
 import type { Series, SeriesContext } from "./types";
-import { screenXAt } from "./types";
+import { screenXAt, settleCoordinates } from "./types";
 
 export interface AreaSeriesStyle {
   line: LineStyle;
@@ -57,8 +57,8 @@ export interface AreaSeriesOptions<T extends BaseDataPoint> {
  * breaking at a gap. One polygon per run of unbroken values.
  *
  * The accessor is injected, for the same reason as `LineSeries`: drawing
- * a close-price area over OHLC is the assembly `new AreaSeries({
- * coordinates: new OHLCAccessor() })`.
+ * a close-price area over OHLC is `areaSeries({ coordinates: new
+ * OHLCAccessor() })`.
  */
 export class AreaSeries<T extends BaseDataPoint = LineDataPoint>
   implements Series<T>
@@ -121,13 +121,32 @@ export class AreaSeries<T extends BaseDataPoint = LineDataPoint>
 
 }
 
-/** The default wiring for LineDataPoint — the same convention as `lineSeries`. */
+/** The default wiring for LineDataPoint, or an area over any point shape given `coordinates` — the same two calls as `lineSeries`. */
 export function areaSeries(
-  style?: AreaSeriesStyleOverrides,
-): AreaSeries<LineDataPoint> {
+  style?: AreaSeriesStyleOverrides & { coordinates?: never },
+): AreaSeries<LineDataPoint>;
+export function areaSeries<T extends BaseDataPoint>(
+  options: AreaSeriesOptions<T> & { [K in keyof AreaSeriesStyleOverrides]?: never },
+): AreaSeries<T>;
+export function areaSeries<T extends BaseDataPoint>(
+  options?: AreaSeriesStyleOverrides | AreaSeriesOptions<T>,
+): AreaSeries<T> | AreaSeries<LineDataPoint> {
+  if (options === undefined) return new AreaSeries({ coordinates: new LineDataAccessor() });
   // Prevents a bad type from passing through quietly and drawing with defaults.
-  if (style !== undefined) requireObject(style, "areaSeries(style)");
-  return new AreaSeries({ coordinates: new LineDataAccessor(), style });
+  requireObject(options, "areaSeries(options)");
+  if (hasCoordinates(options)) {
+    return new AreaSeries<T>({
+      coordinates: settleCoordinates(options, AREA_STYLE_SPEC, "areaSeries(options)"),
+      style: options.style,
+    });
+  }
+  return new AreaSeries({ coordinates: new LineDataAccessor(), style: options });
+}
+
+function hasCoordinates<T extends BaseDataPoint>(
+  options: AreaSeriesStyleOverrides | AreaSeriesOptions<T>,
+): options is AreaSeriesOptions<T> {
+  return "coordinates" in options;
 }
 
 /** The runs of unbroken values, in screen coordinates. A gap is a boundary — the same rule as LineSeries. */

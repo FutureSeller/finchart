@@ -62,7 +62,7 @@ import { cursorClaims, type CursorClaims, focusClaims } from "../interaction";
 import { eventChannel } from "../primitives";
 import type { CrosshairPayload, PlotEvents } from "./events";
 import { DEFAULT_X_FORMAT } from "../axis";
-import { layoutFrame, type Frame } from "./frame";
+import { layoutFrame, layoutPaneHeights, type PaneHeightInput, type Frame } from "./frame";
 import type { AxisSlices } from "./layout";
 import type { SeriesId, SeriesRegistration } from "../registration";
 import type { PaneApi, PaneChange } from "./pane";
@@ -175,6 +175,8 @@ export class Plot
   private readonly measurer: TextMeasurer | null;
   /** null unless supplied. Pane heights are then set by flex alone. */
   private readonly dividers: DividerRenderer | null;
+  /** How many divider handles the last frame put up. */
+  private shownDividers = 0;
 
   /**
    * The default pane that holds series. Always exists.
@@ -318,10 +320,23 @@ export class Plot
     // Give it the same surface as the renderer — the place that measures
     // and the place that draws must be the same engine.
     this.measurer = deps.createTextMeasurer?.(this.layers.data) ?? null;
-    this.dividers =
+    const dividers =
       deps.createDividers?.(this.layers.overlay, (index, dy) =>
         this.resizeBetween(index, dy),
       ) ?? null;
+    // Counts what's up as it goes by — a move is only for a handle the last
+    // frame put up (see `resizeBetween`).
+    this.dividers = dividers && {
+      render: (boundaries) => {
+        this.shownDividers = boundaries.length;
+        dividers.render(boundaries);
+      },
+      clear: () => {
+        this.shownDividers = 0;
+        dividers.clear();
+      },
+      destroy: () => dividers.destroy(),
+    };
     this.scope.add(() => this.dividers?.destroy());
 
     this.xScale = deps.xScale();
@@ -502,6 +517,9 @@ export class Plot
     this.scheduleRender();
   }
 
+  /** Counts the data changes panes report — counted first, before anything that could throw. */
+  private dataChanges = 0;
+
   /**
    * A pane changed. **Whether to refit x is decided right here.**
    *
@@ -516,6 +534,7 @@ export class Plot
    * default [0,1], and nothing is in place.
    */
   private onPaneChange(change: PaneChange): void {
+    if (change.data) this.dataChanges += 1;
     /**
      * If the drawn points haven't changed, **only redraw the picture.**
      *
@@ -1369,22 +1388,18 @@ export class Plot
   }
 
   /**
-   * Settles this frame's geometry — axis slices, pane areas, scale ranges,
-   * ticks.
-   *
-   * The computation is `frame.ts`'s job. All that's left here is **handing
-   * over what the chart knows**: the area minus padding, the pane list,
-   * axis config, and whether there's a labeler mounted and able to measure.
+   * What the vertical half of a frame reads — the area minus padding, the
+   * pane list, axis config, and whether there's a labeler mounted and able
+   * to measure. Shared by the frame and by a divider move, so both split
+   * the height the same way.
    */
-  private layout(readStyle: StyleReader): Frame | null {
+  private verticalInput(readStyle: StyleReader): PaneHeightInput {
     const { measurer } = this;
-    const frame = layoutFrame({
+    return {
       area: this.area,
       panes: this.paneStack.list,
       gap: this.config.paneGap,
       axis: this.config.axis,
-      xScale: this.xScale,
-      x: this.x,
       labels: this.axisLabels !== null,
       // Measurement uses the font the DOM label actually draws with — the
       // variable contract lives in the same place. The measurer is bound
@@ -1397,6 +1412,22 @@ export class Plot
             of: (text: string, font: string) => measurer.measure(text, font),
           }
         : null,
+    };
+  }
+
+  /**
+   * Settles this frame's geometry — axis slices, pane areas, scale ranges,
+   * ticks.
+   *
+   * The computation is `frame.ts`'s job. All that's left here is **handing
+   * over what the chart knows**: the area minus padding, the pane list,
+   * axis config, and whether there's a labeler mounted and able to measure.
+   */
+  private layout(readStyle: StyleReader): Frame | null {
+    const frame = layoutFrame({
+      ...this.verticalInput(readStyle),
+      xScale: this.xScale,
+      x: this.x,
     });
 
     // A degenerate frame doesn't leave slices behind either — if axis drag
@@ -1621,14 +1652,49 @@ export class Plot
    * by `coalesceState`.
    */
   private resizeBetween(index: number, dy: number): void {
+    // Only a handle the last frame put up can be moved. A frame with no
+    // data, with resizing off, or with no room takes the handles down — a
+    // drag still in progress (its listeners sit on the document) or a key
+    // on a handle that's gone has no picture to act on, and shares written
+    // from a gone one would outlive it.
+    if (this.moveRefused(index)) return;
+
+    /**
+     * **Measured from the chart as it is now, not from the last frame.**
+     * Moves arrive faster than frames: the areas are what the last frame
+     * laid out, and a move, a resized viewport or a flex written since then
+     * hasn't reached them — two arrow keys before a frame used to both start
+     * from the same areas, so the second replaced the first. Drawing the
+     * owed frame first would run render listeners that can change the chart
+     * again before this move lands, so the heights come from the vertical
+     * half of the layout alone.
+     *
+     * That half still calls out — the style reader and the text measurer
+     * are the consumer's wiring, and so is a data source read on the way
+     * in. Rather than guessing what they might touch, the move writes down
+     * everything the heights are computed from — the viewport, the options,
+     * and each pane with its flex and minHeight — and compares it after
+     * measuring. Anything different, however it got changed and whether or
+     * not a listener threw on the way, and what was measured no longer
+     * stands: the move is dropped. The comparison reads plain fields only.
+     */
+    const inputs = this.heightInputs();
+    const settled = layoutPaneHeights(
+      this.verticalInput(this.deps.createStyleReader()),
+    );
+    if (
+      settled === null ||
+      this.destroyed ||
+      !sameItems(inputs, this.heightInputs())
+    ) {
+      return;
+    }
     const panes = this.paneStack.list;
     const upper = panes[index];
     const lower = panes[index + 1];
     if (!upper || !lower) return;
 
-    const heights = panes.map(
-      (pane) => pane.area.bottom - pane.area.top,
-    );
+    const { heights } = settled;
     const upperHeight = heights[index];
     const lowerHeight = heights[index + 1];
 
@@ -1643,7 +1709,6 @@ export class Plot
 
     heights[index] = upperHeight + delta;
     heights[index + 1] = lowerHeight - delta;
-
     this.coalesceState(() => {
       panes.forEach((pane, slot) => {
         pane.applyOptions({ flex: heights[slot] });
@@ -1651,6 +1716,37 @@ export class Plot
     });
 
     this.scheduleRender();
+  }
+
+  /**
+   * Everything the pane heights are computed from, and what a move needs
+   * to still apply, as plain values and references — two lists with the
+   * same items lay the panes out the same and leave the same handles up.
+   */
+  private heightInputs(): unknown[] {
+    const inputs: unknown[] = [
+      this.config,
+      this.viewportSize.width,
+      this.viewportSize.height,
+      // Not heights, but the ground a move stands on: a frame that took the
+      // handles down, or data that changed (emptied, replaced).
+      this.shownDividers,
+      this.dataChanges,
+    ];
+    for (const pane of this.paneStack.list) {
+      inputs.push(pane, pane.flex, pane.minHeight);
+    }
+    return inputs;
+  }
+
+  /** Whether a move for the handle at `index` has nothing to act on. */
+  private moveRefused(index: number): boolean {
+    return (
+      this.destroyed ||
+      index >= this.shownDividers ||
+      !this.dataRange ||
+      !this.config.resizablePanes
+    );
   }
 
   destroy(): void {
@@ -1742,4 +1838,9 @@ export class Plot
     // Every resource has been released. What failed, if anything, is reported after.
     if (failures.length > 0) throw throwable(failures, "cleaning up Plot failed");
   }
+}
+
+/** Same length, same items in the same slots. */
+function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((item, slot) => item === b[slot]);
 }

@@ -166,10 +166,22 @@ mid-drag, so the recipe is to write **both together**:
 
 ```css
 .my-chart [data-chart-divider]:hover,
-.my-chart [data-chart-divider][data-dragging] {
+.my-chart [data-chart-divider][data-dragging],
+.my-chart [data-chart-divider]:focus-visible {
   background: rgba(41, 98, 255, 0.22);
 }
+.my-chart [data-chart-divider]:focus-visible {
+  outline: 2px solid #2962ff;
+}
 ```
+
+The handle is also a keyboard control — a focusable `role="separator"` with
+`aria-valuenow`/`aria-valuemin`/`aria-valuemax` giving the upper pane's height
+and limits, moved by the arrow keys (see the key table in
+[plot-contract](/guide/plot-contract#keyboard-accessibility)). **The library
+draws no focus style of its own** — the browser's default outline on a
+transparent 7px strip is easy to miss, so give `:focus-visible` a look, as the
+third selector above does.
 
 Proof: the showcase (`apps/showcase/src/style.css`) is exactly this recipe.
 
@@ -223,10 +235,11 @@ An empty string is "no value" — that leaf falls to the default. To dress one
 chart differently, the registration's `options` override comes before the
 reader (rank 1 of the priority order).
 
-Proof: the worker-render case of the example gallery (`cases.html#worker-render`)
-wears dark by exactly this recipe — the whole chart lives in a worker so there
-is no CSS, and the theme is a JS object in
-`apps/examples/src/cases/worker-render.worker.ts`.
+Proof: the [Worker rendering](/examples/worker-render) example wears dark by
+exactly this recipe — the whole chart lives in a worker so there is no CSS,
+and the theme is a JS object in
+`apps/examples/src/cases/worker-render.worker.ts`. [Workers](/guide/workers)
+covers the rest of that wiring.
 
 **Do not take this road in the browser.** `browserDeps` does accept
 `createStyleReader`, but the DOM overlay (axis labels, tooltip, legend) has the

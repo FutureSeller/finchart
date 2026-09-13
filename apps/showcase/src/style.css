@@ -218,12 +218,16 @@ button[aria-pressed="true"] {
   stroke-linejoin: round;
 }
 
-/* The sign that it can be dragged — the same style on hover and while
-   dragging ([data-dragging]). On hover alone it flickers every time the
-   pointer leaves the handle mid-drag. */
+/* The sign that it can be dragged — the same style on hover, while
+   dragging ([data-dragging]) and with keyboard focus. On hover alone it
+   flickers every time the pointer leaves the handle mid-drag. */
 #charts [data-chart-divider]:hover,
-#charts [data-chart-divider][data-dragging] {
+#charts [data-chart-divider][data-dragging],
+#charts [data-chart-divider]:focus-visible {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+#charts [data-chart-divider]:focus-visible {
+  outline: 2px solid var(--accent);
 }
 
 /* --- Layout — the chart palette sits here so every chart inherits it --- */

@@ -25,6 +25,7 @@ import {
   timeTicks,
 } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
+import type { WorkerReport } from "./worker-fallback";
 
 /** Main → worker. The case (worker-render.ts) imports it type-only. */
 export type MainToWorker =
@@ -68,7 +69,8 @@ function offscreenLayers(
   dpr: number,
 ): ChartLayers {
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("Could not get a 2D context from the OffscreenCanvas");
+  // Reported to the main thread by `onmessage` below, which then draws there instead.
+  if (!context) throw new Error("no 2D context on the OffscreenCanvas");
 
   let logical = { width, height };
   let applied = { width: 0, height: 0 };
@@ -157,10 +159,23 @@ function init(message: MainToWorker & { type: "init" }): void {
   }, 400);
 }
 
+const report = (message: WorkerReport): void => postMessage(message);
+
 onmessage = (event: MessageEvent) => {
   const message: MainToWorker = event.data;
 
-  if (message.type === "init") return init(message);
+  if (message.type === "init") {
+    // Anything that stops the chart from standing up here — no 2D context,
+    // a throwing first frame — goes back as a report, so the main thread
+    // falls back instead of waiting out its timeout.
+    try {
+      init(message);
+      report({ type: "ready" });
+    } catch (error) {
+      report({ type: "failed", reason: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
   if (!plot) return;
 
   switch (message.type) {

@@ -6,6 +6,10 @@ import { requireOverlayElement } from "./overlay-element";
 /** Thick enough to grab, thin enough not to obscure the pane. */
 const THICKNESS = 7;
 
+/** How far one arrow key moves a divider (px); Shift moves `LARGE_STEP`. */
+const STEP = 8;
+const LARGE_STEP = 40;
+
 /**
  * Places draggable handles between panes.
  *
@@ -39,6 +43,8 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
 
   /** Reuses dividers once created — recreating them on every render would swap the handle out mid-drag. */
   const pool: HTMLElement[] = [];
+  /** How many handles are in the DOM now. */
+  let shown = 0;
 
   function handle(): HTMLElement {
     const element = document.createElement("div");
@@ -51,11 +57,47 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
     // a divider is dragged vertically, so it reserves the gesture itself —
     // the allowed gestures are what every element on the way down permits.
     element.style.touchAction = "none";
+    // A focusable separator — the keyboard's way to do what the drag does.
+    // No focus ring is drawn here; style `[data-chart-divider]:focus-visible`.
+    element.setAttribute("role", "separator");
+    element.setAttribute("aria-orientation", "horizontal");
+    element.setAttribute("aria-label", "Resize panes");
+    element.tabIndex = 0;
     return element;
   }
 
   function attach(element: HTMLElement, index: number): void {
     let drag: Scope | null = null;
+
+    listen(scope, element, "keydown", (event: KeyboardEvent) => {
+      // Combinations with Ctrl, Meta or Alt belong to the browser.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const step = event.shiftKey ? LARGE_STEP : STEP;
+      let dy: number;
+      switch (event.key) {
+        case "ArrowUp":
+          dy = -step;
+          break;
+        case "ArrowDown":
+          dy = step;
+          break;
+        // As far as it goes — the limit is the plot's to find, from the
+        // heights as they are now rather than as the last frame drew them.
+        case "Home":
+          dy = -Infinity;
+          break;
+        case "End":
+          dy = Infinity;
+          break;
+        default:
+          return;
+      }
+      // A handled key stops here — past the handle, the input stack would
+      // hand it to a tool and the container would read it as a gesture.
+      event.preventDefault();
+      event.stopPropagation();
+      onDrag(index, dy);
+    });
 
     const end = (): void => {
       drag?.dispose();
@@ -113,13 +155,24 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
         element.style.left = `${boundary.left}px`;
         element.style.width = `${boundary.right - boundary.left}px`;
         element.style.top = `${boundary.y - THICKNESS / 2}px`;
+        // Whole pixels — flex shares lay out as fractions (`268.5`,
+        // `40.00000000000001`), and a screen reader reads every digit.
+        element.setAttribute("aria-valuenow", String(Math.round(boundary.value.now)));
+        element.setAttribute("aria-valuemin", String(Math.round(boundary.value.min)));
+        element.setAttribute("aria-valuemax", String(Math.round(boundary.value.max)));
       });
 
-      root.replaceChildren(...pool.slice(0, boundaries.length));
+      // Only when the count changes — re-inserting a handle that stays
+      // would take the focus off it on every frame its own key causes.
+      if (shown !== boundaries.length) {
+        root.replaceChildren(...pool.slice(0, boundaries.length));
+        shown = boundaries.length;
+      }
     },
 
     clear() {
       root.replaceChildren();
+      shown = 0;
     },
 
     destroy() {

@@ -100,6 +100,11 @@ option branch.
 | `Delete` `Backspace` | delete the selected drawing | drawing tools |
 | `]` `[` | cycle the drawing selection (next/previous, wraps at the ends) | drawing tools |
 | double-click a pane | toggle maximize on that pane | `paneMaximize({ gestures: true })` |
+| `↑` `↓` (with Shift, 40px) | move a focused pane divider 8px | pane divider |
+| `Home` `End` | move a focused pane divider to its limit | pane divider |
+
+The divider rows belong to the handle between panes, which is a tab stop of
+its own; the keys it handles stop there and never reach the container.
 
 Ctrl/⌘+Z does not pass through this table yet: the DOM host deliberately keeps
 modified keys outside the normalized input stack. Bind it on the chart element

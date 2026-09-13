@@ -20,7 +20,7 @@ import {
   type PlotDecoration,
   type PlotDecorationContext,
 } from "./decoration";
-import type { DividerRenderer } from "./dividers";
+import { dividerRange, type DividerRenderer, type DividerSide } from "./dividers";
 import type { Frame, PaneTicks } from "./frame";
 import type { AxisSlices } from "./layout";
 import type { Pane } from "./pane";
@@ -305,12 +305,18 @@ function drawDividers(stage: PaintStage, config: ResolvedPlotConfig): void {
     return;
   }
 
+  const side = (pane: Pane): DividerSide => ({
+    height: pane.area.bottom - pane.area.top,
+    minHeight: pane.minHeight,
+  });
+
   dividers.render(
     panes.slice(0, -1).map((pane, index) => ({
       index,
       y: pane.area.bottom + gap / 2,
       left: pane.area.left,
       right: pane.area.right,
+      value: dividerRange(side(pane), side(panes[index + 1])),
     })),
   );
 }

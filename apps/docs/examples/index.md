@@ -1,5 +1,5 @@
 ---
-description: "Eighteen runnable examples, each one page with the source it actually runs."
+description: "Nineteen runnable examples, each one page with the source it actually runs."
 ---
 
 # Examples
@@ -25,3 +25,4 @@ on the left. Each page shows the live demo alongside the real source.
 - [Two synchronized charts — syncX](/examples/sync-x)
 - [Custom series — volume dots](/examples/custom-series)
 - [Session shading — a custom draw command with a fallback](/examples/session-shading)
+- [Worker rendering](/examples/worker-render) — the chart in a Web Worker, with a main-thread fallback

@@ -295,7 +295,7 @@ Other exports with a row of their own, not computed nodes:
 
 ## Support matrix
 
-- **Node 18+** — where the headless path (SSR, workers, tests) runs.
+- **Node 20.19+** — where the headless path (SSR, workers, tests) runs; CI runs that floor.
 - **Browsers — Chrome 98+ · Edge 98+ · Firefox 94+ · Safari 15.4+** (2022-03).
   The floor is set by `structuredClone`, `Object.hasOwn`, and
   `Array.prototype.at`, and **no polyfills ship** — bring your own if you need

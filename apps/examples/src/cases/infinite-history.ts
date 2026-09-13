@@ -89,6 +89,7 @@ const STATUS_LINE: Record<HistoryStatus, string> = {
   loading: "loading older bars…",
   done: "done — the beginning of history",
   terminated: "terminated — the fetch broke its contract",
+  stopped: "stopped — the loader was disposed",
 };
 
 export function mount(container: HTMLElement): () => void {

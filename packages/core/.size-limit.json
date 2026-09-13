@@ -1,23 +1,23 @@
 [
   {
-    "name": "everything — import * (a preset consumer) · 40 KB gzip (39933B measured)",
+    "name": "everything — import * (a preset consumer) · 41.5 KB gzip (41178B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "40 KB",
+    "limit": "41.5 KB",
     "gzip": true
   },
   {
-    "name": "one line — a consumer taking only the series (tree-shaking) · 1.75 KB gzip (1647B measured)",
+    "name": "one line — a consumer taking only the series (tree-shaking) · 2 KB gzip (1802B measured)",
     "path": "dist/index.mjs",
     "import": "{ lineSeries }",
-    "limit": "1.75 KB",
+    "limit": "2 KB",
     "gzip": true
   },
   {
-    "name": "headless — createPlotModel (server, worker) · 21.5 KB gzip (21362B measured)",
+    "name": "headless — createPlotModel (server, worker) · 22 KB gzip (21702B measured)",
     "path": "dist/headless.mjs",
     "import": "{ createPlotModel }",
-    "limit": "21.5 KB",
+    "limit": "22 KB",
     "gzip": true
   }
 ]

@@ -190,6 +190,12 @@ importers:
       '@vitejs/plugin-react':
         specifier: 'catalog:'
         version: 6.0.4(vite@8.2.2(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 4.1.10(vitest@4.1.10)
+      jsdom:
+        specifier: 'catalog:'
+        version: 25.0.1
       size-limit:
         specifier: 'catalog:'
         version: 11.2.0
@@ -199,6 +205,9 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.2.2(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@25.0.1)(vite@8.2.2(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
 
   apps/showcase:
     dependencies:

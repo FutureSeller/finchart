@@ -1,0 +1,278 @@
+// @vitest-environment jsdom
+/**
+ * A divider is a focusable separator: it names itself, reports the upper
+ * pane's height and limits, and moves with the arrow keys. The keys it
+ * handles stop at the handle — neither the input stack (a drawing tool's
+ * editing keys) nor the container's own key gestures see them — and a
+ * frame drawn while it has focus doesn't take the focus away.
+ */
+import type { ChartLayers, LayersFactory, LineDataPoint, Pane } from "@finchart/core";
+import { lineSeries, manualScheduler, Plot } from "@finchart/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { browserDeps } from "../browser-deps";
+import { createDomDividers } from "../dom-dividers";
+import { fakeCanvasContext } from "./fakes";
+
+const data: LineDataPoint[] = [
+  { x: 0, y: 10 },
+  { x: 50, y: 20 },
+  { x: 100, y: 15 },
+];
+
+let container: HTMLElement;
+
+beforeEach(() => {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  container.remove();
+});
+
+/** Layers whose overlay sits inside the container, so key events bubble the way they do in a page. */
+const layersInContainer: LayersFactory = (width, height): ChartLayers => {
+  const size = { width, height };
+  const overlay = document.createElement("div");
+  container.appendChild(overlay);
+  return {
+    data: {
+      get width() {
+        return size.width;
+      },
+      get height() {
+        return size.height;
+      },
+      context: fakeCanvasContext(),
+    },
+    overlay,
+    resize(nextWidth, nextHeight) {
+      size.width = nextWidth;
+      size.height = nextHeight;
+    },
+    destroy() {
+      overlay.remove();
+    },
+  };
+};
+
+function setup() {
+  // Frames only when the test draws one — keys can land between them, as they do in a page.
+  const deps = browserDeps({
+    createLayers: layersInContainer,
+    createScheduler: manualScheduler(),
+    observeResolution: undefined,
+  })(container);
+  const plot = new Plot({
+    deps,
+    config: {
+      padding: { top: 20, right: 20, bottom: 20, left: 20 },
+      axis: { x: { showLabels: false }, y: { showLabels: false } },
+    },
+    size: { width: 800, height: 600 },
+  });
+  plot.mainPane.addSeries({ series: lineSeries(), data });
+  plot.addPane().addSeries({ series: lineSeries(), data });
+  plot.render();
+
+  const routed = vi.spyOn(plot, "routeInput");
+  const divider = () => {
+    const found = container.querySelector("[data-chart-divider]");
+    if (!(found instanceof HTMLElement)) throw new Error("no divider");
+    return found;
+  };
+  const heightOf = (pane: Pane) => pane.area.bottom - pane.area.top;
+  const key = (name: string, init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true, ...init });
+    divider().dispatchEvent(event);
+    return event;
+  };
+  /** A key, then the frame it asked for. */
+  const press = (name: string, init: KeyboardEventInit = {}) => {
+    const event = key(name, init);
+    plot.render();
+    return event;
+  };
+  return { plot, routed, divider, heightOf, key, press };
+}
+
+describe("a divider as a separator", () => {
+  it("names itself and reports the upper pane's height and limits", () => {
+    const { plot, divider, heightOf } = setup();
+    const [upper, lower] = plot.panes;
+    const handle = divider();
+    expect(handle.getAttribute("role")).toBe("separator");
+    expect(handle.getAttribute("aria-orientation")).toBe("horizontal");
+    expect(handle.getAttribute("tabindex")).toBe("0");
+    expect(handle.getAttribute("aria-label")).toBe("Resize panes");
+    // In whole pixels.
+    const whole = (value: number) => String(Math.round(value));
+    expect(handle.getAttribute("aria-valuenow")).toBe(whole(heightOf(upper)));
+    expect(handle.getAttribute("aria-valuemin")).toBe(whole(upper.minHeight));
+    expect(handle.getAttribute("aria-valuemax")).toBe(
+      whole(heightOf(upper) + heightOf(lower) - lower.minHeight),
+    );
+  });
+
+  it("moves 8px per arrow, 40px with Shift, and updates aria-valuenow", () => {
+    const { plot, divider, heightOf, press } = setup();
+    const [upper, lower] = plot.panes;
+    const start = heightOf(upper);
+    const total = heightOf(upper) + heightOf(lower);
+
+    press("ArrowDown");
+    expect(heightOf(upper)).toBe(start + 8);
+    expect(divider().getAttribute("aria-valuenow")).toBe(String(Math.round(start + 8)));
+
+    press("ArrowUp", { shiftKey: true });
+    expect(heightOf(upper)).toBe(start - 32);
+    expect(heightOf(upper) + heightOf(lower)).toBe(total);
+    expect(divider().getAttribute("aria-valuenow")).toBe(String(Math.round(start - 32)));
+  });
+
+  it("adds up keys pressed before the next frame, Home and End included", () => {
+    const { plot, heightOf, key } = setup();
+    const [upper, lower] = plot.panes;
+    const start = heightOf(upper);
+
+    key("ArrowDown");
+    key("ArrowDown");
+    plot.render();
+    expect(heightOf(upper)).toBe(start + 16);
+
+    key("Home");
+    key("ArrowDown");
+    key("Home");
+    plot.render();
+    expect(heightOf(upper)).toBe(upper.minHeight);
+
+    key("End");
+    key("ArrowUp");
+    key("End");
+    plot.render();
+    expect(heightOf(lower)).toBe(lower.minHeight);
+  });
+
+  it("goes to the limits with Home and End, and stops there", () => {
+    const { plot, heightOf, press } = setup();
+    const [upper, lower] = plot.panes;
+    const total = heightOf(upper) + heightOf(lower);
+
+    press("Home");
+    expect(heightOf(upper)).toBe(upper.minHeight);
+    press("ArrowUp");
+    expect(heightOf(upper)).toBe(upper.minHeight);
+
+    press("End");
+    expect(heightOf(lower)).toBe(lower.minHeight);
+    expect(heightOf(upper)).toBe(total - lower.minHeight);
+  });
+
+  it("keeps the keys it handles away from the input stack and the container", () => {
+    const { routed, press } = setup();
+    const heard = vi.fn();
+    container.addEventListener("keydown", heard);
+
+    for (const key of ["ArrowDown", "ArrowUp", "Home", "End"]) {
+      const event = press(key);
+      expect(event.defaultPrevented).toBe(true);
+    }
+    expect(routed).not.toHaveBeenCalled();
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it("lets every other key through", () => {
+    const { plot, routed, heightOf, press } = setup();
+    const [upper] = plot.panes;
+    const start = heightOf(upper);
+    const heard = vi.fn();
+    container.addEventListener("keydown", heard);
+
+    const event = press("Delete");
+    expect(event.defaultPrevented).toBe(false);
+    expect(routed).toHaveBeenCalledWith({ type: "keydown", key: "Delete" });
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(heightOf(upper)).toBe(start);
+
+    // With Ctrl, Meta or Alt an arrow belongs to the browser.
+    for (const modifier of ["ctrlKey", "metaKey", "altKey"]) {
+      const combined = press("ArrowDown", { [modifier]: true });
+      expect(combined.defaultPrevented).toBe(false);
+      expect(heightOf(upper)).toBe(start);
+    }
+    expect(heard).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps focus across the frames its own keys cause", () => {
+    const { divider, press } = setup();
+    const handle = divider();
+    handle.focus();
+    expect(document.activeElement).toBe(handle);
+
+    press("ArrowDown");
+    press("ArrowDown");
+    press("ArrowUp", { shiftKey: true });
+    expect(divider()).toBe(handle);
+    expect(document.activeElement).toBe(handle);
+  });
+});
+
+describe("createDomDividers on its own", () => {
+  const boundary = (index: number, now: number) => ({
+    index,
+    y: 100 * (index + 1),
+    left: 0,
+    right: 200,
+    value: { now, min: 40, max: 300 },
+  });
+
+  it("reports each render's values, and sends Home/End as a move to the limit", () => {
+    const overlay = document.createElement("div");
+    container.appendChild(overlay);
+    const drags: Array<[number, number]> = [];
+    const dividers = createDomDividers(overlay, (index, dy) => void drags.push([index, dy]));
+
+    dividers.render([boundary(0, 100), boundary(1, 120)]);
+    dividers.render([boundary(0, 110.4), boundary(1, 89.6)]);
+    const handles = [...overlay.querySelectorAll("[data-chart-divider]")];
+    expect(handles.map((handle) => handle.getAttribute("aria-valuenow"))).toEqual(["110", "90"]);
+
+    const key = (slot: number, name: string) =>
+      handles[slot].dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+    key(1, "Home");
+    key(1, "End");
+    key(0, "ArrowDown");
+    expect(drags).toEqual([
+      [1, -Infinity],
+      [1, Infinity],
+      [0, 8],
+    ]);
+    dividers.destroy();
+  });
+
+  it("keeps focus when the count stays, and still drops a handle that goes", () => {
+    const overlay = document.createElement("div");
+    container.appendChild(overlay);
+    const dividers = createDomDividers(overlay, () => undefined);
+
+    dividers.render([boundary(0, 100), boundary(1, 120)]);
+    const [first] = overlay.querySelectorAll("[data-chart-divider]");
+    if (!(first instanceof HTMLElement)) throw new Error("no divider");
+    first.focus();
+    dividers.render([boundary(0, 104), boundary(1, 120)]);
+    expect(document.activeElement).toBe(first);
+
+    dividers.render([boundary(0, 104)]);
+    expect(overlay.querySelectorAll("[data-chart-divider]")).toHaveLength(1);
+    dividers.render([boundary(0, 104), boundary(1, 120)]);
+    expect(overlay.querySelectorAll("[data-chart-divider]")).toHaveLength(2);
+
+    // Cleared, then drawn again at the same count — the handles come back.
+    dividers.clear();
+    expect(overlay.querySelectorAll("[data-chart-divider]")).toHaveLength(0);
+    dividers.render([boundary(0, 104), boundary(1, 120)]);
+    expect(overlay.querySelectorAll("[data-chart-divider]")).toHaveLength(2);
+    dividers.destroy();
+  });
+});
