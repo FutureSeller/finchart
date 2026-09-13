@@ -55,7 +55,10 @@ Implementations: `LinearScale`, `LogScale` (`scale/`).
 
 **Where a data x lands on screen.** Everything series and decorations know
 about x. The scale sits underneath doing domain↔pixels only; whether the
-domain is time or bar index is the mapping's call.
+domain is time or bar index is the mapping's call. What a data x *means* on a
+time axis — an instant, and which zone labels it — is
+[Time zones and sessions](/guide/time-zones); the lightweight-charts terms
+for the same things are in the [migration table](/guide/migrating-from-lightweight-charts).
 
 - `continuousX` — the default. The domain *is* x, so an empty interval is
   empty space on screen too.
@@ -668,3 +671,6 @@ returns and where it plugs in. The full rules and their exceptions are in
 
 - [PRINCIPLES.md](https://github.com/finchart/finchart/blob/main/PRINCIPLES.md) — the principles (referenced by name)
 - [plot-contract.md](plot-contract.md) — which method touches what
+- [Migrating from lightweight-charts](migrating-from-lightweight-charts.md) — the two vocabularies side by side
+- [Next.js and React apps](nextjs.md) — the client boundary, `deps` read once, StrictMode
+- [Time zones and sessions](time-zones.md) — the axis's zone, epoch bars and calendar sessions

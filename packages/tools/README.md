@@ -191,6 +191,60 @@ the drawing's color and its text `--chart-drawing-label` (light by
 default, the same inverted pair as the crosshair badge). The label is
 presentation only: the segment is what you grab.
 
+## Saving per symbol and interval
+
+One key for every chart puts BTC's trend line on AAPL. Drawings belong to
+the same identity the data was fetched for — symbol and interval — so key
+the saved string by that identity, and mind the order: **save the old,
+switch, then load the new or clear.**
+
+```ts
+interface ChartIdentity { symbol: string; interval: string }
+const keyOf = ({ symbol, interval }: ChartIdentity) => `drawings:${symbol}:${interval}`;
+let current: ChartIdentity = { symbol: "BTC-USD", interval: "1m" };
+
+// Restore the identity you start on before anything is saved — the first
+// save below would otherwise write an empty stage over what was there.
+if (!tools.load(localStorage.getItem(keyOf(current)) ?? "")) tools.clear();
+
+function switchTo(next: ChartIdentity): void {
+  localStorage.setItem(keyOf(current), tools.serialize());
+  current = next;
+  if (!tools.load(localStorage.getItem(keyOf(next)) ?? "")) tools.clear();
+}
+```
+
+Two things the order protects. The initial `load()` comes before any save:
+the stage starts empty, and a save-then-switch that ran first would write
+that empty stage over the drawings already stored for the starting identity.
+And the `clear()` is not decoration. `load()` returns `false` for an empty or
+unreadable string and **leaves the stage as it was** — without the clear,
+switching to a symbol you never drew on would keep the previous symbol's
+drawings on screen, the very failure the key was meant to prevent. A
+successful `load()` and `clear()` both replace the document and empty the
+undo history, so a switch is a boundary undo does not cross; a failed
+`load()` changes neither.
+
+What the key needs to carry:
+
+- **The symbol**, always.
+- **The interval.** An anchor's x is a data x — on a time axis, an instant
+  — so a line drawn on 1-minute bars lands on the same instants on daily
+  bars, but it is not re-snapped to the daily bars' closes (snapping is what
+  the magnet does while you draw). Keying by interval is what most apps
+  mean.
+- **Not the coordinate system.** `continuousX` and `barIndexX` both hand the
+  tools a data x, so the same saved drawings load under either.
+- **A price-axis transform's parameters and source**, when one is on. Renko
+  and its kind produce an ordinal x that is only meaningful for one
+  (transform, options, source) triple — the
+  [plot contract](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
+  says how to restore across that boundary, and it is best effort.
+
+The chart's own view state (`plot.getState()`) is keyed the same way; the
+plot contract's `applyState` notes say why a window saved on another
+symbol's history is dropped by the first fit.
+
 ## Pointing at what you restored
 
 `serialize()` / `load()` carry drawings **across sessions**. Restored drawings
@@ -249,3 +303,6 @@ your own UI around them.**
 - **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md)
 - **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
 - **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
+- **Saving per symbol and interval** — [above](#saving-per-symbol-and-interval); the chart's own view state follows the same rule in the plot contract
+- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
+- **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)

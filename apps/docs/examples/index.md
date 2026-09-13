@@ -1,5 +1,5 @@
 ---
-description: "Seventeen runnable examples, each one page with the source it actually runs."
+description: "Eighteen runnable examples, each one page with the source it actually runs."
 ---
 
 # Examples
@@ -24,3 +24,4 @@ on the left. Each page shows the live demo alongside the real source.
 - [Bar-index coordinates](/examples/bar-index)
 - [Two synchronized charts — syncX](/examples/sync-x)
 - [Custom series — volume dots](/examples/custom-series)
+- [Session shading — a custom draw command with a fallback](/examples/session-shading)

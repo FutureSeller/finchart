@@ -19,7 +19,9 @@ needs a Client Component of your own around it: `deps={browserDeps()}` is a
 function, and this function cannot cross the server–client boundary as a prop —
 create it in a small `"use client"` component and render that from the
 server. The hooks (`usePlot`, `useChartPlot`, `usePlugin`) are client-only,
-as hooks are. SSR is fine: nothing here touches the DOM at import time.
+as hooks are. SSR is fine: nothing here touches the DOM at import time. The
+whole picture — the client file, `deps` read once, hydration, StrictMode — is
+in [Next.js and React apps](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md).
 
 ## 60 seconds — one production-shaped chart
 
@@ -305,3 +307,6 @@ you want to swap a single series through an imperative handle
 - **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md)
 - **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
 - **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
+- **Next.js and React apps** — the client boundary, `deps` read once, SSR, StrictMode — [nextjs.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md)
+- **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)
+- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)

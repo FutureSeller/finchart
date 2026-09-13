@@ -50,8 +50,9 @@ computed-node, input-stack, and plugin contracts are real.
   (calendar boundaries·timezone·locale, using only `Intl`)
 - **Interaction** — pan·zoom·pinch·axis drag·keyboard·double-click reset·kinetic
   (optional), every one individually toggleable
-- **Real-time** — `updateLast` (ticks), seam-only incremental checks,
-  `shiftVisibleRangeOnNewBar`
+- **Real-time** — `updateLast` (ticks), `conflated` (a loud feed's repeated
+  updates to one bar, folded until the next frame), seam-only incremental
+  checks, `shiftVisibleRangeOnNewBar`
 - **Decorations** — crosshair (magnet)·tooltip·legend·price line (axis badge)·
   markers·watermark·range highlight
 - **Headless** — `createPlotModel` emits a command list without a DOM. The
@@ -89,7 +90,8 @@ The five packages **ship as one fixed version** (`.changeset/config.json`'s
 mixing versions gets rejected at install. The code below runs as-is.
 
 To work on the repo itself, use the clone steps in [Development](#development)
-below.
+below. Coming from lightweight-charts? There is a
+[side-by-side table](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md).
 
 ## 60 seconds
 
@@ -126,12 +128,25 @@ That's it. Drag to pan, scroll to zoom.
 > const price = plot.mainPane.addSeries({ series: candleSeries(), data: bars });
 > price.updateLast(tick);                                        // real-time
 > pane.use(attachMovingAverage({ source: price, period: 20 }));  // indicator
+>
+> // A loud feed — many ticks per frame — goes through a conflated feed instead:
+> const feed = conflated(price);
+> feed.push(tick);   // repeated updates to one bar are folded until the next frame, then updateLast
 > ```
+>
+> Every `updateLast` copies the array, so fifty ticks between two frames pay
+> fifty copies for a picture that shows only the last. `conflated` coalesces
+> the repeated updates to the same bar until the next frame — a tick that
+> opens a new bar delivers the previous bar at once; the price is that the
+> screen follows the socket by two scheduling steps (the feed's frame, then
+> the render's), and without `requestAnimationFrame` delivery is immediate. The [live feed guide](https://github.com/finchart/finchart/blob/main/apps/docs/guide/live-feed.md)
+> has the whole wiring, including what to flush before a gap-fill.
 
 ## React
 
 Children declare what to draw. Components don't render DOM — they just
-register in an effect.
+register in an effect. (In a Next.js app the chart lives in one client file —
+[Next.js and React apps](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md).)
 
 ```tsx
 import { candleSeries, lineSeries } from "@finchart/core";

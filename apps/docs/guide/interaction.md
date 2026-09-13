@@ -35,7 +35,9 @@ command on release. `clear()` and a successful `load()` replace a document and
 empty both stacks.
 
 A full running example — down to the clear-selection, delete and erase-all
-buttons — is in [Drawing tools](/examples/drawing).
+buttons — is in [Drawing tools](/examples/drawing). Saving drawings across
+sessions — `serialize()` / `load()`, keyed by symbol and interval — is in the
+[`@finchart/tools` README](https://github.com/finchart/finchart/tree/main/packages/tools#saving-per-symbol-and-interval).
 
 ### `paneMaximize` — one pane fills the chart
 

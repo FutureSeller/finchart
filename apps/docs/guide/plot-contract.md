@@ -641,7 +641,8 @@ the consumer's `axis.x.format`, then what the tick strategy offers —
 `timeTicks({ timeZone, locale })` labels a data x in its own zone and language,
 to the second — then the rounded number. So one `ticks={timeTicks({ timeZone
 })}` sets the clock for the axis, the crosshair badge and the tooltip header at
-once; a `format` of your own still wins.
+once; a `format` of your own still wins. Which zone to say, and why not the
+runtime's, is in [Time zones and sessions](/guide/time-zones).
 
 ### Order = nesting
 
@@ -775,7 +776,9 @@ plot.applyState({ xDomain });      // only the pieces you pass land — the maki
   in common counts; a window between two sparse points still counts). A window
   that misses the data entirely — a snapshot from another symbol's history —
   is dropped and the first fit runs as usual, with no extra event. Key persisted
-  state by symbol and interval so that fallback stays rare. This is only about
+  state by symbol and interval so that fallback stays rare — the same rule
+  the [drawing tools](https://github.com/finchart/finchart/tree/main/packages/tools#saving-per-symbol-and-interval)
+  follow for saved drawings. This is only about
   the pre-data restore; `setVisibleRange` after data is applied as given.
 - During a drag it arrives on every pointermove. If saving is expensive, the
   listener defers it.
