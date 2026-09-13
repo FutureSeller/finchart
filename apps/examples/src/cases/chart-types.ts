@@ -1,11 +1,11 @@
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { OHLC, Series, SeriesHandle } from "@finchart/core";
 import {
-  AreaSeries,
+  areaSeries,
   barSeries,
   candleSeries,
   crosshair,
-  LineSeries,
+  lineSeries,
   OHLCAccessor,
   priceFormat,
   timeTicks,
@@ -52,15 +52,15 @@ export function mount(container: HTMLElement): () => void {
 
   /**
    * The list of types — all four draw the **same OHLC data**. Line and area
-   * need an `OHLCAccessor` rather than the default accessor (which reads
-   * `value`) before they read the close. Candles and bars come with their own
+   * are handed an `OHLCAccessor` (`{ coordinates }`) rather than the default
+   * accessor (which reads `y`), so they read the close. Candles and bars come with their own
    * accessor by default, so the factory is enough.
    */
   const chartTypes: Record<ChartType, Series<OHLC>> = {
     candle: candleSeries(),
     bar: barSeries(),
-    line: new LineSeries<OHLC>({ coordinates: new OHLCAccessor() }),
-    area: new AreaSeries<OHLC>({ coordinates: new OHLCAccessor() }),
+    line: lineSeries({ coordinates: new OHLCAccessor() }),
+    area: areaSeries({ coordinates: new OHLCAccessor() }),
   };
 
   const price: SeriesHandle<OHLC> = plot.mainPane.addSeries({

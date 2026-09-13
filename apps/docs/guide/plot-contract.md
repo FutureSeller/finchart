@@ -912,6 +912,14 @@ chart by keyboard.
 | `Delete` `Backspace` | delete the selected drawing | drawing tools |
 | `]` `[` | cycle the drawing selection (next/previous, wrapping at the ends) | drawing tools |
 | double-click a pane | toggle maximizing that pane | `paneMaximize({ gestures: true })` — **opt-in**, off by default |
+| `↑` `↓` (with Shift, 40px) | move a focused pane divider 8px | pane divider |
+| `Home` `End` | move a focused pane divider to its limit | pane divider |
+
+The divider rows are the exception to "the container takes the keys": each
+handle between panes is a tab stop of its own (`[data-chart-divider]`), and
+the keys it handles stop at the handle — neither the drawing tools nor the
+`←→`/`+−` gestures see them. Every other key pressed on a handle bubbles to
+the container as usual.
 
 Ctrl/⌘+Z is not normalized into this stack yet. The DOM host keeps modifier
 combinations for the browser, so an application that wants drawing history
@@ -1002,7 +1010,7 @@ value that ticks every frame moves the line, not the registration.
 | What to use | What it is |
 |---|---|
 | `<Crosshair vertical horizontal style badges format>` | the crosshair (plugin) |
-| `<Tooltip formatX formatValue formatRow>` · `<Legend formatValue formatRow>` | cursor value boxes (plugins) |
+| `<Tooltip formatX formatValue formatRow offset>` · `<Legend formatValue formatRow>` | cursor value boxes (plugins) — a `<Legend>` inside a `<ChartPane>` reads that pane |
 | `<PriceLine>` · `<Markers items>` · `<Watermark>` · `<Span>` | the standard decorations |
 | `<ChartData value>` | the data the series below it will see |
 

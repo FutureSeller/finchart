@@ -1,3 +1,4 @@
+import { MIN_PANE_HEIGHT } from "./frame";
 
 /** Where a divider sits. `index` is the ordinal of the pane just above it. */
 export interface DividerBoundary {
@@ -6,6 +7,13 @@ export interface DividerBoundary {
   y: number;
   left: number;
   right: number;
+  /**
+   * The upper pane's height (px) and the heights a drag can take it to —
+   * what a focusable separator reports as `aria-valuenow`/`min`/`max`, and
+   * the limits a Home/End key moves to. `min === max === now` when the pair
+   * can't move either way.
+   */
+  value: { now: number; min: number; max: number };
 }
 
 export interface DividerRenderer {
@@ -14,7 +22,10 @@ export interface DividerRenderer {
   destroy(): void;
 }
 
-/** Dragged the boundary between pane `index` and the pane below it by `dy`. */
+/**
+ * Dragged the boundary between pane `index` and the pane below it by `dy`.
+ * `-Infinity` and `Infinity` move it as far as it can go — up and down.
+ */
 export type DividerDragHandler = (index: number, dy: number) => void;
 
 /** What the clamp needs to know about one of the two panes beside a divider. */
@@ -48,9 +59,39 @@ export function clampDividerDrag(
   upper: DividerSide,
   lower: DividerSide,
 ): number {
-  const grow = Math.max(0, lower.height - lower.minHeight); // room to shrink the lower pane
-  const shrink = Math.min(0, upper.minHeight - upper.height); // room to shrink the upper pane
+  const { shrink, grow } = room(upper, lower);
   return Math.min(Math.max(dy, shrink), grow);
+}
+
+/**
+ * The upper pane's height and the heights `clampDividerDrag` lets a drag
+ * reach — the same limits, from the same arithmetic, so a separator never
+ * reports a height the drag can't produce.
+ */
+export function dividerRange(
+  upper: DividerSide,
+  lower: DividerSide,
+): DividerBoundary["value"] {
+  const { shrink, grow } = room(upper, lower);
+  return {
+    now: upper.height,
+    min: upper.height + shrink,
+    max: upper.height + grow,
+  };
+}
+
+/**
+ * How far the boundary may move up (`shrink`, ≤ 0) and down (`grow`, ≥ 0).
+ * A pane's floor is its `minHeight`, but never under the pixel the layout
+ * lays under every pane — a limit below that would be a height no frame
+ * draws.
+ */
+function room(upper: DividerSide, lower: DividerSide): { shrink: number; grow: number } {
+  const floor = (side: DividerSide) => Math.max(MIN_PANE_HEIGHT, side.minHeight);
+  return {
+    grow: Math.max(0, lower.height - floor(lower)), // room to shrink the lower pane
+    shrink: Math.min(0, floor(upper) - upper.height), // room to shrink the upper pane
+  };
 }
 
 export type DividerFactory = (

@@ -32,10 +32,15 @@ export { conflated } from "./conflate";
 export type { ConflatableHandle, ConflatedFeed, ConflatedOptions } from "./conflate";
 export { infiniteHistory } from "./infinite-history";
 export type {
+  HistoryCursorFetch,
   HistoryFetch,
+  HistoryHandle,
   HistoryLoader,
+  HistoryOptionsBase,
+  HistoryPage,
   HistorySink,
   HistoryStatus,
+  InfiniteHistoryCursorOptions,
   InfiniteHistoryHost,
   InfiniteHistoryOptions,
 } from "./infinite-history";

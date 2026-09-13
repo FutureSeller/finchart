@@ -21,7 +21,7 @@
  * other processes and are not caught here.
  */
 import { browserDeps, createDomLayers, PlotBuilder } from "@finchart/dom";
-import { barIndexX, candleSeries, computation, conflated, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, manualScheduler, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type ConflatedFeed, type CrosshairLine, type DataView, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
+import { barIndexX, candleSeries, computation, conflated, timeTicks, createCanvasRenderer, createPlotDeps, crosshairLine, LINEAR_GRADIENT, lineSeries, manualScheduler, noStyle, paintLinearGradient, Plot, seriesSpec, syncCrosshair, syncX, type ConflatedFeed, type CrosshairLine, type DataView, type DrawSurface, type LineDataPoint, type OHLC, type SeriesHandle, type Renderer, type RendererFactory, type SchedulerFactory } from "@finchart/core";
 import { tooltip } from "@finchart/dom";
 import { atrPriceStep, renko, smaFold, type SmaState } from "@finchart/indicators";
 import { drawingTools } from "@finchart/tools";
@@ -225,6 +225,13 @@ interface Scenario {
 }
 
 interface ChartOptions {
+  /**
+   * Calendar ticks on the x axis. The bench's x is a bar number, so the
+   * strategy reads it as one minute per bar from a fixed epoch — the work
+   * per frame (zone parts and labels for every boundary candidate) is what
+   * a timestamped chart pays.
+   */
+  timeTicks?: boolean;
   /** Build on the stationary tape instead of the multiplicative walk — the pair's like-for-like source. */
   stationary?: boolean;
   /** The full surface — drawing tools and the tooltip mounted on top too. */
@@ -399,6 +406,9 @@ function smaSeries(window: number): {
   return { derive, deriveLast, deriveFirst };
 }
 
+/** 2026-01-02 00:00 UTC — where the calendar-tick scenarios put bar 0. */
+const TICK_EPOCH = Date.UTC(2026, 0, 2);
+
 /** One ordinary chart — candles plus a few moving averages. */
 function candleChart(options: ChartOptions): Build {
   return (host, createRenderer) => {
@@ -413,6 +423,20 @@ function candleChart(options: ChartOptions): Build {
       }),
     )
       .setSize(WIDTH, HEIGHT)
+      .setAxis(
+        options.timeTicks
+          ? {
+              x: {
+                ticks: timeTicks({
+                  timeZone: "Asia/Seoul",
+                  locale: "en-US",
+                  epochOf: (x) => TICK_EPOCH + x * 60_000,
+                  xOfEpoch: (ms) => (ms - TICK_EPOCH) / 60_000,
+                }),
+              },
+            }
+          : {},
+      )
       .build(host);
 
     const crosshair = crosshairLine();
@@ -1154,6 +1178,28 @@ function renkoDerivePair(points: number): Pair {
 }
 
 const pairs: Pair[] = [
+  {
+    /**
+     * What calendar ticks cost on a frame that only moves the crosshair: the
+     * x domain is unchanged, yet layout recomputes the ticks — zone parts and
+     * labels for every boundary candidate. The difference is the incremental
+     * cost of calendar ticks over the default axis on such a frame. It is not
+     * what a tick cache would save — a cache would skip the default axis's
+     * share too — so that saving is measured as the same strategy with a
+     * cache on and off.
+     */
+    question: "Hover at a 500-bar view, 100k candles: the default axis against calendar ticks",
+    baseline: {
+      name: "default axis",
+      build: zoomedTo(candleChart({ points: 100_000 }), 500 / 100_000),
+      step: hover,
+    },
+    variant: {
+      name: "timeTicks",
+      build: zoomedTo(candleChart({ points: 100_000, timeTicks: true }), 500 / 100_000),
+      step: hover,
+    },
+  },
   liveTickPair(100_000),
   liveTickPair(10_000),
   renkoDerivePair(100_000),

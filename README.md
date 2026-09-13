@@ -70,7 +70,7 @@ computed-node, input-stack, and plugin contracts are real.
 
 | | Floor | What decides it |
 |---|---|---|
-| Node | **18+** | Where the headless path (SSR·workers·tests) runs |
+| Node | **20.19+** | Where the headless path (SSR·workers·tests) runs; CI runs that floor |
 | Browser | **Chrome 98+ · Edge 98+ · Firefox 94+ · Safari 15.4+** (2022-03) | `structuredClone`·`Object.hasOwn`·`Array.prototype.at` |
 | React (`@finchart/react`) | **18+** | Peer range. CI runs both the floor (18) and the ceiling (19) |
 
@@ -216,10 +216,17 @@ approaches the left edge and `prepend`s them; the cursor, the threshold and the
 in-flight dedup are its. `from` is the first x you already hold.
 
 ```ts
-const loader = infiniteHistory(plot, (page) => btc.prepend(page), loadBefore, {
-  from: btcCandles[0].x,
-});
+const loader = infiniteHistory(plot, btc, loadBefore, { from: btcCandles[0].x });
+
+// On a symbol switch or unmount, before btc goes:
+loader.dispose();
 ```
+
+Given the handle, a loader whose page is in flight when `btc` is disposed
+stops by itself (`status()` reads `"stopped"`) instead of throwing. It looks at
+the handle only when it asks for or lands a page, so an idle or finished loader
+stays subscribed to the chart until you dispose it — do that on teardown,
+whatever the sink.
 
 **Reconciling a snapshot** — a REST snapshot of recent bars goes in through
 `upsert`, merged by x: the bars it names are corrected or added, the ones it

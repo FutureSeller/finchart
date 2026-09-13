@@ -20,7 +20,8 @@
     "./authoring": {
       "types": "./dist/authoring.d.mts",
       "default": "./dist/authoring.mjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "sideEffects": false,
   "files": [

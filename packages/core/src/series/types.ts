@@ -1,4 +1,5 @@
 import type { PlotArea } from "../primitives";
+import { ContractError } from "../primitives";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
@@ -45,6 +46,34 @@ export interface SeriesContext<T extends BaseDataPoint = BaseDataPoint> {
    * the end of the data) — drawing itself still only looks at `data`.
    */
   fullData?: DataView<T>;
+}
+
+/**
+ * The door a factory's `{ coordinates, style }` passes. An accessor is two
+ * functions — a value that is not one would only fail later, inside a draw,
+ * far from the call that handed it over. And a style key beside
+ * `coordinates` (`{ coordinates, line }`) would be dropped without a word:
+ * with `coordinates` given, the style goes under `style`.
+ */
+export function settleCoordinates<T extends BaseDataPoint>(
+  options: { coordinates: CoordinateAccessor<T> },
+  styleKeys: object,
+  door: string,
+): CoordinateAccessor<T> {
+  const { coordinates } = options;
+  const stray = Object.keys(styleKeys).find((key) => key in options);
+  if (
+    stray !== undefined ||
+    typeof coordinates !== "object" ||
+    coordinates === null ||
+    typeof coordinates.getX !== "function" ||
+    typeof coordinates.getY !== "function"
+  ) {
+    throw new ContractError(
+      `${door}: coordinates must be an accessor (getX, getY) and the style goes under style`,
+    );
+  }
+  return coordinates;
 }
 
 /**

@@ -165,16 +165,64 @@ import { infiniteHistory, OHLCAccessor } from "@finchart/core";
 
 const loader = infiniteHistory(
   plot,
-  (page) => price.prepend(page),
+  price,
   (before) => rest.barsBefore(symbol, before),
   { from: firstPage[0].x, coordinates: new OHLCAccessor() },
 );
+
+// On a symbol switch or unmount, before the handle goes:
+loader.dispose();
 ```
 
 `from` is the first x you already hold — the loader never guesses it. Pass
 the series' accessor so a page is judged by the same rule the series will
-apply (one bar per x). Its `status()` / `statusChanges` pair is what a
-status line or `useSyncExternalStore` reads.
+apply (one bar per x). Handing the loader the handle itself (`price`) lets it
+see the handle go: a symbol switch that disposes `price` while a page is in
+flight stops the loader — `status()` reads `"stopped"` — instead of throwing
+from the landing. It looks at the handle only when it asks for or lands a
+page, though: an idle loader keeps listening to the chart until then, and a
+`done` one never looks again. So dispose the loader on teardown whatever its
+sink. A function sink (`(page) => { price.prepend(page);
+volume.prepend(...) }`, to feed two panes) has no liveness at all. Its `status()` /
+`statusChanges` pair is what a status line or `useSyncExternalStore` reads.
+
+The loader trims every page to the points strictly before the first x it
+holds, and that trim matters: an inclusive REST bound hands back the bar you
+already have, and `prepend` does not replace a point at the seam. On line
+data a repeated first x is kept twice; on bars (one bar per x) it is a
+`DataError`. The loader discards it before either can happen.
+
+Some APIs page by a token instead of a time — each response carries the key
+for the page before it. Give the loader that token as `cursor` and a fetch
+that takes it and answers `{ bars, next }`:
+
+```ts
+const firstPage = await rest.barsPage(symbol); // → { bars, next }
+price.setData(firstPage.bars);
+
+// null means there is no older page — then there is nothing to load.
+const loader =
+  firstPage.next === null
+    ? null
+    : infiniteHistory(
+        plot,
+        price,
+        (cursor) => rest.barsPage(symbol, cursor),
+        { from: firstPage.bars[0].x, cursor: firstPage.next, coordinates: new OHLCAccessor() },
+      );
+
+// On a symbol switch or unmount:
+loader?.dispose();
+```
+
+`from` is still the first x held: trimming and gap judgment stay in the
+chart's x. The token is opaque — the loader never compares two — and moves
+only after a page is delivered, so a sink that throws retries with the same
+one. `next: null` ends the history once that page's bars are in. A page
+that keeps no older bar is not the end while it has a `next` (a provider can
+skip a closed session): the loader moves the token and keeps filling. Nine
+such pages in a row terminate the loader with a `DataError` — a fetch that
+never goes back in time.
 
 ## In React
 

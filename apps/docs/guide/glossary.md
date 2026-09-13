@@ -478,18 +478,24 @@ below (loading older bars).
 watches `xDomainChange` and asks your `fetch` for the page of points before
 its cursor whenever the view nears (prefetch, on a leftward gesture) or
 passes (gap fill, chaining until covered) the left edge of what is loaded.
-You own two functions — the page before a given x, and where a landed page
-goes — plus the cursor's origin `from` (the first x you already hold; the
+You own the page before a given x and where a landed page goes — a series
+handle (a loader notices a disposed handle at its next request or landing and
+stops) or a function (no liveness to notice) — dispose the loader yourself on
+teardown either way — plus the cursor's origin `from` (the first x you already hold; the
 loader cannot guess it, since a chart-wide range is a union across series
 and a derivation's own range is shorter than its source). An empty page
-means the end of history.
+means the end of history (`done`); `terminated` is a fetch that broke its
+contract; `stopped` is a loader that was disposed or lost its handle. For an
+API that pages by a token instead of a time, cursor mode takes `{ from,
+cursor }` and a fetch answering `{ bars, next }`: `next: null` is the end, and
+a page with no older bar but a `next` moves the token and keeps going.
 
 The loader defends its cursor: points at or after `before` are trimmed off
 quietly (inclusive end bounds are the norm for exchange REST APIs — left
-alone, the boundary bar would silently double), a non-empty page trimmed to
-nothing throws instead of reading as the end, and an out-of-order page
-terminates the loader. Its `status()` / `statusChanges` pair reports
-`idle | loading | done | terminated`. Also answers to: infinite scroll,
+alone, the boundary bar would silently double), in x mode a non-empty page
+trimmed to nothing throws instead of reading as the end, and an out-of-order
+page terminates the loader. Its `status()` / `statusChanges` pair reports
+`idle | loading | done | terminated | stopped`. Also answers to: infinite scroll,
 load more, backfill.
 
 ### Conflation (`conflated`)

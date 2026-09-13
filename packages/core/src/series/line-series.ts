@@ -6,7 +6,7 @@ import type { DrawTarget, LineStyle, StyleOverridesOf, StyleSpec } from "../rend
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
 import type { Series, SeriesContext } from "./types";
-import { screenXAt } from "./types";
+import { screenXAt, settleCoordinates } from "./types";
 
 export interface PointStyle {
   radius: number;
@@ -152,13 +152,38 @@ export class LineSeries<T extends BaseDataPoint = LineDataPoint>
   }
 }
 
-/** The default wiring for LineDataPoint. */
+/**
+ * The default wiring for LineDataPoint — or, given `coordinates`, a line
+ * over any point shape: `lineSeries({ coordinates: new OHLCAccessor() })`
+ * draws candles by their close, so a candle ↔ line toggle is
+ * `handle.swapSeries(...)` between two factories.
+ */
 export function lineSeries(
-  style?: LineSeriesStyleOverrides,
-): LineSeries<LineDataPoint> {
+  style?: LineSeriesStyleOverrides & { coordinates?: never },
+): LineSeries<LineDataPoint>;
+export function lineSeries<T extends BaseDataPoint>(
+  options: LineSeriesOptions<T> & { [K in keyof LineSeriesStyleOverrides]?: never },
+): LineSeries<T>;
+export function lineSeries<T extends BaseDataPoint>(
+  options?: LineSeriesStyleOverrides | LineSeriesOptions<T>,
+): LineSeries<T> | LineSeries<LineDataPoint> {
+  if (options === undefined) return new LineSeries({ coordinates: new LineDataAccessor() });
   // Prevents a bad type from passing through quietly and drawing with defaults.
-  if (style !== undefined) requireObject(style, "lineSeries(style)");
-  return new LineSeries({ coordinates: new LineDataAccessor(), style });
+  requireObject(options, "lineSeries(options)");
+  if (hasCoordinates(options)) {
+    return new LineSeries<T>({
+      coordinates: settleCoordinates(options, LINE_STYLE_SPEC, "lineSeries(options)"),
+      style: options.style,
+    });
+  }
+  return new LineSeries({ coordinates: new LineDataAccessor(), style: options });
+}
+
+/** Which of the two calls this is — the key, not its value, decides (a present `coordinates` is then checked). */
+function hasCoordinates<T extends BaseDataPoint>(
+  options: LineSeriesStyleOverrides | LineSeriesOptions<T>,
+): options is LineSeriesOptions<T> {
+  return "coordinates" in options;
 }
 
 /**

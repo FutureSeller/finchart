@@ -29,7 +29,7 @@ import type {
 const AXIS_WIDTH_STEP = 8;
 
 /** Vertical space (px) left for a pane no matter how large the axis gets. Zero would let the whole frame get dropped. */
-const MIN_PANE_HEIGHT = 1;
+export const MIN_PANE_HEIGHT = 1;
 
 /** Horizontal space (px) left for the data area no matter how large the axis gets. The horizontal counterpart to `MIN_PANE_HEIGHT`. */
 const MIN_DATA_WIDTH = 1;
@@ -146,8 +146,25 @@ function floorAtOnePixel(
   return { heights: raised, collapsed };
 }
 
-export function layoutFrame(input: FrameInput): Frame | null {
-  const { area, panes, gap, axis, xScale, x, labels } = input;
+/** What the vertical half of a frame needs to know. */
+export type PaneHeightInput = Pick<FrameInput, "area" | "panes" | "gap" | "axis" | "labels" | "measure">;
+
+/**
+ * The pane heights a frame of this input lays out — the vertical half of
+ * `layoutFrame`, on its own: nothing is assigned, no tick is made, no scale
+ * is touched. `null` when that frame would be dropped for want of space.
+ *
+ * A divider move measures from this rather than from the areas the last
+ * frame left: moves, a resized viewport or a flex written since then have
+ * not reached those areas yet, and drawing a frame to catch them up runs
+ * listeners that can change the chart again before the move lands.
+ */
+export function layoutPaneHeights(input: PaneHeightInput): {
+  heights: number[];
+  collapsed: ReadonlySet<number>;
+  xHeight: number;
+} | null {
+  const { area, panes, gap } = input;
 
   // **Check the incoming area first — ahead of any assignment.** If area
   // itself carries a NaN, the checks below would pass it through silently,
@@ -164,11 +181,10 @@ export function layoutFrame(input: FrameInput): Frame | null {
     area.bottom - area.top - xHeight,
     gap,
   );
-
   /**
    * **The vertical degeneracy check — ahead of the first assignment.**
-   * `setRange(top + h, top)` right below is this pass's first assignment,
-   * and it throws as a contract violation if `h` is `0`.
+   * `setRange(top + h, top)` is `layoutFrame`'s first assignment once these
+   * heights come back, and it throws as a contract violation if `h` is `0`.
    *
    * **"all", not "any".** With `some`, a single collapsed pane would wipe
    * out the whole chart — what this guard blocks is "the transition where
@@ -186,8 +202,15 @@ export function layoutFrame(input: FrameInput): Frame | null {
    * last pane outside the data area.
    */
   const floored = floorAtOnePixel(rawHeights);
-  if (floored === null) return null;
-  const { heights, collapsed } = floored;
+  return floored && { ...floored, xHeight };
+}
+
+export function layoutFrame(input: FrameInput): Frame | null {
+  const { area, panes, gap, axis, xScale, x, labels } = input;
+
+  const vertical = layoutPaneHeights(input);
+  if (vertical === null) return null;
+  const { heights, collapsed, xHeight } = vertical;
 
   // **Inversion is asked of the pane** — ticks are baked with this range
   // right below. If `setArea` flips the range later, the already-baked
@@ -252,7 +275,7 @@ export function layoutFrame(input: FrameInput): Frame | null {
  * placement rule matches the drawing rule. Skips measurement if a fixed
  * `size` is given.
  */
-function xAxisHeight({ area, axis, labels, measure }: FrameInput): number {
+function xAxisHeight({ area, axis, labels, measure }: PaneHeightInput): number {
   const options = axis.x;
   if (!labels || !options.showLabels) return 0;
 
