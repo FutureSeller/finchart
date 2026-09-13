@@ -86,9 +86,19 @@ back — that handle is what `updateLast` and an indicator's `source` both need:
 
 <<< ../snippets/real-service.ts{ts}
 
+The two `conflated` feeds are for a loud socket: every `updateLast` copies the
+array, and a conflated feed coalesces the repeated updates to the same bar
+until the next frame instead (a tick that opens a new bar delivers the previous
+one at once). The [live feed guide](/guide/live-feed) has the full wiring —
+aggregation, snapshots, reconnects and history.
+
 See [`@finchart/indicators`](https://github.com/finchart/finchart/tree/main/packages/indicators)
 for the full indicator list, and the
 [`@finchart/dom`](https://github.com/finchart/finchart/tree/main/packages/dom)
 README for what `browserDeps` wires up under the hood.
 
 Curious how the pieces fit together? See [Architecture](/guide/architecture).
+Coming from lightweight-charts? The
+[migration table](/guide/migrating-from-lightweight-charts) puts the two side by
+side. In a Next.js app, start with [Next.js and React apps](/guide/nextjs); for
+the axis's zone and market sessions, [Time zones and sessions](/guide/time-zones).

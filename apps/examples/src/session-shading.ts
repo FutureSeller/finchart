@@ -13,8 +13,9 @@
  *    drawCustom(target, { name, params, fallback })
  * 2. Build a renderer that knows how to paint it —
  *    createCanvasRenderer(surface, { painters })
- * 3. A surface that doesn't know it paints the fallback — the headless model
- *    and server rendering take that path
+ * 3. Ship a fallback with the command — the headless model records the whole
+ *    command, fallback included, and a playback renderer that does not know
+ *    the name draws the fallback instead
  *
  * Zero lines change in the core. That is the point of this file.
  */
@@ -35,14 +36,33 @@ interface GradientBandParams {
   to: string;
 }
 
+const isNumber = (value: unknown): value is number => typeof value === "number";
+const isString = (value: unknown): value is string => typeof value === "string";
+
+/** The params come back as `unknown` — the painter is the one that knows their shape, so it checks. */
+function isGradientBandParams(value: unknown): value is GradientBandParams {
+  if (typeof value !== "object" || value === null) return false;
+  const record: Record<string, unknown> = { ...value };
+  return (
+    isNumber(record.left) &&
+    isNumber(record.right) &&
+    isNumber(record.top) &&
+    isNumber(record.bottom) &&
+    isString(record.from) &&
+    isString(record.to)
+  );
+}
+
 /** How the canvas paints this name. The wiring loads it into the renderer. */
 const paintGradientBand: CustomPainter = (context, params) => {
-  const { left, right, top, bottom, from, to } = params as GradientBandParams;
+  // Params of the wrong shape paint nothing — the fallback is for a renderer
+  // that does not know the name, not for a painter that declined.
+  if (!isGradientBandParams(params)) return;
+  const { left, right, top, bottom, from, to } = params;
 
-  // A painter receives the real 2D context — to use anything outside what
-  // `Canvas2DContext` narrows to, you widen it here. The core takes no part in
-  // this cast.
-  const full = context as CanvasRenderingContext2D;
+  // The narrowed 2D context already has everything a gradient needs —
+  // createLinearGradient, addColorStop, fillRect — so no widening.
+  const full = context;
 
   /**
    * A consumer's colors reach this far — `from` and `to` arrive through
@@ -121,12 +141,11 @@ export function sessionShading(
           top: area.top,
           bottom: area.bottom,
         };
-
         /**
-         * Ship a fallback with it — on a surface that doesn't know this name
-         * (the headless model, server rendering, a different canvas wiring) a
-         * flat color is drawn instead of the gradient. Less pretty, but no
-         * hole.
+         * Ship a fallback with it — the headless model records the whole
+         * command, fallback and all; a playback renderer that does not know
+         * this name (server rendering, a different canvas wiring) draws the
+         * flat color instead of the gradient. Less pretty, but no hole.
          */
         const flat: FallbackCommand[] = [
           {

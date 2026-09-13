@@ -134,6 +134,7 @@ export default defineConfig({
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Custom Indicators", link: "/guide/extensions" },
+            { text: "Migrating from lightweight-charts", link: "/guide/migrating-from-lightweight-charts" },
           ],
         },
         {
@@ -141,6 +142,8 @@ export default defineConfig({
           items: [
             { text: "Drawing Tools", link: "/guide/interaction" },
             { text: "Live Feeds", link: "/guide/live-feed" },
+            { text: "Next.js and React apps", link: "/guide/nextjs" },
+            { text: "Time zones and sessions", link: "/guide/time-zones" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Reducing Bundle Size", link: "/guide/explicit-wiring" },
           ],
@@ -176,6 +179,7 @@ export default defineConfig({
             { text: "Bar-index coordinates", link: "/examples/bar-index" },
             { text: "Two synchronized charts", link: "/examples/sync-x" },
             { text: "Custom series", link: "/examples/custom-series" },
+            { text: "Session shading", link: "/examples/session-shading" },
           ],
         },
       ],
