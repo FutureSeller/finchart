@@ -309,3 +309,52 @@ describe("rows a series describes — tooltip and legend", () => {
     expect(text).toContain("gap —");
   });
 });
+
+describe("readout: false — a registration drawn for the eye", () => {
+  it("tooltip leaves it out and keeps every other row, named or not", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    plot.mainPane.addSeries({ series: lineSeries(), data: data.map((point) => ({ ...point, y: 999 })), name: "fill", readout: false });
+    const bars: OHLC[] = data.map((point) => ({ x: point.x, open: 105, high: 112, low: 101, close: 102 }));
+    plot.mainPane.addSeries({ series: candleSeries(), data: bars });
+    plot.use(tooltip());
+    plot.crosshair(paneCenter());
+
+    const box = tooltipBox();
+    expect(box.style.display).toBe("block");
+    const text = box.textContent ?? "";
+    expect(text).toContain("BTC: ");
+    expect(text).toContain("O 105");
+    expect(text).not.toContain("fill");
+    expect(text).not.toContain("999");
+  });
+
+  it("tooltip takes its header from the samples it shows, not from one it left out", () => {
+    const { plot, handle, tooltipBox, paneCenter } = mounted();
+    handle.dispose();
+    // Registered first, and its nearest point sits at a different x.
+    plot.mainPane.addSeries({ series: lineSeries(), data: data.map((point) => ({ ...point, x: point.x + 1 })), readout: false });
+    plot.mainPane.addSeries({ series: lineSeries(), data, name: "S" });
+    plot.use(tooltip({ formatX: (x) => `x=${x}` }));
+    plot.crosshair(paneCenter());
+    const header = tooltipBox().firstChild;
+    expect(header?.textContent).toBe("x=5");
+  });
+
+  it("tooltip hides when every sample under the cursor is left out", () => {
+    const { plot, handle, tooltipBox, paneCenter } = mounted();
+    handle.dispose();
+    plot.mainPane.addSeries({ series: lineSeries(), data, readout: false });
+    plot.use(tooltip());
+    plot.crosshair(paneCenter());
+    expect(tooltipBox().style.display).toBe("none");
+  });
+
+  it("legend leaves it out even when it has a name", () => {
+    const { plot, overlay } = mounted();
+    plot.mainPane.addSeries({ series: lineSeries(), data, name: "fill", readout: false });
+    plot.use(legend());
+    const box = overlay.querySelector("[data-chart-legend]");
+    expect(box?.textContent ?? "").toContain("BTC");
+    expect(box?.textContent ?? "").not.toContain("fill");
+  });
+});

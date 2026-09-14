@@ -41,6 +41,12 @@ export interface SeriesSample {
   /** What the series says about that point — a candle's O/H/L/C/V. Absent when the series does not describe itself. */
   rows?: readonly SeriesRow[];
   /**
+   * `false` when the registration is drawn for the eye and readouts should
+   * leave it out (`SeriesRegistration.readout`). Present only then — a
+   * readout skips `sample.readout === false`.
+   */
+  readout?: false;
+  /**
    * **Which index the chosen point sits at in the registration's own
    * points** — the array the registration holds, which for a derived
    * registration is the derived output, not its source. The consumer's key
@@ -349,6 +355,7 @@ export class SeriesList {
         max: nearest.max,
         index: nearest.index,
         ...(nearest.rows !== undefined && { rows: nearest.rows }),
+        ...(!entry.readout && { readout: false }),
       });
     }
 

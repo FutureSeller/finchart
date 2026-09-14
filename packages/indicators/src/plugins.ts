@@ -499,6 +499,8 @@ export function attachBollingerBands(
         series: bandSeries(options.band),
         input: node.out.band,
         zIndex: -1,
+        // Drawn for the eye — a tooltip row reading an edge value with no name says nothing.
+        readout: false,
       }),
       pane.addSeries({
         series: lineSeries(overlayStyle(options.colors?.edges)),
@@ -1064,8 +1066,9 @@ export function attachSqueezeMomentum(
         name: label,
         color: options.colors?.momentum,
       }),
-      pane.addSeries({ series: histogramSeries({ style: { color: onColor } }), input: node.out.squeezeOn }),
-      pane.addSeries({ series: histogramSeries({ style: { color: offColor } }), input: node.out.squeezeOff }),
+      // Marker rows on the zero line — their value is 0, so they are not read out.
+      pane.addSeries({ series: histogramSeries({ style: { color: onColor } }), input: node.out.squeezeOn, readout: false }),
+      pane.addSeries({ series: histogramSeries({ style: { color: offColor } }), input: node.out.squeezeOff, readout: false }),
     ];
 
     return pluginApi({ node, pane: ownedPaneApi }, () => {
@@ -1686,6 +1689,8 @@ export function attachIchimoku(
         series: bandSeries(options.cloud),
         input: node.out.cloud,
         zIndex: -1,
+        // Drawn for the eye — a tooltip row reading an edge value with no name says nothing.
+        readout: false,
       }),
       ...lines.map(([branch, color, part]) =>
         pane.addSeries({
@@ -1912,6 +1917,8 @@ function wireChannel(
       series: bandSeries(options.band),
       input: node.out.band,
       zIndex: -1,
+      // Drawn for the eye — a tooltip row reading an edge value with no name says nothing.
+      readout: false,
     }),
     pane.addSeries({
       series: lineSeries(overlayStyle(options.colors?.edges)),

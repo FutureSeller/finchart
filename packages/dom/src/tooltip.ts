@@ -94,7 +94,8 @@ export function tooltip(
 
     const refresh = (): void => {
       // Outside a pane (margin, gap) there's nothing to show.
-      const samples = last?.pane ? last.pane.probe(last.x) : [];
+      // A registration drawn for the eye (a band fill, a marker row) is not read out.
+      const samples = last?.pane ? last.pane.probe(last.x).filter((sample) => sample.readout !== false) : [];
       if (!last?.pane || samples.length === 0) {
         box.style.display = "none";
         return;

@@ -12,6 +12,7 @@ import {
 } from "../primitives";
 import { labelFont } from "../axis";
 import type { PaneDecoration, PlotDecoration } from "../plot/decoration";
+import { readableTextOn } from "../render/readable-text";
 
 /**
  * The standard decoration set — all small functions built on the existing
@@ -43,7 +44,11 @@ export const PRICE_LINE_SPEC = /* @__PURE__ */ styleSpec({
   dashArray: { css: "--chart-price-line-dash", fallback: "4,3" },
 }) satisfies StyleSpec<LineStyle>;
 
-/** Badge text color. A code constant, not a token, since it's not reachable through `options.style`. */
+/**
+ * Badge text color when the badge's background can't be read — a code
+ * constant, not a token, since it's not reachable through `options.style`.
+ * A readable opaque background picks black or white instead → `readableTextOn`.
+ */
 export const BADGE_TEXT_COLOR = "#ffffff";
 
 /**
@@ -131,7 +136,8 @@ export function priceLine(options: PriceLineOptions): PriceLineDecoration {
           label:
             current.label ?? (current.format ?? formatY)(current.value),
           back: color,
-          color: BADGE_TEXT_COLOR,
+          // Read each frame, so a theme or style change is followed.
+          color: readableTextOn(color) ?? BADGE_TEXT_COLOR,
         },
       ];
     },

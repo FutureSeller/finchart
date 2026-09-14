@@ -59,6 +59,14 @@ interface RegistrationBase<TPoint extends BaseDataPoint> {
    * row order stay in registration order regardless.
    */
   zIndex?: number;
+  /**
+   * `false` for a registration drawn for the eye rather than read out — a
+   * band fill, a marker row. Readouts (the tooltip and legend) leave it out;
+   * `probe` still returns it, marked, because snapping and the crosshair
+   * magnet read what is under the cursor. Default `true`. Like `name`, it is
+   * fixed at registration — register again to change it.
+   */
+  readout?: boolean;
   /** How to read coordinates off a drawn point. Falls back to the series's, then to x/y if that's absent too. */
   coordinates?: CoordinateAccessor<TPoint>;
 
@@ -265,6 +273,9 @@ export interface Entry {
   /** Overlap order — used only for drawing. Default 0. */
   readonly zIndex: number;
 
+  /** Whether readouts list this registration → `SeriesRegistration.readout`. */
+  readonly readout: boolean;
+
   /**
    * The drawn point nearest to x. `null` if empty. A binary search built on
    * the sort contract. The value comes out through the accessor, so the
@@ -429,6 +440,11 @@ export function createEntry<
    */
   if ("zIndex" in registration && registration.zIndex !== undefined) {
     requireFinite(registration.zIndex, `${door}({ zIndex })`);
+  }
+  if ("readout" in registration && registration.readout !== undefined && typeof registration.readout !== "boolean") {
+    throw new ContractError(
+      `${door}({ readout }) must be a boolean, got ${describe(registration.readout)}`,
+    );
   }
 
   /**
@@ -674,7 +690,7 @@ function entryOf<
   drawSide: (
     series: Series<TPoint>,
   ) => [CoordinateAccessor<TPoint>, DataManager<TPoint>],
-  meta?: { name?: string; color?: string; zIndex?: number },
+  meta?: { name?: string; color?: string; zIndex?: number; readout?: boolean },
   door = "addSeries",
 ): TypedEntry<TSource> {
   // The closure reads this variable, since it needs to be swappable.
@@ -1049,6 +1065,7 @@ function entryOf<
     name: meta?.name ?? null,
     color: meta?.color ?? null,
     zIndex: meta?.zIndex ?? 0,
+    readout: meta?.readout !== false,
 
     /**
      * A binary search built on the sort contract — finds the lower bound

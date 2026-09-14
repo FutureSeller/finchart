@@ -1,6 +1,6 @@
 [
   {
-    "name": "all the drawing tools (@finchart/core is a peer, so excluded) · 9 KB gzip (8820B measured)",
+    "name": "all the drawing tools (@finchart/core is a peer, so excluded) · 9 KB gzip (8861B measured)",
     "path": "dist/index.mjs",
     "import": "*",
     "limit": "9 KB",

@@ -45,6 +45,8 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
   const pool: HTMLElement[] = [];
   /** How many handles are in the DOM now. */
   let shown = 0;
+  /** Per slot: the last render said this boundary can't move either way. */
+  const locked: boolean[] = [];
 
   function handle(): HTMLElement {
     const element = document.createElement("div");
@@ -109,6 +111,10 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       event.stopPropagation();
       event.preventDefault();
 
+      // A boundary that can't move starts no drag — the press still stays
+      // here, so it doesn't pan the chart underneath either.
+      if (locked[index]) return;
+
       // A second pointer landing mid-drag restarts the gesture. Release
       // BEFORE acquiring anything new — releasing after would sweep the
       // fresh gesture's state right back out.
@@ -160,6 +166,16 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
         element.setAttribute("aria-valuenow", String(Math.round(boundary.value.now)));
         element.setAttribute("aria-valuemin", String(Math.round(boundary.value.min)));
         element.setAttribute("aria-valuemax", String(Math.round(boundary.value.max)));
+        // Judged on the limits themselves: rounded ARIA text can read equal
+        // while a fraction of a pixel of room is left.
+        locked[slot] = boundary.value.min === boundary.value.max;
+        if (locked[slot]) {
+          element.setAttribute("aria-disabled", "true");
+          element.style.cursor = "default";
+        } else {
+          element.removeAttribute("aria-disabled");
+          element.style.cursor = "row-resize";
+        }
       });
 
       // Only when the count changes — re-inserting a handle that stays

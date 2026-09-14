@@ -353,7 +353,7 @@ export class CanvasRenderer implements Renderer {
    * canvas.
    */
   private replayText(context: Canvas2DContext, params: TextParams): void {
-    const { text, at, align, baseline, style, box } = params;
+    const { text, align, baseline, style, box, within } = params;
 
     // Must set the font before measuring — measureText uses whatever font is currently set.
     const applied = applyFont(
@@ -363,8 +363,12 @@ export class CanvasRenderer implements Renderer {
       this.fontVerdicts,
     );
 
-    if (box) {
-      const metrics = context.measureText(text);
+    // Measured once, after the font is set, when either needs it: one
+    // horizontal shift for box and text alike, then the box's size.
+    const metrics = within || box ? context.measureText(text) : null;
+    const at = within && metrics ? { x: params.at.x + shiftInside(metrics.width, params, within), y: params.at.y } : params.at;
+
+    if (box && metrics) {
       const width = metrics.width;
       /**
        * Measured with the font that was actually set. Measuring with
@@ -400,6 +404,26 @@ export class CanvasRenderer implements Renderer {
     applyColor(context, "fillStyle", style.color, this.colorVerdicts);
     context.fillText(text, at.x, at.y);
   }
+}
+
+/**
+ * How far to move text so it and its box stay within `left`..`right`: back
+ * in from whichever edge it crosses, and onto `left` when it can't fit.
+ * A range that isn't a pair of finite numbers moves nothing.
+ */
+function shiftInside(
+  width: number,
+  { at, align, box }: TextParams,
+  within: { readonly left: number; readonly right: number },
+): number {
+  if (!Number.isFinite(within.left) || !Number.isFinite(within.right)) return 0;
+  const padding = box?.padding ?? 0;
+  const left = anchorLeft(at.x, width, align) - padding;
+  const right = left + width + padding * 2;
+  let shift = 0;
+  if (right > within.right) shift = within.right - right;
+  if (left + shift < within.left) shift = within.left - left;
+  return shift;
 }
 
 function anchorLeft(x: number, width: number, align: TextParams["align"]): number {

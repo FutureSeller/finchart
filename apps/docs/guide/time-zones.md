@@ -67,6 +67,20 @@ open that crosses midnight is your knowledge, and `BarStart` is the tool to
 write it with. Both go into `barAggregator({ barStart })`; the
 [live feed guide](/guide/live-feed) shows the aggregator inside a real feed.
 
+## Going to a date
+
+A "go to date" box hands you a calendar date, and the chart wants the instant
+that date's session opens in the market's zone. Writing the offset in by hand
+(`T00:00:00-05:00`) is an hour off for most of New York's year, and a single
+guess at the instant (UTC noon of that date) lands on the wrong day in zones
+past UTC+12. The recipe finds an instant the zone reads as that date, then
+lets `sessionStart` open the day from it:
+
+<<< ../snippets/session-of-date.ts{ts}
+
+It throws for a date the zone never had — Samoa skipped 30 December 2011 —
+so the caller decides what "go to" means there (the next day, or nothing).
+
 ## Indicators that reset at the session
 
 VWAP and pivot points restart at a boundary — a session, a week. They take an

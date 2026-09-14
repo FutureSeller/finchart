@@ -10,8 +10,9 @@
     "build": "typedoc && vitepress build",
     "typedoc": "typedoc",
     "preview": "vitepress preview",
-    "lint": "oxlint .vitepress/config.ts",
+    "lint": "oxlint .vitepress/config.ts vitest.config.ts",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist api .vitepress/cache .turbo"
   },
   "devDependencies": {
@@ -23,6 +24,7 @@
     "@finchart/tsconfig": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "typedoc": "^0.28.20",
@@ -31,6 +33,7 @@
     "typescript": "catalog:typedoc",
     "vitepress": "2.0.0-alpha.19",
     "vitepress-plugin-llms": "^1.13.5",
+    "vitest": "catalog:",
     "vue": "^3.5.41"
   }
 }

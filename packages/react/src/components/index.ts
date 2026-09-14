@@ -1,5 +1,5 @@
 export { ChartContainer } from './chart-container';
-export type { ChartContainerProps, PlotHandleRef, PlotOptions } from './chart-container';
+export type { ChartContainerProps, ContainerHandleRef, PlotHandleRef, PlotOptions } from './chart-container';
 export { ChartData } from './chart-data';
 export type { ChartDataProps } from './chart-data';
 export { ChartPane } from './chart-pane';

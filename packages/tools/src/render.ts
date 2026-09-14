@@ -146,6 +146,21 @@ function barbPoint(
   };
 }
 
+/**
+ * Keeps a Fibonacci level label inside the pane — but only while the
+ * drawing's levels (`left`..`right`) reach into it. A drawing panned wholly
+ * off the pane keeps its labels off with it; pulling them in would leave
+ * percentages with no levels beside them.
+ */
+function labelBounds(
+  space: DrawingSpace,
+  left: number,
+  right: number,
+): { within?: { left: number; right: number } } {
+  const { area } = space;
+  return right >= area.left && left <= area.right ? { within: { left: area.left, right: area.right } } : {};
+}
+
 export function drawOne(
   target: DrawTarget,
   space: DrawingSpace,
@@ -396,6 +411,8 @@ export function drawOne(
           align: "right",
           baseline: "middle",
           style: { font, color: style.color },
+          // Near the pane's edge the label would spill out and be cut off.
+          ...labelBounds(space, left, right),
         });
       }
       if (isSelected) drawHandles(target, [a, b, c], style.color);
@@ -426,6 +443,8 @@ export function drawOne(
           align: "right",
           baseline: "middle",
           style: { font, color: style.color },
+          // Near the pane's edge the label would spill out and be cut off.
+          ...labelBounds(space, left, right),
         });
       }
 

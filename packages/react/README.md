@@ -144,6 +144,11 @@ for every line) goes through CSS variables, while a one-off like "this
 indicator is orange" is the `style` prop's `line.color`. A series' identity follows React's
 `key` semantics exactly — same slot, same series.
 
+One exception to "changing a prop updates": a series' registration metadata —
+`name`, `color` and `readout` — is fixed when it registers. Changing one of
+those on the same component leaves the tooltip and legend as they were; give
+the component a new `key` to register it again.
+
 Naming: the `Chart*` prefix marks structure and series (`ChartContainer`,
 `ChartPane`, `ChartLine`, …); no prefix marks attachments (`XAxis`,
 `Crosshair`, `Tooltip`, `PriceLine`, …).

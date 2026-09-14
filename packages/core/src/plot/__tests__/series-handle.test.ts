@@ -12,6 +12,7 @@ function fakeEntry(): TypedEntry<{ x: number }> & { calls: string[] } {
     name: null,
     color: null,
     zIndex: 0,
+    readout: true,
     nearest: () => null,
     swapSeries: () => void calls.push("swapSeries"),
     feed: () => void calls.push("feed"),
