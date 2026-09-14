@@ -13,6 +13,12 @@ interface LineLook {
   /** Display name — the legend and tooltip refer to it by this. */
   name?: string;
   /**
+   * `false` for a series drawn for the eye rather than read out (a band
+   * fill, a marker row) — the tooltip and legend leave it out. Like `name`,
+   * fixed at registration: change the React `key` to change it.
+   */
+  readout?: boolean;
+  /**
    * The line's look, in the imperative lane's override shape — the same
    * `LineSeriesStyleOverrides` that `lineSeries(style)` takes, so what you
    * learn in one lane holds in the other: `{ line: { color, width,
@@ -108,6 +114,7 @@ export function ChartLine<
         input={props.input}
         name={props.name}
         color={color}
+        readout={props.readout}
       />
     );
   }
@@ -121,6 +128,7 @@ export function ChartLine<
         data={props.data}
         name={props.name}
         color={color}
+        readout={props.readout}
         derive={props.derive}
         deriveKey={props.deriveKey}
         coordinates={coordinates}
@@ -134,6 +142,7 @@ export function ChartLine<
       data={props.data}
       name={props.name}
       color={color}
+      readout={props.readout}
     />
   );
 }

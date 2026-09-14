@@ -275,4 +275,88 @@ describe("createDomDividers on its own", () => {
     expect(overlay.querySelectorAll("[data-chart-divider]")).toHaveLength(2);
     dividers.destroy();
   });
+
+  describe("a handle that cannot move", () => {
+    const at = (value: { now: number; min: number; max: number }) => ({ index: 0, y: 100, left: 0, right: 200, value });
+    const mountOne = () => {
+      const overlay = document.createElement("div");
+      container.appendChild(overlay);
+      const drags: number[] = [];
+      const dividers = createDomDividers(overlay, (_index, dy) => void drags.push(dy));
+      const handle = () => {
+        const found = overlay.querySelector("[data-chart-divider]");
+        if (!(found instanceof HTMLElement)) throw new Error("no divider");
+        return found;
+      };
+      return { overlay, dividers, handle, drags };
+    };
+
+    it("says so while its limits meet, and stops saying so when they part — on every render", () => {
+      const { dividers, handle } = mountOne();
+      dividers.render([at({ now: 60, min: 60, max: 60 })]);
+      expect(handle().getAttribute("aria-disabled")).toBe("true");
+      expect(handle().style.cursor).toBe("default");
+
+      dividers.render([at({ now: 60, min: 40, max: 90 })]);
+      expect(handle().hasAttribute("aria-disabled")).toBe(false);
+      expect(handle().style.cursor).toBe("row-resize");
+
+      dividers.render([at({ now: 60, min: 60, max: 60 })]);
+      expect(handle().getAttribute("aria-disabled")).toBe("true");
+      dividers.destroy();
+    });
+
+    it("judges by the limits themselves, not by their rounded ARIA text", () => {
+      const { dividers, handle } = mountOne();
+      // All three read "100" once rounded, yet there is room to move.
+      dividers.render([at({ now: 100, min: 99.6, max: 100.4 })]);
+      expect(handle().getAttribute("aria-valuemin")).toBe(handle().getAttribute("aria-valuemax"));
+      expect(handle().hasAttribute("aria-disabled")).toBe(false);
+      dividers.destroy();
+    });
+
+    it("keeps its focus and tab stop, still keeps its own keys, and lets the others through", () => {
+      const { dividers, handle, drags } = mountOne();
+      dividers.render([at({ now: 60, min: 40, max: 90 })]);
+      handle().focus();
+      dividers.render([at({ now: 60, min: 60, max: 60 })]);
+      expect(document.activeElement).toBe(handle());
+      expect(handle().tabIndex).toBe(0);
+
+      const arrow = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+      handle().dispatchEvent(arrow);
+      expect(arrow.defaultPrevented).toBe(true);
+      expect(drags).toEqual([8]);
+
+      const other = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+      handle().dispatchEvent(other);
+      expect(other.defaultPrevented).toBe(false);
+      dividers.destroy();
+    });
+
+    it("does not start a drag, but still keeps the press from panning the chart", () => {
+      const { dividers, handle, drags } = mountOne();
+      dividers.render([at({ now: 60, min: 60, max: 60 })]);
+      const heard = vi.fn();
+      container.addEventListener("pointerdown", heard);
+
+      handle().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientY: 100 }));
+      expect(heard).not.toHaveBeenCalled();
+      expect(handle().hasAttribute("data-dragging")).toBe(false);
+      document.dispatchEvent(new MouseEvent("pointermove", { clientY: 140 }));
+      expect(drags).toEqual([]);
+      dividers.destroy();
+    });
+
+    it("lets a drag that started while it could move carry on after the limits meet", () => {
+      const { dividers, handle, drags } = mountOne();
+      dividers.render([at({ now: 60, min: 40, max: 90 })]);
+      handle().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientY: 100 }));
+      dividers.render([at({ now: 60, min: 60, max: 60 })]);
+      document.dispatchEvent(new MouseEvent("pointermove", { clientY: 110 }));
+      expect(drags).toEqual([10]);
+      document.dispatchEvent(new MouseEvent("pointerup", {}));
+      dividers.destroy();
+    });
+  });
 });

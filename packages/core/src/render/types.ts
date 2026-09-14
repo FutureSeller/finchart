@@ -37,6 +37,15 @@ export interface TextParams {
   readonly style: TextStyle;
   /** If present, lays a box behind the text. Its size comes from the measured result. */
   readonly box?: { fill: string; padding: number };
+  /**
+   * If present, the horizontal range the text — box and padding included —
+   * should stay inside. The caller can't measure, so the renderer that
+   * draws does: text that would cross an edge slides back in, keeping its
+   * alignment; text wider than the range sits on `left` and overflows
+   * right. A renderer that only records commands passes it on; one that
+   * replays them and ignores it draws the text where the anchor put it.
+   */
+  readonly within?: { readonly left: number; readonly right: number };
 }
 
 export type ShapeParams =

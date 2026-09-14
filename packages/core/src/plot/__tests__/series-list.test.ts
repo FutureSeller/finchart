@@ -19,6 +19,7 @@ function fakeEntry(over: Partial<Entry> = {}): Entry {
     name: null,
     color: null,
     zIndex: 0,
+    readout: true,
     nearest: () => null,
     swapSeries: vi.fn(),
     feed: vi.fn(),

@@ -25,6 +25,12 @@ interface CommonSeriesProps<TSource extends BaseDataPoint> {
   name?: string;
   /** Display color swatch — the dot in the legend. Separate from the color it's drawn in. */
   color?: string;
+  /**
+   * `false` for a series drawn for the eye rather than read out (a band
+   * fill, a marker row) — the tooltip and legend leave it out. Like `name`,
+   * fixed at registration: change the React `key` to change it.
+   */
+  readout?: boolean;
 }
 
 interface PlainSeriesProps<TSource extends BaseDataPoint>
@@ -116,6 +122,7 @@ function toSpec<TSource extends BaseDataPoint, TPoint extends BaseDataPoint>(
       input: props.input,
       name: props.name,
       color: props.color,
+      readout: props.readout,
       coordinates: props.coordinates,
     });
   }
@@ -127,6 +134,7 @@ function toSpec<TSource extends BaseDataPoint, TPoint extends BaseDataPoint>(
         data,
         name: props.name,
         color: props.color,
+        readout: props.readout,
         derive: props.derive,
         deriveKey: props.deriveKey,
         coordinates: props.coordinates,
@@ -137,6 +145,7 @@ function toSpec<TSource extends BaseDataPoint, TPoint extends BaseDataPoint>(
         data,
         name: props.name,
         color: props.color,
+        readout: props.readout,
       });
 }
 

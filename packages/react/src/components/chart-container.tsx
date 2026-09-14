@@ -40,6 +40,11 @@ export interface PlotHandleRef {
   current: Plot | null;
 }
 
+/** Holds the element the chart is built on → `ChartContainerProps.containerRef`. */
+export interface ContainerHandleRef {
+  current: HTMLDivElement | null;
+}
+
 export interface ChartContainerProps<T extends BaseDataPoint> {
   /**
    * A finished wiring, or the recipe `browserDeps()` returns — the
@@ -116,6 +121,14 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
    */
   plotRef?: PlotHandleRef;
   /**
+   * The element the chart is built on — the one that takes focus and the
+   * keyboard. A toolbar button takes focus when clicked, so the keys that
+   * follow (Esc to cancel a drawing, Delete) only reach the chart once
+   * focus comes back: `containerRef.current?.focus()` after `tools.begin()`.
+   * `null` until mounted and after unmount; never set on the server.
+   */
+  containerRef?: ContainerHandleRef;
+  /**
    * The door for lifting the chart into **state** — wiring **between**
    * containers requires this. Since `plotRef` can't wake an effect,
    * wiring that has to react to the chart appearing and disappearing
@@ -169,6 +182,7 @@ export function ChartContainer<T extends BaseDataPoint>({
   state,
   onStateChange,
   plotRef: exposed,
+  containerRef: exposedContainer,
   onPlot,
   className,
   style,
@@ -258,6 +272,19 @@ export function ChartContainer<T extends BaseDataPoint>({
       if (exposed) exposed.current = null;
     };
   }, [exposed, plotRef]);
+
+  // Its own effect for the same reason as the plot ref above: planted once
+  // per mount (and per ref object), not torn down by an unstable `onPlot`.
+  // Declared before `onPlot`, so the element is in place when the callback
+  // announces the chart, and already cleared when it announces `null` on
+  // unmount (a changed `onPlot` alone re-announces without touching this).
+  useEffect(() => {
+    if (!exposedContainer) return;
+    exposedContainer.current = containerRef.current;
+    return () => {
+      exposedContainer.current = null;
+    };
+  }, [exposedContainer, containerRef]);
 
   useEffect(() => {
     onPlot?.(plotRef.current);

@@ -190,6 +190,30 @@ describe('<ChartLine>', () => {
     expect(samples.find((entry) => entry.name === 'I')?.color).toBe('#010');
   });
 
+  it('should carry readout={false} on the candle, plain line, derive and input branches', () => {
+    const { deps, ref, plot } = setup();
+    const source = { read: () => [{ x: 0, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 3 }] };
+
+    mount(
+      <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
+        <ChartCandles name="P" readout={false} />
+        <ChartLine name="L" data={[{ x: 0, y: 1 }, { x: 1, y: 2 }]} readout={false} />
+        <ChartLine name="D" derive={closes} deriveKey={[]} readout={false} />
+        <ChartLine name="I" input={source} readout={false} />
+        <ChartLine name="shown" derive={closes} deriveKey={[]} />
+      </ChartContainer>,
+    );
+
+    const samples = plot().mainPane.probe(1);
+    expect(samples.map((entry) => [entry.name, entry.readout === false])).toEqual([
+      ['P', true],
+      ['L', true],
+      ['D', true],
+      ['I', true],
+      ['shown', false],
+    ]);
+  });
+
   it('should draw what derive returned', () => {
     const { deps, ref, drawn } = setup();
 

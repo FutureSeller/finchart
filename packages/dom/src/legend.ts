@@ -92,7 +92,7 @@ export function legend(
       const samples = at === null ? [] : pane.probe(at);
 
       const rows = samples
-        .filter((sample) => sample.name !== null)
+        .filter((sample) => sample.name !== null && sample.readout !== false)
         .map((sample) => {
           const row = document.createElement("div");
           if (sample.color) {

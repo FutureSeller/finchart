@@ -94,7 +94,7 @@ to make the same mistake in both files.
 | `--chart-pane-divider`, `--chart-pane-divider-width` | pane border (when there is more than one pane) |
 | `--chart-crosshair`, `--chart-crosshair-width`, `--chart-crosshair-dash` | crosshair line |
 | `--chart-crosshair-badge`, `--chart-crosshair-badge-back` | crosshair axis badge |
-| `--chart-price-line`, `--chart-price-line-width`, `--chart-price-line-dash`, `--chart-marker`, `--chart-watermark`, `--chart-span` | standard decorations |
+| `--chart-price-line`, `--chart-price-line-width`, `--chart-price-line-dash`, `--chart-marker`, `--chart-watermark`, `--chart-span` | standard decorations (a price line's badge text is black or white, whichever reads better, when the line colour is `#rgb`, `#rrggbb`, or `rgb()`/`rgba()` with integer channels 0–255 and alpha omitted or exactly 1; white on anything else, percentages and fractional channels included) |
 | `--chart-label`, `--chart-label-font-size`, `--chart-label-font-family` | axis label |
 | `--chart-tooltip`, `--chart-tooltip-back` | tooltip (DOM) |
 | `--chart-legend` | legend (DOM) |

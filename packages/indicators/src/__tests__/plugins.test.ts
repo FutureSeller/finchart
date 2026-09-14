@@ -1008,3 +1008,49 @@ describe("the node door guards exactly the branches the attach reads", () => {
     }
   });
 });
+
+describe("helper registrations are not read out", () => {
+  // The fills and marker rows are drawn for the eye: a tooltip row reading a
+  // band's edge value with no name says nothing. They stay in `probe` (marked),
+  // and every named line keeps its readout.
+  const lastX = candles[candles.length - 1].x;
+  const readouts = (samples: readonly { name: string | null; readout?: false }[]) =>
+    samples.map((sample) => [sample.name, sample.readout === false]);
+
+  it("marks the Bollinger and Keltner fills, and nothing else on the pane", () => {
+    const { model, price } = pricedModel();
+    model.plot.mainPane.use(attachBollingerBands({ source: price, period: 5 }));
+    model.plot.mainPane.use(attachKeltnerChannels({ source: price, period: 5 }));
+    model.plot.render();
+    const marked = readouts(model.plot.mainPane.probe(lastX)).filter(([, hidden]) => hidden);
+    expect(marked).toEqual([[null, true], [null, true]]);
+    expect(readouts(model.plot.mainPane.probe(lastX)).filter(([name]) => name !== null).every(([, hidden]) => !hidden)).toBe(true);
+  });
+
+  it("marks the Donchian fill", () => {
+    const { model, price } = pricedModel();
+    model.plot.mainPane.use(attachDonchianChannels({ source: price, period: 5 }));
+    model.plot.render();
+    const hidden = readouts(model.plot.mainPane.probe(lastX)).filter(([, isHidden]) => isHidden);
+    expect(hidden).toEqual([[null, true]]);
+  });
+
+  it("marks the Ichimoku cloud", () => {
+    const { model, price } = pricedModel();
+    model.plot.mainPane.use(attachIchimoku({ source: price }));
+    model.plot.render();
+    const hidden = readouts(model.plot.mainPane.probe(lastX)).filter(([, isHidden]) => isHidden);
+    expect(hidden).toEqual([[null, true]]);
+  });
+
+  it("marks the two Squeeze marker rows and keeps the momentum", () => {
+    const { model, price } = pricedModel();
+    const squeeze = model.plot.use(attachSqueezeMomentum({ source: price }));
+    model.plot.render();
+    const pane = squeeze.pane;
+    if (!pane) throw new Error("squeeze has its own pane");
+    const rows = readouts(pane.probe(lastX));
+    expect(rows.filter(([, isHidden]) => isHidden)).toEqual([[null, true], [null, true]]);
+    expect(rows.filter(([, isHidden]) => !isHidden).map(([name]) => name)).toEqual([expect.stringMatching(/^Squeeze/)]);
+  });
+});

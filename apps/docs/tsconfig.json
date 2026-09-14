@@ -6,6 +6,6 @@
     "jsx": "react-jsx",
     "types": []
   },
-  "include": [".vitepress/**/*.ts", "snippets/**/*.ts", "snippets/**/*.tsx"],
+  "include": [".vitepress/**/*.ts", "snippets/**/*.ts", "snippets/**/*.tsx", "vitest.config.ts"],
   "exclude": ["dist"]
 }

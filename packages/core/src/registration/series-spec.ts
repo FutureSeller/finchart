@@ -81,6 +81,7 @@ export function seriesSpec<TSource extends BaseDataPoint>(spec: {
   name?: string;
   color?: string;
   zIndex?: number;
+  readout?: boolean;
 }): SeriesSpec<TSource>;
 
 export function seriesSpec<
@@ -93,6 +94,7 @@ export function seriesSpec<
   name?: string;
   color?: string;
   zIndex?: number;
+  readout?: boolean;
   derive: (source: DataView<TSource>) => TPoint[];
   /** Required whenever there's a derivation — without it, everything recomputes on every update. */
   deriveKey: readonly unknown[];
@@ -107,6 +109,7 @@ export function seriesSpec<TPoint extends BaseDataPoint>(spec: {
   name?: string;
   color?: string;
   zIndex?: number;
+  readout?: boolean;
   coordinates?: CoordinateAccessor<TPoint>;
 }): SeriesSpec<never>;
 

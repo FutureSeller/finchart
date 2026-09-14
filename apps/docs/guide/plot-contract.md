@@ -484,7 +484,10 @@ beside it; Kagi and Point & Figure belong to it too):
 size and volatility is not the transform's. A helper that suggests a step
 from the data is something the consumer calls explicitly, so *when* the
 suggestion was taken stays visible in the call site; the transform itself
-never defaults it.
+never defaults it. `atrPriceStep` is that helper — take it once per symbol,
+when the symbol loads, and catch the tapes it has no step for:
+
+<<< ../snippets/renko-brick-size.ts{ts}
 
 **What does not fit beside an ordinal axis — and what you would see.** The
 core does not know an ordinal from a timestamp (x is a number either way),
@@ -526,11 +529,33 @@ were looking at survives a height change, and with nothing to refit it's cheap.
 
 - **There is one x, shared by every pane.** The tick labels sit only under the bottom pane.
 - **y is per pane.** `PlotConfig.axis.y` is the default and `PaneOptions.axis`
-  overrides it per pane.
+  overrides it per pane — see [one format per pane](#one-format-per-pane).
 - Tick density comes from each pane's pixel height — a short pane thins out on its own.
   `Axis` reads the scale's range, so there's nothing to pass in.
 - The grid is drawn per pane as well. A vertical line crossing the gap between
   panes would make two separate regions read as one.
+
+#### One format per pane
+
+A price, a volume and an oscillator are three different numbers, and a single
+format prints at least two of them wrong: a won has no decimals, a volume is a
+count, an RSI reads in whole numbers. Set the price format on the chart — it
+is every pane's default — and give the panes that read something else their
+own. A pane's format is used everywhere that pane prints a value: its axis,
+its crosshair badge, its price lines, and the tooltip and legend rows it reads
+out.
+
+<<< ../snippets/pane-formats.ts{ts}
+
+In React, a `<YAxis>` outside every `<ChartPane>` is the default and one inside
+a pane is that pane's:
+
+<<< ../snippets/pane-formats-react.tsx{tsx}
+
+With no format anywhere, the axis prints values as they are and the badges,
+tooltip and legend print two decimals — `293053.22` on a won chart. That split
+is kept deliberately, because changing it would change every chart that never
+set a format; set one and the surfaces agree.
 
 #### Writing a tick strategy
 
@@ -871,9 +896,19 @@ toolbarButton.addEventListener("click", () => {
 ```
 
 **There's no separate `plot.focus()`** because the caller already holds that
-element — it's the one you passed to `build()`, and in React a `ref` lands in
-that slot. It isn't something the core can't do; it's **something the caller can
-already do**, so it's written down here instead of carved into the core surface.
+element — it's the one you passed to `build()`. In React, `usePlot` returns it
+as `containerRef`, and `<ChartContainer>` hands it out through its own
+`containerRef` prop:
+
+```tsx
+const chartEl = useRef<HTMLDivElement>(null);
+
+<button onClick={() => { tools?.begin("trend"); chartEl.current?.focus(); }}>Trend</button>
+<ChartContainer deps={deps} data={bars} containerRef={chartEl}>…</ChartContainer>
+```
+
+It isn't something the core can't do; it's **something the caller can already
+do**, so it's written down here instead of carved into the core surface.
 
 **With several charts side by side**, the element to give focus back to is *"the
 one the chart you just operated passed to `build()`"* — not an outer wrapper such
