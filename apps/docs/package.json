@@ -10,7 +10,7 @@
     "build": "typedoc && vitepress build",
     "typedoc": "typedoc",
     "preview": "vitepress preview",
-    "lint": "oxlint .vitepress/config.ts vitest.config.ts",
+    "lint": "oxlint .vitepress/config.ts vitest.config.ts zero-coverage-reporter.ts snippets",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "clean": "rm -rf dist api .vitepress/cache .turbo"

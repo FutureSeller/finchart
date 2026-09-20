@@ -27,6 +27,7 @@
       ]
     },
     "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json"],
       "outputs": [],
       "cache": true,
       "dependsOn": []
