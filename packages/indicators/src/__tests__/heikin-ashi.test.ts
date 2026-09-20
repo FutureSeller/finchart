@@ -88,7 +88,7 @@ describe("heikinAshiLast — the tail of heikinAshi, for deriveLast", () => {
     const source = tape(0, 40);
     const previous = heikinAshi(source.slice(0, 35));
     expect(heikinAshiLast(previous, source, { kind: "append", count: 5 })).toHaveLength(5);
-    const replaced = [...source.slice(0, 35)];
+    const replaced = source.slice(0, 35);
     replaced[34] = candle(34, 1, 2, 0, 1.5);
     expect(heikinAshiLast(previous, replaced, { kind: "replace", count: 1 })).toHaveLength(1);
   });

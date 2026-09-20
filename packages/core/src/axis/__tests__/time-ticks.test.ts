@@ -622,7 +622,7 @@ describe("timeTicks — how close a pair may sit", () => {
 
     expect(ticks.length).toBeGreaterThan(1);
     expect(ticks.map((tick) => tick.value)).toEqual(
-      [...ticks.map((tick) => tick.value)].sort((a, b) => a - b),
+      ticks.map((tick) => tick.value).sort((a, b) => a - b),
     );
   });
 

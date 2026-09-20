@@ -154,7 +154,7 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
 
 describe("the kind table", () => {
   it("matches DRAWING_KINDS exactly — both directions", () => {
-    expect([...Object.keys(TABLE)].sort()).toEqual([...DRAWING_KINDS].sort());
+    expect(Object.keys(TABLE).sort()).toEqual([...DRAWING_KINDS].sort());
   });
 
   const rows = Object.entries(TABLE);
