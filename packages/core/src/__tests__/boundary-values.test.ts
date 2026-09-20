@@ -318,11 +318,21 @@ function declaredNumberFields(source: string, name: string): string[] {
   let depth = 0;
   let i = found.index + found[0].length - 1;
   const start = i;
+  // The bound is not paranoia about EOF, it is what makes a miscount *fail*.
+  // The scanner counts braces without knowing strings, template literals or
+  // comments, so one `{` in a comment inside the declaration and the closing
+  // brace never brings `depth` back to 0. Unbounded, that walks past the end
+  // reading `undefined` forever — a tight loop that allocates nothing, so no
+  // timeout and no OOM ever ends it; the worker just burns a core until
+  // someone finds it by hand. Bounded, the same miscount throws here.
   do {
     if (source[i] === "{") depth++;
     else if (source[i] === "}") depth--;
     i++;
-  } while (depth > 0);
+  } while (depth > 0 && i < source.length);
+  if (depth > 0) {
+    throw new Error(`unbalanced braces while scanning the ${name} declaration`);
+  }
   return [...source.slice(start, i).matchAll(/^ {2}(\w+)\??:\s*number\b/gm)].map(
     (match) => match[1],
   );
