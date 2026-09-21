@@ -180,6 +180,45 @@ goes back to the theme. Per-drawing `style` uses the same
 `dashArray`), and the values are literals: a drawing you colored by hand
 keeps its color across a theme switch, deliberately.
 
+**A Fibonacci can space its levels in log price** — `levelSpacing: "log"` on a
+retracement or an extension, set through `add` or `handle.update`
+(`levelSpacing: undefined` goes back). Levels are evenly spaced *in price* by
+default, so on a log axis they bunch toward one end — the 50% line of a
+160,000 → 380,000 retracement sits a tenth of the swing off the visual middle.
+Log spacing puts level `l` at `b·(a/b)^l` (an extension: `c·(b/a)^l`), which is
+what looks even there.
+
+It belongs to the **drawing, not the axis**: the arithmetic needs only the
+anchors' prices, so a saved drawing puts its lines at the same prices whatever
+axis shows it — toggle the axis and nothing jumps. (TradingView's option of the
+same name takes effect only while the chart is on a log scale; this one does
+not look at the scale, on purpose.) The other side of that: on a *linear* axis
+log-spaced levels are the ones that bunch, and their percent labels can overlap.
+A body drag moves a log-spaced drawing by a common factor rather than a common
+amount, so the level you grabbed stays under the cursor — when a factor is
+possible: every anchor's price, and the cursor's where it grabbed, is positive.
+Otherwise the whole gesture moves by a common amount, like any other drawing.
+During such a drag, a move log price cannot express is not applied — the cursor
+at a price that is not positive, an anchor that would leave the doubles, or two
+different anchor prices that would land on the same one — and the drawing waits
+where it last was until the cursor comes back to a price it can follow.
+
+Log price needs positive prices. While an anchor's price is zero or below, the
+levels log spacing cannot define are **not drawn** — never drawn somewhere else:
+the anchors' own levels (a retracement's 0% and 100%, an extension's 0%) stay
+defined, so those lines remain where the level list has them and the axis shows
+their prices, until the prices are positive again. The same goes for a level
+whose price would leave the doubles. A saved drawing whose `levelSpacing` this
+build does not know loads with the default spacing — that one field is dropped,
+like a field it does not know, and every other drawing loads as usual.
+
+**Hand-drawn Fibonaccis are born with `defaults`** —
+`drawingTools({ plot, defaults: { fib: { levelSpacing: "log" }, fibExtension: { levels: [0, 1, 1.618] } } })`.
+A drawing made with the pointer is otherwise just its anchors, so this is how a
+hand gets log spacing or a level list of its own. It applies to hand-drawing
+only: `add` takes exactly what you give it, and `update({ levels: undefined })`
+returns to the built-in list, not to this. The option is read once.
+
 **The two measures carry a label** on their segment's midpoint — a price
 measure reports the move from `a` to `b` (delta in the pane's own format,
 plus the percent when `a` isn't zero), a bar measure the number of bars

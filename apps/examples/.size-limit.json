@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 49 KB gzip (48863B measured)",
+    "name": "+ every drawing tool · 50 KB gzip (49808B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -54,11 +54,11 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "49 KB",
+    "limit": "50 KB",
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 49 KB gzip (48866B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 50 KB gzip (49792B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -71,7 +71,7 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "49 KB",
+    "limit": "50 KB",
     "ignore": [
       "react",
       "react-dom"

@@ -4,11 +4,10 @@ import type { Anchor, Drawing } from "./drawings";
 import {
   channelParallel,
   drawingAnchors,
-  fibExtensionLevels,
-  fibExtensionPrice,
-  fibLevelPrice,
-  fibLevels,
+  fibExtensionLines,
+  fibLevelLines,
   pitchforkLines,
+  scaledByRatio,
 } from "./drawings";
 import { distanceToPoint, distanceToSegment, extendThrough } from "./geometry";
 import type { DrawingSpace } from "./space";
@@ -26,14 +25,21 @@ export type Grip =
   | { drawing: Extract<Drawing, { c: Anchor }>; part: "c" };
 
 /**
- * The domain offset at the moment of grabbing. Keeping this fixed for the
- * whole drag makes the grabbed spot stick to the cursor — unlike
- * accumulating a pixel delta, it stays accurate on a log axis too.
+ * What a drag fixes at the moment of grabbing. Every move is computed from
+ * that and the cursor — never accumulated — which is what makes the grabbed
+ * spot stick to the cursor, on a log axis too: domain offsets for a move by a
+ * difference, and for a log-spaced drawing grabbed by its body the cursor it
+ * was grabbed at and the original prices, for a move by a factor.
  */
 export interface DragState {
   grip: Grip;
   /** Per anchor (or price): the domain value minus the cursor's domain value. */
   offsets: { x: number; price: number }[];
+  /**
+   * Where the cursor was when a **log-spaced** drawing was grabbed by its body
+   * — present only then (see `logGrab`). Such a drag moves prices by a factor.
+   */
+  grabbed?: { x: number; price: number };
   /**
    * A snapshot taken at the moment of grabbing — the material a cancel
    * restores. `moveGrip` mutates the original object in place, so
@@ -336,10 +342,9 @@ export function gripAt(
         }
         const [left, right] = fibExtensionSpan(a, b, c);
         if (point.x >= left - LINE_TOLERANCE && point.x <= right + LINE_TOLERANCE) {
-          const onLevel = fibExtensionLevels(drawing).some((level) => {
-            const y = space.pixelAtValue(fibExtensionPrice(drawing, level));
-            return Math.abs(point.y - y) <= LINE_TOLERANCE;
-          });
+          const onLevel = fibExtensionLines(drawing).some(
+            ({ price }) => Math.abs(point.y - space.pixelAtValue(price)) <= LINE_TOLERANCE,
+          );
           if (onLevel) return { drawing, part: "whole" };
         }
         break;
@@ -370,10 +375,9 @@ function hitsFibLevel(
     return false;
   }
 
-  return fibLevels(drawing).some((level) => {
-    const price = fibLevelPrice(drawing, level);
-    return Math.abs(point.y - space.pixelAtValue(price)) <= LINE_TOLERANCE;
-  });
+  return fibLevelLines(drawing).some(
+    ({ price }) => Math.abs(point.y - space.pixelAtValue(price)) <= LINE_TOLERANCE,
+  );
 }
 
 /**
@@ -411,6 +415,28 @@ export function gripOffsets(
 }
 
 /**
+ * A log-spaced drawing grabbed by its body moves by a **factor**, not a
+ * difference: adding the same amount to both anchors keeps a price-linear
+ * level under the cursor and loses a log-spaced one (a at 100, b at 400 — grab
+ * the 50% level at 200, move to 300: +100 each puts that level at 316; ×1.5
+ * each puts it at 300). This says whether the drag is that kind, once, at the
+ * grab, and remembers where the cursor was.
+ *
+ * It is that kind only if everything a factor needs is there: the whole
+ * drawing was grabbed, it is log-spaced, every anchor price is positive, and
+ * so is the cursor's — the hit tolerance reaches a few pixels past a line, so
+ * a press can land where the price is not. Anything else stays a difference.
+ */
+export function logGrab(grip: Grip, space: DrawingSpace, point: Point): DragState["grabbed"] {
+  const { drawing } = grip;
+  if (grip.part !== "whole" || (drawing.type !== "fib" && drawing.type !== "fibExtension")) return undefined;
+  if (drawing.levelSpacing !== "log") return undefined;
+  const cursor = domainAt(space, point);
+  if (!(cursor.price > 0) || !drawingAnchors(drawing).every((anchor) => anchor.price > 0)) return undefined;
+  return cursor;
+}
+
+/**
  * Takes the cursor **as a domain position** — not pixels. That's so
  * snapping can decorate the cursor: the caller (tools) passes either a
  * free cursor or a snapped one in the same shape. This function doesn't
@@ -420,7 +446,35 @@ export function moveGrip(
   drag: DragState,
   cursor: { x: number; price: number },
 ): void {
-  const { grip, offsets } = drag;
+  const { grip, offsets, grabbed } = drag;
+
+  if (grabbed) {
+    const anchors = anchorsOf(grip);
+    const origin = drawingAnchors(drag.original);
+    // One factor for every anchor. With the cursor's price where it was grabbed
+    // that factor is exactly 1, so the prices come back **to the bit** — also on
+    // a sideways drag, which changes no price. A drift nobody can see would
+    // still be recorded as a move to undo — or, between two anchors one double
+    // apart, erase the swing.
+    const prices = origin.map((from) => scaledByRatio(from.price, cursor.price, grabbed.price));
+    // **The whole candidate first.** A cursor whose price is not positive, or a
+    // price that would leave the doubles either way, is a move log price cannot
+    // express: nothing is written — not one anchor of several, not x — and the
+    // drawing waits where it last was. Written unchecked, an infinite anchor is
+    // copied into history by the commit and the next save throws.
+    if (!prices.every((price) => price > 0 && Number.isFinite(price))) return;
+    // Nor can it express two anchors on one double: doubles thin out as prices
+    // grow, and anchors a double apart may have only one to land on. A swing
+    // that closes takes every level with it, so that move is refused as well.
+    // (One factor keeps order, so counting distinct prices is the whole check.)
+    if (new Set(prices).size < new Set(origin.map((from) => from.price)).size) return;
+    anchors.forEach((anchor, index) => {
+      // x is a difference, and `g + (x − g)` is not always `x` — so back at the grab is said, not computed.
+      anchor.x = cursor.x === grabbed.x ? origin[index].x : cursor.x + offsets[index].x;
+      anchor.price = prices[index];
+    });
+    return;
+  }
 
   if (grip.drawing.type === "horizontal") {
     grip.drawing.price = cursor.price + offsets[0].price;

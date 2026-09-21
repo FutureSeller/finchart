@@ -1,6 +1,6 @@
 import type { CursorHost, DataProbe, FocusAreaHost, InputConsumer, InputEvent, InputHost, LineStyle, Observable, PaneDecoration, PaneDecorationHost, PlotArea, Plugin, PluginApi, Point, RenderRequester, StyleSpec, ValueCoordinates, XCoordinates } from "@finchart/core";
 import { ContractError, emitter, pluginApi, resolveStyle, styleSpec } from "@finchart/core";
-import type { Anchor, Drawing, DrawingInput, DrawingUpdate } from "./drawings";
+import type { Anchor, Drawing, DrawingInput, DrawingUpdate, FibExtension, FibRetracement } from "./drawings";
 import { DRAWING_KINDS, describeValue, drawingAnchors } from "./drawings";
 import {
   assignOwned,
@@ -14,7 +14,7 @@ import {
 } from "./drawings";
 import { distanceToPoint } from "./geometry";
 import type { DragState } from "./hit";
-import { gripAt, gripOffsets, moveGrip, restoreDrawing } from "./hit";
+import { gripAt, gripOffsets, logGrab, moveGrip, restoreDrawing } from "./hit";
 import type { DrawingRenderContext } from "./render";
 import { drawOne } from "./render";
 import type { SnapAxes, SnapContext } from "./snap";
@@ -34,13 +34,6 @@ export type { DrawingSpace } from "./space";
  */
 export type DrawingPane = PaneDecorationHost & ValueCoordinates & DataProbe;
 
-/**
- * What the toolbox requires from **the chart** — the three things a pane
- * can't give it (input, re-render, x coordinates). The toolbox
- * installs onto a pane, but the pane doesn't know about these three, so
- * they arrive by wiring (the convention of injecting a collaborator from
- * outside, Principle 11).
- */
 /**
  * The **runtime list** of methods `DrawingStage` requires. The type doesn't
  * exist at runtime, so this holds it separately — if the chart ever grows
@@ -86,6 +79,13 @@ export interface CrosshairDriver {
   crosshair(position: Point): void;
 }
 
+/**
+ * What the toolbox requires from **the chart** — what a pane can't give it
+ * (input, re-render, x coordinates, the cursor, the focus area, the
+ * crosshair). The toolbox installs onto a pane, but the pane doesn't know
+ * about these, so they arrive by wiring — a collaborator is handed in from
+ * outside, never reached for.
+ */
 export type DrawingStage = CrosshairDriver &
   RenderRequester &
   InputHost &
@@ -109,6 +109,20 @@ export interface DrawingToolsOptions {
    * Toggle it at runtime with `api.setSnap`.
    */
   snap?: boolean;
+  /**
+   * What a drawing of this kind is **born with when it is drawn by hand** — the
+   * fields that are not geometry. A Fibonacci drawn with the pointer is
+   * otherwise its anchors and nothing else, so without this there is no way for
+   * a hand to get log-spaced levels or a level list of its own.
+   *
+   * Hand-drawn only: `add` takes exactly what it is given, and clearing a field
+   * with `update({ … : undefined })` goes back to the built-in default, not to
+   * this. Read once — the tool keeps its own copy.
+   */
+  defaults?: {
+    fib?: Pick<FibRetracement, "levels" | "levelSpacing">;
+    fibExtension?: Pick<FibExtension, "levels" | "levelSpacing">;
+  };
   /** The snap radius (px). Default 8. Free-hand drawing when the candidate is outside it. A hit-test distance, so not a CSS variable. */
   snapRadius?: number;
 }
@@ -119,7 +133,8 @@ export interface DrawingHandle {
   /** Safe to call twice. */
   remove(): void;
   /**
-   * Patches the drawing's own fields — geometry, `style`, `levels` —
+   * Patches the drawing's own fields — geometry, `style`, `levels`,
+   * `levelSpacing` —
    * through the same normalizer every door uses. **Identity is
    * preserved**: the object in the list is written in place, so every
    * handle, the selection, and a save recipe keep working.
@@ -334,6 +349,17 @@ function snapRing(center: Point): Point[] {
   return points;
 }
 
+type BornWith = NonNullable<DrawingToolsOptions["defaults"]>;
+type FibDefaults = NonNullable<BornWith["fib"]>;
+
+/** A fresh copy each time — two drawings never share one `levels` array, nor the caller's. */
+function ownDefaults(defaults: FibDefaults | undefined): FibDefaults {
+  const owned: FibDefaults = {};
+  if (defaults?.levels) owned.levels = [...defaults.levels];
+  if (defaults?.levelSpacing) owned.levelSpacing = defaults.levelSpacing;
+  return owned;
+}
+
 /**
  * A fresh draft with every anchor at the first press — a complete
  * drawing from birth (the render loop draws it as-is), whose unconfirmed
@@ -342,7 +368,7 @@ function snapRing(center: Point): Point[] {
  * identity begins when a drawing enters the ledger, not while it's a
  * draft.
  */
-function draftFor(kind: Drawing["type"], at: Anchor): Drawing {
+function draftFor(kind: Drawing["type"], at: Anchor, born: BornWith): Drawing {
   const id = mintDrawingId();
   const anchor = (from: Anchor): Anchor => ({ x: from.x, price: from.price });
   switch (kind) {
@@ -354,15 +380,17 @@ function draftFor(kind: Drawing["type"], at: Anchor): Drawing {
     case "ray":
     case "extended":
     case "arrow":
-    case "fib":
     case "rectangle":
     case "ellipse":
     case "priceMeasure":
     case "barMeasure":
       return { type: kind, id, a: anchor(at), b: anchor(at) };
+    case "fib":
+      return { type: kind, id, a: anchor(at), b: anchor(at), ...ownDefaults(born.fib) };
+    case "fibExtension":
+      return { type: kind, id, a: anchor(at), b: anchor(at), c: anchor(at), ...ownDefaults(born.fibExtension) };
     case "parallelChannel":
     case "pitchfork":
-    case "fibExtension":
       return { type: kind, id, a: anchor(at), b: anchor(at), c: anchor(at) };
   }
   const unreachable: never = kind;
@@ -392,20 +420,6 @@ function followCursor(draft: Drawing, placed: number, at: Anchor): void {
 }
 
 /**
- * A drawing toolbox — one toolbox is one decoration. It doesn't make a
- * decoration per drawing: stacking order (z) and hit order are decided by
- * a single list, and install/teardown are tied to one plugin lifecycle.
- *
- * Installs onto a pane — because it has to live and die with that pane.
- *
- * ```ts
- * const tools = plot.mainPane.use(drawingTools({ plot }));
- * plot.removePane(rsi);   // the toolbox attached to it is cleaned up too
- * ```
- *
- * The three things that must come from the chart arrive by wiring → `DrawingStage`
- */
-/**
  * Builds the owned copy, but translates into contract vocabulary even if a
  * consumer's getter throws — a computed getter backed by a store (MobX,
  * Vue) can throw while being read, and letting that bubble up unchanged
@@ -420,7 +434,20 @@ function safeOwned(drawing: unknown, id: string): unknown {
   }
 }
 
-/** The **runtime** list of kinds. With only the type, `begin` would accept any value. */
+/**
+ * A drawing toolbox — one toolbox is one decoration. It doesn't make a
+ * decoration per drawing: stacking order (z) and hit order are decided by
+ * a single list, and install/teardown are tied to one plugin lifecycle.
+ *
+ * Installs onto a pane — because it has to live and die with that pane.
+ *
+ * ```ts
+ * const tools = rsi.use(drawingTools({ plot }));
+ * plot.removePane(rsi);   // the toolbox attached to it is cleaned up too
+ * ```
+ *
+ * What must come from the chart arrives by wiring → `DrawingStage`
+ */
 export function drawingTools(
   options: DrawingToolsOptions,
 ): Plugin<DrawingPane, DrawingToolsApi> {
@@ -469,6 +496,58 @@ export function drawingTools(
       `drawingTools({ snapRadius }) must be a positive number, got ${describeValue(options.snapRadius)}`,
     );
   }
+  // Judged the way a drawing at `add` is: the owned copy is built first and the
+  // copy is what gets checked and kept. Checking the caller's object and then
+  // copying it would read it twice — a getter, or a hole in a sparse array that
+  // only the copy turns into `undefined`, could pass the check and keep a value
+  // that never did.
+  //
+  // The option is read **once**, for both kinds, and everything of the caller's
+  // is read inside a fence: a getter that throws or a revoked proxy is an invalid
+  // value like any other. What was thrown is the consumer's too and is not
+  // looked at — a revoked proxy thrown from a getter throws again at `instanceof`.
+  const spot = { x: 0, price: 1 };
+  const build = (kind: string, given: FibDefaults | undefined, probe: object): unknown => {
+    try {
+      if (typeof given !== "object" || given === null) return null;
+      return safeOwned({ ...probe, levels: given.levels, levelSpacing: given.levelSpacing }, kind);
+    } catch {
+      return null;
+    }
+  };
+  const bear = (kind: string, given: unknown, built: unknown): FibDefaults => {
+    if (given === undefined) return {};
+    if (!isDrawing(built) || (built.type !== "fib" && built.type !== "fibExtension")) {
+      throw new ContractError(
+        `drawingTools({ defaults: { ${kind} } }) must hold a valid \`levels\` and/or \`levelSpacing\`, got ${describeValue(given)}`,
+      );
+    }
+    return ownDefaults(built);
+  };
+  let container: unknown;
+  let given: BornWith = {};
+  let readable = true;
+  try {
+    const { defaults } = options;
+    container = defaults;
+    if (typeof defaults === "object" && defaults !== null) given = { fib: defaults.fib, fibExtension: defaults.fibExtension };
+  } catch {
+    readable = false;
+  }
+  if (!readable || (container !== undefined && (typeof container !== "object" || container === null))) {
+    throw new ContractError(
+      `drawingTools({ defaults }) must be an object, got ${readable ? describeValue(container) : "one that throws when read"}`,
+    );
+  }
+  const born: BornWith = {
+    fib: bear("fib", given.fib, build("fib", given.fib, { type: "fib", a: spot, b: spot })),
+    fibExtension: bear(
+      "fibExtension",
+      given.fibExtension,
+      build("fibExtension", given.fibExtension, { type: "fibExtension", a: spot, b: spot, c: spot }),
+    ),
+  };
+
   if (
     options.style !== undefined &&
     (typeof options.style !== "object" || options.style === null)
@@ -1100,7 +1179,7 @@ export function drawingTools(
           transition({
             kind: "drafting",
             tool: state.tool,
-            draft: draftFor(state.tool, at),
+            draft: draftFor(state.tool, at, born),
             pointerId: event.pointerId,
             placed: 1,
           });
@@ -1148,6 +1227,7 @@ export function drawingTools(
             drag: {
               grip,
               offsets: gripOffsets(grip, space, event.point),
+              grabbed: logGrab(grip, space, event.point),
               // The material a cancel restores — `moveGrip` mutates the
               // original in place.
               original: toOwnedDrawing(grip.drawing),

@@ -9,10 +9,8 @@ import { labelFont, resolveStyle, styleSpec } from "@finchart/core";
 import type { Drawing } from "./drawings";
 import {
   channelParallel,
-  fibExtensionLevels,
-  fibExtensionPrice,
-  fibLevelPrice,
-  fibLevels,
+  fibExtensionLines,
+  fibLevelLines,
   pitchforkLines,
   priceMeasureDelta,
 } from "./drawings";
@@ -396,8 +394,8 @@ export function drawOne(
 
       // The swing legs first, so the levels read as projected from them.
       target.drawLine([a, b, c], style);
-      for (const level of fibExtensionLevels(drawing)) {
-        const y = space.pixelAtValue(fibExtensionPrice(drawing, level));
+      for (const { level, price } of fibExtensionLines(drawing)) {
+        const y = space.pixelAtValue(price);
         target.drawLine(
           [
             { x: left, y },
@@ -426,8 +424,7 @@ export function drawOne(
       const right = Math.max(a.x, b.x);
       const font = labelFont(readStyle);
 
-      for (const level of fibLevels(drawing)) {
-        const price = fibLevelPrice(drawing, level);
+      for (const { level, price } of fibLevelLines(drawing)) {
         const y = space.pixelAtValue(price);
 
         target.drawLine(
