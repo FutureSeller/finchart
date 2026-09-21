@@ -9,6 +9,7 @@ import {
   requireObject,
   requirePoint,
   throwable,
+  runAll,
   createScope,
   type PlotArea,
   type Point,
@@ -299,128 +300,143 @@ export class Plot
     this.scheduler = (deps.createScheduler ?? immediateScheduler)(() =>
       this.render(),
     );
-    this.layers = deps.createLayers(size.width, size.height);
-    this.scope.add(() => this.layers.destroy());
-    // Read through `this.layers` on each transition rather than detaching
-    // `setCursor` — a layer written as a class keeps its receiver that way.
-    this.cursor = cursorClaims((cursor) => this.layers.setCursor?.(cursor));
-    this.renderer = deps.createRenderer(this.layers.data);
-    // Not a release — the last frame is erased so a still-mounted canvas
-    // doesn't keep showing a dead chart. Runs before layers go (reverse order).
-    this.scope.add(() => {
-      this.renderer.clear();
-      this.renderer.commit();
-    });
-    this.axisLabels =
-      deps.createAxisLabels?.({
-        overlay: this.layers.overlay,
-        target: this.renderer,
-      }) ?? null;
-    this.scope.add(() => this.axisLabels?.destroy());
-    // Give it the same surface as the renderer — the place that measures
-    // and the place that draws must be the same engine.
-    this.measurer = deps.createTextMeasurer?.(this.layers.data) ?? null;
-    const dividers =
-      deps.createDividers?.(this.layers.overlay, (index, dy) =>
-        this.resizeBetween(index, dy),
-      ) ?? null;
-    // Counts what's up as it goes by — a move is only for a handle the last
-    // frame put up (see `resizeBetween`).
-    this.dividers = dividers && {
-      render: (boundaries) => {
-        this.shownDividers = boundaries.length;
-        dividers.render(boundaries);
-      },
-      clear: () => {
-        this.shownDividers = 0;
-        dividers.clear();
-      },
-      destroy: () => dividers.destroy(),
-    };
-    this.scope.add(() => this.dividers?.destroy());
+    const rollback: (() => void)[] = [() => this.scheduler.cancel(), () => this.scope.dispose()];
+    try {
+      this.layers = deps.createLayers(size.width, size.height);
+      this.scope.add(() => this.layers.destroy());
+      // Read through `this.layers` on each transition rather than detaching
+      // `setCursor` — a layer written as a class keeps its receiver that way.
+      this.cursor = cursorClaims((cursor) => this.layers.setCursor?.(cursor));
+      this.renderer = deps.createRenderer(this.layers.data);
+      // Not a release — the last frame is erased so a still-mounted canvas
+      // doesn't keep showing a dead chart. Runs before layers go (reverse order).
+      this.scope.add(() => {
+        this.renderer.clear();
+        this.renderer.commit();
+      });
+      this.axisLabels =
+        deps.createAxisLabels?.({
+          overlay: this.layers.overlay,
+          target: this.renderer,
+        }) ?? null;
+      this.scope.add(() => this.axisLabels?.destroy());
+      // Give it the same surface as the renderer — the place that measures
+      // and the place that draws must be the same engine.
+      this.measurer = deps.createTextMeasurer?.(this.layers.data) ?? null;
+      const dividers =
+        deps.createDividers?.(this.layers.overlay, (index, dy) =>
+          this.resizeBetween(index, dy),
+        ) ?? null;
+      // Counts what's up as it goes by — a move is only for a handle the last
+      // frame put up (see `resizeBetween`).
+      this.dividers = dividers && {
+        render: (boundaries) => {
+          this.shownDividers = boundaries.length;
+          dividers.render(boundaries);
+        },
+        clear: () => {
+          this.shownDividers = 0;
+          dividers.clear();
+        },
+        destroy: () => dividers.destroy(),
+      };
+      this.scope.add(() => this.dividers?.destroy());
 
-    this.xScale = deps.xScale();
-    this.x = (deps.createXMapping ?? continuousX)(this.xScale);
-    this.paneStack = new PaneStack(deps.mainPaneYScale(), {
-      createDataManager: deps.createDataManager,
-      yAxisOptions: () => this.config.axis.y,
-      onCreate: (pane) => this.addGrid(pane),
-      onChange: (change) => this.onPaneChange(change),
-    });
-    this.stage = {
-      renderer: this.renderer,
-      axisLabels: this.axisLabels,
-      dividers: this.dividers,
-      decorations: this.decorations,
-      panes: this.paneStack.list,
-      x: this.x,
-      formatX: this.formatX,
-    };
-    this.xViewport = new XViewport({
-      scale: this.xScale,
-      x: this.x,
-      dataRange: () => this.dataRange,
-      // A reader function, not a value — changed via applyOptions.
-      options: () => this.config,
-      onChange: (visible) => {
-        this.emitStateChange();
+      this.xScale = deps.xScale();
+      this.x = (deps.createXMapping ?? continuousX)(this.xScale);
+      this.paneStack = new PaneStack(deps.mainPaneYScale(), {
+        createDataManager: deps.createDataManager,
+        yAxisOptions: () => this.config.axis.y,
+        onCreate: (pane) => this.addGrid(pane),
+        onChange: (change) => this.onPaneChange(change),
+      });
+      rollback.splice(1, 0, () => {
+        const failures = this.paneStack.detachAll();
+        if (failures.length) throw throwable(failures, "detaching failed constructor panes");
+      });
+      this.stage = {
+        renderer: this.renderer,
+        axisLabels: this.axisLabels,
+        dividers: this.dividers,
+        decorations: this.decorations,
+        panes: this.paneStack.list,
+        x: this.x,
+        formatX: this.formatX,
+      };
+      this.xViewport = new XViewport({
+        scale: this.xScale,
+        x: this.x,
+        dataRange: () => this.dataRange,
+        // A reader function, not a value — changed via applyOptions.
+        options: () => this.config,
+        onChange: (visible) => {
+          this.emitStateChange();
 
-        /**
-         * **Don't build the payload if nobody's listening** — the same door
-         * its sibling `emitStateChange` puts up before building a snapshot.
-         *
-         * `dataRange` is a walk over every series in every pane
-         * (`Plot.dataRange`), and this spot runs on **every pointermove**
-         * of a drag pan (state is synchronous, it doesn't coalesce into a
-         * frame). On a high-polling-rate trackpad this fires more
-         * often than frames do.
-         */
-        if (!this.events.has("xDomainChange")) return;
-        this.events.emit("xDomainChange", {
-          ...visible,
-          // Series decide "empty means null" themselves — Plot doesn't
-          // second-guess it.
-          dataRange: this.dataRange,
-        });
-      },
-    });
+          /**
+           * **Don't build the payload if nobody's listening** — the same door
+           * its sibling `emitStateChange` puts up before building a snapshot.
+           *
+           * `dataRange` is a walk over every series in every pane
+           * (`Plot.dataRange`), and this spot runs on **every pointermove**
+           * of a drag pan (state is synchronous, it doesn't coalesce into a
+           * frame). On a high-polling-rate trackpad this fires more
+           * often than frames do.
+           */
+          if (!this.events.has("xDomainChange")) return;
+          this.events.emit("xDomainChange", {
+            ...visible,
+            // Series decide "empty means null" themselves — Plot doesn't
+            // second-guess it.
+            dataRange: this.dataRange,
+          });
+        },
+      });
 
-    // The chart always starts empty — series only arrive through addSeries
-    // (see PlotOptions). When the first data arrives, onPaneChange fits x,
-    // and the new-bar detection baseline (lastDataMax) is set there too.
+      // The chart always starts empty — series only arrive through addSeries
+      // (see PlotOptions). When the first data arrives, onPaneChange fits x,
+      // and the new-bar detection baseline (lastDataMax) is set there too.
 
-    this.installAxisDrag();
+      this.installAxisDrag();
 
-    // Input and size observation know for themselves where they attach —
-    // assembly bound the element up front (the browserDeps recipe). Headless
-    // wiring doesn't supply these collaborators.
-    this.deps.interactions?.connect(this);
-    this.scope.add(() => this.deps.interactions?.disconnect());
-    const unobserveSize = this.deps.observeSize?.((width, height) =>
-      this.followContainer(width, height),
-    );
-    if (unobserveSize) this.scope.add(unobserveSize);
-    /**
-     * Redraw when the scale changes — **that's all.**
-     *
-     * Neither the viewport nor the domain is touched. Reacquiring the
-     * backing store is `layers.resize()`, called from `render()`, and the
-     * surface reads its own `devicePixelRatio` inside that call
-     * itself. All this does is trigger that, so leaving it unwired
-     * behaves exactly as before.
-     */
-    const unobserveResolution = this.deps.observeResolution?.(() =>
-      this.scheduleRender(),
-    );
-    if (unobserveResolution) this.scope.add(unobserveResolution);
+      // Input and size observation know for themselves where they attach —
+      // assembly bound the element up front (the browserDeps recipe). Headless
+      // wiring doesn't supply these collaborators.
+      this.scope.add(() => this.deps.interactions?.disconnect());
+      this.deps.interactions?.connect(this);
+      const unobserveSize = this.deps.observeSize?.((width, height) =>
+        this.followContainer(width, height),
+      );
+      if (unobserveSize) this.scope.add(unobserveSize);
+      /**
+       * Redraw when the scale changes — **that's all.**
+       *
+       * Neither the viewport nor the domain is touched. Reacquiring the
+       * backing store is `layers.resize()`, called from `render()`, and the
+       * surface reads its own `devicePixelRatio` inside that call
+       * itself. All this does is trigger that, so leaving it unwired
+       * behaves exactly as before.
+       */
+      const unobserveResolution = this.deps.observeResolution?.(() =>
+        this.scheduleRender(),
+      );
+      if (unobserveResolution) this.scope.add(unobserveResolution);
 
-    /**
-     * Last, once every acquisition above has succeeded — the parent must
-     * never hold a teardown for a chart that failed to finish being born.
-     * `destroy()` is idempotent, so the consumer destroying the chart
-     * early leaves the parent's entry a no-op, not a double free.
-     */
-    options.scope?.add(() => this.destroy());
+      /**
+       * Last, once every acquisition above has succeeded — the parent must
+       * never hold a teardown for a chart that failed to finish being born.
+       * `destroy()` is idempotent, so the consumer destroying the chart
+       * early leaves the parent's entry a no-op, not a double free.
+       */
+      options.scope?.add(() => this.destroy());
+    } catch (error) {
+      this.destroyed = true;
+      this.events.clear();
+      // connect/observe callbacks have already seen the initialized host
+      // and may have installed plugins before throwing.
+      rollback.splice(1, 0, ...this.plugins.splice(0).reverse().map(api => () => api.dispose()));
+      const failures = runAll(rollback, (release) => release());
+      throw throwable([error, ...(failures ?? [])], "constructing Plot failed");
+    }
   }
 
   /**
@@ -486,7 +502,7 @@ export class Plot
       throw new ContractError("cannot install a plugin on a destroyed Plot");
     }
 
-    return install(this.plugins, this, plugin, "plot.use(plugin)");
+    return install(this.plugins, this, plugin, "plot.use(plugin)", () => !this.destroyed);
   }
 
   /**

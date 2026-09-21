@@ -1,3 +1,4 @@
+import { DataError } from "../primitives";
 import { isGap } from "./accessors";
 import { passthrough } from "./decimation";
 import type { DecimationStrategy, IndexRange, OHLC } from "./types";
@@ -60,7 +61,12 @@ function merge(data: OHLC[], start: number, end: number): OHLC {
     if (candle.high > high) high = candle.high;
     if (candle.low < low) low = candle.low;
     // Volume can be a gap. Sum only what's there, and leave it absent if none are.
-    if (!isGap(candle.volume)) volume = (volume ?? 0) + candle.volume;
+    if (!isGap(candle.volume)) {
+      volume = (volume ?? 0) + candle.volume;
+      if (!Number.isFinite(volume)) {
+        throw new DataError("OHLC aggregation volume must remain finite");
+      }
+    }
   }
 
   const candle: OHLC = {

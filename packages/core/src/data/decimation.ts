@@ -456,8 +456,32 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
      * kills the sweep. Opened separately, both only move forward, and
      * either pass gives the same answer.
      */
-    const placeOf = screenPlaceOf(this.coordinates, screenXScan);
-    const averagePlaceOf = screenPlaceOf(this.coordinates, screenXScan);
+    // Translate before scaling: dividing prices around a large offset first
+    // would discard the small, representable differences that define shape.
+    const boundsPlaceOf = screenPlaceOf(this.coordinates, screenXScan);
+    const firstX = boundsPlaceOf(data[start]);
+    const lastX = boundsPlaceOf(data[end - 1]);
+    const xSpan = lastX - firstX;
+    const xMagnitude = Math.max(Math.abs(firstX), Math.abs(lastX)) || 1;
+    const firstY = valueAt(this.coordinates, data[start]);
+    let ySpan = 0;
+    let yMagnitude = 0;
+    for (let i = start; i < end; i++) {
+      const value = valueAt(this.coordinates, data[i]);
+      ySpan = Math.max(ySpan, Math.abs(value - firstY));
+      yMagnitude = Math.max(yMagnitude, Math.abs(value));
+    }
+    const normalizeX = Number.isFinite(xSpan)
+      ? (value: number): number => (value - firstX) / (xSpan || 1)
+      : (value: number): number => value / xMagnitude - firstX / xMagnitude;
+    const normalizeY = Number.isFinite(ySpan)
+      ? (value: number): number => (value - firstY) / (ySpan || 1)
+      : (value: number): number => value / yMagnitude - firstY / yMagnitude;
+    const rawPlaceOf = screenPlaceOf(this.coordinates, screenXScan);
+    const rawAveragePlaceOf = screenPlaceOf(this.coordinates, screenXScan);
+    const placeOf = (point: T): number => normalizeX(rawPlaceOf(point));
+    const averagePlaceOf = (point: T): number => normalizeX(rawAveragePlaceOf(point));
+    const yOf = (point: T): number => normalizeY(valueAt(this.coordinates, point));
 
     const last = end - 1;
     // The first and last points are always kept, so only the middle is bucketed.
@@ -468,7 +492,7 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
     // bucket. The scoring loop already measured this value with the same
     // pass, so the answer is the same.
     let previousX = placeOf(data[start]);
-    let previousY = valueAt(this.coordinates, data[start]);
+    let previousY = yOf(data[start]);
 
     for (let i = 0; i < threshold - 2; i++) {
       const [avgX, avgY] = this.nextBucketAverage(
@@ -478,6 +502,7 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
         i,
         bucketSize,
         averagePlaceOf,
+        yOf,
       );
 
       const rangeStart = start + Math.floor(i * bucketSize) + 1;
@@ -490,7 +515,7 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
 
       for (let j = rangeStart; j < rangeEnd; j++) {
         const placeX = placeOf(data[j]);
-        const placeY = valueAt(this.coordinates, data[j]);
+        const placeY = yOf(data[j]);
         const area = triangleArea(
           previousX,
           previousY,
@@ -525,6 +550,7 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
     bucket: number,
     bucketSize: number,
     placeOf: (point: T) => number,
+    yOf: (point: T) => number,
   ): [number, number] {
     const from = start + Math.floor((bucket + 1) * bucketSize) + 1;
     const to = Math.min(start + Math.floor((bucket + 2) * bucketSize) + 1, end);
@@ -532,14 +558,14 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
 
     if (count <= 0) {
       const tail = data[end - 1];
-      return [placeOf(tail), valueAt(this.coordinates, tail)];
+      return [placeOf(tail), yOf(tail)];
     }
 
     let sumX = 0;
     let sumY = 0;
     for (let j = from; j < to; j++) {
       sumX += placeOf(data[j]);
-      sumY += valueAt(this.coordinates, data[j]);
+      sumY += yOf(data[j]);
     }
 
     return [sumX / count, sumY / count];
@@ -554,5 +580,5 @@ function triangleArea(
   x3: number,
   y3: number,
 ): number {
-  return Math.abs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2);
+  return Math.abs(((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) / 2);
 }

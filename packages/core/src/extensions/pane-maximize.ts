@@ -215,8 +215,9 @@ export function paneMaximize(
         return;
       }
 
+      const target = snapshot.target;
       const divergedElsewhere = plot.panes.some(
-        (pane) => pane !== snapshot!.target && pane.flex !== 0,
+        (pane) => pane !== target && pane.flex !== 0,
       );
       if (divergedElsewhere) {
         // flex changed from outside (a divider drag, etc.) — that's the new truth.

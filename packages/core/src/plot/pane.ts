@@ -388,7 +388,7 @@ export class Pane implements PaneApi {
       throw new ContractError("cannot install an extension on a detached pane");
     }
 
-    return install(this.plugins, this, plugin, "pane.use(plugin)");
+    return install(this.plugins, this, plugin, "pane.use(plugin)", () => !this.detached);
   }
 
   /**

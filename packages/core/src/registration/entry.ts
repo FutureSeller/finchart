@@ -304,13 +304,10 @@ export interface Entry {
    */
   swapSeries(next: SeriesId): void;
 
-  /**
-   * A data entry point with the point type erased. **`syncSeries`-only.**
-   * `syncSeries`'s contract is that the same id means the same slot and the
-   * same point type. TS has no existential type to write that fact down
-   * with, so it's confined to this one place.
-   */
-  feed(data: readonly BaseDataPoint[]): void;
+  /** Prepares a declarative replacement without touching this entry. The
+   * returned commit only assigns validated state and cannot call host code.
+   * Undefined data preserves the existing derivation; [] explicitly clears. */
+  prepare(next: SeriesId, data?: readonly BaseDataPoint[]): () => void;
 
   /** The x range of the drawn points. `null` if empty. */
   xRange(): Range | null;
@@ -1109,6 +1106,26 @@ function entryOf<
       };
     },
 
+    prepare(next, data) {
+      const nextSeries = requireSeries<TPoint>(next, "syncSeries(series)");
+      const [nextCoordinates, nextManager] = drawSide(nextSeries);
+      const nextSource = data === undefined ? source
+        : [...requireDataArray(data, "syncSeries(data)")] as TSource[];
+      const nextPoints = data === undefined ? [...points]
+        : owned(origin).toPoints(nextSource);
+      nextManager.setData(nextPoints);
+      const accepted = nextManager.read();
+      return () => {
+        series = nextSeries;
+        coordinates = nextCoordinates;
+        manager = nextManager;
+        points = accepted;
+        source = data !== undefined && owns(origin) && origin.identity
+          ? accepted as unknown as TSource[] : nextSource;
+        xsOf = null;
+      };
+    },
+
     swapSeries(next) {
       // **Stand up the representation first, then swap** — doing `series =
       // next` first would mean that if `swapSeries(candleSeries)` drops the
@@ -1122,15 +1139,12 @@ function entryOf<
        * back in, so the next tick's increment already sees the new manager.
        */
       const [nextCoordinates, nextManager] = drawSide(nextSeries);
-      nextManager.setData([...points] as TPoint[]);
+      nextManager.setData([...points]);
       series = nextSeries;
       coordinates = nextCoordinates;
       manager = nextManager;
       xsOf = null;
     },
-
-    feed: (data) =>
-      load([...requireDataArray(data, "feed(data)")] as TSource[]),
 
     setData: (data) => load([...requireDataArray(data, "setData(data)")]),
 

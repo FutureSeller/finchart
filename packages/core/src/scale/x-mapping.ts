@@ -1,4 +1,5 @@
 import type { Scale } from "./types";
+import { lerp, unlerp } from "./finite-lerp";
 
 /**
  * Where a data point's x lands on screen. This is everything a series
@@ -275,13 +276,13 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
    */
   const placeAt = (at: number, x: number): number => {
     const n = xs.length;
-    if (at === 0) return base + (x - xs[0]) / (xs[1] - xs[0]);
+    if (at === 0) return base + unlerp(xs[0], xs[1], x);
     if (at === n) {
-      return base + (n - 1) + (x - xs[n - 1]) / (xs[n - 1] - xs[n - 2]);
+      return base + (n - 1) - unlerp(xs[n - 1], xs[n - 2], x);
     }
     if (xs[at] === x) return base + at;
 
-    return base + (at - 1) + (x - xs[at - 1]) / (xs[at] - xs[at - 1]);
+    return base + (at - 1) + unlerp(xs[at - 1], xs[at], x);
   };
 
   /**
@@ -382,11 +383,11 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
     if (n === 1) return xs[0] + (value - base);
 
     const t = value - base;
-    if (t <= 0) return xs[0] + t * (xs[1] - xs[0]);
-    if (t >= n - 1) return xs[n - 1] + (t - (n - 1)) * (xs[n - 1] - xs[n - 2]);
+    if (t <= 0) return lerp(xs[0], xs[1], t);
+    if (t >= n - 1) return lerp(xs[n - 1], xs[n - 2], -(t - (n - 1)));
 
     const at = Math.floor(t);
-    return xs[at] + (t - at) * (xs[at + 1] - xs[at]);
+    return lerp(xs[at], xs[at + 1], t - at);
   };
 
   return {

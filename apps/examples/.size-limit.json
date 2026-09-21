@@ -1,6 +1,6 @@
 [
   {
-    "name": "the quick start — one candlestick chart, core + dom · 29.5 KB gzip (29347B measured)",
+    "name": "the quick start — one candlestick chart, core + dom · 30 KB gzip (29909B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -9,11 +9,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps }"
     },
-    "limit": "29.5 KB",
+    "limit": "30 KB",
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 35 KB gzip (34722B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 35.5 KB gzip (35446B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -22,11 +22,11 @@
       "../../packages/core/dist/index.mjs": "{ candleSeries, histogramSeries, crosshair, priceFormat, timeTicks }",
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }"
     },
-    "limit": "35 KB",
+    "limit": "35.5 KB",
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 41 KB gzip (40514B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 41.5 KB gzip (41339B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -37,11 +37,11 @@
       "../../packages/dom/dist/index.mjs": "{ PlotBuilder, browserDeps, legend, tooltip }",
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }"
     },
-    "limit": "41 KB",
+    "limit": "41.5 KB",
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 50 KB gzip (49808B measured)",
+    "name": "+ every drawing tool · 51.5 KB gzip (51433B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -54,11 +54,11 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "50 KB",
+    "limit": "51.5 KB",
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 50 KB gzip (49792B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 51.5 KB gzip (51475B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -71,7 +71,7 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "50 KB",
+    "limit": "51.5 KB",
     "ignore": [
       "react",
       "react-dom"

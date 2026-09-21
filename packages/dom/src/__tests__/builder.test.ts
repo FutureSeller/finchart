@@ -202,3 +202,15 @@ describe("PlotBuilder config", () => {
     expect(plot.getOptions().axis?.x?.showLabels ?? true).toBe(true);
   });
 });
+
+it("rolls back the plot and observer when initial registration fails", () => {
+  const { deps, factory } = withFakeLayers(testBrowserDeps());
+  let stopped = 0;
+  expect(() => PlotBuilder.create({
+    ...deps,
+    observeSize: () => () => { stopped++; },
+  }, lineSeries()).addDataPoints([{ x: 2, y: 2 }, { x: 1, y: 1 }]).build(fakeContainer())).toThrow(/sorted/);
+  expect(factory.created).toHaveLength(1);
+  expect(factory.created[0].destroyed).toBe(true);
+  expect(stopped).toBe(1);
+});

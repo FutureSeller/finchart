@@ -1,8 +1,9 @@
 import type { Pane, PaneOptions, Scale } from '@finchart/core';
 import { PANE_OPTION_DEFAULTS } from '@finchart/core';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import { PaneProvider, useChartApi } from './chart-context';
+import { useEffect, useId, useRef, useState } from 'react';
+import { PaneProvider, SeriesPlacementProvider, useChartApi, useSeriesPlacement } from './chart-context';
+import { createSeriesPlacement } from './series-collector';
 
 /*
  * There's no `axis` prop here. With two doors for configuring the value
@@ -71,6 +72,11 @@ export function ChartPane({
   children,
 }: ChartPaneProps) {
   const api = useChartApi('ChartPane');
+  const placementId = useId();
+  const parentPlacement = useSeriesPlacement();
+  // Reserve the subtree's JSX position even before this pane is acquired.
+  const prefix = parentPlacement?.place(placementId);
+  const placement = createSeriesPlacement(prefix ?? [Number.MAX_SAFE_INTEGER]);
   // biome-ignore lint/suspicious/noExplicitAny: the context erases the data type
   const [pane, setPane] = useState<Pane | null>(null);
 
@@ -118,16 +124,18 @@ export function ChartPane({
 
   // Children claim their slot here during the render phase, and it goes to the pane after commit.
   const collector = pane ? api.seriesCollector(pane) : null;
-  collector?.begin();
 
   // This pane gets applied even when a child skips rendering via `React.memo`.
   useEffect(() => {
+    placement.commit();
     collector?.flush();
   });
 
   if (!pane) return null;
 
-  return <PaneProvider value={pane}>{children}</PaneProvider>;
+  return <PaneProvider value={pane}>
+    <SeriesPlacementProvider value={placement}>{children}</SeriesPlacementProvider>
+  </PaneProvider>;
 }
 
 type PaneFields = Required<Pick<PaneOptions, 'flex' | 'minHeight' | 'valuePadding' | 'autoScale' | 'invert'>>;

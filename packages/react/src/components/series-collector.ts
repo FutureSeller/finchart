@@ -7,7 +7,7 @@ import type { BaseDataPoint, Pane, SeriesSpec } from '@finchart/core';
  * `syncSeries` treats array order as draw order, but effects run in mount
  * order, so a series switched on late by a condition always lands at the
  * end. Only the render phase knows the JSX order, so the slot gets
- * decided during render (`place`) and applying it to the chart is
+ * decided by a render-local placement pass and applying it to the chart is
  * deferred to after commit (`flush`).
  *
  * The key is holding the slot as a **rank**, not an array position — an
@@ -19,18 +19,6 @@ import type { BaseDataPoint, Pane, SeriesSpec } from '@finchart/core';
  * collector's.
  */
 export interface SeriesCollector<T extends BaseDataPoint> {
-  /** Render phase. Signals that the pane is starting to rebuild its children. */
-  begin(): void;
-
-  /**
-   * Render phase. Gets a rank for this pass.
-   *
-   * If the pane didn't render (a series that re-rendered on its own), the
-   * rank stays put and only the content is swapped — otherwise it would
-   * jump to the front on its own.
-   */
-  place(spec: SeriesSpec<T>): void;
-
   /**
    * Commit phase. Only confirms membership in the list. The rank is
    * whatever render already assigned, so it lands back in its place.
@@ -38,9 +26,9 @@ export interface SeriesCollector<T extends BaseDataPoint> {
    * StrictMode attaches, detaches, and reattaches an effect, so something
    * that left through cleanup has to come back without a render.
    */
-  keep(spec: SeriesSpec<T>): void;
+  keep(spec: SeriesSpec<T>, rank?: readonly number[]): void;
 
-  /** Unmount. Doesn't clear the rank right away — it might come back without a render. If it never does, the next `begin()` cleans it up. */
+  /** Unmount. A replayed effect carries its captured rank when it reattaches. */
   remove(id: string): void;
 
   /** After commit. Hands the current list to the pane. Safe to call more than once. */
@@ -50,93 +38,46 @@ export interface SeriesCollector<T extends BaseDataPoint> {
 export function createSeriesCollector<T extends BaseDataPoint>(
   pane: Pane,
 ): SeriesCollector<T> {
-  /** What's mounted on the chart. **Only what an effect has admitted lives here** → see `place`. */
+  /** What's mounted on the chart. Only a committed effect admits a spec. */
   const specs = new Map<string, SeriesSpec<T>>();
   /** Which position it was in JSX. The only basis for deciding a slot. */
-  const ranks = new Map<string, number>();
+  const ranks = new Map<string, readonly number[]>();
   /** The order last applied to the chart. The tiebreaker when ranks are equal. */
   let order: string[] = [];
 
-  /** Whether we're in the render phase. */
-  let placing = false;
-  /** The rank handed out during this render. */
-  let next = 0;
   /** Whether anything has ever been applied to the chart → see `flush` below. */
   let owned = false;
   /** The largest rank assigned in `ranks` so far. `rankOf` uses it to pick the next slot. */
   let maxRank = -1;
 
-  const setRank = (id: string, value: number): void => {
+  const setRank = (id: string, value: readonly number[]): void => {
     ranks.set(id, value);
-    if (value > maxRank) maxRank = value;
+    if (value[0] > maxRank) maxRank = value[0];
   };
 
   /** Sends anything render didn't assign a slot to, to the back. */
-  const rankOf = (id: string): number => {
+  const rankOf = (id: string): readonly number[] => {
     const known = ranks.get(id);
     if (known !== undefined) return known;
 
-    const assigned = maxRank + 1;
+    const assigned = [maxRank + 1];
     setRank(id, assigned);
     return assigned;
   };
 
   return {
-    begin() {
-      // If something above (`<ChartContainer>`) already opened it, carry that rank forward.
-      if (placing) return;
-
-      /**
-       * Cleans up whatever dropped out in the last cycle and hasn't come
-       * back.
-       *
-       * `remove` doesn't clear the rank — because a StrictMode
-       * double-mount that reattaches without a render needs to find its
-       * own slot again. That return (`keep`) always finishes before the
-       * next `begin()`, so if it's not in `specs` here, it really hasn't
-       * come back. Leave it uncleared and, on a screen where the series
-       * keep changing — a watchlist, say — `ranks` would keep growing for
-       * the whole session.
-       */
-      for (const id of ranks.keys()) {
-        if (!specs.has(id)) ranks.delete(id);
-      }
-
-      placing = true;
-      next = 0;
-    },
-
-    /**
-     * Only decides the slot. **Admitting it into the list is the
-     * effect's job.**
-     *
-     * **Rendering doesn't guarantee a commit.** A child inside `<Activity
-     * mode="hidden">` renders but its effect doesn't run — admitting it
-     * into the list during the render phase would put a series that was
-     * never mounted onto the chart. Effects only run on the path that
-     * survives, so that's used as the witness of identity.
-     *
-     * Something already alive only gets its content updated — a
-     * re-render where only the style changed is that case.
-     */
-    place(spec) {
-      if (specs.has(spec.id)) specs.set(spec.id, spec);
-      if (placing) setRank(spec.id, next++);
-    },
-
-    keep(spec) {
+    keep(spec, rank) {
+      if (rank !== undefined) setRank(spec.id, rank);
       specs.set(spec.id, spec);
       rankOf(spec.id);
     },
 
     remove(id) {
       specs.delete(id);
-      // The rank isn't cleared here — the next `begin()` filters out only what never came back.
+      ranks.delete(id);
     },
 
     flush() {
-      placing = false;
-
       // Rebuilds using only the rank, while keeping the previous order.
       // Since `sort` is stable, entries with the same rank (ones that
       // didn't take part in this render) keep their place.
@@ -146,7 +87,7 @@ export function createSeriesCollector<T extends BaseDataPoint>(
       for (const id of specs.keys()) {
         if (!known.has(id)) live.push(id);
       }
-      live.sort((a, b) => rankOf(a) - rankOf(b));
+      live.sort((a, b) => compareRank(rankOf(a), rankOf(b)));
       order = live;
 
       const list: SeriesSpec<T>[] = [];
@@ -164,5 +105,34 @@ export function createSeriesCollector<T extends BaseDataPoint>(
       owned = true;
       pane.syncSeries(list);
     },
+  };
+}
+
+/** JSX paths order a pane subtree between the siblings on either side. */
+function compareRank(a: readonly number[], b: readonly number[]): number {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return a.length - b.length;
+}
+
+/** A render owns its cursor. An abandoned render cannot change another pass. */
+export interface SeriesPlacement {
+  place(id: string): readonly number[] | undefined;
+  commit(): void;
+}
+
+export function createSeriesPlacement(prefix: readonly number[] = []): SeriesPlacement {
+  const positions = new Map<string, readonly number[]>();
+  let committed = false;
+  return {
+    place(id) {
+      const known = positions.get(id);
+      if (known || committed) return known;
+      const rank = [...prefix, positions.size];
+      positions.set(id, rank);
+      return rank;
+    },
+    commit() { committed = true; },
   };
 }

@@ -1,6 +1,6 @@
 import type { BaseDataPoint, Pane, PaneOptions, Plot, Scale } from '@finchart/core';
 import { createContext, useContext } from 'react';
-import type { SeriesCollector } from './series-collector';
+import type { SeriesCollector, SeriesPlacement } from './series-collector';
 
 /**
  * The channel children use to register themselves onto the chart.
@@ -38,6 +38,7 @@ const ChartContext = createContext<ChartApi<any> | null>(null);
 
 // biome-ignore lint/suspicious/noExplicitAny: same as above
 const PaneContext = createContext<Pane | null>(null);
+const SeriesPlacementContext = createContext<SeriesPlacement | null>(null);
 
 /**
  * The `data` the container received. **Kept separate from the api on purpose.**
@@ -53,6 +54,11 @@ const DataContext = createContext<any[]>([]);
 export const ChartProvider = ChartContext.Provider;
 export const PaneProvider = PaneContext.Provider;
 export const ChartDataProvider = DataContext.Provider;
+export const SeriesPlacementProvider = SeriesPlacementContext.Provider;
+
+export function useSeriesPlacement(): SeriesPlacement | null {
+  return useContext(SeriesPlacementContext);
+}
 /** Exposed because `<YAxis>` has to tell on its own whether it's inside a pane or not. */
 export const PaneContextValue = PaneContext;
 
@@ -111,4 +117,3 @@ export function useSeriesCollector<T extends BaseDataPoint = BaseDataPoint>(
   const pane = useContext(PaneContext) ?? api.plot.mainPane;
   return api.seriesCollector(pane);
 }
-

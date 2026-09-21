@@ -1,5 +1,6 @@
 import type { LineStyle } from "@finchart/core";
 import { ContractError } from "@finchart/core";
+import { midpoint, translatedDifference } from "./numeric";
 
 /**
  * A drawing is pure data in domain coordinates: x is the data's x —
@@ -352,7 +353,10 @@ export function fibLevels(
  */
 export function fibLevelPrice(drawing: FibRetracement, level: number): number {
   const { a, b } = drawing;
-  if (drawing.levelSpacing !== "log") return b.price + (a.price - b.price) * level;
+  if (drawing.levelSpacing !== "log") {
+    if (level === 1) return a.price;
+    return translatedDifference(b.price, a.price, b.price, level);
+  }
   // The anchors' own levels are the anchors, whatever their prices are.
   if (level === 0) return b.price;
   if (level === 1) return a.price;
@@ -495,7 +499,7 @@ export function fibExtensionPrice(
   level: number,
 ): number {
   const { a, b, c } = drawing;
-  if (drawing.levelSpacing !== "log") return c.price + (b.price - a.price) * level;
+  if (drawing.levelSpacing !== "log") return translatedDifference(c.price, b.price, a.price, level);
   // Level 0 is c itself. Level 1 is `c·b/a` — a log level like any other.
   if (level === 0) return c.price;
   return logSpaced(c.price, b.price, a.price, level);
@@ -526,10 +530,16 @@ export function channelParallel(
       { x: c.x, price: b.price },
     ];
   }
-  const slope = (b.price - a.price) / (b.x - a.x);
+  const ratio = (x: number): number => {
+    const span = b.x - a.x;
+    const offset = x - c.x;
+    return Number.isFinite(span) && Number.isFinite(offset)
+      ? offset / span
+      : (x / 2 - c.x / 2) / (b.x / 2 - a.x / 2);
+  };
   return [
-    { x: a.x, price: c.price + (a.x - c.x) * slope },
-    { x: b.x, price: c.price + (b.x - c.x) * slope },
+    { x: a.x, price: translatedDifference(c.price, b.price, a.price, ratio(a.x)) },
+    { x: b.x, price: translatedDifference(c.price, b.price, a.price, ratio(b.x)) },
   ];
 }
 
@@ -544,11 +554,11 @@ export function pitchforkLines(
   drawing: Pick<Pitchfork, "a" | "b" | "c">,
 ): [Anchor, Anchor][] {
   const { a, b, c } = drawing;
-  const dx = (b.x + c.x) / 2 - a.x;
-  const dprice = (b.price + c.price) / 2 - a.price;
+  const midX = midpoint(b.x, c.x);
+  const midPrice = midpoint(b.price, c.price);
   const along = (from: Anchor): [Anchor, Anchor] => [
     { x: from.x, price: from.price },
-    { x: from.x + dx, price: from.price + dprice },
+    { x: translatedDifference(from.x, midX, a.x, 1), price: translatedDifference(from.price, midPrice, a.price, 1) },
   ];
   return [along(a), along(b), along(c)];
 }
@@ -733,10 +743,14 @@ function dedupeIds(drawings: Drawing[]): Drawing[] {
       return drawing;
     }
     let suffix = 2;
-    let candidate = `${drawing.id}#${suffix}`;
+    const renamed = (): string => {
+      const tail = `#${suffix}`;
+      return `${drawing.id.slice(0, 128 - tail.length)}${tail}`;
+    };
+    let candidate = renamed();
     while (taken.has(candidate)) {
       suffix += 1;
-      candidate = `${drawing.id}#${suffix}`;
+      candidate = renamed();
     }
     taken.add(candidate);
     seen.add(candidate);

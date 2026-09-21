@@ -9,7 +9,6 @@ import type {
 } from "@finchart/core";
 import { computation, ContractError, reuseUnchanged } from "@finchart/core";
 import {
-  decayHorizon,
   ema,
   highest,
   lowest,
@@ -24,6 +23,7 @@ import {
 import type { ExtremumFold, LagFold, LinregFold, RecursiveFold, RecursiveState, SeededRecursiveFold, SmaFold, StddevFold, SumFold } from "./kernels";
 import {
   assertDisplacement,
+  assertPeriod,
   assertFourPeriods,
   describeValue,
   committable,
@@ -64,7 +64,12 @@ function points<T extends BaseDataPoint>(
   source: readonly T[],
   values: readonly (number | null)[],
 ): LineDataPoint[] {
-  return source.map((point, index) => ({ x: point.x, y: values[index] }));
+  return source.map((point, index) => ({ x: point.x, y: reading(values[index]) }));
+}
+
+/** The same finite-or-null boundary as foldNode, for recomputing factories. */
+function reading(value: number | null): number | null {
+  return value === null || committable(value) ? value : null;
 }
 
 /**
@@ -185,19 +190,11 @@ export function movingAverage<T extends BaseDataPoint>(
       return { ma: previous.ma.slice(0, keep).concat(tail) };
     },
 
-    /**
-     * A landing corrects the window's warmup for an sma and the decay
-     * horizon for an ema — past that horizon the restarted fold agrees
-     * with the old values to below the landing bound. `headLookback`'s
-     * generic interpreter does the rest (prefix rerun, tail reuse). That
-     * prefix rerun is a real call to `calc`, so `beforeLast`/`atEnd` then
-     * describe the prefix's end — stale for the tail. The node knows: the
-     * first tick after a landing is a full `calc`, which takes them fresh
-     * again over the whole input.
-     */
+    // Only the finite SMA window has a bounded head correction. Recursive
+    // state retains arbitrary historical seed magnitudes and can pause at gaps.
     headLookback:
       (options.type ?? MOVING_AVERAGE_DEFAULTS.type) === "ema"
-        ? decayHorizon(2 / (options.period + 1))
+        ? undefined
         : options.period - 1,
   });
 }
@@ -277,7 +274,7 @@ export function macd<T extends BaseDataPoint>(
     const fastValue = folds.fast.step(raw);
     const slowValue = folds.slow.step(raw);
     const macdValue =
-      fastValue === null || slowValue === null ? null : fastValue - slowValue;
+      fastValue === null || slowValue === null ? null : reading(fastValue - slowValue);
     const signalValue = folds.signal.step(macdValue);
     return {
       macd: macdValue,
@@ -285,7 +282,7 @@ export function macd<T extends BaseDataPoint>(
       histogram:
         macdValue === null || signalValue === null
           ? null
-          : macdValue - signalValue,
+          : reading(macdValue - signalValue),
     };
   };
 
@@ -353,15 +350,6 @@ export function macd<T extends BaseDataPoint>(
         histogram: previous.histogram.slice(0, keep).concat(histogramTail),
       };
     },
-
-    /**
-     * A landing's corrected zone stacks the chained memories: the slow
-     * EMA's horizon to settle the macd line, plus the signal EMA's
-     * horizon on top of that settled line, plus the one-bar diff the
-     * histogram's tone remembers.
-     */
-    headLookback:
-      decayHorizon(2 / (slow + 1)) + decayHorizon(2 / (signalPeriod + 1)) + 1,
   });
 }
 
@@ -426,13 +414,13 @@ export function bollingerBands<T extends BaseDataPoint>(
         const width = spread[index];
         return mean === null || width === null
           ? null
-          : mean + multiplier * width;
+          : reading(mean + multiplier * width);
       });
       const lower = middle.map((mean, index) => {
         const width = spread[index];
         return mean === null || width === null
           ? null
-          : mean - multiplier * width;
+          : reading(mean - multiplier * width);
       });
 
       return {
@@ -478,11 +466,10 @@ export function rsi<T extends BaseDataPoint>(
   requireOptions(options, "rsi");
   const value = options.value ?? (closeOf as unknown as ValueAccessor<T>);
   const period = options.period ?? RSI_DEFAULTS.period;
+  assertPeriod(period);
 
   return computation(recomputing({
     inputs: [source],
-    /** Wilder smoothing's decay horizon, plus one bar for the diff. */
-    headLookback: decayHorizon(1 / period) + 1,
     calc: (data) => {
       const values = valuesOf(data, value);
 
@@ -528,11 +515,10 @@ export type Atr = Computation<{ atr: LineDataPoint[] }>;
 export function atr(source: Source<OHLC>, options: AtrOptions = {}): Atr {
   requireOptions(options, "atr");
   const period = options.period ?? ATR_DEFAULTS.period;
+  assertPeriod(period);
 
   return computation(recomputing({
     inputs: [source],
-    /** Wilder smoothing's decay horizon, plus one bar for the true range. */
-    headLookback: decayHorizon(1 / period) + 1,
     calc: (data) => ({ atr: points(data, rma(trueRanges(data), period)) }),
   }));
 }
@@ -562,11 +548,10 @@ export type Adx = Computation<{
 export function adx(source: Source<OHLC>, options: AdxOptions = {}): Adx {
   requireOptions(options, "adx");
   const period = options.period ?? ADX_DEFAULTS.period;
+  assertPeriod(period);
 
   return computation(recomputing({
     inputs: [source],
-    /** Two chained Wilder smoothings (DI, then ADX), plus one bar for the DM diff. */
-    headLookback: decayHorizon(1 / period) * 2 + 1,
     calc: (data) => {
       const plusDm: (number | null)[] = new Array(data.length).fill(null);
       const minusDm: (number | null)[] = new Array(data.length).fill(null);
@@ -768,7 +753,7 @@ export function ichimoku(
       const bottom = lowest(lows, period);
       return top.map((high, index) => {
         const low = bottom[index];
-        return high === null || low === null ? null : (high + low) / 2;
+        return high === null || low === null ? null : reading((high + low) / 2);
       });
     };
 
@@ -776,7 +761,7 @@ export function ichimoku(
     const baseline = midline(basePeriod);
     const rawSpanA = conversion.map((fast, index) => {
       const slow = baseline[index];
-      return fast === null || slow === null ? null : (fast + slow) / 2;
+      return fast === null || slow === null ? null : reading((fast + slow) / 2);
     });
     const rawSpanB = midline(spanPeriod);
 
@@ -943,9 +928,17 @@ export function vwap(source: Source<OHLC>, options: VwapOptions = {}): Vwap {
         }
 
         const typical = (candle.high + candle.low + candle.close) / 3;
-        weighted += typical * volume;
-        total += volume;
-        out[index] = total === 0 ? null : weighted / total;
+        const nextWeighted = weighted + typical * volume;
+        const nextTotal = total + volume;
+        if (!committable(nextWeighted) || !committable(nextTotal)) {
+          // An unknown contribution makes this session's weights unknown,
+          // just as missing volume does. The next anchor starts afresh.
+          broken = true;
+          continue;
+        }
+        weighted = nextWeighted;
+        total = nextTotal;
+        out[index] = total === 0 ? null : reading(weighted / total);
       }
 
       return { vwap: points(data, out) };
@@ -978,14 +971,16 @@ export function obv(source: Source<OHLC>): Obv {
 
       for (let index = 0; index < data.length; index++) {
         const volume = volumeOf(data[index]);
-        if (volume === null) continue;
+        if (volume === null || !committable(volume)) continue;
 
         if (state === null) {
           state = volume;
         } else {
           const change = data[index].close - data[index - 1].close;
-          if (change > 0) state += volume;
-          else if (change < 0) state -= volume;
+          const next: number = change > 0 ? state + volume : change < 0 ? state - volume : state;
+          // Skip an unrepresentable contribution without poisoning later bars.
+          if (!committable(next)) continue;
+          state = next;
         }
         out[index] = state;
       }
@@ -1095,8 +1090,6 @@ export function stochasticRsi(
       const d = f.d.step(k);
       return { k, d };
     },
-    /** The RSI's decay horizon and its one-bar diff, then the three windows stacked on it. */
-    headLookback: decayHorizon(1 / rsiPeriod) + 1 + (period - 1) + (smooth - 1) + (signal - 1),
   });
 }
 
@@ -1413,8 +1406,6 @@ export function elderRay(source: Source<OHLC>, options: ElderRayOptions = {}): E
         bearPower: average === null ? null : candle.low - average,
       };
     },
-    /** The ema's decay horizon. */
-    headLookback: decayHorizon(2 / (period + 1)),
   });
 }
 
@@ -1686,8 +1677,6 @@ export function trix(source: Source<OHLC>, options: TrixOptions = {}): Trix {
       const value = tr === null || previous === null || previous === 0 ? null : ((tr - previous) / previous) * 100;
       return { trix: value, signal: f.signal.step(value) };
     },
-    /** Three chained ema horizons, plus the one-bar diff, plus the signal window. */
-    headLookback: 3 * decayHorizon(2 / (period + 1)) + 1 + (signal - 1),
   });
 }
 
@@ -2636,11 +2625,11 @@ export function keltnerChannels(
   const multiplier = options.multiplier ?? KELTNER_DEFAULTS.multiplier;
   assertRatio(multiplier, "multiplier", "keltnerChannels");
   const atrPeriod = options.atrPeriod ?? KELTNER_DEFAULTS.atrPeriod;
+  assertPeriod(period);
+  assertPeriod(atrPeriod);
 
   return computation(recomputing({
     inputs: [source],
-    /** The wider of the two parallel memories (EMA middle, Wilder ATR width), plus one bar for the true range. */
-    headLookback: Math.max(decayHorizon(2 / (period + 1)), decayHorizon(1 / atrPeriod)) + 1,
     calc: (data) => {
       const middle = ema(data.map((candle) => candle.close), period);
       const width = rma(trueRanges(data), atrPeriod);
@@ -2650,7 +2639,7 @@ export function keltnerChannels(
           const range = width[index];
           return center === null || range === null
             ? null
-            : center + sign * multiplier * range;
+            : reading(center + sign * multiplier * range);
         });
       const upper = edge(1);
       const lower = edge(-1);

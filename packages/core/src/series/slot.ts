@@ -119,31 +119,44 @@ function pixelGaps<T extends BaseDataPoint>(
  * Picks the median without sorting (quickselect).
  *
  * This runs every frame, so it trades an O(n log n) sort for O(n)
- * average. `values` gets shuffled inside this function, so the caller's
+ * average, with a bounded O(n log n) fallback. Equal gaps take one pass.
+ * `values` gets shuffled inside this function, so the caller's
  * array must not be reused afterward.
  */
 function median(values: number[]): number {
   const target = Math.floor(values.length / 2);
   let low = 0;
   let high = values.length - 1;
+  let budget = values.length * 4;
 
   while (low < high) {
-    const pivot = values[high];
-    let split = low;
-
-    for (let i = low; i < high; i++) {
-      if (values[i] < pivot) {
-        [values[i], values[split]] = [values[split], values[i]];
-        split += 1;
+    // Bound even adversarial pivot sequences; ordinary equal spacing is
+    // consumed by the equal partition in a single linear pass.
+    budget -= high - low + 1;
+    if (budget < 0) {
+      return values.slice(low, high + 1).sort((a, b) => a - b)[target - low];
+    }
+    const middle = (low + high) >>> 1;
+    const a = values[low], b = values[middle], c = values[high];
+    const pivot = Math.max(Math.min(a, b), Math.min(Math.max(a, b), c));
+    let less = low;
+    let at = low;
+    let greater = high;
+    while (at <= greater) {
+      if (values[at] < pivot) {
+        [values[at], values[less]] = [values[less], values[at]];
+        less++;
+        at++;
+      } else if (values[at] > pivot) {
+        [values[at], values[greater]] = [values[greater], values[at]];
+        greater--;
+      } else {
+        at++;
       }
     }
-
-    [values[high], values[split]] = [values[split], values[high]];
-
-    if (split === target) return values[split];
-    if (split < target) low = split + 1;
-    else high = split - 1;
+    if (target < less) high = less - 1;
+    else if (target > greater) low = greater + 1;
+    else return pivot;
   }
-
   return values[target];
 }

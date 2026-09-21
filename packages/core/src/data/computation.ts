@@ -94,7 +94,7 @@ export interface ComputationSpec<
    * one output per input position, left to right. Declare how far back a
    * landing corrects (a window's warmup, a recursion's decay horizon) and
    * the node lands pages by itself: it re-runs `calc` on the prefix
-   * (`count + headLookback` positions — a landing's resume point is the
+   * (`count + input corrections + headLookback` positions — a landing's resume point is the
    * beginning of time, so no checkpoint is needed) and reuses each
    * branch's tail as is.
    *
@@ -289,17 +289,20 @@ export function computation<
     changes: readonly ({ kind: "none" } | HeadChange)[],
   ): TOut | null => {
     let count = -1;
+    let inputCorrected = 0;
     for (const change of changes) {
       if (change.kind !== "prepend") return null;
       if (count === -1) count = change.count;
       else if (change.count !== count) return null;
+      inputCorrected = Math.max(inputCorrected, change.corrected);
     }
     if (count <= 0) return null;
 
     const look = typeof headLookback === "function" ? headLookback() : headLookback;
     if (look === undefined || !Number.isInteger(look) || look < 0) return null;
 
-    const upto = count + look;
+    // Corrections from an upstream node also influence this node's window.
+    const upto = count + inputCorrected + look;
     const expected = Math.min(upto, values[0]?.length ?? 0);
     if (expected < count) return null;
     // Every sliced prefix must be the same length — with inputs of

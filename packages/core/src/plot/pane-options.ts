@@ -114,7 +114,7 @@ export function settleOptions(options: PaneOptions): PaneSettings {
     autoScale: options.autoScale ?? PANE_OPTION_DEFAULTS.autoScale,
     flex: options.flex ?? PANE_OPTION_DEFAULTS.flex,
     minHeight: options.minHeight ?? PANE_OPTION_DEFAULTS.minHeight,
-    axis: options.axis ?? {},
+    axis: { ...options.axis },
     invert: options.invert ?? PANE_OPTION_DEFAULTS.invert,
     stateKey: options.stateKey ?? null,
   };

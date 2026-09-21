@@ -29,8 +29,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/headless.ts src/authoring.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/headless.ts src/authoring.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/headless.ts src/authoring.ts --format esm --unbundle --dts",
+    "dev": "tsdown src/index.ts src/headless.ts src/authoring.ts --format esm --unbundle --dts --watch",
     "lint": "oxlint src",
     "type-check": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",

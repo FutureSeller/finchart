@@ -30,10 +30,6 @@ export const createDomLayers = (
 
   const document = container.ownerDocument;
 
-  if (!container.style.position) {
-    container.style.position = "relative";
-  }
-
   const canvas = document.createElement("canvas");
   canvas.style.position = "absolute";
   canvas.style.top = "0";
@@ -43,9 +39,6 @@ export const createDomLayers = (
   overlay.style.position = "absolute";
   overlay.style.inset = "0";
   overlay.style.pointerEvents = "none";
-
-  container.appendChild(canvas);
-  container.appendChild(overlay);
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -95,6 +88,19 @@ export const createDomLayers = (
   };
 
   sizeBackingStore();
+
+  // Prepare the surfaces before publishing DOM children. A missing context
+  // or backing-store failure leaves the caller's container untouched.
+  const position = container.style.position;
+  try {
+    container.appendChild(canvas);
+    container.appendChild(overlay);
+    if (!position) container.style.position = "relative";
+  } catch (error) {
+    canvas.remove();
+    overlay.remove();
+    throw error;
+  }
 
   return {
     data: {

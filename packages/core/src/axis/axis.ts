@@ -32,9 +32,12 @@ export function autoTickStep(options: {
 
   const spacing =
     options.minTickSpacing ?? MIN_TICK_SPACING[options.orientation];
-  const fits = Math.max(1, Math.floor(Math.abs(options.pixels) / spacing));
+  const fits = Math.min(1000, Math.max(1, Math.floor(Math.abs(options.pixels) / spacing)));
 
-  return Math.max(niceInterval(range / fits), options.minInterval ?? 0);
+  const raw = Number.isFinite(range)
+    ? range / fits
+    : (options.max / 2 - options.min / 2) / (fits / 2);
+  return Math.max(niceInterval(Math.max(Number.MIN_VALUE, Math.min(Number.MAX_VALUE, raw))), options.minInterval ?? 0);
 }
 
 export class Axis {
@@ -89,7 +92,10 @@ export class Axis {
     const step = this.tickInterval;
     if (!(step > 0) || !Number.isFinite(step)) return;
 
-    const first = Math.ceil(this.min / step) * step;
+    let first = Math.ceil(this.min / step) * step;
+    // A step finer than the domain's ULP cannot be aligned by division.
+    if (!Number.isFinite(first)) first = this.min;
+    if (first < this.min) first += step;
 
     /**
      * Defense in depth. `Scale.setDomain` already blocks a degenerate
@@ -100,14 +106,24 @@ export class Axis {
      * than anyone can read, so more than that means the math is wrong.
      */
     const MAX_TICKS = 1000;
-    const count = Math.min(
-      Math.floor((this.max - first) / step) + 1,
-      MAX_TICKS,
-    );
+    const span = this.max - first;
+    const intervals = Number.isFinite(span)
+      ? span / step
+      : (this.max / 2 - first / 2) / (step / 2);
+    const count = Math.min(Math.floor(intervals) + 1, MAX_TICKS);
 
     for (let index = 0; index < count; index++) {
       // Multiplication instead of accumulating addition — error doesn't build up.
-      const value = withoutFloatNoise(first + index * step);
+      const grown = index * step;
+      const exact = Number.isFinite(grown)
+        ? first + grown
+        : (first / 2 + index * (step / 2)) * 2;
+      const rounded = withoutFloatNoise(exact);
+      // Cosmetic rounding must not erase distinctions the interval names.
+      const value = Math.abs(rounded - exact) <= step * 1e-6 && rounded >= this.min && rounded <= this.max
+        ? rounded : exact;
+      if (!Number.isFinite(value) || value < this.min || value > this.max) continue;
+      if (this.ticks.length > 0 && value <= this.ticks[this.ticks.length - 1].value) continue;
 
       this.ticks.push({
         value,

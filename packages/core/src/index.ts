@@ -28,8 +28,8 @@
  * is exported: use what `plot.mainPane` or `addPane()` gives you.
  *
  * **`Entry` and `TypedEntry` are deliberately absent.** That's where the
- * point-type seal would leak: `Entry.feed` is a cast hole whose own
- * comment says "for `syncSeries` only," and `swapSeries` stands on an
+ * point-type seal would leak: `Entry.prepare` stages type-erased data
+ * for `syncSeries` only, and `swapSeries` stands on an
  * unwritable contract — "the same id means the same point type." Calling
  * either from outside just breaks the seal. As long as a consumer builds
  * a `SeriesSpec` through `seriesSpec()` instead of by hand, there's never

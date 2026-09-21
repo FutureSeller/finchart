@@ -148,7 +148,7 @@ export function resolveStyle<Spec>(
   read: StyleReader,
   overrides?: StyleOverridesOf<Spec>,
 ): StyleOf<Spec> {
-  const out = {} as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
   const over = (overrides ?? {}) as Record<string, unknown>;
 
   for (const key in spec) {

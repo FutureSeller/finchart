@@ -76,7 +76,9 @@ export function priceFormat(
   const base = numberFormat(
     compact
       ? { notation: "compact", maximumFractionDigits: Math.min(decimals, 1) }
-      : {
+      : decimals > 100
+        ? { notation: "scientific", maximumSignificantDigits: 17 }
+        : {
           minimumFractionDigits: decimals,
           maximumFractionDigits: decimals,
         },
@@ -98,10 +100,9 @@ export function priceFormat(
   const plainWith = (digits: number): Intl.NumberFormat => {
     let format = variants.get(digits);
     if (!format) {
-      format = new Intl.NumberFormat(locale, {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-      });
+      format = numberFormat(digits > 100
+        ? { notation: "scientific", maximumSignificantDigits: 17 }
+        : { minimumFractionDigits: digits, maximumFractionDigits: digits });
       variants.set(digits, format);
     }
     return format;
@@ -110,7 +111,7 @@ export function priceFormat(
   return (value, step) => {
     const snapped =
       minMove !== undefined && minMove > 0
-        ? Math.round(value / minMove) * minMove
+        ? snapToMove(value, minMove)
         : value;
 
     if (stepAware && step !== undefined && step > 0) {
@@ -134,9 +135,19 @@ export function priceFormat(
   };
 }
 
-/** 0.05 → 2, 0.001 → 3, 1 → 0. Floating-point noise is cut off at 8 digits. */
-function decimalsOf(minMove: number): number {
-  const text = minMove.toFixed(8).replace(/0+$/, "");
-  const dot = text.indexOf(".");
-  return dot === -1 ? 0 : text.length - dot - 1;
+/** Count decimal places without discarding valid ticks below 1e-8. */
+function decimalsOf(move: number): number {
+  // Fifteen significant digits remove arithmetic noise, not leading zeros.
+  const [coefficient, exponent = "0"] = Number(move.toPrecision(15)).toString().split("e");
+  const fraction = coefficient.split(".")[1]?.length ?? 0;
+  return Math.max(0, fraction - Number(exponent));
+}
+
+function snapToMove(value: number, move: number): number {
+  const units = value / move;
+  // At this magnitude a step is below the value's representable resolution.
+  if (!Number.isFinite(units)) return value;
+  const snapped = Math.round(units) * move;
+  // A finite price must never be displayed as infinity through rounding.
+  return Number.isFinite(value) && !Number.isFinite(snapped) ? value : snapped;
 }

@@ -269,3 +269,16 @@ describe("the backing store is only reacquired when it needs to be", () => {
     expect(transforms).toEqual([[3, 0, 0, 3, 0, 0]]);
   });
 });
+
+it("does not publish children or change container style when context acquisition fails", () => {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  expect(() => createDomLayers(container, 100, 100)).toThrow(/2D context/);
+  expect(container.childElementCount).toBe(0);
+  expect(container.style.position).toBe("");
+});
+
+it("does not publish children when backing store initialization throws", () => {
+  fakeContext.setTransform = () => { throw new Error("transform failed"); };
+  expect(() => createDomLayers(container, 100, 100)).toThrow(/transform failed/);
+  expect(container.childElementCount).toBe(0);
+});

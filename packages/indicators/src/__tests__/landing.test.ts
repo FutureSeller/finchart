@@ -1,14 +1,7 @@
 /**
- * A history page landing on the published indicators — the head door
- * (`calcFirst`) must carry it: no full recomputation, values that agree
- * with a cold full computation within the landing contract's bound.
- *
- * The bound (1e-9 relative) is the real contract, not a softened one: a
- * landing restarts the fold on a new prefix, and a running-sum or
- * recursive kernel's rounding path is history-dependent, so the last bits
- * legitimately drift with how history arrived. Every bug this file exists
- * to catch (a stale head, a shifted window, warmup nulls left behind)
- * moves values by five-plus orders of magnitude more.
+ * History pages agree with a cold full computation. Finite-window nodes
+ * also retain the untouched tail; recursive nodes recompute the history
+ * because seed magnitude and missing observations have no fixed horizon.
  */
 import { describe, expect, it } from "vitest";
 import type { OHLC, Source } from "@finchart/core";
@@ -107,24 +100,11 @@ function expectClose(
 const closes = (data: readonly OHLC[]) => data.map((point) => point.close);
 
 /**
- * Every doored indicator, against a cold node given the full history at
- * once — the factory itself is the reference, so a wrong `headLookback`
- * declaration reds here without any hand-rolled formula (proven by
- * mutation: shrinking a horizon by one fails its row).
+ * Compare every output field with a cold node. AO and Squeeze include the
+ * prior histogram bar in their finite lookback so their tones agree too.
  */
-/*
- * The toned histograms (macd, awesomeOscillator, squeezeMomentum) declare
- * one more bar — a tone remembers the bar before it. Every field is
- * compared, so the AO and Squeeze rows go red without that `+ 1`. The
- * macd row cannot tell: its EMA horizons settle the value to 1e-12, and a
- * tone flips only when the true one-bar difference sits below that — a
- * band no finite horizon closes. The `+ 1` stays for the rule's sake.
- * The same holds for every recursive lookback here — trix's three chained
- * ema horizons settle its value the same way, so shrinking that row's
- * declaration by one does not go red either (recorded, not a gap).
- */
-describe("every doored indicator lands within the bound", () => {
-  const doored: [string, (source: Source<OHLC>) => Computation<Record<string, { x: number }[]>>][] = [
+describe("every indicator landing agrees with a cold computation", () => {
+  const factories: [string, (source: Source<OHLC>) => Computation<Record<string, { x: number }[]>>][] = [
     ["movingAverage sma", (s) => movingAverage(s, { period: 14 })],
     ["movingAverage ema", (s) => movingAverage(s, { period: 14, type: "ema" })],
     ["macd", (s) => macd(s, {})],
@@ -158,7 +138,9 @@ describe("every doored indicator lands within the bound", () => {
     // so does kdj (its recursions' memory is counted in observations, and a flat stretch holds it).
   ];
 
-  it.each(doored)("%s", (_name, make) => {
+  const recursive = new Set(["movingAverage ema", "macd", "rsi", "atr", "adx", "keltnerChannels", "stochasticRsi", "elderRay", "trix"]);
+
+  it.each(factories)("%s", (name, make) => {
     const f = feed(bars(2000, 6000));
     const landed = make(f.source);
     const branches = Object.keys(landed.out);
@@ -174,10 +156,10 @@ describe("every doored indicator lands within the bound", () => {
       const after = landed.out[key].read();
       const want = cold.out[key].read();
       expect(after.length, `${key} length`).toBe(want.length);
-      // The tail beyond every landing's reach is the original objects —
-      // the proof the full path never ran.
+      // Finite-window nodes preserve the original objects beyond the
+      // corrected head. Recursive nodes deliberately take the full path.
       const held = before.get(key);
-      if (held !== undefined && held.length > 0) {
+      if (!recursive.has(name) && held !== undefined && held.length > 0) {
         expect(after[after.length - 1], `${key} tail identity`).toBe(
           held[held.length - 1],
         );
@@ -227,7 +209,7 @@ describe("indicator landings", () => {
     expectClose(after, sma(closes(all), 20), all.map((p) => p.x), "sma");
   });
 
-  it("ema rides the head door on its decay horizon — bounded drift, reused tail", () => {
+  it("ema recomputes the full history on a landing", () => {
     const f = feed(bars(500, 1600));
     const node = movingAverage(f.source, { period: 20, type: "ema" });
     const before = node.out.ma.read();
@@ -235,13 +217,13 @@ describe("indicator landings", () => {
     f.prepend(bars(100, 500));
     const after = node.out.ma.read();
 
-    expect(after[after.length - 1]).toBe(before[before.length - 1]);
+    expect(after[after.length - 1]).not.toBe(before[before.length - 1]);
 
     const all = bars(100, 1600);
     expectClose(after, ema(closes(all), 20), all.map((p) => p.x), "ema");
   });
 
-  it("macd rides the head door across its three chained folds", () => {
+  it("macd recomputes all three chained folds on a landing", () => {
     const f = feed(bars(500, 2600));
     const node = macd(f.source, {});
     const before = node.out.histogram.read();
@@ -250,7 +232,7 @@ describe("indicator landings", () => {
     f.prepend(bars(299, 300));
     const histogram = node.out.histogram.read();
 
-    expect(histogram[histogram.length - 1]).toBe(before[before.length - 1]);
+    expect(histogram[histogram.length - 1]).not.toBe(before[before.length - 1]);
 
     // The cold-computation reference: macd over everything, from scratch.
     const all = bars(299, 2600);

@@ -204,7 +204,7 @@ export class InputRouter {
       const { consumer } = entry;
       if (!consumer.handle(event)) continue;
 
-      if (event.type === "pointerdown") {
+      if (event.type === "pointerdown" && this.entries.includes(entry)) {
         this.captures.set(event.pointerId, consumer);
       }
       return true;

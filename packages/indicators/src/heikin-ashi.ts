@@ -15,12 +15,21 @@ interface Seed {
  * after it follows.
  */
 function fold(candle: OHLC, previous: Seed | null): OHLC {
-  const close = (candle.open + candle.high + candle.low + candle.close) / 4;
+  const sum = candle.open + candle.high + candle.low + candle.close;
+  // Keep ordinary/subnormal rounding unchanged; scale only an overflowing sum.
+  const close = Number.isFinite(sum)
+    ? sum / 4
+    : candle.open / 4 + candle.high / 4 + candle.low / 4 + candle.close / 4;
   const open =
-    previous === null ? (candle.open + candle.close) / 2 : (previous.open + previous.close) / 2;
+    previous === null ? midpoint(candle.open, candle.close) : midpoint(previous.open, previous.close);
   const high = Math.max(candle.high, open, close);
   const low = Math.min(candle.low, open, close);
   return { x: candle.x, open, high, low, close, volume: candle.volume };
+}
+
+function midpoint(a: number, b: number): number {
+  const sum = a + b;
+  return Number.isFinite(sum) ? sum / 2 : a / 2 + b / 2;
 }
 
 /**

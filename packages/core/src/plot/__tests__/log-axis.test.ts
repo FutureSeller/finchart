@@ -223,12 +223,13 @@ describe("log axis — data with non-positive values mixed in", () => {
     pane.addSeries({
       series: lineSeries(),
       data,
-      // Counts every time the core reads a value — this is the cost that laziness is buying or spending.
+      // Count the positive-floor operation directly: ingestion must validate getY independently.
       coordinates: {
         getX: (point: LineDataPoint) => point.x,
-        getY: (point: LineDataPoint) => {
+        getY: (point: LineDataPoint) => point.y,
+        getPositiveFloor: (point: LineDataPoint) => {
           reads += 1;
-          return point.y;
+          return point.y !== null && point.y > 0 ? point.y : null;
         },
       },
     });
@@ -241,8 +242,8 @@ describe("log axis — data with non-positive values mixed in", () => {
     model.commands();
     const log = reads / count;
 
-    // A linear axis never pays for a scan — the one pass measuring the value extent is all there is.
-    expect(linear).toBeLessThan(2);
+    // A linear axis never asks for the positive floor.
+    expect(linear).toBe(0);
     // Log plus a non-positive floor is when the scan gets added (equal would mean the callback was never invoked).
     expect(log).toBeGreaterThan(linear);
   });

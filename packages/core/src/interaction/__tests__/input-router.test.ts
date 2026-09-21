@@ -413,3 +413,17 @@ describe("cancellation releases the capture", () => {
     expect(second).toHaveLength(1);
   });
 });
+
+it("does not capture a consumer removed by its own down callback", () => {
+  const router = new InputRouter();
+  const seen: string[] = [];
+  let remove = () => {};
+  remove = router.add({ handle(event) {
+    seen.push(event.type);
+    remove();
+    return true;
+  } });
+  expect(router.route(down())).toBe(true);
+  expect(router.route(move())).toBe(false);
+  expect(seen).toEqual(["pointerdown"]);
+});

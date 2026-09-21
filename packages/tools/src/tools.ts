@@ -1,5 +1,5 @@
 import type { CursorHost, DataProbe, FocusAreaHost, InputConsumer, InputEvent, InputHost, LineStyle, Observable, PaneDecoration, PaneDecorationHost, PlotArea, Plugin, PluginApi, Point, RenderRequester, StyleSpec, ValueCoordinates, XCoordinates } from "@finchart/core";
-import { ContractError, emitter, pluginApi, resolveStyle, styleSpec } from "@finchart/core";
+import { ContractError, createScope, emitter, pluginApi, resolveStyle, styleSpec } from "@finchart/core";
 import type { Anchor, Drawing, DrawingInput, DrawingUpdate, FibExtension, FibRetracement } from "./drawings";
 import { DRAWING_KINDS, describeValue, drawingAnchors } from "./drawings";
 import {
@@ -591,6 +591,8 @@ export function drawingTools(
   const plot = options.plot;
 
   return (pane) => {
+    const installation = createScope();
+    try {
 
     /** Internal state — a drag mutates these objects directly. */
     const drawings: Drawing[] = [];
@@ -611,6 +613,7 @@ export function drawingTools(
      * door — a listener's bug doesn't take the toolbox down with it.
      */
     const pending: (() => void)[] = [];
+    let revision = 0;
     let doorDepth = 0;
     let flushing = false;
     const notify = (deliver: () => void): void => {
@@ -627,6 +630,7 @@ export function drawingTools(
     };
     /** Every public entry that can change state runs inside one of these. */
     const door = <T,>(run: () => T): T => {
+      revision += 1;
       doorDepth += 1;
       try {
         return run();
@@ -789,6 +793,8 @@ export function drawingTools(
           tool: Drawing["type"];
           draft: Drawing;
           pointerId: number | null;
+          /** Raw press position: snapping must not turn a stationary click into a drag. */
+          press: Point;
           /** How many anchors are confirmed; the rest trail the cursor. */
           placed: number;
         }
@@ -931,6 +937,7 @@ export function drawingTools(
       drafting: Extract<ToolState, { kind: "drafting" }>,
       at: Anchor,
       pointerId: number | null,
+      press = drafting.press,
     ): void => {
       followCursor(drafting.draft, drafting.placed, at);
       const placed = drafting.placed + 1;
@@ -938,7 +945,7 @@ export function drawingTools(
         finishPlacement(drafting.draft);
         return;
       }
-      transition({ ...drafting, placed, pointerId });
+      transition({ ...drafting, placed, pointerId, press });
       plot.requestRender();
     };
 
@@ -1017,6 +1024,20 @@ export function drawingTools(
       );
     };
 
+    // Registered before host resources, so state cleanup runs last even if a
+    // host disposer throws. Failed installation uses the same ownership path.
+    installation.add(() => {
+      releaseCursor?.();
+      releaseCursor = null;
+      hoverCursor(false);
+      if (state.kind === "dragging" && !sameDrawing(state.drag.original, state.drag.grip.drawing)) {
+        restoreDrawing(state.drag.grip.drawing, state.drag.original);
+      }
+      state = { kind: "idle" };
+      selected = null;
+      plot.requestRender();
+    });
+
     /**
      * Registers to contend for the keyboard. Simply asking "does someone
      * else have this area" would let a claimant with no interest in the
@@ -1029,6 +1050,8 @@ export function drawingTools(
     const focusClaim = plot.claimFocusArea(() =>
       usableArea(space.area) ? space.area : null,
     );
+
+    installation.add(() => focusClaim.release());
 
     const trackCursor = (point: Point): void => {
       if (ownsPoint(point)) cursorInside = true;
@@ -1138,6 +1161,7 @@ export function drawingTools(
     const removeDecoration = pane.addDecoration(decoration, {
       zIndex: options.zIndex,
     });
+    installation.add(removeDecoration);
 
     type PointerInput = Extract<InputEvent, { pointerId: number }>;
 
@@ -1182,6 +1206,7 @@ export function drawingTools(
             draft: draftFor(state.tool, at, born),
             pointerId: event.pointerId,
             placed: 1,
+            press: { ...event.point },
           });
           plot.requestRender();
           return true;
@@ -1199,7 +1224,7 @@ export function drawingTools(
           // The next click of click-move-click — where it's pressed
           // confirms the next anchor (and the ones after it keep
           // trailing until their own click).
-          confirmAnchor(state, snappedAt(event.point, state.draft.type), event.pointerId);
+          confirmAnchor(state, snappedAt(event.point, state.draft.type), event.pointerId, { ...event.point });
           return true;
         }
 
@@ -1231,7 +1256,6 @@ export function drawingTools(
               // The material a cancel restores — `moveGrip` mutates the
               // original in place.
               original: toOwnedDrawing(grip.drawing),
-              moved: false,
             },
             pointerId: event.pointerId,
           });
@@ -1274,7 +1298,6 @@ export function drawingTools(
       if (state.kind === "dragging") {
         if (event.pointerId !== state.pointerId) return true;
         moveGrip(state.drag, dragCursor(state.drag, event.point));
-        state.drag.moved = true;
         plot.crosshair(event.point);
         changed("move");
         return true;
@@ -1336,10 +1359,10 @@ export function drawingTools(
           return true;
         }
 
-        // "Was that a drag" is measured from the anchor this press
-        // confirmed — the last one placed, not `a`. Measuring from `a`
-        // would read a click on b as a drag and stamp c on top of it.
-        const reference = toPixel(space, anchors[state.placed - 1]);
+        // Measure the hand, not the snapped anchor: snapping alone can
+        // move an anchor farther than the drag threshold. Each new press
+        // replaces this origin, including the second press of a three-point tool.
+        const reference = state.press;
         const moved = distanceToPoint(event.point, reference) >= PLACEMENT_DRAG_MIN;
         if (moved) {
           // Drawn by dragging — the release point confirms the next
@@ -1529,6 +1552,7 @@ export function drawingTools(
     const removeConsumer = plot.addInputConsumer(consumer, {
       priority: options.priority,
     });
+    installation.add(removeConsumer);
 
     const removeOne = (drawing: Drawing): void => {
       const index = drawings.indexOf(drawing);
@@ -1556,6 +1580,7 @@ export function drawingTools(
     };
 
     const updateOne = (target: Drawing, patch: DrawingUpdate): void => {
+      const started = revision;
       if (typeof patch !== "object" || patch === null) {
         throw new ContractError(
           `update(patch) must be an object, got ${describeValue(patch)}`,
@@ -1575,6 +1600,7 @@ export function drawingTools(
           );
         }
       }
+      unchanged(started);
       if (keys.length === 0) return;
 
       /**
@@ -1586,7 +1612,16 @@ export function drawingTools(
        */
       const before = toOwnedDrawing(target);
       const { id, ...shape } = target;
-      const candidate = safeOwned({ ...shape, ...patch }, id);
+      let candidate: unknown;
+      try {
+        candidate = safeOwned({ ...shape, ...patch }, id);
+      } catch {
+        candidate = null;
+      }
+      unchanged(started);
+      if (!drawings.includes(target)) {
+        throw new ContractError("Can’t update a drawing removed while reading the patch");
+      }
       if (!isDrawing(candidate)) {
         throw new ContractError(
           `update(patch) would make the drawing unfit — got ${describeValue(patch)}`,
@@ -1618,6 +1653,7 @@ export function drawingTools(
     // Doesn't hold onto the caller's object — editing it from outside
     // would drift out of sync without the chart knowing.
     const addOwned = (drawing: DrawingInput): Drawing => {
+      const started = revision;
       /**
        * Looks at the same predicate as the parser — whatever
        * `parseDrawings` rejects has to be rejected here too. Otherwise
@@ -1638,6 +1674,7 @@ export function drawingTools(
       // The id is minted here, at the door — a consumer never invents
       // one, so a duplicate can't even arrive.
       const owned = safeOwned(drawing, mintDrawingId());
+      unchanged(started);
       if (!isDrawing(owned)) {
         throw new ContractError(
           `drawing must have finite coordinates, got ${describeValue(drawing)}`,
@@ -1719,6 +1756,13 @@ export function drawingTools(
       }
     };
 
+    const unchanged = (started: number): void => {
+      alive();
+      if (revision !== started) {
+        throw new ContractError("The toolbox changed while reading the drawing input; retry the edit");
+      }
+    };
+
     const api = pluginApi(
       {
         add: (drawing: DrawingInput, options: AddDrawingOptions = {}): DrawingHandle => door(() => {
@@ -1731,15 +1775,15 @@ export function drawingTools(
               `add(drawing, options) must be an object, got ${describeValue(options)}`,
             );
           }
-          if (
-            options.select !== undefined &&
-            typeof options.select !== "boolean"
-          ) {
+          const started = revision;
+          const select = options.select;
+          unchanged(started);
+          if (select !== undefined && typeof select !== "boolean") {
             throw new ContractError(
-              `add(drawing, { select }) must be a boolean, got ${describeValue(options.select)}`,
+              `add(drawing, { select }) must be a boolean, got ${describeValue(select)}`,
             );
           }
-          return add(drawing, options);
+          return add(drawing, { select });
         }),
 
         list: () => drawings.map((drawing) => structuredClone(drawing)),
@@ -1803,7 +1847,7 @@ export function drawingTools(
 
         mode: () => modeOf(state),
 
-        modeChanges: modeEmitter as Observable<DrawingModeChange>,
+        modeChanges: modeEmitter,
 
         clear: (): void => door(() => {
           alive();
@@ -1895,12 +1939,12 @@ export function drawingTools(
 
         canRedo: () => historyState().canRedo,
 
-        historyChanges: historyEmitter as Observable<DrawingHistoryChange>,
+        historyChanges: historyEmitter,
 
-        changes: changes as Observable<DrawingsChange>,
+        changes: changes,
 
         selectionChanges:
-          selectionEmitter as Observable<DrawingSelectionChange>,
+          selectionEmitter,
 
         applyOptions(patch: Partial<DrawingToolsStyleOptions>) {
           alive();
@@ -1964,38 +2008,17 @@ export function drawingTools(
           return true;
         }),
       },
-      () => {
-        removeConsumer();
-        removeDecoration();
-        // Releases the focus-contention registration too — otherwise a
-        // disposed toolbox would permanently hijack the keyboard from
-        // the toolboxes left behind (a dead pane's area would forever
-        // count as "someone else's").
-        focusClaim.release();
-        /**
-         * Teardown is quiet — a direct assignment, not `transition` or
-         * `setSelected`. If a toolbox mid-dispose fired one last
-         * selection notification, the subscriber could already be a
-         * React component that's been unmounted.
-         */
-        // Only the cursor claim gets released — the chart outlives the tool.
-        releaseCursor?.();
-        releaseCursor = null;
-        // Same for the hover claim. Disposing the tool while over a
-        // line would leave `grab` stuck on the chart.
-        hoverCursor(false);
-        if (
-          state.kind === "dragging" &&
-          !sameDrawing(state.drag.original, state.drag.grip.drawing)
-        ) {
-          restoreDrawing(state.drag.grip.drawing, state.drag.original);
-        }
-        state = { kind: "idle" };
-        selected = null;
-        plot.requestRender();
-      },
+      () => installation.dispose(),
     );
 
     return api;
+    } catch (error) {
+      try {
+        installation.dispose();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Drawing tools installation and rollback failed");
+      }
+      throw error;
+    }
   };
 }

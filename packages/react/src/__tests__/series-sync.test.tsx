@@ -19,6 +19,7 @@ import {
   type ReactElement,
   StrictMode,
   Suspense,
+  startTransition,
   useState,
 } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -497,4 +498,83 @@ describe('an uncommitted render', () => {
 
     expect(drawOrder(plot(), log)).toEqual(['visible']);
   });
+});
+
+it('does not publish a suspended series candidate when a sibling commits', async () => {
+  const { deps, ref, plot } = setup();
+  const log: string[] = [];
+  const never = new Promise<void>(() => {});
+  let updateA = (_n: number) => {};
+  let updateB = (_n: number) => {};
+  function Suspend({ active }: { active: boolean }) {
+    if (active) throw never;
+    return null;
+  }
+  function A() {
+    const [n, set] = useState(0);
+    updateA = set;
+    return <><ChartSeries series={fakeSeries(`A${n}`, log)} /><Suspend active={n > 0} /></>;
+  }
+  function B() {
+    const [n, set] = useState(0);
+    updateB = set;
+    return <ChartSeries series={fakeSeries(`B${n}`, log)} />;
+  }
+  mount(<ChartContainer deps={deps} data={data} plotRef={ref}>
+    <Suspense fallback={null}><A /></Suspense><B />
+  </ChartContainer>);
+  expect(drawOrder(plot(), log)).toEqual(['A0', 'B0']);
+  await act(async () => updateA(1));
+  await act(async () => updateB(1));
+  expect(drawOrder(plot(), log)).toEqual(['A0', 'B1']);
+  await act(async () => updateA(0));
+  expect(drawOrder(plot(), log)).toEqual(['A0', 'B1']);
+});
+
+it('keeps committed JSX ranks when an abandoned parent render precedes a child update', async () => {
+  const { deps, ref, plot } = setup();
+  const log: string[] = [];
+  let reverse = (_value: boolean) => {};
+  let updateB = (_value: number) => {};
+  function B() {
+    const [value, setValue] = useState(0);
+    updateB = setValue;
+    return <ChartSeries series={fakeSeries(`B${value}`, log)} />;
+  }
+  function Parent() {
+    const [pending, setPending] = useState(false);
+    reverse = setPending;
+    const children = [
+      <ChartSeries key="A" series={fakeSeries('A', log)} />,
+      <B key="B" />,
+      <ChartSeries key="C" series={fakeSeries('C', log)} />,
+    ];
+    return <>
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        {pending ? children.reverse() : children}
+      </ChartContainer>
+      {pending && <NeverResolves />}
+    </>;
+  }
+  mount(<Suspense fallback={null}><Parent /></Suspense>);
+  expect(drawOrder(plot(), log)).toEqual(['A', 'B0', 'C']);
+  await act(async () => startTransition(() => reverse(true)));
+  await act(async () => updateB(1));
+  expect(drawOrder(plot(), log)).toEqual(['A', 'B1', 'C']);
+});
+
+it('preserves JSX order across series inside and outside the main ChartPane', () => {
+  const { deps, ref, plot } = setup();
+  const log: string[] = [];
+  const view = (middle: boolean) => <ChartContainer deps={deps} data={data} plotRef={ref}>
+    <ChartPane>
+      <ChartSeries series={fakeSeries('inside-first', log)} />
+      {middle && <ChartSeries series={fakeSeries('inside-next', log)} />}
+    </ChartPane>
+    <ChartSeries series={fakeSeries('outside', log)} />
+  </ChartContainer>;
+  const mounted = mount(view(false));
+  expect(drawOrder(plot(), log)).toEqual(['inside-first', 'outside']);
+  mounted.rerender(view(true));
+  expect(drawOrder(plot(), log)).toEqual(['inside-first', 'inside-next', 'outside']);
 });
