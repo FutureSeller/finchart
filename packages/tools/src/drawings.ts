@@ -43,7 +43,14 @@ export const DRAWING_KINDS: readonly Drawing["type"][] = [
 export function describeValue(value: unknown): string {
   if (value === null) return "null";
   const kind = typeof value;
-  if (kind === "object") return Array.isArray(value) ? "array" : "object";
+  if (kind === "object") {
+    try {
+      return Array.isArray(value) ? "array" : "object";
+    } catch {
+      // A revoked proxy throws even at `Array.isArray` — and this runs while an error is being built.
+      return "object";
+    }
+  }
   if (kind === "string") return JSON.stringify(value);
   if (kind === "function" || kind === "symbol" || kind === "bigint") return kind;
   return String(value);
@@ -116,6 +123,25 @@ export interface ArrowLine extends DrawingIdentity {
   b: Anchor;
 }
 
+/**
+ * `"log"` spreads a Fibonacci drawing's levels evenly in **log price** instead
+ * of evenly in price: a retracement's level sits at `b·(a/b)^level` rather than
+ * `b + (a − b)·level`, an extension's at `c·(b/a)^level` rather than
+ * `c + (b − a)·level`. On a log axis that is what looks even; price-linear
+ * levels bunch toward one end there.
+ *
+ * It belongs to the drawing, not to the axis: the arithmetic needs only the
+ * anchors' prices, so the same saved drawing puts its lines at the same prices
+ * whatever axis shows it. (TradingView's option of the same name takes effect
+ * only while the chart is on a log scale; this one does not look at the scale,
+ * on purpose — a stored drawing that changed shape when the axis is toggled is
+ * what the price-space rule for derived geometry exists to prevent.) Seen on a
+ * linear axis, log-spaced levels are the ones that bunch.
+ *
+ * There is no `"linear"`: absence is the one spelling of the default.
+ */
+export type LevelSpacing = "log";
+
 export interface FibRetracement extends DrawingIdentity {
   type: "fib";
   a: Anchor;
@@ -127,6 +153,8 @@ export interface FibRetracement extends DrawingIdentity {
    * the normalizer sorts and dedupes but never clamps.
    */
   levels?: number[];
+  /** How the levels are spread between the anchors — see `LevelSpacing`. Absent is price-linear. */
+  levelSpacing?: LevelSpacing;
 }
 
 /**
@@ -201,7 +229,8 @@ export interface Pitchfork extends DrawingIdentity {
 
 /**
  * A trend-based Fibonacci extension: the a→b swing, retraced to `c`,
- * projected from `c` — level 0 sits at `c`, level 1 at `c + (b − a)`.
+ * projected from `c` — level 0 sits at `c`, level 1 at `c + (b − a)`
+ * (at `c·b/a` when the levels are log-spaced — see `LevelSpacing`).
  * Its default levels and its formula are its own, not the retracement's:
  * levels past 1 are the point of this tool.
  */
@@ -212,6 +241,8 @@ export interface FibExtension extends DrawingIdentity {
   c: Anchor;
   /** Absent means `FIB_EXTENSION_LEVELS`. Sorted and deduped, never clamped. */
   levels?: number[];
+  /** How the levels are spread — see `LevelSpacing`. Absent is price-linear. */
+  levelSpacing?: LevelSpacing;
 }
 
 export type Drawing =
@@ -311,14 +342,129 @@ export function fibLevels(
 }
 
 /**
- * A level's price — a is 0, b is 1; the retracement reads from b toward a.
+ * A level's price — a is 0, b is 1; the retracement reads from b toward a:
+ * `b + (a − b)·level`, or `b·(a/b)^level` when the levels are log-spaced
+ * (`NaN` where that is not defined — see `logSpaced`).
  *
  * Hit-testing and rendering read **the same formula**. Two copies could
  * drift apart, and the moment they do, the line you see and the line you
  * can grab stop matching.
  */
 export function fibLevelPrice(drawing: FibRetracement, level: number): number {
-  return drawing.b.price + (drawing.a.price - drawing.b.price) * level;
+  const { a, b } = drawing;
+  if (drawing.levelSpacing !== "log") return b.price + (a.price - b.price) * level;
+  // The anchors' own levels are the anchors, whatever their prices are.
+  if (level === 0) return b.price;
+  if (level === 1) return a.price;
+  return logSpaced(b.price, a.price, b.price, level);
+}
+
+/**
+ * The levels a drawing **draws**, each with its price — the ones its spacing
+ * defines, in list order. Rendering and hit-testing both walk this, so the
+ * line you see and the line you can grab are the same set: a level without a
+ * price (log spacing over a price that is not positive, a result outside the
+ * doubles) is in neither. The filter runs **before** anything is projected — a
+ * consumer's `pixelAtValue` has never been promised a `NaN`.
+ */
+export function fibLevelLines(drawing: FibRetracement): { level: number; price: number }[] {
+  return pricedLevels(fibLevels(drawing), (level) => fibLevelPrice(drawing, level));
+}
+
+/** The extension's counterpart of `fibLevelLines`. */
+export function fibExtensionLines(
+  drawing: Pick<FibExtension, "a" | "b" | "c" | "levels" | "levelSpacing">,
+): { level: number; price: number }[] {
+  return pricedLevels(fibExtensionLevels(drawing), (level) => fibExtensionPrice(drawing, level));
+}
+
+function pricedLevels(levels: readonly number[], priceOf: (level: number) => number) {
+  return levels.map((level) => ({ level, price: priceOf(level) })).filter((line) => Number.isFinite(line.price));
+}
+
+/**
+ * `base · (over / under)^level` — a level spaced in log price.
+ *
+ * Defined only where log price is: every price positive, and a result that is
+ * a positive finite number. Anywhere else this is `NaN` and the level is **not
+ * drawn** — never a price-linear stand-in, which would put a line at a price
+ * the drawing does not mean (and jump: with b at 100, the 50% level would go
+ * from 0.0001 to 50 as a moves from 1e-10 to 0). A result that underflows to
+ * zero is no more a log level than one that overflows.
+ *
+ * The ratio is never formed: `1e300 / 1e-300` leaves the doubles while the
+ * level between them is an ordinary 1. And a large level multiplies whatever
+ * the swing's logarithm got wrong, so that logarithm is kept good to its last
+ * digits at any magnitude:
+ *
+ * - Close prices: `log1p` of the relative offset. `log(1e16 + 2) − log(1e16)`
+ *   is 0 in doubles, and a large level would then return an endpoint.
+ * - Far prices: each is split into a power of two and a factor next to 1
+ *   (`halved`), and the two parts are carried apart to the end. Subtracting
+ *   `log(5e299)` from `log(1e300)` rounds both near 690 and keeps thirteen
+ *   digits of a difference of 0.69; the logarithms of the factors are small and
+ *   exact to their own last digit, and the powers of two are integers.
+ *
+ * The result is put together the same way — a factor times a power of two — so
+ * a level that is exactly `2^1024` overflows instead of landing a hair under
+ * the largest double.
+ */
+function logSpaced(base: number, over: number, under: number, level: number): number {
+  if (!(base > 0 && over > 0 && under > 0)) return Number.NaN;
+  if (over === under) return base;
+  const offset = (over - under) / under;
+  const from = halved(base);
+  let swing: [number, number] = [Math.log1p(offset), 0];
+  if (Math.abs(offset) >= 0.5) {
+    const [top, bottom] = [halved(over), halved(under)];
+    swing = [top[0] - bottom[0], top[1] - bottom[1]];
+  }
+  const natural = from[0] + level * swing[0];
+  const binary = from[1] + level * swing[1];
+  const power = Math.round(binary + natural / Math.LN2);
+  const price = scaled(Math.exp(natural + (binary - power) * Math.LN2), power);
+  return price > 0 && Number.isFinite(price) ? price : Number.NaN;
+}
+
+/**
+ * `price · over / under`, for moving several prices by the factor between two
+ * others. The ratio is not formed (it can leave the doubles while every product
+ * stays an ordinary price), and the prices are not sent through a logarithm
+ * and back one by one: that rounds each on its own, and two prices one double
+ * apart come out equal. One factor for all of them, applied to each price
+ * **lifted next to 1** — the smallest doubles have a bit or two to round, and
+ * `2m · 0.75` and `3m · 0.75` are the same double — then the powers of two
+ * together. `over === under` is exactly the price given.
+ *
+ * Good to a few units in the last place — which is also how wide the edge of
+ * the doubles is here: a product within that of the largest double (7 moved
+ * from 7 to `MAX_VALUE`) may come out as infinity. Callers refuse what is not
+ * finite, so at that edge a move is not applied rather than applied wrong.
+ */
+export function scaledByRatio(price: number, over: number, under: number): number {
+  const [top, bottom] = [halved(over), halved(under)];
+  const power = Math.round(Math.log2(price));
+  return scaled(scaled(price, -power) * Math.exp(top[0] - bottom[0]), power + top[1] - bottom[1]);
+}
+
+/** `value` as `[ln(factor), power]` with `value = factor · 2^power` exactly and the factor next to 1. */
+function halved(value: number): [number, number] {
+  const power = Math.round(Math.log2(value));
+  return [Math.log(scaled(value, -power)), power];
+}
+
+/**
+ * `value · 2^power` in two steps, for the two uses here: lifting a price next
+ * to 1, and taking a value next to 1 out to its price. `2^power` alone leaves
+ * the doubles before the product does (`2^-1074` is a double, `2^1074` is not),
+ * while half of any power between a double and 1 is itself a double — and the
+ * step in between lies between the two ends, so only the last multiplication
+ * can round. A power no price can carry gives zero or infinity, which the
+ * callers refuse.
+ */
+function scaled(value: number, power: number): number {
+  const half = Math.trunc(power / 2);
+  return value * 2 ** half * 2 ** (power - half);
 }
 
 /**
@@ -339,14 +485,20 @@ export function fibExtensionLevels(
 }
 
 /**
- * A level's price: the a→b move, scaled by the level, laid from `c`.
- * Price space, one formula, never clamped — a down-swing projects down.
+ * A level's price: the a→b move, scaled by the level, laid from `c` —
+ * `c + (b − a)·level`, or `c·(b/a)^level` when the levels are log-spaced
+ * (`NaN` where that is not defined — see `logSpaced`). Price space, never
+ * clamped — a down-swing projects down.
  */
 export function fibExtensionPrice(
-  drawing: Pick<FibExtension, "a" | "b" | "c">,
+  drawing: Pick<FibExtension, "a" | "b" | "c" | "levelSpacing">,
   level: number,
 ): number {
-  return drawing.c.price + (drawing.b.price - drawing.a.price) * level;
+  const { a, b, c } = drawing;
+  if (drawing.levelSpacing !== "log") return c.price + (b.price - a.price) * level;
+  // Level 0 is c itself. Level 1 is `c·b/a` — a log level like any other.
+  if (level === 0) return c.price;
+  return logSpaced(c.price, b.price, a.price, level);
 }
 
 /**
@@ -484,6 +636,25 @@ function safeOwn(drawing: Drawing): Drawing | null {
 }
 
 /**
+ * A `levelSpacing` this build does not know is read the way a field it does
+ * not know is: dropped, and the drawing kept. It is the one known field whose
+ * unknown *value* is repaired rather than refused — a later build that adds a
+ * spacing would otherwise have every drawing in the ledger rejected here over
+ * one fib (the parse is all-or-nothing), while a *renamed* field would have
+ * been dropped without a murmur: the careful change would break old readers
+ * and the careless one would not. The loss is real and the same as an unknown
+ * field's: that drawing reads with the default spacing, so its level prices
+ * differ from what was saved.
+ */
+function withoutUnknownSpacing(item: unknown): unknown {
+  if (typeof item !== "object" || item === null || !("levelSpacing" in item) || item.levelSpacing === "log") {
+    return item;
+  }
+  const { levelSpacing: _unknown, ...rest } = item;
+  return rest;
+}
+
+/**
  * The other side of the round trip. Unreadable is null — it doesn't
  * throw. A string coming from a URL or `localStorage` might belong to
  * someone else's session or an old version, and an unfamiliar version or
@@ -517,7 +688,8 @@ export function parseDrawings(payload: string): Drawing[] | null {
    */
   const items: unknown[] = drawings;
   const checked: Drawing[] = [];
-  for (const [index, item] of items.entries()) {
+  for (const [index, stored] of items.entries()) {
+    const item = withoutUnknownSpacing(stored);
     if (version === 1) {
       // v1 has no ids — geometry is checked with the same per-kind rules,
       // and the id is derived from position (see migratedV1Id).
@@ -578,16 +750,6 @@ function isAnchor(value: unknown): value is Anchor {
   return Number.isFinite(anchor.x) && Number.isFinite(anchor.price);
 }
 
-/**
- * The drawing's shape-and-numeric contract. The parser and the input API
- * look at the same predicate — if the contract drifted between the front
- * door and the back door, `add({price: NaN})` would go through and get
- * saved, and when a later session tries to `load` that save, the
- * all-or-nothing rule would reject the entire ledger.
- *
- * Only the policy differs: the parser returns null, `add` throws
- * `ContractError`.
- */
 /**
  * Builds the drawing's own copy — rebuilds it field by field instead of
  * cloning the argument.
@@ -663,6 +825,7 @@ export function ownWithId(drawing: DrawingInput, id: string): Drawing {
       if (style) owned.style = style;
       const levels = normalizedLevels(drawing.levels);
       if (levels) owned.levels = levels;
+      copySpacing(owned, drawing);
       return owned;
     }
     case "fib": {
@@ -675,6 +838,7 @@ export function ownWithId(drawing: DrawingInput, id: string): Drawing {
       if (style) owned.style = style;
       const levels = normalizedLevels(drawing.levels);
       if (levels) owned.levels = levels;
+      copySpacing(owned, drawing);
       return owned;
     }
   }
@@ -704,6 +868,19 @@ function ownStyle(
     : undefined;
 }
 
+/**
+ * Copies the spacing **as it is** — judging it is the predicate's job, the way
+ * `normalizedLevels` copies and `hasValidLevels` judges. A copy that kept only
+ * `"log"` would let `update({ levelSpacing: "LOG" })` through the predicate
+ * with the field gone, and silently switch off the `"log"` that was there.
+ */
+function copySpacing(
+  owned: FibRetracement | FibExtension,
+  drawing: Pick<FibRetracement, "levelSpacing">,
+): void {
+  if (drawing.levelSpacing !== undefined) owned.levelSpacing = drawing.levelSpacing;
+}
+
 /** Sorted, deduped copy — never clamped (extension levels live outside [0, 1]). */
 function normalizedLevels(levels: number[] | undefined): number[] | undefined {
   if (levels === undefined) return undefined;
@@ -730,14 +907,14 @@ export const PATCHABLE_FIELDS: Record<Drawing["type"], readonly string[]> = {
   ray: ["a", "b", "style"],
   extended: ["a", "b", "style"],
   arrow: ["a", "b", "style"],
-  fib: ["a", "b", "style", "levels"],
+  fib: ["a", "b", "style", "levels", "levelSpacing"],
   rectangle: ["a", "b", "style"],
   ellipse: ["a", "b", "style"],
   priceMeasure: ["a", "b", "style"],
   barMeasure: ["a", "b", "style"],
   parallelChannel: ["a", "b", "c", "style"],
   pitchfork: ["a", "b", "c", "style"],
-  fibExtension: ["a", "b", "c", "style", "levels"],
+  fibExtension: ["a", "b", "c", "style", "levels", "levelSpacing"],
 };
 
 /**
@@ -773,6 +950,13 @@ export function assignOwned(target: Drawing, source: Drawing): void {
       target.levels = source.levels;
     } else {
       delete target.levels;
+    }
+    // Undo and redo restore through here — leave this out and "switch it on,
+    // then Ctrl+Z" does nothing, quietly, because no geometry moved.
+    if (source.levelSpacing) {
+      target.levelSpacing = source.levelSpacing;
+    } else {
+      delete target.levelSpacing;
     }
   }
 }
@@ -814,13 +998,15 @@ export function hasDrawingShape(value: unknown): value is DrawingInput {
         isAnchor(drawing.a) &&
         isAnchor(drawing.b) &&
         isAnchor(drawing.c) &&
-        hasValidLevels(drawing.levels)
+        hasValidLevels(drawing.levels) &&
+        hasValidSpacing(drawing.levelSpacing)
       );
     case "fib":
       return (
         isAnchor(drawing.a) &&
         isAnchor(drawing.b) &&
-        hasValidLevels(drawing.levels)
+        hasValidLevels(drawing.levels) &&
+        hasValidSpacing(drawing.levelSpacing)
       );
     default:
       return false;
@@ -866,6 +1052,23 @@ function hasValidLevels(levels: unknown): boolean {
   return levels.every((level) => Number.isFinite(level));
 }
 
+/** Absent, or the one value there is. */
+function hasValidSpacing(spacing: unknown): boolean {
+  return spacing === undefined || spacing === "log";
+}
+
+/**
+ * The drawing's shape-and-numeric contract. The parser and the input API
+ * look at the same predicate — if the contract drifted between the front
+ * door and the back door, `add({ type: "horizontal", price: NaN })` would go
+ * through and get saved, and when a later session tries to `load` that
+ * save, the all-or-nothing rule would reject the entire ledger.
+ *
+ * Only the policy differs: the parser returns null, `add` throws
+ * `ContractError`. One repair comes before the predicate on the parser's side
+ * only: a `levelSpacing` it does not know is dropped like an unknown field
+ * (see `withoutUnknownSpacing`), while `add` and `update` refuse it.
+ */
 export function isDrawing(value: unknown): value is Drawing {
   if (!hasDrawingShape(value)) return false;
   const id = (value as { id?: unknown }).id;

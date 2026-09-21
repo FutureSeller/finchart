@@ -16,6 +16,7 @@ export type {
   FibExtension,
   FibRetracement,
   HorizontalLine,
+  LevelSpacing,
   ParallelChannel,
   Pitchfork,
   PriceMeasure,

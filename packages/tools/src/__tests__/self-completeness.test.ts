@@ -35,7 +35,7 @@ const INHERITED: Record<string, string> = {
   PluginApi: "../../core/src/primitives/plugin.ts",
 };
 
-/** Pulls member names out of an interface body -- good enough for our declarations, which don't nest. */
+/** Pulls the **top-level** member names out of an interface body -- by their two-space indent, so a nested declaration's own members (`defaults: { fib, ... }`) are not taken for doors. */
 function membersOf(file: string, name: string): string[] {
   const source = readFileSync(resolve(SRC, file), "utf8");
   const start = source.indexOf(`export interface ${name}`);
@@ -113,6 +113,15 @@ const OPTIONS: Record<string, Verdict> = {
   snapRadius: {
     shape: "blocks it",
     value: "blocks it -- NaN would make snapping() report true while nothing actually snaps",
+    policy: "throws",
+  },
+  defaults: {
+    shape: "blocks it -- an object, and each kind's entry an object",
+    value:
+      "blocks it -- judged by the predicate the drawings themselves pass: a " +
+      "kind's defaults are valid exactly when a drawing of that kind carrying " +
+      "them is. Read once into an owned copy, so a later edit of the caller's " +
+      "object cannot slip an unjudged value into a draft",
     policy: "throws",
   },
 };
@@ -243,7 +252,7 @@ const HANDLE: Record<string, Verdict> = {
 
 const MODULE: Record<string, Verdict> = {
   drawingTools: {
-    shape: "blocks it -- all five option fields (see the table above)",
+    shape: "blocks it -- every option field (see the table above)",
     value: "see the table above",
     policy: "throws",
   },
@@ -508,6 +517,7 @@ describe("self-completeness -- the door-by-door verdict table", () => {
       ["snap", { snap: 1 }],
       ["snapRadius", { snapRadius: 0 }],
       ["style", { style: "red" }],
+      ["defaults", { defaults: { fib: { levelSpacing: "LOG" } } }],
     ])("drawingTools({ %s })", (_door, bad) => {
       expect(() => drawingTools({ ...stage(), ...bad } as never)).toThrow(
         ContractError,

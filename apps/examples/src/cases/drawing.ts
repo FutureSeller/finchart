@@ -1,6 +1,6 @@
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { OHLC } from "@finchart/core";
-import { candleSeries, crosshair, priceFormat, timeTicks } from "@finchart/core";
+import { candleSeries, crosshair, LinearScale, LogScale, priceFormat, timeTicks } from "@finchart/core";
 import { drawingTools } from "@finchart/tools";
 import { fixtureCandles } from "./fixture";
 import { chartHost } from "./stage";
@@ -11,7 +11,8 @@ export const description =
   "`]` and `[` cycle the selection without a pointer (the keys only arrive once you've clicked the chart to give it focus). " +
   "For touch and anything else without a keyboard, the three buttons below (deselect · delete · clear all) do the same work. " +
   "What you draw is saved to localStorage — a serialize()/load() round trip, so it survives a refresh and a theme switch (a remount; a drawing styled by hand keeps its own color — that is the saved literal working). A drag-move carries reason \"move\", so only its save is deferred. " +
-  "Turn the magnet on and drawing and endpoint drags snap to a bar's close, low, and high (and the bar's x) — you don't leave a peak to pixel luck.";
+  "Turn the magnet on and drawing and endpoint drags snap to a bar's close, low, and high (and the bar's x) — you don't leave a peak to pixel luck. " +
+  "Switch the price axis to log and a Fibonacci's levels bunch toward one end — by default they are spaced evenly in price. Select it and press Log levels: `levelSpacing: \"log\"` spaces them evenly in log price instead, which is what looks even there. It belongs to the drawing, not the axis — switch back to linear and the same lines stay at the same prices. (`drawingTools({ defaults })` gives hand-drawn Fibonaccis that spacing from birth.)";
 
 /** Background for the pressed button — the case stands on its own without the shell's CSS. */
 function paintPressed(el: HTMLButtonElement, pressed: boolean): void {
@@ -136,7 +137,46 @@ export function mount(container: HTMLElement): () => void {
     paintPressed(magnet, tools.snapping());
   });
 
-  toolbar.append(deselect, remove, clearAll, magnet);
+  // The price axis, linear or log. By default a Fibonacci's levels are evenly
+  // spaced in price, so on a log axis they bunch — the reason the next button exists.
+  let logAxis = false;
+  const axis = document.createElement("button");
+  axis.textContent = "Log axis";
+  axis.title = "Switch the price axis between linear and log";
+  axis.addEventListener("click", () => {
+    logAxis = !logAxis;
+    plot.mainPane.setYScale(logAxis ? new LogScale() : new LinearScale());
+    axis.setAttribute("aria-pressed", String(logAxis));
+    paintPressed(axis, logAxis);
+  });
+
+  // Log-spaced levels for the selected Fibonacci — `update` through its handle.
+  // `selection()` is a copy, so the handle is found by id among `handles()`,
+  // which come in `list()`'s order.
+  const selectedFib = () => {
+    const selected = tools.selection();
+    if (!selected || (selected.type !== "fib" && selected.type !== "fibExtension")) return null;
+    const handle = tools.handles()[tools.list().findIndex((drawing) => drawing.id === selected.id)];
+    return handle ? { handle, log: selected.levelSpacing === "log" } : null;
+  };
+  const logLevels = document.createElement("button");
+  logLevels.textContent = "Log levels";
+  logLevels.title = "Space the selected Fibonacci's levels evenly in log price";
+  logLevels.addEventListener("click", () => {
+    const fib = selectedFib();
+    fib?.handle.update({ levelSpacing: fib.log ? undefined : "log" });
+  });
+  const syncLogLevels = (): void => {
+    const fib = selectedFib();
+    logLevels.disabled = fib === null;
+    logLevels.setAttribute("aria-pressed", String(fib?.log ?? false));
+    paintPressed(logLevels, fib?.log ?? false);
+  };
+  tools.selectionChanges.subscribe(syncLogLevels);
+  tools.changes.subscribe(syncLogLevels);
+  syncLogLevels();
+
+  toolbar.append(deselect, remove, clearAll, magnet, axis, logLevels);
 
   return Object.assign(
     () => {

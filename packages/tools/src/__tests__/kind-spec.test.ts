@@ -87,6 +87,7 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
       a: { x: 1, price: 90 },
       b: { x: 7, price: 140 },
       levels: [0, 0.5, 1, 1.618],
+      levelSpacing: "log",
     },
   },
   rectangle: {
@@ -148,6 +149,7 @@ const TABLE: Record<Drawing["type"], KindSpec> = {
       b: { x: 5, price: 120 },
       c: { x: 7, price: 110 },
       levels: [0, 1, 1.618],
+      levelSpacing: "log",
     },
   },
 };
