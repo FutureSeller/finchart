@@ -360,3 +360,27 @@ describe("createDomDividers on its own", () => {
     });
   });
 });
+
+it("ignores moves and releases belonging to a different pointer", () => {
+  const drag = vi.fn();
+  const dividers = createDomDividers(container, drag);
+  dividers.render([{ index: 0, y: 50, left: 0, right: 100, value: { now: 50, min: 10, max: 90 } }]);
+  const handle = container.querySelector('[data-chart-divider]');
+  if (!handle) throw new Error('missing divider');
+  const send = (target: EventTarget, type: string, id: number, y: number) => {
+    const event = new MouseEvent(type, { bubbles: true, clientY: y });
+    Object.defineProperty(event, 'pointerId', { value: id });
+    target.dispatchEvent(event);
+  };
+  send(handle, 'pointerdown', 1, 50);
+  send(document, 'pointermove', 2, 80);
+  send(document, 'pointerup', 2, 80);
+  send(document, 'pointercancel', 2, 80);
+  expect(drag).not.toHaveBeenCalled();
+  send(document, 'pointermove', 1, 60);
+  expect(drag).toHaveBeenCalledExactlyOnceWith(0, 10);
+  send(document, 'pointerup', 1, 60);
+  send(document, 'pointermove', 1, 70);
+  expect(drag).toHaveBeenCalledTimes(1);
+  dividers.destroy();
+});

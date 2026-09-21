@@ -9,7 +9,7 @@ import {
   pitchforkLines,
   scaledByRatio,
 } from "./drawings";
-import { distanceToPoint, distanceToSegment, extendThrough } from "./geometry";
+import { distanceToPoint, distanceToSegment } from "./geometry";
 import type { DrawingSpace } from "./space";
 import { domainAt, toPixel } from "./space";
 
@@ -46,8 +46,6 @@ export interface DragState {
    * without this, Esc would have nothing to restore to.
    */
   original: Drawing;
-  /** Whether it actually moved after being grabbed. Esc on a drag that never moved does nothing. */
-  moved: boolean;
 }
 
 /**
@@ -100,10 +98,9 @@ function handleAt(
 }
 
 /**
- * The overshoot endpoints of a ray / extended line — far enough past the
- * pane that the clipped drawing reaches its edge. The renderer draws
- * these same two points and the pane clips the spill, so the line you
- * see and the line you can grab come from one function (the
+ * The viewport intersections of a ray / extended line. Off-screen anchors
+ * can be arbitrarily far away, so extending by the pane dimensions alone
+ * cannot reach its edge. Rendering and hit-testing share these endpoints (the
  * `fibLevelPrice` rule for derived geometry).
  */
 export function infiniteEndpoints(
@@ -113,11 +110,42 @@ export function infiniteEndpoints(
   space: DrawingSpace,
 ): [Point, Point] {
   const { area } = space;
-  const overshoot = area.right - area.left + (area.bottom - area.top);
-  const end = extendThrough(a, b, overshoot);
-  const start =
-    kind === "extended" ? extendThrough(b, a, overshoot) : { x: a.x, y: a.y };
-  return [start, end];
+  let dx = b.x - a.x, dy = b.y - a.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+    dx = b.x / 2 - a.x / 2;
+    dy = b.y / 2 - a.y / 2;
+  }
+  if ((dx === 0 && dy === 0) || !Number.isFinite(dx) || !Number.isFinite(dy)) return [a, b];
+  // Work along the dominant axis: its slope is at most one. Construct
+  // intersections on the boundary itself rather than adding a viewport-sized
+  // offset to a huge ray distance (which can round both ends to one point).
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const along = (point: Point): number => horizontal ? point.x : point.y;
+  const across = (point: Point): number => horizontal ? point.y : point.x;
+  const direction = horizontal ? dx : dy;
+  const slope = (horizontal ? dy : dx) / direction;
+  const origin = Math.max(Math.abs(a.x), Math.abs(a.y)) < Math.max(Math.abs(b.x), Math.abs(b.y)) ? a : b;
+  const intercept = across(origin) - along(origin) * slope;
+  const low = horizontal ? area.left : area.top;
+  const high = horizontal ? area.right : area.bottom;
+  const bottom = horizontal ? area.top : area.left;
+  const top = horizontal ? area.bottom : area.right;
+  const points: Point[] = [];
+  const add = (x: number, y: number): void => {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < low || x > high || y < bottom || y > top) return;
+    if (kind === "ray" && (direction > 0 ? x < along(a) : x > along(a))) return;
+    points.push(horizontal ? { x, y } : { x: y, y: x });
+  };
+  add(low, intercept + low * slope);
+  add(high, intercept + high * slope);
+  if (slope !== 0) {
+    add((bottom - intercept) / slope, bottom);
+    add((top - intercept) / slope, top);
+  }
+  if (kind === "ray") add(along(a), across(a));
+  if (points.length === 0) return [a, b];
+  points.sort((left, right) => direction > 0 ? along(left) - along(right) : along(right) - along(left));
+  return [points[0], points[points.length - 1]];
 }
 
 /** The four corners of the box with `a` and `b` as opposite corners — clockwise from the top-left. */
@@ -468,25 +496,31 @@ export function moveGrip(
     // that closes takes every level with it, so that move is refused as well.
     // (One factor keeps order, so counting distinct prices is the whole check.)
     if (new Set(prices).size < new Set(origin.map((from) => from.price)).size) return;
+    const xs = anchors.map((_, index) => cursor.x === grabbed.x ? origin[index].x : cursor.x + offsets[index].x);
+    if (!xs.every(Number.isFinite)) return;
     anchors.forEach((anchor, index) => {
       // x is a difference, and `g + (x − g)` is not always `x` — so back at the grab is said, not computed.
-      anchor.x = cursor.x === grabbed.x ? origin[index].x : cursor.x + offsets[index].x;
+      anchor.x = xs[index];
       anchor.price = prices[index];
     });
     return;
   }
 
   if (grip.drawing.type === "horizontal") {
-    grip.drawing.price = cursor.price + offsets[0].price;
+    const price = cursor.price + offsets[0].price;
+    if (Number.isFinite(price)) grip.drawing.price = price;
     return;
   }
   if (grip.drawing.type === "vertical") {
-    grip.drawing.x = cursor.x + offsets[0].x;
+    const x = cursor.x + offsets[0].x;
+    if (Number.isFinite(x)) grip.drawing.x = x;
     return;
   }
 
+  const candidates = offsets.map((offset) => ({ x: cursor.x + offset.x, price: cursor.price + offset.price }));
+  if (!candidates.every((anchor) => Number.isFinite(anchor.x) && Number.isFinite(anchor.price))) return;
   anchorsOf(grip).forEach((anchor, index) => {
-    anchor.x = cursor.x + offsets[index].x;
-    anchor.price = cursor.price + offsets[index].price;
+    anchor.x = candidates[index].x;
+    anchor.price = candidates[index].price;
   });
 }

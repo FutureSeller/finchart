@@ -332,7 +332,7 @@ export function mergeOptions(
       x: resolveAxisX({ ...current.axis.x, ...axis?.x }),
       y: resolveAxisY({ ...current.axis.y, ...axis?.y }),
     },
-    style: style ? { grid: style.grid } : current.style,
+    style: style ? { grid: style.grid && { ...style.grid } } : current.style,
   };
   settleSpacing(next, "minBarSpacing", minBarSpacing);
   settleSpacing(next, "maxBarSpacing", maxBarSpacing);

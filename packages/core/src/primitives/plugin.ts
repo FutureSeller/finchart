@@ -151,6 +151,7 @@ export function install<Host, Api extends PluginApi>(
   host: Host,
   plugin: Plugin<Host, Api>,
   door: string,
+  isAlive: () => boolean,
 ): Api {
   checkPlugin(plugin, door);
 
@@ -162,6 +163,10 @@ export function install<Host, Api extends PluginApi>(
 
   const api = plugin(host);
   checkPluginApi(api, door);
+  if (!isAlive()) {
+    api.dispose();
+    return api;
+  }
   installed.push(api);
   return api;
 }

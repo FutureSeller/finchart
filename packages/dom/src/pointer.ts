@@ -316,8 +316,8 @@ export class PointerInteractions implements InteractionHandler {
       this.target.crosshair(this.localPoint(event));
     }
 
-    if (!this.options.pan) return;
-    const last = this.panPointers.get(pointerId)!;
+    const last = this.panPointers.get(pointerId);
+    if (!this.options.pan || !this.target || last === undefined) return;
     this.panPointers.set(pointerId, clientX);
     if (Math.abs(clientX - this.downX) > 5) this.dragged = true;
     const dx = clientX - last;
@@ -345,16 +345,17 @@ export class PointerInteractions implements InteractionHandler {
 
     const [a, b] = [...this.panPointers.keys()];
     const other = moved === a ? b : a;
-    const before = Math.abs(
-      this.panPointers.get(moved)! - this.panPointers.get(other)!,
-    );
+    const movedX = this.panPointers.get(moved);
+    const otherX = this.panPointers.get(other);
+    if (movedX === undefined || otherX === undefined) return;
+    const before = Math.abs(movedX - otherX);
     this.panPointers.set(moved, clientX);
-    const after = Math.abs(clientX - this.panPointers.get(other)!);
+    const after = Math.abs(clientX - otherX);
 
     // If the fingers overlap the ratio spikes to 0/∞ — that frame is discarded.
     if (before < 8 || after < 8) return;
 
-    const midClient = (clientX + this.panPointers.get(other)!) / 2;
+    const midClient = (clientX + otherX) / 2;
     const rect = this.element.getBoundingClientRect();
     this.target.zoomAtPixel(after / before, midClient - rect.left);
   }

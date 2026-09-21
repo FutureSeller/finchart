@@ -10,6 +10,9 @@
  * finite wherever the answer is.
  */
 export function lerp(a: number, b: number, t: number): number {
+  // Endpoints are exact even when b - a rounds away the smaller operand.
+  if (t === 0) return a;
+  if (t === 1) return b;
   const grown = t * (b - a);
   if (Number.isFinite(grown)) return a + grown;
   return (a / 2 + t * (b / 2 - a / 2)) * 2;

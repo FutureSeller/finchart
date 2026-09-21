@@ -100,7 +100,13 @@ export function createPlotModel<T extends BaseDataPoint = BaseDataPoint>(
   // Added here instead of in the constructor — a constructor can't be
   // generic, so it would lose the pane's type, whereas `addSeries` is a
   // generic method that carries the registration's type through untouched.
-  if (options.series) plot.mainPane.addSeries(options.series);
+  try {
+    if (options.series) plot.mainPane.addSeries(options.series);
+  } catch (error) {
+    try { plot.destroy(); }
+    catch (cleanup) { throw new AggregateError([error, cleanup], "creating PlotModel failed"); }
+    throw error;
+  }
 
   return { plot, commands: recorder.commands };
 }

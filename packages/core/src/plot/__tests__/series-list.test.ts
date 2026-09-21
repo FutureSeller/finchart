@@ -22,7 +22,7 @@ function fakeEntry(over: Partial<Entry> = {}): Entry {
     readout: true,
     nearest: () => null,
     swapSeries: vi.fn(),
-    feed: vi.fn(),
+    prepare: vi.fn(() => () => {}),
     xRange: () => null,
     xValues: () => [],
     valueExtent: () => null,
@@ -82,7 +82,7 @@ describe("SeriesList.sync", () => {
       list.sync([again, spec("b", fakeEntry()), spec("b", fakeEntry())], managers),
     ).toThrow(ContractError);
 
-    expect(a.feed).not.toHaveBeenCalled();
+    expect(a.prepare).not.toHaveBeenCalled();
     expect(list.entries).toHaveLength(1);
   });
 
@@ -103,7 +103,7 @@ describe("SeriesList.sync", () => {
 
     expect(changed).toBe(true);
     expect(next.built).not.toHaveBeenCalled();
-    expect(a.swapSeries).toHaveBeenCalledWith(next.series);
+    expect(a.prepare).toHaveBeenCalledWith(next.series, undefined);
     expect(list.entries[0]).toBe(a);
   });
 
@@ -114,10 +114,10 @@ describe("SeriesList.sync", () => {
     list.sync([spec("a", a, { data })], managers);
 
     list.sync([{ ...spec("a", a, { data }), series: a.series }], managers);
-    expect(a.feed).not.toHaveBeenCalled();
+    expect(a.prepare).not.toHaveBeenCalled();
 
     list.sync([{ ...spec("a", a, { data: [{ x: 2 }] }), series: a.series }], managers);
-    expect(a.feed).toHaveBeenCalledTimes(1);
+    expect(a.prepare).toHaveBeenCalledTimes(1);
   });
 
   it("should rebuild when the derive key or the input changes", () => {

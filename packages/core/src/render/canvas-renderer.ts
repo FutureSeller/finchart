@@ -4,7 +4,7 @@ import {
   type PlotArea,
   type Point,
 } from "../primitives";
-import { textHeight } from "./text-measurer";
+import { textHeight } from "./font-metrics";
 import { eachFallback } from "./types";
 import type {
   Canvas2DContext,

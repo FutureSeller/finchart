@@ -134,6 +134,7 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       // `move`, nothing can read a stale baseline.
       let lastY = event.clientY;
       const move = (moveEvent: PointerEvent): void => {
+        if (moveEvent.pointerId !== event.pointerId) return;
         onDrag(index, moveEvent.clientY - lastY);
         lastY = moveEvent.clientY;
       };
@@ -143,8 +144,11 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       // attribute resets — a mid-drag destroy() walks the same path as release.
       drag.add(() => element.removeAttribute("data-dragging"));
       listen(drag, document, "pointermove", move);
-      listen(drag, document, "pointerup", end);
-      listen(drag, document, "pointercancel", end);
+      const release = (releaseEvent: PointerEvent): void => {
+        if (releaseEvent.pointerId === event.pointerId) end();
+      };
+      listen(drag, document, "pointerup", release);
+      listen(drag, document, "pointercancel", release);
     });
   }
 

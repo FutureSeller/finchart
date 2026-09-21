@@ -1,9 +1,10 @@
+import { Suspense, useState } from 'react';
 /**
  * `useDataSource` — does a React state array cross over into core's `Source`
  * contract ("if the reference changed, it changed")?
  */
 import type { LineDataPoint, Source } from '@finchart/core';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useDataSource } from '../hooks';
 
@@ -30,4 +31,23 @@ describe('useDataSource', () => {
     // read() stays current — the compute node recognizes "changed" by reference.
     expect(sources[0].read()).toBe(second);
   });
+});
+
+it('exposes only committed data while a later render suspends', async () => {
+  const sources: Source<LineDataPoint>[] = [];
+  let update = (_n: number) => {};
+  const never = new Promise<void>(() => {});
+  function Consumer() {
+    const [n, set] = useState(0);
+    update = set;
+    sources.push(useDataSource([{ x: 0, y: n }]));
+    if (n === 1) throw never;
+    return null;
+  }
+  render(<Suspense fallback={null}><Consumer /></Suspense>);
+  const source = sources[0];
+  await act(async () => update(1));
+  expect(source.read()).toEqual([{ x: 0, y: 0 }]);
+  await act(async () => update(2));
+  expect(source.read()).toEqual([{ x: 0, y: 2 }]);
 });

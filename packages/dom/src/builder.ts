@@ -156,8 +156,14 @@ export class PlotBuilder<T extends BaseDataPoint> {
       scope: this.scope,
     });
 
-    if (this.series) {
-      plot.mainPane.addSeries({ series: this.series, data: this.data });
+    try {
+      if (this.series) {
+        plot.mainPane.addSeries({ series: this.series, data: this.data });
+      }
+    } catch (error) {
+      try { plot.destroy(); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], "building Plot failed"); }
+      throw error;
     }
 
     return plot;

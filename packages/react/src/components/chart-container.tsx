@@ -17,11 +17,13 @@ import { usePlot } from '../hooks/use-chart';
 import {
   ChartDataProvider,
   ChartProvider,
+  SeriesPlacementProvider,
   type ChartApi,
   type PaneAcquisition,
 } from './chart-context';
 import {
   createSeriesCollector,
+  createSeriesPlacement,
   type SeriesCollector,
 } from './series-collector';
 
@@ -357,9 +359,10 @@ export function ChartContainer<T extends BaseDataPoint>({
   // a pane took over `mainPane`, it's the same collector, so the order
   // chains into one.
   const mainCollector = api ? api.seriesCollector(api.plot.mainPane) : null;
-  mainCollector?.begin();
+  const placement = createSeriesPlacement();
 
   useEffect(() => {
+    placement.commit();
     mainCollector?.flush();
   });
 
@@ -377,7 +380,9 @@ export function ChartContainer<T extends BaseDataPoint>({
       {api ? (
         <ChartProvider value={api}>
           {/* The series owns the data — the container just passes it down */}
-          <ChartDataProvider value={data}>{children}</ChartDataProvider>
+          <SeriesPlacementProvider value={placement}>
+            <ChartDataProvider value={data}>{children}</ChartDataProvider>
+          </SeriesPlacementProvider>
         </ChartProvider>
       ) : null}
     </>

@@ -70,6 +70,7 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
 
       let low = Number.POSITIVE_INFINITY;
       let high = Number.NEGATIVE_INFINITY;
+      let volumeScale = 0;
       const visible: OHLC[] = [];
       for (const candle of data) {
         const x = candle.x;
@@ -78,8 +79,9 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
         visible.push(candle);
         if (candle.low < low) low = candle.low;
         if (candle.high > high) high = candle.high;
+        if (!isGap(candle.volume) && candle.volume > volumeScale) volumeScale = candle.volume;
       }
-      if (visible.length === 0 || high <= low) return;
+      if (visible.length === 0 || high <= low || volumeScale <= 0) return;
 
       const totals = new Array<number>(bins).fill(0);
       for (const candle of visible) {
@@ -87,12 +89,19 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
         // `isGap` covers `null` too — `null <= 0` happened to be true, but
         // that was luck, not a rule. Finiteness is the data gate's job.
         if (isGap(volume) || volume <= 0) continue;
-        const typical = (candle.high + candle.low + candle.close) / 3;
+        const sum = candle.high + candle.low + candle.close;
+        const typical = Number.isFinite(sum) ? sum / 3 : candle.high / 3 + candle.low / 3 + candle.close / 3;
+        const span = high - low;
+        const fraction = Number.isFinite(span)
+          ? (typical - low) / span
+          : (typical / 2 - low / 2) / (high / 2 - low / 2);
         const index = Math.min(
           bins - 1,
-          Math.floor(((typical - low) / (high - low)) * bins),
+          Math.max(0, Math.floor(fraction * bins)),
         );
-        totals[index] += volume;
+        // Only ratios are drawn. In units of the largest volume each
+        // contribution is at most one, so a finite tape cannot overflow.
+        totals[index] += volume / volumeScale;
       }
 
       let max = 0;
@@ -111,14 +120,17 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
         options.style,
       );
       const maxWidth = (area.right - area.left) * fraction;
-      const step = (high - low) / bins;
+      const priceAt = (index: number): number => {
+        const fraction = index / bins;
+        return low * (1 - fraction) + high * fraction;
+      };
 
       for (let index = 0; index < bins; index++) {
         const total = totals[index];
         if (total <= 0) continue;
 
-        const bandTop = yScale.scale(low + (index + 1) * step);
-        const bandBottom = yScale.scale(low + index * step);
+        const bandTop = yScale.scale(priceAt(index + 1));
+        const bandBottom = yScale.scale(priceAt(index));
         const width = (total / max) * maxWidth;
 
         target.drawShape({

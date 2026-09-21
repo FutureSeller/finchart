@@ -210,6 +210,14 @@ downstream. Two rules hold for all of them:
   says ✓: the node re-runs the prefix plus its declared lookback and keeps
   the rest of its output as is. Where it says —, a landing recomputes.
 
+`movingAverage` has a head door only for `type: "sma"`. All recursive
+indicators recompute the full history on prepend, including EMA, MACD, RSI,
+ATR, ADX, Stochastic RSI, Elder-Ray, TRIX and Keltner Channels. A fixed
+decay horizon cannot bound the error relative to the current reading when
+older seed prices are arbitrarily large; missing observations can also pause
+the recursion. This costs a full-history calculation on a history page;
+the tick paths in the table are unchanged.
+
 Defaults are exported as constants so a settings panel can render them —
 the same values the labels are built from — and so are the oscillators'
 reference lines (`RSI_LEVELS`, `PSY_LEVELS`, `KDJ_LEVELS`, `STOCHASTIC_LEVELS`, `STOCHASTIC_RSI_LEVELS`,
@@ -222,11 +230,11 @@ must carry beyond OHLC: `volume` on every bar, or an `anchor` predicate
 | Indicator | Tick | Head door | Defaults | Needs |
 |---|---|---|---|---|
 | `movingAverage` | increment | ✓ | `MOVING_AVERAGE_DEFAULTS` | — |
-| `macd` | increment | ✓ | `MACD_DEFAULTS` | — |
+| `macd` | increment | — | `MACD_DEFAULTS` | — |
 | `bollingerBands` | recompute + reuse | ✓ | `BOLLINGER_DEFAULTS` | — |
-| `rsi` | recompute + reuse | ✓ | `RSI_DEFAULTS` | — |
-| `atr` | recompute + reuse | ✓ | `ATR_DEFAULTS` | — |
-| `adx` | recompute + reuse | ✓ | `ADX_DEFAULTS` | — |
+| `rsi` | recompute + reuse | — | `RSI_DEFAULTS` | — |
+| `atr` | recompute + reuse | — | `ATR_DEFAULTS` | — |
+| `adx` | recompute + reuse | — | `ADX_DEFAULTS` | — |
 | `parabolicSar` | recompute + reuse | — | `PARABOLIC_SAR_DEFAULTS` | — |
 | `ichimoku` | recompute + reuse | ✓ | `ICHIMOKU_DEFAULTS` | — |
 | `vwap` | recompute + reuse | — | — | volume |
@@ -235,18 +243,18 @@ must carry beyond OHLC: `volume` on every bar, or an `anchor` predicate
 | `cci` | recompute + reuse | ✓ | `CCI_DEFAULTS` | — |
 | `williamsR` | recompute + reuse | ✓ | `WILLIAMS_R_DEFAULTS` | — |
 | `donchianChannels` | recompute + reuse | ✓ | `DONCHIAN_DEFAULTS` | — |
-| `keltnerChannels` | recompute + reuse | ✓ | `KELTNER_DEFAULTS` | — |
+| `keltnerChannels` | recompute + reuse | — | `KELTNER_DEFAULTS` | — |
 | `superTrend` | recompute + reuse | — | `SUPERTREND_DEFAULTS` | — |
 | `pivotPoints` | recompute + reuse | — | `PIVOT_POINTS_DEFAULTS` | anchor |
-| `stochasticRsi` | increment | ✓ | `STOCHASTIC_RSI_DEFAULTS` | — |
+| `stochasticRsi` | increment | — | `STOCHASTIC_RSI_DEFAULTS` | — |
 | `mfi` | increment | ✓ | `MFI_DEFAULTS` | volume |
 | `ultimateOscillator` | increment | ✓ | `ULTIMATE_OSCILLATOR_DEFAULTS` | — |
 | `awesomeOscillator` | increment | ✓ | `AWESOME_OSCILLATOR_DEFAULTS` | — |
 | `momentum` | increment | ✓ | `MOMENTUM_DEFAULTS` | — |
-| `elderRay` | increment | ✓ | `ELDER_RAY_DEFAULTS` | — |
+| `elderRay` | increment | — | `ELDER_RAY_DEFAULTS` | — |
 | `squeezeMomentum` | increment | ✓ | `SQUEEZE_MOMENTUM_DEFAULTS` | — |
 | `roc` | increment | ✓ | `ROC_DEFAULTS` | — |
-| `trix` | increment | ✓ | `TRIX_DEFAULTS` | — |
+| `trix` | increment | — | `TRIX_DEFAULTS` | — |
 | `psy` | increment | ✓ | `PSY_DEFAULTS` | — |
 | `bbi` | increment | ✓ | `BBI_DEFAULTS` | — |
 | `dma` | increment | ✓ | `DMA_DEFAULTS` | — |
@@ -275,7 +283,7 @@ completes; `pivotPoints` is anchored the same way — a period's levels come fro
 period before it, so a page can change the first period you held (its
 levels now have a period before them, and its own extremes gain the bars
 the page completes) and the one after it, nothing later.
-`ichimoku` is the one of the six with a horizon (`max(conversion, base, span)
+`ichimoku` has a finite horizon (`max(conversion, base, span)
 − 1 + displacement` bars), so it lands a page through its own door.
 
 Other exports with a row of their own, not computed nodes:

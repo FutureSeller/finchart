@@ -7,8 +7,8 @@ import type {
   Source,
 } from '@finchart/core';
 import { seriesSpec } from '@finchart/core';
-import { useEffect, useId, useRef } from 'react';
-import { useChartData, useSeriesCollector } from './chart-context';
+import { useEffect, useId } from 'react';
+import { useChartData, useSeriesCollector, useSeriesPlacement } from './chart-context';
 
 /** What every variant accepts. */
 interface CommonSeriesProps<TSource extends BaseDataPoint> {
@@ -174,37 +174,20 @@ export function ChartSeries<
   const spec = toSpec(id, props, props.data ?? inherited);
 
   // This is the only place that knows the JSX order — effects run in mount order.
-  collector.place(spec);
+  const placement = useSeriesPlacement();
+  const rank = placement?.place(id);
 
-  // What to hand over when the effect reattaches. `place` already applied it to the list.
-  const latest = useRef(spec);
-  latest.current = spec;
-
-  // Entering and leaving the list.
+  // Each effect closes over the render that actually committed. Shared
+  // refs written during render would expose abandoned Suspense candidates.
   useEffect(() => {
-    collector.keep(latest.current);
-    collector.flush();
-
-    return () => {
-      collector.remove(id);
-      collector.flush();
-    };
-  }, [collector, id]);
-
-  /**
-   * The case where something already mounted has its content changed — a
-   * new series or a new `deriveKey`.
-   *
-   * `place` only swaps the collector during the render phase, and the
-   * effect above doesn't re-run since its deps are unchanged. **When
-   * neither the pane nor the container re-renders and only the component
-   * in between does, this is the only place left to hand it over to the
-   * chart.** `syncSeries` doesn't notify when nothing changed, so calling
-   * it every time is cheap.
-   */
-  useEffect(() => {
+    collector.keep(spec, rank);
     collector.flush();
   });
+
+  useEffect(() => () => {
+    collector.remove(id);
+    collector.flush();
+  }, [collector, id]);
 
   return null;
 }

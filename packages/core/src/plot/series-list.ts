@@ -89,29 +89,6 @@ interface Synced {
   entry: Entry;
 }
 
-/**
- * Fits the Entry of a matching id onto the new spec — this is where the
- * derivation cache survives. Returns what actually changed: if nothing did,
- * there's neither a render nor a refit.
- */
-function reuseEntry(prior: Synced, spec: SeriesSpec): { swapped: boolean; fed: boolean } {
-  const swapped = prior.spec.series !== spec.series;
-  if (swapped) prior.entry.swapSeries(spec.series);
-
-  /**
-   * Data is pushed in **only when the reference changed.**
-   *
-   * `setData` does a full sort check and reruns the derivation, so calling
-   * it on every render would turn data size into the cost of a React
-   * update. Not refitting is what distinguishes this from the imperative
-   * handle.
-   */
-  const fed = prior.spec.data !== spec.data;
-  if (fed) prior.entry.feed(spec.data ?? []);
-
-  return { swapped, fed };
-}
-
 export class SeriesList {
   private list: Entry[] = [];
   private owner: Owner | null = null;
@@ -216,22 +193,11 @@ export class SeriesList {
 
     const next = new Map<string, Synced>();
     const entries: Entry[] = [];
-    let swapped = false;
-    let fed = false;
+    const commits: (() => void)[] = [];
 
-    /**
-     * **Building comes first, committing comes later.** If `toEntry` on the
-     * next spec throws after `feed`/`swapSeries` has already been committed
-     * to a reused registration, the earlier sibling's new data sits inside
-     * its manager with no notification firing, so the chart refits neither
-     * the x index nor the value axis. So everything that can throw
-     * (building a new registration) happens first — only once that whole
-     * pass clears does it move on to committing the reused ones.
-     *
-     * **The window this leaves open**: if a reuse commit itself throws (bad
-     * feed data), an earlier sibling's commit is left standing — a full
-     * rollback would require the manager to have an undo door, which it doesn't.
-     */
+    // All construction, derivation and data validation finish before any
+    // live entry is changed. A later sibling failure discards the staged
+    // states, preserving both live values and the reconciliation baseline.
     type Step = { spec: SeriesSpec; reuse: Synced } | { spec: SeriesSpec; built: Entry };
     const plan: Step[] = [];
     for (const spec of specs) {
@@ -253,13 +219,16 @@ export class SeriesList {
       );
     }
 
-    this.owner = specs.length === 0 ? null : "declarative";
-
     for (const step of plan) {
       if ("reuse" in step) {
-        const changes = reuseEntry(step.reuse, step.spec);
-        swapped ||= changes.swapped;
-        fed ||= changes.fed;
+        const swapped = step.reuse.spec.series !== step.spec.series;
+        const fed = step.reuse.spec.data !== step.spec.data;
+        if (swapped || fed) {
+          commits.push(step.reuse.entry.prepare(
+            step.spec.series,
+            fed ? step.spec.data ?? [] : undefined,
+          ));
+        }
 
         next.set(step.spec.id, { spec: step.spec, entry: step.reuse.entry });
         entries.push(step.reuse.entry);
@@ -271,11 +240,12 @@ export class SeriesList {
     }
 
     const changed =
-      swapped ||
-      fed ||
+      commits.length > 0 ||
       entries.length !== this.list.length ||
       entries.some((entry, index) => entry !== this.list[index]);
 
+    for (const commit of commits) commit();
+    this.owner = specs.length === 0 ? null : "declarative";
     this.list = entries;
     this.synced = next;
     return changed;

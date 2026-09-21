@@ -82,13 +82,19 @@ export function distributeHeights(
 
   const space = available - gap * (boxes.length - 1);
   const floors = boxes.map((box) => Math.max(0, box.minHeight));
-  const floorSum = floors.reduce((total, height) => total + height, 0);
+  const floorSum = floors.reduce((sum, height) => sum + height, 0);
+  const floorMax = floors.reduce((max, height) => Math.max(max, height), 0);
+  const floorTotal = floorMax === 0 ? 0 : floors.reduce((sum, height) => sum + height / floorMax, 0);
 
   // If even the sum of the floors doesn't fit, everyone shrinks together.
   // More predictable than cutting some out or letting things overflow.
   if (space <= floorSum) {
-    const ratio = floorSum === 0 ? 0 : Math.max(0, space) / floorSum;
-    return floors.map((height) => height * ratio);
+    if (Number.isFinite(floorSum)) {
+      const ratio = floorSum === 0 ? 0 : Math.max(0, space) / floorSum;
+      return floors.map(height => height * ratio);
+    }
+    return floors.map((height) => floorMax === 0 ? 0
+      : Math.max(0, space) * ((height / floorMax) / floorTotal));
   }
 
   const heights = boxes.map(() => 0);
@@ -96,7 +102,10 @@ export function distributeHeights(
 
   for (;;) {
     let pinnedTotal = 0;
+    const flexMax = boxes.reduce((max, box, index) =>
+      pinned[index] ? max : Math.max(max, box.flex), 0);
     let flexTotal = 0;
+    let normalizedTotal = 0;
     let freeCount = 0;
 
     boxes.forEach((box, index) => {
@@ -105,6 +114,7 @@ export function distributeHeights(
         return;
       }
       flexTotal += Math.max(0, box.flex);
+      normalizedTotal += flexMax === 0 ? 0 : Math.max(0, box.flex) / flexMax;
       freeCount += 1;
     });
 
@@ -116,7 +126,9 @@ export function distributeHeights(
       // If nobody declared a flex ratio, split evenly.
       heights[index] =
         flexTotal > 0
-          ? remaining * (Math.max(0, box.flex) / flexTotal)
+          ? remaining * (Number.isFinite(flexTotal)
+            ? Math.max(0, box.flex) / flexTotal
+            : (Math.max(0, box.flex) / flexMax) / normalizedTotal)
           : remaining / freeCount;
     });
 

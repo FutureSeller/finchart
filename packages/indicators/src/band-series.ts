@@ -27,13 +27,16 @@ export function bandSeries(options: BandSeriesOptions = {}): Series<BandPoint> {
       let extent: Range | null = null;
 
       for (const point of data) {
-        if (isGap(point.upper) || isGap(point.lower)) continue;
+        if (!hasBounds(point)) continue;
+        // Ichimoku's two spans can cross: their names do not order their prices.
+        const min = Math.min(point.lower, point.upper);
+        const max = Math.max(point.lower, point.upper);
         extent =
           extent === null
-            ? { min: point.lower, max: point.upper }
+            ? { min, max }
             : {
-                min: Math.min(extent.min, point.lower),
-                max: Math.max(extent.max, point.upper),
+                min: Math.min(extent.min, min),
+                max: Math.max(extent.max, max),
               };
       }
 
@@ -68,12 +71,18 @@ const bandCoordinates: CoordinateAccessor<BandPoint> = {
 };
 
 /** Contiguous runs where both boundaries exist. A gap splits a run. */
-function segments(data: readonly BandPoint[]): BandPoint[][] {
-  const runs: BandPoint[][] = [];
-  let current: BandPoint[] = [];
+type BoundedPoint = BandPoint & { upper: number; lower: number };
+
+function hasBounds(point: BandPoint): point is BoundedPoint {
+  return !isGap(point.upper) && !isGap(point.lower);
+}
+
+function segments(data: readonly BandPoint[]): BoundedPoint[][] {
+  const runs: BoundedPoint[][] = [];
+  let current: BoundedPoint[] = [];
 
   for (const point of data) {
-    if (isGap(point.upper) || isGap(point.lower)) {
+    if (!hasBounds(point)) {
       // A one-point run has no area — nothing to draw.
       if (current.length > 1) runs.push(current);
       current = [];
@@ -88,7 +97,7 @@ function segments(data: readonly BandPoint[]): BandPoint[][] {
 
 /** Traces the upper boundary left→right, then the lower right→left, to close the outline. */
 function outline(
-  segment: readonly BandPoint[],
+  segment: readonly BoundedPoint[],
   { x, yScale }: SeriesContext<BandPoint>,
 ): Point[] {
   const points: Point[] = [];
@@ -96,14 +105,14 @@ function outline(
   for (const point of segment) {
     points.push({
       x: x.toPixel(point.x),
-      y: yScale.scale(point.upper!),
+      y: yScale.scale(point.upper),
     });
   }
   for (let index = segment.length - 1; index >= 0; index--) {
     const point = segment[index];
     points.push({
       x: x.toPixel(point.x),
-      y: yScale.scale(point.lower!),
+      y: yScale.scale(point.lower),
     });
   }
 

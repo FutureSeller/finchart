@@ -331,6 +331,21 @@ export function checkPoint<T extends BaseDataPoint>(
         });
       }
     }
+  } else {
+    // Custom accessors need the same finite-or-gap rule as built-in ones.
+    // A richer accessor owns its additional fields through assertFinite.
+    let y: number | null | undefined;
+    try {
+      y = coordinates.getY(point);
+    } catch (error) {
+      if (report === null) throw error;
+      report({ code: "unreadable-y", index, message: `${label}: the accessor could not read a value from index ${index} — ${messageOf(error)}` });
+      return x;
+    }
+    if (!isGap(y) && !Number.isFinite(y)) {
+      fail(report, "non-finite-value", index,
+        `${label} y must be a finite number or null (gap), but index ${index} is ${describe(y)}`);
+    }
   }
 
   return x;

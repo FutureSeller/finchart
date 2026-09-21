@@ -48,7 +48,6 @@ function grab(drawing: Drawing, price: number, x = 200): DragState {
     offsets: gripOffsets(grip, space, point),
     grabbed: logGrab(grip, space, point),
     original: toOwnedDrawing(drawing),
-    moved: false,
   };
 }
 
