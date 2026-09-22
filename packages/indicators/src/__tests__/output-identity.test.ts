@@ -109,7 +109,7 @@ function newObjectsInPrefix(before: readonly BaseDataPoint[], after: readonly Ba
   return changed;
 }
 
-describe.each(cases)("%s", (_name, build) => {
+describe.each(cases)("%s", (name, build) => {
   it("a new bar keeps the earlier output objects on every branch", () => {
     const data = Array.from({ length: 80 }, (_, i) => candle(i));
     const source = sourceOf(data);
@@ -120,8 +120,13 @@ describe.each(cases)("%s", (_name, build) => {
 
     branches.forEach((branch, k) => {
       const after = branch.read();
-      expect(after.length, `branch ${k} grows`).toBeGreaterThan(before[k].length - 1);
-      expect(newObjectsInPrefix(before[k], after), `branch ${k}`).toBeLessThanOrEqual(1);
+      if (name === "bollingerBands") {
+        expect(after).toHaveLength(81);
+        expect(newObjectsInPrefix(before[k], after), `branch ${k}`).toBe(0);
+      } else {
+        expect(after.length, `branch ${k} grows`).toBeGreaterThan(before[k].length - 1);
+        expect(newObjectsInPrefix(before[k], after), `branch ${k}`).toBeLessThanOrEqual(1);
+      }
     });
   });
 
@@ -138,24 +143,6 @@ describe.each(cases)("%s", (_name, build) => {
       const after = branch.read();
       const prefix = before[k].slice(0, before[k].length - 1);
       expect(newObjectsInPrefix(prefix, after), `branch ${k}`).toBeLessThanOrEqual(1);
-    });
-  });
-});
-
-describe("bollingerBands, exactly", () => {
-  it("a new bar changes nothing before it — every earlier object is the same one", () => {
-    const data = Array.from({ length: 80 }, (_, i) => candle(i));
-    const source = sourceOf(data);
-    const node = bollingerBands(source);
-    const before = { ...node.out };
-    const snapshot = Object.values(before).map((branch) => [...branch.read()]);
-
-    source.swap([...data, candle(80)]);
-
-    Object.values(node.out).forEach((branch, k) => {
-      const after = branch.read();
-      expect(after).toHaveLength(81);
-      for (let i = 0; i < 80; i++) expect(after[i], `branch ${k} [${i}]`).toBe(snapshot[k][i]);
     });
   });
 });

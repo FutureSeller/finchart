@@ -1,7 +1,7 @@
 /** A collection of regression checks for bugs review caught by actually measuring. */
 import { describe, expect, it, vi } from "vitest";
 import { createPlotModel } from "../index";
-import { frameScheduler } from "../../render";
+import { frameScheduler, createMemoryLayers, noStyle, recordingRenderer } from "../../render";
 import { pluginApi } from "../../primitives";
 import {
   addDecoration,
@@ -11,6 +11,8 @@ import {
 import { lineSeries } from "../../series";
 import { seriesSpec } from "../../registration";
 import { priceFormat } from "../../axis/price-format";
+import { Plot } from "../plot";
+import { createPlotDeps } from "../presets";
 
 const DATA = [
   { x: 0, y: 10 },
@@ -557,5 +559,64 @@ describe("the draw context's mapping does not lose its original", () => {
     // Four of them used to vanish (only `toPixel` survived) — and calling
     // fromPixel inside the render loop then threw forever.
     expect(seen).toEqual([]);
+  });
+});
+
+describe("constructor rollback", () => {
+  const size = { width: 400, height: 300 };
+
+  it("releases acquired layers and scheduler after renderer construction fails", () => {
+    const destroy = vi.fn();
+    const cancel = vi.fn();
+    const failure = new Error("renderer failed");
+    const deps = createPlotDeps({
+      createLayers: (w, h) => ({ ...createMemoryLayers(w, h), destroy }),
+      createRenderer: () => { throw failure; },
+      createScheduler: () => ({ request() {}, cancel }),
+      createStyleReader: () => noStyle,
+    });
+    expect(() => new Plot({ deps, size })).toThrow(failure);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the original failure and finishes rollback when one release also fails", () => {
+    const destroy = vi.fn();
+    const original = new Error("observer failed");
+    const cleanup = new Error("disconnect failed");
+    const deps = createPlotDeps({
+      createLayers: (w, h) => ({ ...createMemoryLayers(w, h), destroy }),
+      createRenderer: recordingRenderer().factory,
+      createStyleReader: () => noStyle,
+      interactions: { handlePan() {}, handleZoom() {}, handleCrosshair() {}, connect() {}, disconnect() { throw cleanup; } },
+      observeSize: () => { throw original; },
+    });
+    let caught: unknown;
+    try { new Plot({ deps, size }); } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(AggregateError);
+    if (!(caught instanceof AggregateError)) throw new Error("expected aggregate");
+    expect(caught.errors).toEqual([original, cleanup]);
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases plugins installed by a collaborator before constructor failure", () => {
+    const cleanup = vi.fn();
+    const destroy = vi.fn();
+    const deps = createPlotDeps({
+      createLayers: (w, h) => ({ ...createMemoryLayers(w, h), destroy }),
+      createRenderer: recordingRenderer().factory,
+      createStyleReader: () => noStyle,
+      interactions: {
+        handlePan() {}, handleZoom() {}, handleCrosshair() {}, disconnect() {},
+        connect(host) {
+          if (!(host instanceof Plot)) throw new Error("expected plot");
+          host.use(() => pluginApi({}, cleanup));
+          throw new Error("connect failed");
+        },
+      },
+    });
+    expect(() => new Plot({ deps, size })).toThrow("connect failed");
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 });

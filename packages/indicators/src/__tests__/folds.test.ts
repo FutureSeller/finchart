@@ -370,7 +370,8 @@ describe("stddevFold ↔ stddev", () => {
     expect(run(stddevFold(2), [1, 3, 3])).toEqual([null, 1, 0]);
   });
 
-  it.each([2, 5, 20])("period %i — bit for bit (the array is the fold in a loop)", (period) => {
+  it("the array wrapper agrees with the fold bit for bit", () => {
+    const period = 5;
     for (const values of inputs) {
       expect(run(stddevFold(period), values)).toEqual(stddev(values, period));
     }

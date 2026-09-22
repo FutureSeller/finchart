@@ -220,3 +220,19 @@ describe("Axis", () => {
     });
   });
 });
+
+it.each([[1, 1 + 1e-14], [-Number.MAX_VALUE, Number.MAX_VALUE]])("keeps finite distinct ticks across [%s,%s]", (min, max) => {
+  const ticks = new Axis(new LinearScale(min, max, 0, 1000), "horizontal", {}).getTicks();
+  expect(ticks.length).toBeGreaterThan(2);
+  expect(ticks.length).toBeLessThan(1000);
+  expect(ticks.every(t => Number.isFinite(t.value) && t.value >= min && t.value <= max)).toBe(true);
+  expect(ticks.every((t, i) => i === 0 || t.value > ticks[i - 1].value)).toBe(true);
+  expect(ticks.every((t, i) => i === 0 || t.position > ticks[i - 1].position)).toBe(true);
+});
+
+it("does not lose a positive tick interval to subnormal underflow", () => {
+  const min = Number.MIN_VALUE;
+  const ticks = new Axis(new LinearScale(min, min * 2, 0, 1000), "horizontal", {}).getTicks();
+  expect(ticks.map(t => t.value)).toEqual([min, min * 2]);
+  expect(ticks.map(t => t.position)).toEqual([0, 1000]);
+});

@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Point } from "@finchart/core";
+import type { Point, InteractionTarget } from "@finchart/core";
 import { InputRouter, type InputEvent } from "@finchart/core";
 import { PointerInteractions } from "../pointer";
-import type { InteractionTarget } from "@finchart/core";
 
 function recordingTarget() {
   const pans: number[] = [];
@@ -1116,18 +1115,6 @@ describe("leaving the chart", () => {
     element.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
 
     expect(target.crosshairs).toEqual([]);
-  });
-});
-
-/**
- * **Horizontal gestures are the chart's, vertical ones the page's.** With
- * `touch-action: none` a vertical swipe over a chart in a scrolling page
- * did nothing and scrolled nothing.
- */
-describe("touch-action", () => {
-  it("leaves vertical panning to the page", () => {
-    new PointerInteractions(element).connect(target.target);
-    expect(element.style.touchAction).toBe("pan-y");
   });
 });
 

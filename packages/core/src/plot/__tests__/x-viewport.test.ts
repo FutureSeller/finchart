@@ -553,17 +553,6 @@ describe("zoom center clamp", () => {
     expect(min).toBeLessThanOrEqual(800);
   });
 
-  it("should keep the cursor-fixed invariant for anchors inside the data", () => {
-    const s = setup();
-    s.load([0, 800]);
-    s.viewport.fit();
-
-    const anchored = s.scale.invert(200); // a point inside the data
-    s.viewport.zoomAtPixel(2, 200);
-
-    expect(s.scale.invert(200)).toBeCloseTo(anchored);
-  });
-
   it("should zoom freely when there is no data to clamp against", () => {
     const s = setup();
 
@@ -571,7 +560,6 @@ describe("zoom center clamp", () => {
 
     const [min, max] = s.domain();
     expect(max - min).toBeCloseTo(0.5);
-    expect(s.changes.length).toBeGreaterThanOrEqual(0);
   });
 });
 

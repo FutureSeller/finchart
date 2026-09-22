@@ -67,3 +67,21 @@ describe("priceFormat", () => {
     });
   });
 });
+
+it("formats distinct sub-nanounit ticks through both precision inference doors", () => {
+  const explicit = priceFormat({ minMove: 1e-9, locale: "en-US" });
+  expect(explicit(1e-9)).toBe("0.000000001");
+  expect(explicit(2e-9)).toBe("0.000000002");
+  const automatic = priceFormat({ locale: "en-US" });
+  expect(automatic(1e-9, 1e-9)).toBe("0.000000001");
+  expect(automatic(2e-9, 1e-9)).toBe("0.000000002");
+});
+
+it("uses scientific labels beyond Intl's decimal limit and preserves finite snapping", () => {
+  const format = priceFormat({ minMove: 1e-310, locale: "en-US" });
+  expect(format(1)).not.toContain("∞");
+  expect(format(1e-310)).not.toBe(format(2e-310));
+  const automatic = priceFormat({ locale: "en-US" });
+  expect(automatic(1e-310, 1e-310)).not.toBe(automatic(2e-310, 1e-310));
+  expect(priceFormat({ minMove: 1e308, locale: "en-US" })(Number.MAX_VALUE)).not.toContain("∞");
+});

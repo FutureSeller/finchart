@@ -1,5 +1,6 @@
+import { mountDrawingStage } from "./drawing-stage.fixture";
 import type { OHLC, SeriesSample } from "@finchart/core";
-import { candleSeries, createPlotModel } from "@finchart/core";
+import { candleSeries, createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { barSampleAt } from "../snap";
 import { drawingTools } from "../tools";
@@ -192,4 +193,17 @@ describe("the bar at an x — one rule for snapping and the bar measure", () => 
     expect(barSampleAt([sample({}), sample({ index: 2 })])).toBeNull();
     expect(barSampleAt([])).toBeNull();
   });
+});
+
+it('does not complete a stationary click merely because the first anchor snapped', () => {
+  const { api, route, setSamples } = mountDrawingStage();
+  api.setSnap(true);
+  setSamples([{ series: lineSeries(), name: null, color: null, x: 50, value: 56, min: null, max: null, index: 0 }]);
+  api.begin('trend');
+  route('pointerdown', 50, 50); route('pointerup', 50, 50);
+  expect(api.list()).toEqual([]);
+  expect(api.mode()).toBe('trend');
+  route('pointerdown', 80, 80); route('pointerup', 80, 80);
+  expect(api.list()).toHaveLength(1);
+  api.dispose();
 });

@@ -142,3 +142,11 @@ describe("sliceAreas", () => {
     expect(sliceAreas(full, [560], 10)).toEqual([full]);
   });
 });
+
+describe("finite layout weights", () => {
+  it("preserves ratios when finite layout weights or floors overflow their sum", () => {
+    expect(distributeHeights([{ flex: 1e308, minHeight: 0 }, { flex: 1e308, minHeight: 0 }], 100, 0)).toEqual([50, 50]);
+    expect(distributeHeights([{ flex: 1, minHeight: 1e308 }, { flex: 1, minHeight: 1e308 }], 100, 0)).toEqual([50, 50]);
+    expect(distributeHeights([{ flex: 1e308, minHeight: 60 }, { flex: 1e308, minHeight: 0 }], 100, 0)).toEqual([60, 40]);
+  });
+});

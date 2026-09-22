@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DataError } from "../../primitives";
 import { M4Decimation, OHLCAccessor, SimpleDataManager, defaultCoordinates } from "..";
 import type { CoordinateAccessor, LineDataPoint } from "../types";
-import { validateSeriesData } from "../validate";
+import { validateSeriesData, validateSeriesPoint } from "../validate";
+import { SimpleDecimation } from "../decimation";
 
 /**
  * The quality contract of this API: `null` means exactly "setData will not
@@ -156,5 +157,22 @@ describe("issues", () => {
     const issues = validateSeriesData([{ x: Number.NaN, y: 1 }]);
 
     expect(issues?.[0]?.message).toMatch(/finite/);
+  });
+});
+
+describe("custom accessor finite-or-gap fallback", () => {
+  const coordinates = { getX: (p: { x: number; v: number | null }) => p.x, getY: (p: { x: number; v: number | null }) => p.v };
+  it.each([NaN, Infinity, -Infinity])("rejects %s in both diagnostics and ingestion", v => {
+    const data = [{ x: 0, v: 1 }, { x: 1, v }, { x: 2, v: 2 }];
+    expect(validateSeriesData(data, coordinates)).toEqual([expect.objectContaining({ code: "non-finite-value", index: 1 })]);
+    expect(validateSeriesPoint(data[1], coordinates)?.[0].code).toBe("non-finite-value");
+    const manager = new SimpleDataManager({ coordinates, decimation: new SimpleDecimation(coordinates) });
+    manager.setData([{ x: 0, v: 1 }]);
+    expect(() => manager.append(data.slice(1))).toThrow(DataError);
+    expect(manager.read()).toEqual([{ x: 0, v: 1 }]);
+    expect(() => manager.setData(data)).toThrow(DataError);
+  });
+  it("retains null gaps", () => {
+    expect(validateSeriesData([{ x: 0, v: null }], coordinates)).toBeNull();
   });
 });

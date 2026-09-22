@@ -13,6 +13,7 @@
 import type { OHLC, Source } from "@finchart/core";
 import { barIndexX, candleSeries, ContractError, createPlotModel } from "@finchart/core";
 import { describe, expect, it } from "vitest";
+import { bandSeries } from "../band-series";
 import { ichimoku } from "../factories";
 import { attachIchimoku } from "../plugins";
 
@@ -291,5 +292,18 @@ describe("attachIchimoku — ahead", () => {
     model.plot.fitDomains();
     model.plot.render();
     expect(model.plot.getState().xDomain?.max).toBe(minute(data[99].x, 26));
+  });
+});
+
+describe("ichimoku cloud extent", () => {
+  const bar = (x: number, close: number, volume = 100): OHLC => ({
+    x, open: close, high: close, low: close, close, volume,
+  });
+
+  it('claims both Ichimoku cloud bounds when span A falls below span B', () => {
+    const data = Array.from({ length: 20 }, (_, i) => bar(i, 100 - i * 2));
+    const cloud = ichimoku({ read: () => data }, { conversion: 2, base: 3, span: 5, displacement: 0 }).out.cloud.read();
+    const values = cloud.flatMap(p => p.upper === null || p.lower === null ? [] : [p.upper, p.lower]);
+    expect(bandSeries().valueExtent([...cloud])).toEqual({ min: Math.min(...values), max: Math.max(...values) });
   });
 });

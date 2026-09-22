@@ -225,3 +225,24 @@ describe("screen-space bucketing (screenXOf)", () => {
     expect(decimated.some((point) => point.y === null)).toBe(true);
   });
 });
+
+it("LTTB retains the same shape under finite large and small coordinate scalings", () => {
+  const values = [46, 14, 50, 33, 66, 21, 49, 25, 7, 36, 86, 17, 9, 16, 8, 44, 82, 96, 85, 31];
+  const decimator = new LttbDecimation<{ x: number; y: number; id: number }>();
+  for (const [sx, sy] of [[1, 1], [1e306, 1e300], [1e-300, 1e-300]]) {
+    const data = values.map((y, id) => ({ x: id * sx, y: y * sy, id }));
+    const snapshot = data.map(p => ({ ...p }));
+    expect(decimator.decimate(data, { start: 0, end: data.length }, 5).map(p => p.id)).toEqual([0, 1, 10, 14, 19]);
+    expect(data).toEqual(snapshot);
+  }
+});
+
+it("LTTB preserves small price differences around a large common offset", () => {
+  const offsets = [96, 134, 76, 130, 64, 94, 172, 42, 16, 70, 124, 2, 160, 190, 172, 58, 32, 190, 132, 18];
+  const decimator = new LttbDecimation<{ x: number; y: number }>();
+  // Exact integer-area oracle, including each bucket's rational centroid.
+  for (const offset of [0, 1e16]) {
+    const data = offsets.map((y, x) => ({ x, y: y + offset }));
+    expect(decimator.decimate(data, { start: 0, end: data.length }, 5).map(p => p.x)).toEqual([0, 6, 11, 13, 19]);
+  }
+});

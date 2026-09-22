@@ -1,3 +1,4 @@
+import { mountDrawingStage } from "./drawing-stage.fixture";
 /**
  * Don't trust the consumer. If `add` only validates the argument and
  * then saves it via `structuredClone`, an argument that uses getters or
@@ -242,4 +243,20 @@ describe("validation and storage see the same object", () => {
     expect(shapeOf(viaLoad)).toEqual(shapeOf(viaAdd));
     expect(viaAdd.list()).toMatchObject([{ type: "horizontal", price: 100 }]);
   });
+});
+
+it('does not add after an input getter disposes the toolbox', () => {
+  const { api } = mountDrawingStage();
+  expect(() => api.add({ type: 'horizontal', get price() { api.dispose(); return 50; } })).toThrow(/disposed/);
+  expect(api.list()).toEqual([]);
+});
+
+it('does not write or record history for a target removed by a patch getter', () => {
+  const { api } = mountDrawingStage();
+  const handle = api.add({ type: 'horizontal', price: 50 });
+  expect(() => handle.update({ get price() { api.clear(); return 60; } })).toThrow(/changed while reading/);
+  expect(handle.read()).toMatchObject({ price: 50 });
+  expect(api.list()).toEqual([]);
+  expect(api.canUndo()).toBe(false);
+  api.dispose();
 });

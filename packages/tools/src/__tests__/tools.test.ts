@@ -1,7 +1,9 @@
+import { space } from "./drawing-stage.fixture";
 import type { LineDataPoint } from "@finchart/core";
 import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { drawingTools } from "../tools";
+import type { DrawingPane, DrawingStage } from '../tools';
 
 const data: LineDataPoint[] = [
   { x: 0, y: 100 },
@@ -303,4 +305,16 @@ describe("double-click on a shape", () => {
     const { model, x, y } = withLine();
     expect(dbl(model, { x, y: y + 200 })).toBe(false);
   });
+});
+
+it('rolls back focus and decoration acquisitions if input installation fails', () => {
+  let focus = 0, decorations = 0;
+  const plot: DrawingStage = {
+    ...space, requestRender() {}, crosshair() {}, claimCursor: () => () => {},
+    claimFocusArea() { focus++; return { contestedAt: () => false, release() { focus--; } }; },
+    addInputConsumer() { throw new Error('registration failed'); },
+  };
+  const pane: DrawingPane = { ...space, xRange: () => null, probe: () => [], addDecoration() { decorations++; return () => { decorations--; }; } };
+  expect(() => drawingTools({ plot })(pane)).toThrow('registration failed');
+  expect({ focus, decorations }).toEqual({ focus: 0, decorations: 0 });
 });

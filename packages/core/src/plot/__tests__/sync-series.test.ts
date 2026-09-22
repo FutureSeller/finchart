@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DataView, LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { seriesSpec } from "../../registration";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
+import { createPlotModel } from "../model";
+import { lineSeries } from "../../series";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 10 },
@@ -336,5 +338,31 @@ describe("Pane.syncSeries — the input lane", () => {
     ).not.toThrow();
     plot.render();
     expect(seen.points.at(-1)?.map((p) => p.y)).toEqual([5]);
+  });
+});
+
+describe("syncSeries rollback", () => {
+  const size = { width: 400, height: 300 };
+
+  it("keeps every reused sibling and comparison baseline unchanged when a later feed fails", () => {
+    const { plot } = createPlotModel({ size });
+    const series = lineSeries();
+    const a = seriesSpec({ id: "a", series, data: [{ x: 0, y: 1 }, { x: 1, y: 2 }] });
+    const b = seriesSpec({ id: "b", series, data: [{ x: 0, y: 3 }, { x: 1, y: 4 }] });
+    plot.mainPane.syncSeries([a, b]);
+    const changed = vi.fn();
+    plot.mainPane.subscribe(changed);
+    expect(() => plot.mainPane.syncSeries([
+      seriesSpec({ id: "a", series, data: [{ x: 0, y: 99 }] }),
+      seriesSpec({ id: "b", series, data: [{ x: 1, y: 4 }, { x: 0, y: 3 }] }),
+    ])).toThrow(/sorted/);
+    expect(plot.mainPane.probe(0).map(sample => sample.value)).toEqual([1, 3]);
+    expect(changed).not.toHaveBeenCalled();
+    plot.mainPane.syncSeries([a, b]);
+    expect(plot.mainPane.probe(0).map(sample => sample.value)).toEqual([1, 3]);
+    plot.mainPane.syncSeries([seriesSpec({ id: "a", series, data: [{ x: 0, y: 99 }] }), b]);
+    expect(plot.mainPane.probe(0).map(sample => sample.value)).toEqual([99, 3]);
+    expect(changed).toHaveBeenCalledTimes(1);
+    plot.destroy();
   });
 });

@@ -160,13 +160,6 @@ describe("createDomLayers", () => {
     expect(container.children).toHaveLength(1);
     expect(container.children[0]).toBe(annotation);
   });
-
-  it("should throw a RenderError when no 2d context is available", () => {
-    vi.restoreAllMocks();
-    stubContext(null);
-
-    expect(() => createDomLayers(container, 800, 600)).toThrow(RenderError);
-  });
 });
 
 describe("screen density", () => {
@@ -272,7 +265,10 @@ describe("the backing store is only reacquired when it needs to be", () => {
 
 it("does not publish children or change container style when context acquisition fails", () => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-  expect(() => createDomLayers(container, 100, 100)).toThrow(/2D context/);
+  expect(() => createDomLayers(container, 100, 100)).toThrow(expect.objectContaining({
+    constructor: RenderError,
+    message: expect.stringMatching(/2D context/),
+  }));
   expect(container.childElementCount).toBe(0);
   expect(container.style.position).toBe("");
 });
