@@ -5,11 +5,10 @@
  * installed, and cleaning up twice is safe.
  */
 import { describe, expect, it, vi } from "vitest";
-import { ContractError } from "../../primitives";
+import { ContractError, pluginApi, teardown, type Plugin, type PluginApi } from "../../primitives";
 import { lineSeries } from "../../series";
 import { crosshair } from "../../extensions/crosshair";
 import { paneMaximize } from "../../extensions/pane-maximize";
-import { pluginApi, teardown, type Plugin, type PluginApi } from "../../primitives";
 import type {
   DecorationHost,
   InputHost,
@@ -21,6 +20,7 @@ import type { Plot } from "../plot";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import type { FakeLayers } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
+import { createPlotModel } from "../model";
 
 const mounted = new WeakMap<Plot, FakeLayers>();
 
@@ -412,5 +412,29 @@ describe("demanding only capabilities", () => {
     const narrow: Plugin<PaneHost & PlotEventSource & InputHost> = paneMaximize();
 
     expect(() => plot.use(narrow).dispose()).not.toThrow();
+  });
+});
+
+describe("installation during disposal", () => {
+  const size = { width: 400, height: 300 };
+
+  it("disposes an API returned after its plot or pane is destroyed during installation", () => {
+    const { plot } = createPlotModel({ size });
+    const pane = plot.addPane();
+    const paneCleanup = vi.fn();
+    const paneApi = pane.use(() => {
+      plot.removePane(pane);
+      return pluginApi({}, paneCleanup);
+    });
+    expect(paneApi.disposed).toBe(true);
+    const cleanup = vi.fn();
+    const api = plot.use(host => {
+      host.destroy();
+      return pluginApi({}, cleanup);
+    });
+    plot.destroy();
+    expect(api.disposed).toBe(true);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(paneCleanup).toHaveBeenCalledTimes(1);
   });
 });

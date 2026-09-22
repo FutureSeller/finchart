@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ContractError } from "@finchart/core";
-import { parseDrawings, serializeDrawings, type Drawing } from "../drawings";
+import { parseDrawings, serializeDrawings, type Drawing, channelParallel, fibExtensionPrice, fibLevelPrice, pitchforkLines } from "../drawings";
 import { distanceToSegment } from "../geometry";
 
 describe("serialization", () => {
@@ -170,18 +170,31 @@ describe("symmetry between entry and exit", () => {
       expect(() => serializeDrawings([drawing])).toThrow(ContractError);
     }
   });
+});
 
-  /**
-   * The round trip doesn't reject its own output -- whatever `add`
-   * accepts, `load` must be able to read back.
-   */
-  it("should round-trip anything the parser accepts", () => {
-    const good: Drawing[] = [
-      { type: "horizontal", id: "h1", price: 105 },
-      { type: "trend", id: "t1", a: { x: 1, price: 2 }, b: { x: 3, price: 4 } },
-      { type: "fib", id: "f1", a: { x: 1, price: 2 }, b: { x: 3, price: 4 } },
-    ];
-    const back = parseDrawings(serializeDrawings(good));
-    expect(back).toEqual(good);
-  });
+it('keeps finite linear geometry when intermediate sums or differences overflow', () => {
+  const a = { x: 0, price: 1e308 }, b = { x: 1, price: -1e308 };
+  const fib = { type: 'fib' as const, id: 'f', a, b };
+  expect(fibLevelPrice(fib, 0)).toBe(b.price);
+  expect(fibLevelPrice(fib, 1)).toBe(a.price);
+  expect(fibLevelPrice(fib, 0.5)).toBe(0);
+  const origin = { x: 0, price: 1e16 };
+  expect(fibExtensionPrice({ a: origin, b: { x: 1, price: 1 }, c: origin }, 1)).toBe(1);
+  expect(channelParallel({ a, b, c: { x: 0, price: 0 } })[0].price).toBe(0);
+  const fork = pitchforkLines({ a: { x: 0, price: 1e308 }, b: { x: 1, price: 1e308 }, c: { x: 3, price: 1e308 } });
+  expect(fork.every((pair) => pair.every((anchor) => anchor.price === 1e308))).toBe(true);
+  expect(distanceToSegment({ x: 0, y: 0 }, { x: -1e200, y: 0 }, { x: 1e200, y: 0 })).toBe(0);
+  expect(distanceToSegment({ x: 1e16 + 2, y: 3 }, { x: 1e16, y: 0 }, { x: 1e16 + 4, y: 0 })).toBe(3);
+});
+
+it('keeps repaired IDs valid and avoids collisions with existing shortened IDs', () => {
+  const id = 'a'.repeat(128);
+  const drawings = [id, id, `${'a'.repeat(126)}#2`, id].map((id, price) => ({ type: 'horizontal', price, id }));
+  const parsed = parseDrawings(JSON.stringify({ version: 2, drawings }));
+  expect(parsed).not.toBeNull();
+  if (!parsed) return;
+  expect(new Set(parsed.map((drawing) => drawing.id)).size).toBe(4);
+  expect(parsed.every((drawing) => drawing.id.length <= 128)).toBe(true);
+  expect(parseDrawings(serializeDrawings(parsed))).toEqual(parsed);
+  expect(parseDrawings(JSON.stringify({ version: 2, drawings }))).toEqual(parsed);
 });

@@ -15,6 +15,7 @@ import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import { mountPlot } from "./helpers";
+import { createPlotModel } from "../model";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 10 },
@@ -53,5 +54,22 @@ describe("constructor config ownership", () => {
 
     expect(plot.getOptions().axis?.x?.showLabels).toBe(true);
     expect(plot.getOptions().style?.grid?.color).toBe("#123456");
+  });
+});
+
+describe("nested option ownership", () => {
+  const size = { width: 400, height: 300 };
+
+  it("copies owned nested option records at patch and constructor ingress", () => {
+    const { plot } = createPlotModel({ size });
+    const grid = { color: "red" };
+    plot.applyOptions({ style: { grid } });
+    grid.color = "blue";
+    expect(plot.getOptions().style?.grid?.color).toBe("red");
+    const axis = { format: () => "before" };
+    const pane = plot.addPane({ axis });
+    axis.format = () => "after";
+    expect(pane.axis.format?.(1)).toBe("before");
+    plot.destroy();
   });
 });

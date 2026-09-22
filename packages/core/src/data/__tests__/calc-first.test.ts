@@ -283,3 +283,18 @@ describe("calcFirst", () => {
     expect(node.out.line.read().map((p) => p.x)).toEqual(pts(5, 20).map((p) => p.x));
   });
 });
+
+it("propagates an upstream corrected prefix through the declared lookback", () => {
+  let values = [2, 3, 4, 5, 6].map(x => ({ x, y: x }));
+  const calc = (data: readonly Readonly<{ x: number; y: number }>[]) => ({
+    line: data.map((p, i) => ({ x: p.x, y: i === 0 ? null : data[i - 1].y + p.y })),
+  });
+  const node = computation({ inputs: [{ read: () => values }], calc, headLookback: 1 });
+  const before = node.out.line.read();
+  values = [{ x: 1, y: 1 }, { x: 2, y: 20 }, { x: 3, y: 30 }, ...values.slice(2)];
+  const after = node.out.line.read();
+  expect(after).toEqual(calc(values).line);
+  expect(after[4]).toBe(before[3]);
+  values = [...values, { x: 7, y: 7 }];
+  expect(node.out.line.read()).toEqual(calc(values).line);
+});

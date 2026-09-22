@@ -160,3 +160,17 @@ describe("heikinAshiLast — the tail of heikinAshi, for deriveLast", () => {
     expect(() => handle.append(tape(10, 1))).toThrow(DataError);
   });
 });
+
+describe("heikinAshi extreme means", () => {
+  const bar = (x: number, close: number, volume = 100): OHLC => ({
+    x, open: close, high: close, low: close, close, volume,
+  });
+
+  it('computes representable extreme HA means on the full and tail paths', () => {
+    const data = [bar(0, 8e307), bar(1, 8e307)];
+    const out = heikinAshi(data);
+    expect(out).toEqual(data);
+    expect(heikinAshiLast(out.slice(0, 1), data, { kind: 'append', count: 1 })).toEqual(out.slice(1));
+    expect(heikinAshi([bar(0, Number.MIN_VALUE)])[0].close).toBe(Number.MIN_VALUE);
+  });
+});

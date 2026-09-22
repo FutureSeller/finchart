@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OHLC, PaneHost, Plugin, PluginApi, SeriesHost, Source } from "@finchart/core";
 import { ContractError, candleSeries, createPlotModel, lineSeries } from "@finchart/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { bollingerBands, cr, MOVING_AVERAGE_DEFAULTS, movingAverage } from "../factories";
 import {
   MFI_LEVELS,
@@ -1052,5 +1052,58 @@ describe("helper registrations are not read out", () => {
     const rows = readouts(pane.probe(lastX));
     expect(rows.filter(([, isHidden]) => isHidden)).toEqual([[null, true], [null, true]]);
     expect(rows.filter(([, isHidden]) => !isHidden).map(([name]) => name)).toEqual([expect.stringMatching(/^Squeeze/)]);
+  });
+});
+
+describe("indicator plugin rollback", () => {
+  it('rolls back an owned pane when its second series is rejected', () => {
+    const model = createPlotModel({ size: { width: 400, height: 300 } });
+    const original = model.plot.addPane.bind(model.plot);
+    let disposed = vi.fn();
+    vi.spyOn(model.plot, 'addPane').mockImplementation(options => {
+      const pane = original(options);
+      const add = pane.addSeries.bind(pane);
+      let calls = 0;
+      vi.spyOn(pane, 'addSeries').mockImplementation(options => {
+        if (++calls === 2) {
+          throw new Error('second series rejected');
+        }
+        const handle = add(options);
+        disposed = vi.spyOn(handle, 'dispose');
+        return handle;
+      });
+      return pane;
+    });
+    expect(() => model.plot.use(attachMacd({ source: { read: () => [] } }))).toThrow('second series rejected');
+    expect(disposed).toHaveBeenCalledOnce();
+    expect(model.plot.panes).toHaveLength(1);
+    model.plot.destroy();
+  });
+
+  it('rolls back the owned pane when oscillator wiring rejects a level', () => {
+    const model = createPlotModel({ size: { width: 400, height: 300 } });
+    expect(() => model.plot.use(attachRsi({ source: { read: () => [] }, levels: { overbought: Infinity } }))).toThrow();
+    expect(model.plot.panes).toHaveLength(1);
+    model.plot.destroy();
+  });
+
+  it('rolls back earlier registrations while leaving a borrowed pane alive', () => {
+    const model = createPlotModel({ size: { width: 400, height: 300 } });
+    const pane = model.plot.mainPane;
+    const add = pane.addSeries.bind(pane);
+    let disposed = vi.fn();
+    let calls = 0;
+    vi.spyOn(pane, 'addSeries').mockImplementation(options => {
+      if (++calls === 2) {
+        throw new Error('borrowed rejection');
+      }
+      const handle = add(options);
+      disposed = vi.spyOn(handle, 'dispose');
+      return handle;
+    });
+    expect(() => pane.use(attachBollingerBands({ source: { read: () => [] } }))).toThrow('borrowed rejection');
+    expect(disposed).toHaveBeenCalledOnce();
+    expect(model.plot.panes).toEqual([pane]);
+    model.plot.destroy();
   });
 });

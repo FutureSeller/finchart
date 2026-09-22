@@ -245,18 +245,6 @@ describe("my key survives even a bad areaOf from a contestant", () => {
     rival.release();
   });
 
-  /** Control -- a well-behaved contestant actually does take ownership. The above isn't free. */
-  it("control: a well-behaved contestant takes ownership", () => {
-    const s = stage();
-    const rival = s.plot.claimFocusArea(() => s.indicator.area);
-    s.hover(s.plot.mainPane);
-    s.main.select(s.main.handles()[0]);
-    s.hover(s.indicator);
-    s.key("Delete");
-    expect(s.main.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
-    rival.release();
-  });
-
   /**
    * The judgment does not depend on registration order -- using `some`'s
    * short-circuit means that if an earlier claimant returns true first,

@@ -219,3 +219,14 @@ describe("placement and drag through the real state machine", () => {
     }
   });
 });
+
+it('clips rays and extended lines whose defining anchors are far off screen', () => {
+  for (const type of ['ray', 'extended'] as const) {
+    const drawing = { type, id: type, a: { x: -1000, price: 50 }, b: { x: -900, price: 50 } };
+    expect(infiniteEndpoints(type, { x: -1000, y: 50 }, { x: -900, y: 50 }, space)).toEqual([{ x: 0, y: 50 }, { x: 100, y: 50 }]);
+    expect(gripAt([drawing], space, { x: 50, y: 50 })?.part).toBe('whole');
+    expect(infiniteEndpoints(type, { x: 1e308, y: 1e308 }, { x: 0, y: 0 }, space)).toEqual([{ x: 100, y: 100 }, { x: 0, y: 0 }]);
+    // Reversing a ray points away; extending the full line still crosses.
+    expect(gripAt([{ ...drawing, a: drawing.b, b: drawing.a }], space, { x: 50, y: 50 })?.part).toBe(type === 'ray' ? undefined : 'whole');
+  }
+});

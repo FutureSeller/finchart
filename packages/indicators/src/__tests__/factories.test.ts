@@ -170,6 +170,17 @@ describe("macd", () => {
 });
 
 describe("bollingerBands", () => {
+  it('turns overflowing Bollinger boundaries into gaps, including its band branch', () => {
+    const flatBar = (x: number, close: number, volume = 100): OHLC => ({
+      x, open: close, high: close, low: close, close, volume,
+    });
+
+    const node = bollingerBands({ read: () => [flatBar(0, 1), flatBar(1, 5)] }, { period: 2, multiplier: 1e308 });
+    expect(node.out.upper.read()[1].y).toBeNull();
+    expect(node.out.lower.read()[1].y).toBeNull();
+    expect(node.out.band.read()[1]).toEqual({ x: 1, upper: null, lower: null });
+  });
+
   it("should straddle the middle symmetrically", () => {
     const source = sourceOf([
       candle(0, 2),
@@ -290,6 +301,15 @@ function traded(x: number, close: number, volume?: number | null): OHLC {
 }
 
 describe("vwap", () => {
+  it('keeps VWAP unknown after overflow until the next anchor', () => {
+    const flatBar = (x: number, close: number, volume = 100): OHLC => ({
+      x, open: close, high: close, low: close, close, volume,
+    });
+
+    const node = vwap({ read: () => [flatBar(0, 8e307), flatBar(1, 1), flatBar(2, 2)] }, { anchor: p => p.x === 2 });
+    expect(node.out.vwap.read().map(p => p.y)).toEqual([null, null, 2]);
+  });
+
   it("should weight the typical price by volume", () => {
     const source = sourceOf([
       { x: 0, open: 10, high: 12, low: 8, close: 10, volume: 10 }, // typical price 10
@@ -337,6 +357,15 @@ describe("vwap", () => {
 });
 
 describe("obv", () => {
+  it('does not commit overflowing OBV contributions', () => {
+    const flatBar = (x: number, close: number, volume = 100): OHLC => ({
+      x, open: close, high: close, low: close, close, volume,
+    });
+
+    const node = obv({ read: () => [flatBar(0, 1, 1e308), flatBar(1, 2, 1e308), flatBar(2, 1, 1e308)] });
+    expect(node.out.obv.read().map(p => p.y)).toEqual([1e308, null, 0]);
+  });
+
   it("should accumulate signed volume from vol₀", () => {
     const source = sourceOf([
       traded(0, 10, 5),

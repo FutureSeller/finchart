@@ -96,3 +96,19 @@ describe("volumeProfile", () => {
     expect(profileRects(model)).toHaveLength(0);
   });
 });
+
+describe("volumeProfile extreme volume", () => {
+  it('draws finite proportional profile rectangles when total volume overflows', () => {
+    const data = [{ ...bar(0, 10, 1e308), high: 11, low: 9 }, { ...bar(1, 10, 1e308), high: 11, low: 9 }, { ...bar(2, 20, 1e308), high: 21, low: 19 }];
+    const model = createPlotModel({ size: { width: 400, height: 300 }, series: { series: candleSeries(), data } });
+    model.plot.setVisibleRange(0, 2);
+    model.plot.mainPane.setValueDomain(0, 30);
+    model.plot.mainPane.addDecoration(volumeProfile({ source: { read: () => data }, bins: 2, style: { fill: '#audit', poc: '#audit' } }));
+    model.plot.render();
+    const widths = model.commands().flatMap(c => c.type === 'drawShape' && c.shape.shape === 'rect' && c.shape.fill === '#audit' ? [c.shape.width] : []);
+    expect(widths).toHaveLength(2);
+    expect(widths.every(Number.isFinite)).toBe(true);
+    expect(Math.max(...widths) / Math.min(...widths)).toBeCloseTo(2);
+    model.plot.destroy();
+  });
+});

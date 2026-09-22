@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OhlcAggregation } from "../aggregation";
 import type { OHLC } from "../types";
+import { DataError } from "../../primitives";
 
 /** The full window — a test convenience for the range contract: `decimate(...whole(data), threshold)`. */
 const whole = <T,>(data: T[]): [T[], { start: number; end: number }] => [
@@ -167,4 +168,12 @@ describe("OhlcAggregation", () => {
     expect(merged[0].open).toBe(data[0].open);
     expect(merged[0].close).toBe(data[99].close);
   });
+});
+
+it("OHLC aggregation refuses overflowing volume without altering its input", () => {
+  const data = [0, 1].map(x => Object.freeze({ x, open: 1, high: 2, low: 0, close: 1, volume: Number.MAX_VALUE }));
+  expect(() => new OhlcAggregation().decimate(data, { start: 0, end: 2 }, 1)).toThrow(DataError);
+  expect(data.map(p => p.volume)).toEqual([Number.MAX_VALUE, Number.MAX_VALUE]);
+  const finite = data.map(p => ({ ...p, volume: Number.MAX_VALUE / 4 }));
+  expect(new OhlcAggregation().decimate(finite, { start: 0, end: 2 }, 1)[0].volume).toBe(Number.MAX_VALUE / 2);
 });

@@ -2,6 +2,9 @@ import type { LineDataPoint } from "@finchart/core";
 import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { drawingTools } from "../tools";
+import { moveGrip } from '../hit';
+import { parseDrawings, toOwnedDrawing } from '../drawings';
+import type { Drawing } from '../drawings';
 
 const data: LineDataPoint[] = [
   { x: 0, y: 100 },
@@ -227,4 +230,26 @@ describe("fibonacci", () => {
     expect(after.a.price - after.b.price).toBeCloseTo(16, 8);
     expect(after.a.price).toBeLessThan(118);
   });
+});
+
+it('rejects a complete additive drag candidate before writing any anchor', () => {
+  const drawing: Drawing = { type: 'trend', id: 't', a: { x: 1, price: 1e308 }, b: { x: 2, price: 10 } };
+  const original = toOwnedDrawing(drawing);
+  moveGrip({ grip: { drawing, part: 'whole' }, offsets: [{ x: 1, price: 1e308 }, { x: 2, price: 10 }], original }, { x: 50, price: 1e308 });
+  expect(drawing).toEqual(original);
+});
+
+it('keeps saving and history valid after an out-of-range finite pixel drag', () => {
+  const model = createPlotModel({ size: { width: 800, height: 600 }, series: { series: lineSeries(), data: [{ x: 0, y: 1e307 }, { x: 10, y: 2e307 }] } });
+  const api = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
+  const handle = api.add({ type: 'horizontal', price: 1.5e307 });
+  const before = handle.read();
+  model.plot.routeInput({ type: 'pointerdown', point: { x: 400, y: model.plot.mainPane.pixelAtValue(1.5e307) }, pointerId: 1 });
+  model.plot.routeInput({ type: 'pointermove', point: { x: 400, y: -10000 }, pointerId: 1 });
+  model.plot.routeInput({ type: 'pointerup', point: { x: 400, y: -10000 }, pointerId: 1 });
+  expect(handle.read()).toEqual(before);
+  expect(parseDrawings(api.serialize())).toEqual([before]);
+  api.undo(); // Only the add was committed.
+  expect(api.list()).toEqual([]);
+  model.plot.destroy();
 });
