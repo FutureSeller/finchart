@@ -595,13 +595,14 @@ export function drawingTools(
     try {
 
     /** Internal state — a drag mutates these objects directly. */
-    const drawings: Drawing[] = [];
+    let drawings: Drawing[] = [];
     const changes = emitter<DrawingsChange>();
     const historyEmitter = emitter<DrawingHistoryChange>();
 
     /**
-     * Notifications are queued and delivered after the outermost door
-     * returns, in the order the state changed. A subscriber that calls
+     * Notifications are queued until the outermost mutation finishes,
+     * then delivered synchronously before the public call returns, in
+     * the order the state changed. A subscriber that calls
      * back in (`clear()` from a selection listener, `undo()` from a change
      * listener) therefore never runs while a door is half-done: its call
      * applies at once, and its own notifications line up behind the ones
@@ -1999,10 +2000,11 @@ export function drawingTools(
           // `changes: "move"` would keep firing.
           if (state.kind === "dragging") cancelDrag(state.drag, false);
           else cancelPlacement(false);
-          drawings.length = 0;
-          setSelected(null);
-          drawings.push(...parsed);
+          // Parsing owns the replacement already. Swap it as one value;
+          // spreading a large document can throw after erasing the old one.
+          drawings = parsed;
           resetHistory();
+          setSelected(null);
           changed("load");
           emitHistoryChange();
           return true;

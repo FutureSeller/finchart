@@ -17,7 +17,11 @@ import { createSeriesPlacement } from './series-collector';
  * this.
  */
 export interface ChartPaneProps {
-  /** Stable identity for restored pane state. Change the React `key` to change it. */
+  /**
+   * Stable identity for restored pane state. The first ChartPane borrows the
+   * persistent mainPane: change the ChartContainer key to change that identity.
+   * Later panes are owned by their wrapper; change their ChartPane key instead.
+   */
   stateKey?: string;
   /** The share of leftover vertical space this takes. Defaults to 1. */
   flex?: number;
@@ -91,7 +95,7 @@ export function ChartPane({
   const initialStateKey = useRef(stateKey);
   if (initialStateKey.current !== stateKey) {
     throw new Error(
-      '<ChartPane stateKey> is identity and cannot change after mount; change the React key to replace the pane.',
+      '<ChartPane stateKey> cannot change after mount; change the ChartContainer key for the borrowed main pane, or the ChartPane key for a later pane.',
     );
   }
   const initialOptions = useRef({ flex, minHeight, valuePadding, autoScale, invert, stateKey, yScale });

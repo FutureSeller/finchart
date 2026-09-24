@@ -1,16 +1,16 @@
 [
   {
-    "name": "every indicator — import * (@finchart/core is a peer, so excluded) · 21 KB gzip (20527B measured)",
+    "name": "every indicator — import * (@finchart/core is a peer, so excluded) · 21.1 KB gzip (21069B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "21 KB",
+    "limit": "21.1 KB",
     "ignore": [
       "@finchart/core"
     ],
     "gzip": true
   },
   {
-    "name": "one moving average — a consumer picking a single indicator (tree-shaking) · 1.25 KB gzip (981B measured)",
+    "name": "one moving average — a consumer picking a single indicator (tree-shaking) · 1.25 KB gzip (1005B measured)",
     "path": "dist/index.mjs",
     "import": "{ movingAverage }",
     "limit": "1.25 KB",

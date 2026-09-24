@@ -129,10 +129,11 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
 
     calc: (data) => {
       const folds = spec.make();
+      let nextBeforeLast: S | null = null;
       const lines = record(plainKeys, () => new Array<LineDataPoint>(data.length));
       const bars = record(toneKeys, () => new Array<HistogramPoint>(data.length));
       for (let i = 0; i < data.length; i++) {
-        if (i === data.length - 1) beforeLast = spec.snapshot(folds);
+        if (i === data.length - 1) nextBeforeLast = spec.snapshot(folds);
         const values = spec.step(folds, data[i]);
         for (const key of plainKeys) lines[key][i] = { x: data[i].x, y: reading(values[key]) };
         for (const key of toneKeys) {
@@ -140,8 +141,11 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
           bars[key][i] = { x: data[i].x, y, tone: toneOf(i > 0 ? bars[key][i - 1].y : undefined, y) };
         }
       }
-      atEnd = spec.snapshot(folds);
-      return { ...lines, ...bars };
+      const nextAtEnd = spec.snapshot(folds);
+      const output = { ...lines, ...bars };
+      beforeLast = nextBeforeLast;
+      atEnd = nextAtEnd;
+      return output;
     },
 
     calcLast: (previous, [data], [change]) => {
@@ -160,8 +164,9 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
       const previousBars: Record<TK, HistogramPoint[]> = previous;
       const lineTails = record(plainKeys, () => new Array<LineDataPoint>(count));
       const barTails = record(toneKeys, () => new Array<HistogramPoint>(count));
+      let nextBeforeLast = beforeLast;
       for (let i = from; i < data.length; i++) {
-        if (i === data.length - 1) beforeLast = spec.snapshot(tailFolds);
+        if (i === data.length - 1) nextBeforeLast = spec.snapshot(tailFolds);
         const values = spec.step(tailFolds, data[i]);
         for (const key of plainKeys) lineTails[key][i - from] = { x: data[i].x, y: reading(values[key]) };
         for (const key of toneKeys) {
@@ -172,12 +177,16 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
           barTails[key][i - from] = { x: data[i].x, y, tone: toneOf(back?.y, y) };
         }
       }
-      atEnd = spec.snapshot(tailFolds);
+      const nextAtEnd = spec.snapshot(tailFolds);
 
-      return {
+      const output = {
         ...record(plainKeys, (key) => previousLines[key].slice(0, from).concat(lineTails[key])),
         ...record(toneKeys, (key) => previousBars[key].slice(0, from).concat(barTails[key])),
       };
+      // Publish only after every step and output branch succeeded.
+      beforeLast = nextBeforeLast;
+      atEnd = nextAtEnd;
+      return output;
     },
 
     headLookback: spec.headLookback,

@@ -447,3 +447,32 @@ describe('state restoration', () => {
     ]);
   });
 });
+
+it('replaces the borrowed main pane stateKey by remounting ChartContainer', () => {
+  const { deps, ref, plot } = setup();
+  const view = (identity: string) => <ChartContainer key={identity} deps={deps} data={data} plotRef={ref}>
+    <ChartPane stateKey={identity}><ChartSeries series={price} /></ChartPane>
+  </ChartContainer>;
+  const mounted = mount(view('a'));
+  const first = plot();
+  expect(first.mainPane.stateKey).toBe('a');
+  mounted.rerender(view('b'));
+  expect(plot()).not.toBe(first);
+  expect(plot().mainPane.stateKey).toBe('b');
+  expect(plot().mainPane.probe(0)[0].value).toBe(10);
+});
+
+it('does not replace main pane identity by changing only a pane key', () => {
+  const { deps, ref } = setup();
+  const view = (identity: string) => <ChartContainer deps={deps} data={data} plotRef={ref}>
+    <ChartPane key={identity} stateKey={identity} />
+  </ChartContainer>;
+  const mounted = mount(view('a'));
+  const quiet = console.error;
+  console.error = () => undefined;
+  try {
+    expect(() => mounted.rerender(view('b'))).toThrow(/stateKey/);
+  } finally {
+    console.error = quiet;
+  }
+});

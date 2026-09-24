@@ -7,6 +7,7 @@ import type {
   Source,
 } from '@finchart/core';
 import { defaultCoordinates, LineSeries } from '@finchart/core';
+import { useMemo } from 'react';
 import { ChartSeries } from './chart-series';
 
 interface LineLook {
@@ -63,7 +64,10 @@ interface DerivedLineProps<
   derive: (source: DataView<TSource>) => TPoint[];
   /** The condition for re-running the derivation. Follows the same rule as a `useMemo` dependency array. */
   deriveKey: readonly unknown[];
-  /** How to read coordinates from the points `derive` built. Falls back to `x`/`y` when omitted. */
+  /**
+   * Reads the derived points; defaults to x/y. Changing this reference
+   * reinstalls the registration and derivation; pin custom accessors.
+   */
   coordinates?: CoordinateAccessor<TPoint>;
 }
 
@@ -78,8 +82,9 @@ export type ChartLineProps<
 /** Not giving coordinates means the points have `x`/`y` — the same assumption as the core's default accessor. */
 function coordinatesOf<T extends BaseDataPoint>(
   given: CoordinateAccessor<T> | undefined,
+  fallback: CoordinateAccessor<BaseDataPoint>,
 ): CoordinateAccessor<T> {
-  return given ?? defaultCoordinates<T>();
+  return given ?? fallback;
 }
 
 /**
@@ -104,13 +109,14 @@ export function ChartLine<
   TPoint extends BaseDataPoint = TSource,
 >(props: ChartLineProps<TSource, TPoint>) {
   const { style } = props;
+  const defaults = useMemo(defaultCoordinates<BaseDataPoint>, []);
   // The registration's color is the legend swatch — the stroke color doubles as it.
   const color = style?.line?.color;
 
   if (props.input) {
     return (
       <ChartSeries<TSource, LineDataPoint>
-        series={new LineSeries<LineDataPoint>({ coordinates: defaultCoordinates(), style })}
+        series={new LineSeries<LineDataPoint>({ coordinates: defaults, style })}
         input={props.input}
         name={props.name}
         color={color}
@@ -120,7 +126,7 @@ export function ChartLine<
   }
 
   if (props.derive) {
-    const coordinates = coordinatesOf<TPoint>(props.coordinates);
+    const coordinates = coordinatesOf<TPoint>(props.coordinates, defaults);
 
     return (
       <ChartSeries<TSource, TPoint>
@@ -138,7 +144,7 @@ export function ChartLine<
 
   return (
     <ChartSeries<TSource>
-      series={new LineSeries({ coordinates: coordinatesOf(props.coordinates), style })}
+      series={new LineSeries({ coordinates: coordinatesOf(props.coordinates, defaults), style })}
       data={props.data}
       name={props.name}
       color={color}

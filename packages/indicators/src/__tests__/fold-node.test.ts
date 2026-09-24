@@ -359,3 +359,26 @@ describe("foldNode", () => {
     }
   });
 });
+
+
+it("keeps the accepted fold checkpoint when a later step throws", () => {
+  const original = [bar(0), bar(1), bar(2)];
+  let data = original;
+  const make = () => foldNode({ read: () => data }, {
+    keys: ["total"],
+    make: () => ({ total: 0 }),
+    snapshot: f => f.total,
+    restore: (f, state) => { f.total = state; },
+    step: (f, point) => {
+      f.total += point.close;
+      if (point.x === 99) throw new Error("step failed");
+      return { total: f.total };
+    },
+  });
+  const node = make();
+  node.out.total.read();
+  data = [...original, bar(3), { ...bar(4), x: 99 }];
+  expect(() => node.out.total.read()).toThrow("step failed");
+  data = [...original.slice(0, -1), { ...bar(2), close: 150 }];
+  expect(node.out.total.read()).toEqual(make().out.total.read());
+});

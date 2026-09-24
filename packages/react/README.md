@@ -149,6 +149,23 @@ One exception to "changing a prop updates": a series' registration metadata —
 those on the same component leaves the tooltip and legend as they were; give
 the component a new `key` to register it again.
 
+A derived or input series' `coordinates` accessor defines its registration's
+reader. Changing that reference reinstalls the registration so drawing,
+decimation and readouts agree; for a derived series this also rebuilds its
+cached output. Keep a custom accessor stable when its meaning is unchanged.
+
+`ChartPane.stateKey` identifies saved pane state. The first `ChartPane` borrows
+the plot's persistent `mainPane`, so changing that identity requires changing
+the **ChartContainer key**. Changing only the first pane's key does not replace
+mainPane. Later panes are created and removed by their wrapper, so changing a
+later **ChartPane key** can replace its stateKey.
+
+This restriction concerns replacing pane identity, not rearranging panes.
+`mainPane` retains its identity independently of visual position. A future
+drag-and-drop ordering API belongs to Plot/ChartContainer and must preserve
+pane keys, instances, series and scales; it must not remount the container.
+Changing JSX order currently does not reorder the plot's panes.
+
 Naming: the `Chart*` prefix marks structure and series (`ChartContainer`,
 `ChartPane`, `ChartLine`, …); no prefix marks attachments (`XAxis`,
 `Crosshair`, `Tooltip`, `PriceLine`, …).

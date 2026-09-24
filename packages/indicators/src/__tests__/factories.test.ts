@@ -661,3 +661,37 @@ describe("movingAverage — tail-door equivalence", () => {
     expect(after.length).toBe(before.length + 1);
   });
 });
+
+
+describe("failed accessor recovery", () => {
+  const value = (point: OHLC) => {
+    if (point.close === 99) throw new Error("accessor failed");
+    return point.close;
+  };
+  const factories = [
+    ["SMA", (source: Source<OHLC>) => movingAverage(source, { period: 2, value })],
+    ["EMA", (source: Source<OHLC>) => movingAverage(source, { period: 2, type: "ema", value })],
+    ["MACD", (source: Source<OHLC>) => macd(source, { fast: 2, slow: 3, signal: 2, value })],
+  ] as const;
+
+  it.each(factories)("%s keeps its accepted checkpoint after a failed append or full read", (_name, make) => {
+    for (const full of [false, true]) {
+      const original = [1, 2, 3, 4].map((close, x) => candle(x, close));
+      const source = sourceOf(original);
+      const node = make(source);
+      const read = () => Object.fromEntries(Object.entries(node.out).map(([key, branch]) => [key, branch.read()]));
+      const accepted = read();
+      source.swap([
+        ...(full ? original.map(point => ({ ...point })) : original),
+        candle(4, 5), candle(5, 99),
+      ]);
+      expect(read).toThrow("accessor failed");
+      source.swap([...original.slice(0, -1), candle(3, 10)]);
+      const expected = make(source);
+      for (const [key, branch] of Object.entries(node.out)) {
+        expect(branch.read()).toEqual(Object.entries(expected.out).find(([name]) => name === key)?.[1].read());
+        expect(branch.read()[0]).toBe(accepted[key][0]);
+      }
+    }
+  });
+});

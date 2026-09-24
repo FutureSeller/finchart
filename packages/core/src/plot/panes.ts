@@ -34,6 +34,8 @@ export interface PaneStackOptions {
 
 export class PaneStack {
   private readonly panes: Pane[] = [];
+  /** The default pane's identity is independent of its visual position. */
+  private readonly mainPane: Pane;
   /**
    * The live list, top to bottom. **Read directly by layout and painting**
    * so no frame copies it; nobody outside the chart ever sees this
@@ -47,7 +49,7 @@ export class PaneStack {
     mainYScale: Scale,
     private readonly options: PaneStackOptions,
   ) {
-    this.create(mainYScale, {});
+    this.mainPane = this.create(mainYScale, {});
   }
 
   /**
@@ -55,7 +57,7 @@ export class PaneStack {
    * another pane, every series lands here.
    */
   get main(): Pane {
-    return this.panes[0];
+    return this.mainPane;
   }
 
   /** Stacks one more pane below. */

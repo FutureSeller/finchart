@@ -1,4 +1,4 @@
-import { createPlotModel, lineSeries } from "@finchart/core";
+import { createPlotModel, lineSeries, manualScheduler } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { drawingTools } from "../tools";
 
@@ -30,6 +30,35 @@ function mounted() {
 }
 
 describe("drawingTools history", () => {
+  it("replaces a large saved document without an argument-limit failure or stale history", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      deps: { createScheduler: manualScheduler() },
+    });
+    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
+    tools.add({ type: "horizontal", price: 10 }, { select: true });
+    const drawings = Array.from({ length: 200_000 }, (_, i) => ({
+      type: "horizontal", id: `saved-${i}`, price: i,
+    }));
+    try {
+      expect(tools.load(JSON.stringify({ version: 2, drawings }))).toBe(true);
+      const restored = tools.list();
+      expect(restored).toHaveLength(drawings.length);
+      expect(restored[0]).toEqual(drawings[0]);
+      expect(restored.at(-1)).toEqual(drawings.at(-1));
+      expect(tools.selection()).toBeNull();
+      expect(tools.canUndo()).toBe(false);
+      expect(tools.canRedo()).toBe(false);
+      tools.clear();
+      const next = tools.add({ type: "horizontal", price: -1 });
+      expect(tools.undo()).toBe(true);
+      expect(tools.redo()).toBe(true);
+      expect(tools.list()).toEqual([next.read()]);
+    } finally {
+      model.plot.destroy();
+    }
+  });
+
   it("undoes and redoes a selected add without losing its handle", () => {
     const { tools } = mounted();
     const handle = tools.add(

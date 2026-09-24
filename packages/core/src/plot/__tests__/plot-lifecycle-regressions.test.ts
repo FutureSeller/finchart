@@ -620,3 +620,50 @@ describe("constructor rollback", () => {
     expect(destroy).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe("failed decoration mounting releases its registration", () => {
+  it.each(["plot", "pane"])("should let the %s render again after installation throws", (site) => {
+    const model = stage();
+    const host = site === "plot" ? model.plot : model.plot.mainPane;
+    const kept = vi.fn();
+    const bad = vi.fn(() => { throw new Error("decoration failed"); });
+    host.addDecoration({ draw: kept });
+    expect(() => host.addDecoration({ draw: bad })).toThrow("decoration failed");
+    kept.mockClear();
+    expect(() => model.plot.render()).not.toThrow();
+    expect(kept).toHaveBeenCalledTimes(1);
+    expect(bad).toHaveBeenCalledTimes(1);
+    model.plot.destroy();
+  });
+});
+
+describe("scheduler cleanup failures do not strand the plot", () => {
+  it("should release plugins, panes and layers before reporting every cleanup failure", () => {
+    const cancelError = new Error("cancel failed");
+    const pluginError = new Error("plugin failed");
+    const cancel = vi.fn(() => { throw cancelError; });
+    const layersDestroyed = vi.fn();
+    const paneDisposed = vi.fn();
+    const plot = new Plot({
+      size: { width: 400, height: 300 },
+      deps: createPlotDeps({
+        createLayers: (width, height) => ({ ...createMemoryLayers(width, height), destroy: layersDestroyed }),
+        createRenderer: recordingRenderer().factory,
+        createStyleReader: () => noStyle,
+        createScheduler: () => ({ request() {}, cancel }),
+      }),
+    });
+    plot.use(() => pluginApi({}, () => { throw pluginError; }));
+    plot.mainPane.use(() => pluginApi({}, paneDisposed));
+    let thrown: unknown;
+    try { plot.destroy(); } catch (error) { thrown = error; }
+    expect(thrown).toBeInstanceOf(AggregateError);
+    if (!(thrown instanceof AggregateError)) throw new Error("missing cleanup aggregate");
+    expect(thrown.errors).toEqual([cancelError, pluginError]);
+    expect(paneDisposed).toHaveBeenCalledTimes(1);
+    expect(layersDestroyed).toHaveBeenCalledTimes(1);
+    expect(() => plot.destroy()).not.toThrow();
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+});

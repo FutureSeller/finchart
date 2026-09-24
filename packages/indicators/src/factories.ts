@@ -158,11 +158,14 @@ export function movingAverage<T extends BaseDataPoint>(
     calc: (data) => {
       const fold = makeFold(options.period);
       const out: LineDataPoint[] = new Array(data.length);
+      let nextBeforeLast: unknown = null;
       for (let i = 0; i < data.length; i++) {
-        if (i === data.length - 1) beforeLast = fold.snapshot();
+        if (i === data.length - 1) nextBeforeLast = fold.snapshot();
         out[i] = { x: data[i].x, y: fold.step(value(data[i])) };
       }
-      atEnd = fold.snapshot();
+      const nextAtEnd = fold.snapshot();
+      beforeLast = nextBeforeLast;
+      atEnd = nextAtEnd;
       return { ma: out };
     },
 
@@ -176,18 +179,23 @@ export function movingAverage<T extends BaseDataPoint>(
       tailFold.restore(resume);
       const count = change.count;
       const tail: LineDataPoint[] = new Array(count);
+      let nextBeforeLast = beforeLast;
       for (let i = data.length - count; i < data.length; i++) {
-        if (i === data.length - 1) beforeLast = tailFold.snapshot();
+        if (i === data.length - 1) nextBeforeLast = tailFold.snapshot();
         tail[i - (data.length - count)] = {
           x: data[i].x,
           y: tailFold.step(value(data[i])),
         };
       }
-      atEnd = tailFold.snapshot();
+      const nextAtEnd = tailFold.snapshot();
 
       const keep = previous.ma.length - (change.kind === "replace" ? count : 0);
       // Reuses the front of the previous array — so downstream sees the same tail verdict.
-      return { ma: previous.ma.slice(0, keep).concat(tail) };
+      const output = { ma: previous.ma.slice(0, keep).concat(tail) };
+      // Failed accessors must leave both checkpoints at the accepted input.
+      beforeLast = nextBeforeLast;
+      atEnd = nextAtEnd;
+      return output;
     },
 
     // Only the finite SMA window has a bounded head correction. Recursive
@@ -294,9 +302,10 @@ export function macd<T extends BaseDataPoint>(
       const macdLine: (number | null)[] = new Array(data.length);
       const signalLine: (number | null)[] = new Array(data.length);
       const histogram: HistogramPoint[] = new Array(data.length);
+      let nextBeforeLast: Checkpoint | null = null;
 
       for (let i = 0; i < data.length; i++) {
-        if (i === data.length - 1) beforeLast = snapshotOf(folds);
+        if (i === data.length - 1) nextBeforeLast = snapshotOf(folds);
         const step = advance(folds, value(data[i]));
         macdLine[i] = step.macd;
         signalLine[i] = step.signal;
@@ -306,13 +315,16 @@ export function macd<T extends BaseDataPoint>(
           tone: toneOf(i > 0 ? histogram[i - 1].y : undefined, step.histogram),
         };
       }
-      atEnd = snapshotOf(folds);
+      const nextAtEnd = snapshotOf(folds);
 
-      return {
+      const output = {
         macd: points(data, macdLine),
         signal: points(data, signalLine),
         histogram,
       };
+      beforeLast = nextBeforeLast;
+      atEnd = nextAtEnd;
+      return output;
     },
 
     calcLast: (previous, [data], [change]) => {
@@ -330,9 +342,10 @@ export function macd<T extends BaseDataPoint>(
       const macdTail: LineDataPoint[] = new Array(count);
       const signalTail: LineDataPoint[] = new Array(count);
       const histogramTail: HistogramPoint[] = new Array(count);
+      let nextBeforeLast = beforeLast;
 
       for (let i = from; i < data.length; i++) {
-        if (i === data.length - 1) beforeLast = snapshotOf(tailFolds);
+        if (i === data.length - 1) nextBeforeLast = snapshotOf(tailFolds);
         const step = advance(tailFolds, value(data[i]));
         macdTail[i - from] = { x: data[i].x, y: step.macd };
         signalTail[i - from] = { x: data[i].x, y: step.signal };
@@ -341,14 +354,17 @@ export function macd<T extends BaseDataPoint>(
         const back = i === from ? previous.histogram[from - 1] : histogramTail[i - from - 1];
         histogramTail[i - from] = { x: data[i].x, y: step.histogram, tone: toneOf(back?.y, step.histogram) };
       }
-      atEnd = snapshotOf(tailFolds);
+      const nextAtEnd = snapshotOf(tailFolds);
 
       const keep = previous.macd.length - (change.kind === "replace" ? 1 : 0);
-      return {
+      const output = {
         macd: previous.macd.slice(0, keep).concat(macdTail),
         signal: previous.signal.slice(0, keep).concat(signalTail),
         histogram: previous.histogram.slice(0, keep).concat(histogramTail),
       };
+      beforeLast = nextBeforeLast;
+      atEnd = nextAtEnd;
+      return output;
     },
   });
 }

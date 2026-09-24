@@ -22,6 +22,22 @@ function withFakeLayers<D extends { createLayers: unknown }>(deps: D) {
 }
 
 describe("PlotBuilder", () => {
+  it("appends a large batch without exceeding the engine argument limit", () => {
+    const points = Array.from({ length: 200_000 }, (_, i) => ({ x: i + 1, y: i }));
+    const { deps } = withFakeLayers(testBrowserDeps());
+    const plot = PlotBuilder.create(deps, lineSeries())
+      .addDataPoint({ x: 0, y: -1 })
+      .addDataPoints(points)
+      .addDataPoint({ x: 200_001, y: 200_000 })
+      .build(fakeContainer());
+    try {
+      expect(plot.mainPane.xRange()).toEqual({ min: 0, max: 200_001 });
+      expect(plot.mainPane.probe(100_000)[0].value).toBe(99_999);
+    } finally {
+      plot.destroy();
+    }
+  });
+
   it("should hand the chart to a parent scope via setScope", () => {
     const { deps, factory } = withFakeLayers(testBrowserDeps());
     const page = createScope();
