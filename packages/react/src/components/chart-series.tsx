@@ -62,7 +62,10 @@ interface DerivedSeriesProps<
    * alone is 7.23ms (half the frame budget).
    */
   deriveKey: readonly unknown[];
-  /** How to read coordinates from the points `derive` built. Falls back to x/y when omitted. */
+  /**
+   * Reads the derived points; defaults to x/y. A different accessor reference
+   * reinstalls the registration, including its derivation. Pin custom accessors.
+   */
   coordinates?: CoordinateAccessor<TPoint>;
   input?: undefined;
 }
@@ -81,7 +84,10 @@ interface InputSeriesProps<
    * rebuilds every render. Pinning it with `useMemo` is the contract.
    */
   input: Source<TPoint>;
-  /** How to read coordinates from the points `input` produced. Falls back to x/y when omitted. */
+  /**
+   * Reads the input points; defaults to x/y. A different accessor reference
+   * reinstalls the registration. Pin custom accessors.
+   */
   coordinates?: CoordinateAccessor<TPoint>;
   data?: undefined;
   derive?: undefined;
@@ -184,10 +190,12 @@ export function ChartSeries<
     collector.flush();
   });
 
+  // Coordinates define the registration's data reader. A changed accessor
+  // must release the old entry before the committed spec installs its replacement.
   useEffect(() => () => {
     collector.remove(id);
     collector.flush();
-  }, [collector, id]);
+  }, [collector, id, props.coordinates]);
 
   return null;
 }

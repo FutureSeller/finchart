@@ -330,9 +330,8 @@ export function ChartContainer<T extends BaseDataPoint>({
 
       releasePane(pane: Pane): void {
         structure.current += 1;
-        collectors.current.delete(pane);
-
         if (pane === plot.mainPane) {
+          // Outside series share this collector and survive the pane wrapper.
           mainPaneTaken.current = false;
           const previous = previousScale.current;
           if (previous) {
@@ -341,6 +340,7 @@ export function ChartContainer<T extends BaseDataPoint>({
           }
           return;
         }
+        collectors.current.delete(pane);
         plot.removePane(pane);
       },
 

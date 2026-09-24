@@ -51,7 +51,7 @@ export class PlotBuilder<T extends BaseDataPoint> {
   }
 
   addDataPoints(points: T[]): this {
-    this.data.push(...points);
+    for (const point of points) this.data.push(point);
     return this;
   }
 

@@ -1154,3 +1154,174 @@ describe("wheel", () => {
     expect(event.defaultPrevented).toBe(true);
   });
 });
+
+describe('editable key origins', () => {
+  it.each(['input', 'textarea', 'select', 'contenteditable', 'shadow-input'])('leaves keys from %s to the editor', (kind) => {
+    const host = document.createElement('div');
+    element.appendChild(host);
+    let origin: HTMLElement;
+    if (kind === 'shadow-input') {
+      origin = document.createElement('input');
+      host.attachShadow({ mode: 'open' }).appendChild(origin);
+    } else if (kind === 'contenteditable') {
+      host.setAttribute('contenteditable', 'plaintext-only');
+      origin = document.createElement('span');
+      host.appendChild(origin);
+    } else {
+      origin = document.createElement(kind);
+      host.appendChild(origin);
+    }
+    const routed = vi.fn(() => false);
+    target.target.routeInput = routed;
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+    for (const key of ['Delete', 'Escape', '[', 'ArrowLeft', '+']) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true });
+      origin.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(routed).not.toHaveBeenCalled();
+    expect(target.pixelPans).toEqual([]);
+    expect(target.pixelZooms).toEqual([]);
+    interactions.disconnect();
+  });
+
+  it('honors the nearest contenteditable boundary inside an editable ancestor', () => {
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    const island = document.createElement('div');
+    island.setAttribute('contenteditable', 'false');
+    const leaf = document.createElement('span');
+    island.appendChild(leaf);
+    editor.appendChild(island);
+    element.appendChild(editor);
+    const routed = vi.fn(() => true);
+    target.target.routeInput = routed;
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+    leaf.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    expect(routed).toHaveBeenCalledOnce();
+    leaf.setAttribute('contenteditable', 'true');
+    leaf.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    expect(routed).toHaveBeenCalledOnce();
+    interactions.disconnect();
+  });
+});
+
+it('ignores zero-delta wheel fallback after offering it to the input stack', () => {
+  const routed = vi.fn(() => false);
+  target.target.routeInput = routed;
+  const interactions = new PointerInteractions(element);
+  interactions.connect(target.target);
+  const event = new WheelEvent('wheel', { deltaX: 100, deltaY: 0, bubbles: true, cancelable: true });
+  element.dispatchEvent(event);
+  expect(routed).toHaveBeenCalledOnce();
+  expect(target.pixelZooms).toEqual([]);
+  expect(event.defaultPrevented).toBe(false);
+  routed.mockReturnValue(true);
+  const consumed = new WheelEvent('wheel', { deltaY: 0, bubbles: true, cancelable: true });
+  element.dispatchEvent(consumed);
+  expect(consumed.defaultPrevented).toBe(true);
+  interactions.disconnect();
+});
+
+describe('connection lifetime during callbacks', () => {
+  it.each(['pointermove', 'wheel', 'dblclick', 'contextmenu', 'keydown', 'pointerdown'])('does not continue %s after routeInput disconnects or reconnects', (type) => {
+    const errors: unknown[] = [];
+    const catchError = (event: ErrorEvent) => { errors.push(event.error); event.preventDefault(); };
+    window.addEventListener('error', catchError);
+    try {
+      for (const reconnect of [false, true]) {
+        const interactions = new PointerInteractions(element);
+        const next = recordingTarget();
+        const nextRoute = vi.spyOn(next.target, 'routeInput');
+        target.target.routeInput = () => {
+          interactions.disconnect();
+          if (reconnect) interactions.connect(next.target);
+          return type === 'pointerdown';
+        };
+        interactions.connect(target.target);
+        const event = type === 'keydown'
+          ? new KeyboardEvent(type, { key: 'ArrowLeft', bubbles: true })
+          : type === 'wheel'
+            ? new WheelEvent(type, { deltaY: -1, bubbles: true })
+            : new MouseEvent(type, { clientX: 100, bubbles: true });
+        element.dispatchEvent(event);
+        if (type === 'pointerdown') move(120);
+        expect(nextRoute).not.toHaveBeenCalled();
+        expect(next.crosshairs).toEqual([]);
+        expect(next.pixelPans).toEqual([]);
+        expect(next.pixelZooms).toEqual([]);
+        expect(next.fits).toEqual([]);
+        expect(next.menus).toEqual([]);
+        interactions.disconnect();
+      }
+      expect(errors).toEqual([]);
+    } finally {
+      window.removeEventListener('error', catchError);
+    }
+  });
+
+
+  it('ends the old hover event when the same target reconnects', () => {
+    const interactions = new PointerInteractions(element);
+    target.target.routeInput = () => {
+      interactions.connect(target.target);
+      return false;
+    };
+    interactions.connect(target.target);
+    element.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+    expect(target.crosshairs).toEqual([]);
+    interactions.disconnect();
+  });
+
+  it('does not pan a new drag started by a crosshair callback', () => {
+    const interactions = new PointerInteractions(element);
+    const next = recordingTarget();
+    target.target.crosshair = () => {
+      interactions.connect(next.target);
+      down(200);
+    };
+    interactions.connect(target.target);
+    down(100);
+    move(120);
+    expect(next.pixelPans).toEqual([]);
+    move(210);
+    expect(next.pixelPans).toEqual([10]);
+    interactions.disconnect();
+  });
+
+  it('does not reset a reconnected target after doubleClick', () => {
+    const interactions = new PointerInteractions(element);
+    const next = recordingTarget();
+    target.target.doubleClick = () => interactions.connect(next.target);
+    interactions.connect(target.target);
+    element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(next.fits).toEqual([]);
+    interactions.disconnect();
+  });
+});
+
+it.each(['wheel', 'contextmenu', 'keydown'])('still prevents consumed %s when its handler replaces the connection', (type) => {
+  for (const reconnect of [false, true]) {
+    const interactions = new PointerInteractions(element);
+    const next = recordingTarget();
+    target.target.routeInput = () => {
+      interactions.disconnect();
+      if (reconnect) interactions.connect(next.target);
+      return true;
+    };
+    interactions.connect(target.target);
+    const event = type === 'keydown'
+      ? new KeyboardEvent(type, { key: 'ArrowLeft', bubbles: true, cancelable: true })
+      : type === 'wheel'
+        ? new WheelEvent(type, { deltaY: -1, bubbles: true, cancelable: true })
+        : new MouseEvent(type, { bubbles: true, cancelable: true });
+    element.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(next.pixelPans).toEqual([]);
+    expect(next.pixelZooms).toEqual([]);
+    expect(next.menus).toEqual([]);
+    interactions.disconnect();
+  }
+});

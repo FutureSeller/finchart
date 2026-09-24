@@ -23,7 +23,7 @@ import {
   useState,
 } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ChartContainer, ChartData, ChartPane, ChartSeries } from '../components';
+import { ChartContainer, ChartData, ChartLine, ChartPane, ChartSeries } from '../components';
 import { layersSpy } from './fake-layers';
 
 afterEach(cleanup);
@@ -577,4 +577,53 @@ it('preserves JSX order across series inside and outside the main ChartPane', ()
   expect(drawOrder(plot(), log)).toEqual(['inside-first', 'outside']);
   mounted.rerender(view(true));
   expect(drawOrder(plot(), log)).toEqual(['inside-first', 'inside-next', 'outside']);
+});
+
+
+it('keeps outside series when the main ChartPane is replaced by key', () => {
+  const { deps, ref, plot } = setup();
+  const log: string[] = [];
+  const view = (key: string) => <ChartContainer deps={deps} data={data} plotRef={ref}>
+    <ChartPane key={key}>
+      <ChartSeries series={fakeSeries(`inside-${key}`, log)} />
+    </ChartPane>
+    <ChartSeries series={fakeSeries('outside', log)} />
+  </ChartContainer>;
+  const mounted = mount(view('a'));
+  expect(drawOrder(plot(), log)).toEqual(['inside-a', 'outside']);
+  mounted.rerender(view('b'));
+  expect(drawOrder(plot(), log)).toEqual(['inside-b', 'outside']);
+  mounted.rerender(view('c'));
+  expect(drawOrder(plot(), log)).toEqual(['inside-c', 'outside']);
+});
+
+it('updates derived line coordinates consistently for drawing and readouts', () => {
+  const { deps, ref, plot } = setup();
+  const points = [{ x: 0, a: 10, b: 100 }, { x: 1, a: 20, b: 200 }];
+  type Point = (typeof points)[number];
+  const derive = (source: DataView<Point>) => [...source];
+  const a = { getX: (p: Point) => p.x, getY: (p: Point) => p.a };
+  const b = { getX: (p: Point) => p.x, getY: (p: Point) => p.b };
+  const view = (coordinates: typeof a) => <ChartContainer deps={deps} data={points} plotRef={ref}>
+    <ChartLine derive={derive} deriveKey={[]} coordinates={coordinates} name="price" />
+  </ChartContainer>;
+  const mounted = mount(view(a));
+  expect(plot().mainPane.probe(0)[0].value).toBe(10);
+  mounted.rerender(view(b));
+  expect(plot().mainPane.valueExtent()).toEqual({ min: 100, max: 200 });
+  expect(plot().mainPane.probe(0)[0].value).toBe(100);
+});
+
+it('retains the derived ChartLine cache when default coordinates are unchanged', () => {
+  const { deps, ref, plot } = setup();
+  const calls = { n: 0 };
+  const derive = countingDerive(calls);
+  const view = (color: string) => <ChartContainer deps={deps} data={data} plotRef={ref}>
+    <ChartLine derive={derive} deriveKey={[20]} style={{ line: { color } }} />
+  </ChartContainer>;
+  const mounted = mount(view('red'));
+  expect(calls.n).toBe(1);
+  mounted.rerender(view('blue'));
+  expect(calls.n).toBe(1);
+  expect(plot().mainPane.probe(0)[0].value).toBe(20);
 });

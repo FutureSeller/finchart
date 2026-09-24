@@ -89,11 +89,12 @@ export class BaselineSeries implements Series<LineDataPoint> {
   draw(target: DrawTarget, context: SeriesContext<LineDataPoint>): void {
     const style = resolveStyle(BASELINE_STYLE_SPEC, context.readStyle, this.overrides);
     const baseY = context.yScale.scale(this.baseline);
+    const [lowY, highY] = context.yScale.getRange();
 
     for (const run of screenRuns(context, this.coordinates)) {
       if (run.length < 2) continue;
 
-      for (const segment of splitAtBaseline(run, baseY)) {
+      for (const segment of splitAtBaseline(run, baseY, highY < lowY)) {
         const above = segment.side === "above";
 
         target.drawShape({
@@ -133,7 +134,8 @@ interface BaselineSegment {
  * into both segments — the line and the fill both meet exactly at that
  * point.
  *
- * Screen y increases downward, so "above" is the side with smaller y. A
+ * By default, "above" is the side with smaller screen y. An inverted
+ * value axis reverses that comparison so colors still describe values. A
  * point sitting exactly on the baseline (y === baseY) sticks with
  * whichever side is already in progress — splitting a segment for a
  * point that merely grazes the line would spawn a flood of one-point
@@ -142,16 +144,19 @@ interface BaselineSegment {
 export function splitAtBaseline(
   run: readonly Point[],
   baseY: number,
+  aboveIsSmaller = true,
 ): BaselineSegment[] {
   const segments: BaselineSegment[] = [];
   let current: Point[] = [run[0]];
-  let side: "above" | "below" = run[0].y <= baseY ? "above" : "below";
+  const sideOf = (y: number): "above" | "below" =>
+    y === baseY || (y < baseY) === aboveIsSmaller ? "above" : "below";
+  let side = sideOf(run[0].y);
 
   for (let i = 1; i < run.length; i++) {
     const previous = run[i - 1];
     const point = run[i];
     const nextSide: "above" | "below" =
-      point.y === baseY ? side : point.y < baseY ? "above" : "below";
+      point.y === baseY ? side : sideOf(point.y);
 
     if (nextSide !== side) {
       // Interpolate the crossing x linearly — color changes at the crossing point, not at a bar.

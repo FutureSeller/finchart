@@ -246,7 +246,14 @@ export function mountDecoration<D>(
   changed: () => void,
 ): () => void {
   const remove = addDecoration(list, decoration, options);
-  changed();
+  try {
+    changed();
+  } catch (error) {
+    // No remover can reach the caller when mounting throws. Release only
+    // this entry; a synchronous draw or subscriber may have added others.
+    remove();
+    throw error;
+  }
 
   let off = false;
   return () => {

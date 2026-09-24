@@ -18,6 +18,26 @@ function sawtooth(count: number): LineDataPoint[] {
 }
 
 describe("M4Decimation", () => {
+  it.each([false, true])("should preserve column extremes when the finite place span overflows (mapped: %s)", (mapped) => {
+    const normalized: LineDataPoint[] = Array.from({ length: 33 }, (_, i) => ({
+      x: (i - 16) / 16,
+      y: i % 4 === 1 ? 10 : i % 4 === 2 ? -10 : 0,
+    }));
+    const data = normalized.map((point) => ({
+      x: mapped ? point.x : point.x * Number.MAX_VALUE,
+      y: point.y,
+    }));
+    const expected = m4().decimate(...whole(normalized), 16)
+      .map((point) => normalized.indexOf(point));
+    const actual = m4().decimate(
+      ...whole(data), 16,
+      mapped ? () => (x) => x * Number.MAX_VALUE : undefined,
+    ).map((point) => data.indexOf(point));
+
+    expect(actual).toEqual(expected);
+    expect(actual.length).toBeGreaterThan(4);
+  });
+
   it("should return the data untouched when it already fits", () => {
     const data = sawtooth(20);
     expect(m4().decimate(...whole(data), 50)).toBe(data);

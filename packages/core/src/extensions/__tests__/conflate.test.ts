@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OHLC } from "../../data";
 import { manualScheduler } from "../../render";
-import { conflated } from "../conflate";
+import { conflated, type ConflatedFeed } from "../conflate";
 
 /** A handle that records updateLast calls — the only surface the feed touches. */
 function recordingHandle<T>() {
@@ -113,4 +113,81 @@ describe("conflation", () => {
     expect(updates).toEqual([]);
   });
 
+});
+
+
+describe("conflation teardown during callbacks", () => {
+  it("should not queue the next bar after rollover delivery disposes the feed", () => {
+    const updates: OHLC[] = [];
+    const frame = manualScheduler();
+    let feed: ConflatedFeed<OHLC>;
+    feed = conflated({ attached: true, updateLast(point: OHLC) { updates.push(point); feed.dispose(); } }, { schedule: frame });
+    feed.push(bar(10, 100));
+    feed.push(bar(11, 101));
+    expect(frame.created[0].pending).toBe(false);
+    frame.created[0].flush();
+    expect(updates).toEqual([bar(10, 100)]);
+  });
+
+  it("should not publish a merge result after its callback disposes the feed", () => {
+    const { handle, updates } = recordingHandle<OHLC>();
+    const frame = manualScheduler();
+    let feed: ConflatedFeed<OHLC>;
+    feed = conflated(handle, { schedule: frame, merge(_pending, incoming) { feed.dispose(); return incoming; } });
+    feed.push(bar(10, 100));
+    feed.push(bar(10, 101));
+    expect(frame.created[0].pending).toBe(false);
+    frame.created[0].flush();
+    expect(updates).toEqual([bar(10, 100)]);
+  });
+
+  it("should reject reentrant pushes while flushing the last pending tick on dispose", () => {
+    const updates: OHLC[] = [];
+    const frame = manualScheduler();
+    let feed: ConflatedFeed<OHLC>;
+    feed = conflated({ attached: true, updateLast(point: OHLC) { updates.push(point); feed.push(bar(11, 101)); } }, { schedule: frame });
+    feed.push(bar(10, 100));
+    feed.dispose();
+    expect(frame.created[0].pending).toBe(false);
+    frame.created[0].flush();
+    expect(updates).toEqual([bar(10, 100)]);
+  });
+
+  it("should recheck disposal after reading handle attachment", () => {
+    const updates: OHLC[] = [];
+    const frame = manualScheduler();
+    let feed: ConflatedFeed<OHLC>;
+    feed = conflated({ get attached() { feed.dispose(); return true; }, updateLast(point: OHLC) { updates.push(point); } }, { schedule: frame });
+    feed.push(bar(10, 100));
+    frame.created[0].flush();
+    expect(updates).toEqual([]);
+  });
+
+  it("should stay stopped if delivery throws during disposal", () => {
+    const frame = manualScheduler();
+    const feed = conflated({ attached: true, updateLast() { throw new Error("delivery failed"); } }, { schedule: frame });
+    feed.push(bar(10, 100));
+    expect(() => feed.dispose()).toThrow("delivery failed");
+    feed.push(bar(11, 101));
+    expect(frame.created[0].pending).toBe(false);
+    expect(() => feed.dispose()).not.toThrow();
+  });
+});
+
+
+it("should attempt final delivery and report both failures when scheduler cancellation throws", () => {
+  const cancellation = new Error("cancel failed");
+  const delivery = new Error("delivery failed");
+  const updates: OHLC[] = [];
+  const feed = conflated({ attached: true, updateLast(point: OHLC) { updates.push(point); throw delivery; } }, {
+    schedule: () => ({ request() {}, cancel() { throw cancellation; } }),
+  });
+  feed.push(bar(10, 100));
+  let thrown: unknown;
+  try { feed.dispose(); } catch (error) { thrown = error; }
+  expect(thrown).toBeInstanceOf(AggregateError);
+  if (!(thrown instanceof AggregateError)) throw new Error("missing cleanup aggregate");
+  expect(thrown.errors).toEqual([cancellation, delivery]);
+  expect(updates).toEqual([bar(10, 100)]);
+  expect(() => feed.dispose()).not.toThrow();
 });

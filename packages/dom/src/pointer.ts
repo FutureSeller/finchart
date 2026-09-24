@@ -226,7 +226,32 @@ export class PointerInteractions implements InteractionHandler {
     return event.pointerId ?? 1;
   }
 
+  /** A callback may replace even the same target with a new connection. */
+  private isCurrent(target: InteractionTarget, connection: Scope): boolean {
+    return this.target === target && this.connection === connection;
+  }
+
+  private isEditing(event: KeyboardEvent): boolean {
+    const Element = this.element.ownerDocument.defaultView?.Element;
+    if (!Element) return false;
+    let editable: boolean | undefined;
+    for (const node of event.composedPath()) {
+      if (!(node instanceof Element)) continue;
+      if (node.localName === "input" || node.localName === "textarea" || node.localName === "select") return true;
+      // The nearest explicit boundary wins, including a non-editable island.
+      if (editable === undefined) {
+        const value = node.getAttribute("contenteditable")?.toLowerCase();
+        if (value === "" || value === "true" || value === "plaintext-only") editable = true;
+        else if (value === "false") editable = false;
+      }
+    }
+    return editable === true;
+  }
+
   private onPointerDown = (event: PointerEvent): void => {
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
     this.inside = true;
     const pointerId = this.pointerIdOf(event);
 
@@ -235,14 +260,14 @@ export class PointerInteractions implements InteractionHandler {
 
     // Stack first. If it's consumed, this drag belongs to the
     // consumer — document keeps feeding it move/up, and pan never starts.
-    if (
-      this.target?.routeInput({
-        type: "pointerdown",
-        point: this.localPoint(event),
-        pointerId,
-        button: event.button,
-      })
-    ) {
+    const consumed = target.routeInput({
+      type: "pointerdown",
+      point: this.localPoint(event),
+      pointerId,
+      button: event.button,
+    });
+    if (!this.isCurrent(target, connection)) return;
+    if (consumed) {
       this.stackPointers.add(pointerId);
       this.listenForDrag();
       return;
@@ -282,11 +307,13 @@ export class PointerInteractions implements InteractionHandler {
   }
 
   private onDragMove = (event: PointerEvent): void => {
-    if (!this.target) return;
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
 
     // Movement of a pointer the consumer has captured — the router sends it straight through.
     if (this.stackPointers.has(this.pointerIdOf(event))) {
-      this.target.routeInput({
+      target.routeInput({
         type: "pointermove",
         point: this.localPoint(event),
         pointerId: this.pointerIdOf(event),
@@ -313,15 +340,17 @@ export class PointerInteractions implements InteractionHandler {
       this.options.crosshair &&
       event.pointerType !== "touch"
     ) {
-      this.target.crosshair(this.localPoint(event));
+      target.crosshair(this.localPoint(event));
+      if (!this.isCurrent(target, connection)) return;
     }
 
     const last = this.panPointers.get(pointerId);
-    if (!this.options.pan || !this.target || last === undefined) return;
+    if (!this.options.pan || last === undefined) return;
     this.panPointers.set(pointerId, clientX);
     if (Math.abs(clientX - this.downX) > 5) this.dragged = true;
     const dx = clientX - last;
-    this.target.panByPixels(dx);
+    target.panByPixels(dx);
+    if (!this.isCurrent(target, connection)) return;
 
     if (this.options.kineticScroll) {
       const now = Date.now();
@@ -361,6 +390,9 @@ export class PointerInteractions implements InteractionHandler {
   }
 
   private onDragEnd = (event: PointerEvent): void => {
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
     const pointerId = this.pointerIdOf(event);
 
     if (this.stackPointers.has(pointerId)) {
@@ -375,11 +407,12 @@ export class PointerInteractions implements InteractionHandler {
        * still flow through below the same way — only what's told to the
        * stack diverges.
        */
-      this.target?.routeInput({
+      target.routeInput({
         type: event.type === "pointercancel" ? "pointercancel" : "pointerup",
         point: this.localPoint(event),
         pointerId,
       });
+      if (!this.isCurrent(target, connection)) return;
       this.stopDragListening();
       this.afterDrag();
       return;
@@ -413,12 +446,15 @@ export class PointerInteractions implements InteractionHandler {
    * is decoration, not a contract.
    */
   private startInertia(): void {
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
     const view = this.element.ownerDocument?.defaultView;
     if (!view?.requestAnimationFrame || Math.abs(this.velocity) < 0.05) return;
 
     let last = Date.now();
     const step = (): void => {
-      if (!this.target) return;
+      if (!this.isCurrent(target, connection)) return;
       const now = Date.now();
       const elapsed = now - last;
       last = now;
@@ -430,7 +466,8 @@ export class PointerInteractions implements InteractionHandler {
         return;
       }
 
-      this.target.panByPixels(dx);
+      target.panByPixels(dx);
+      if (!this.isCurrent(target, connection)) return;
       this.inertiaFrame = view.requestAnimationFrame(step);
     };
 
@@ -463,10 +500,12 @@ export class PointerInteractions implements InteractionHandler {
 
   /** Only movement while not dragging counts as a crosshair. */
   private onHover = (event: PointerEvent): void => {
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
     if (
       this.panPointers.size > 0 ||
-      this.stackPointers.size > 0 ||
-      !this.target
+      this.stackPointers.size > 0
     ) {
       return;
     }
@@ -476,18 +515,15 @@ export class PointerInteractions implements InteractionHandler {
     // Even unconsumed movement passes through the stack — this is the path
     // for a tool's hover highlight. If it was consumed, there's no reason
     // for the crosshair to draw over it.
-    if (
-      this.target.routeInput({
-        type: "pointermove",
-        point,
-        pointerId: this.pointerIdOf(event),
-      })
-    ) {
-      return;
-    }
+    const consumed = target.routeInput({
+      type: "pointermove",
+      point,
+      pointerId: this.pointerIdOf(event),
+    });
+    if (!this.isCurrent(target, connection) || consumed) return;
 
     if (!this.options.crosshair) return;
-    this.target.crosshair(point);
+    target.crosshair(point);
   };
 
   private onEnter = (): void => {
@@ -521,15 +557,18 @@ export class PointerInteractions implements InteractionHandler {
   }
 
   private onDoubleClick = (event: MouseEvent): void => {
-    if (!this.target) return;
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
 
     const point = this.localPoint(event);
     // Stack first — a tool needs to be able to use double-click (e.g. deleting a drawing).
-    if (this.target.routeInput({ type: "dblclick", point })) return;
+    const consumed = target.routeInput({ type: "dblclick", point });
+    if (!this.isCurrent(target, connection) || consumed) return;
 
-    this.target.doubleClick(point);
-    if (!this.options.doubleClickReset) return;
-    this.target.fitDomains();
+    target.doubleClick(point);
+    if (!this.isCurrent(target, connection) || !this.options.doubleClickReset) return;
+    target.fitDomains();
   };
 
   /** The click at the end of a drag is swallowed — that was a drag-and-release, not a click. */
@@ -539,17 +578,23 @@ export class PointerInteractions implements InteractionHandler {
   };
 
   private onContextMenu = (event: MouseEvent): void => {
-    if (!this.target) return;
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
 
     const point = this.localPoint(event);
     // Stack first — if a tool consumes it, the browser menu is blocked
     // too. For a tool that uses right-click as a delete gesture, the
     // native menu popping up alongside it would be a half-measure.
-    if (this.target.routeInput({ type: "contextmenu", point })) {
+    const consumed = target.routeInput({ type: "contextmenu", point });
+    if (consumed) {
+      // Consumption still blocks the browser action if the callback ended
+      // this connection. Only further target work depends on its lifetime.
       event.preventDefault();
       return;
     }
-    this.target.contextMenu(point);
+    if (!this.isCurrent(target, connection)) return;
+    target.contextMenu(point);
   };
 
   /**
@@ -558,13 +603,19 @@ export class PointerInteractions implements InteractionHandler {
    * intercepted.
    */
   private onKeyDown = (event: KeyboardEvent): void => {
-    if (!this.target || event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection || event.ctrlKey || event.metaKey || event.altKey || this.isEditing(event)) return;
 
     // Stack first — editing keys like Delete/Esc belong to the tool.
-    if (this.target.routeInput({ type: "keydown", key: event.key })) {
+    const consumed = target.routeInput({ type: "keydown", key: event.key });
+    if (consumed) {
+      // Consumption still blocks the browser action if the callback ended
+      // this connection. Only further target work depends on its lifetime.
       event.preventDefault();
       return;
     }
+    if (!this.isCurrent(target, connection)) return;
 
     /**
      * This is where the `keyboard` option actually turns things off — the
@@ -581,20 +632,20 @@ export class PointerInteractions implements InteractionHandler {
     switch (event.key) {
       case "ArrowLeft":
         if (!this.options.pan) return;
-        this.target.panByPixels(step);
+        target.panByPixels(step);
         break;
       case "ArrowRight":
         if (!this.options.pan) return;
-        this.target.panByPixels(-step);
+        target.panByPixels(-step);
         break;
       case "+":
       case "=":
         if (!this.options.zoom) return;
-        this.target.zoomAtPixel(this.options.zoomSpeed, center);
+        target.zoomAtPixel(this.options.zoomSpeed, center);
         break;
       case "-":
         if (!this.options.zoom) return;
-        this.target.zoomAtPixel(1 / this.options.zoomSpeed, center);
+        target.zoomAtPixel(1 / this.options.zoomSpeed, center);
         break;
       default:
         return;
@@ -604,19 +655,25 @@ export class PointerInteractions implements InteractionHandler {
   };
 
   private onWheel = (event: WheelEvent): void => {
-    if (!this.target) return;
+    const target = this.target;
+    const connection = this.connection;
+    if (!target || !connection) return;
 
     const point = this.localPoint(event);
 
     // preventDefault is only called by whichever side actually used the
     // event — page scroll must not be blocked over a chart with zoom off
     // and no consumer.
-    if (this.target.routeInput({ type: "wheel", point, deltaY: event.deltaY })) {
+    const consumed = target.routeInput({ type: "wheel", point, deltaY: event.deltaY });
+    if (consumed) {
+      // Consumption still blocks the browser action if the callback ended
+      // this connection. Only further target work depends on its lifetime.
       event.preventDefault();
       return;
     }
+    if (!this.isCurrent(target, connection)) return;
 
-    if (!this.options.zoom) return;
+    if (!this.options.zoom || event.deltaY === 0) return;
     // Asked to zoom only with a modifier, a plain wheel is the page's —
     // and a trackpad pinch arrives as a wheel with Ctrl, so it still zooms.
     if (this.options.wheel === "modifier" && !event.ctrlKey && !event.metaKey) return;
@@ -626,6 +683,6 @@ export class PointerInteractions implements InteractionHandler {
     const factor =
       event.deltaY < 0 ? this.options.zoomSpeed : 1 / this.options.zoomSpeed;
 
-    this.target.zoomAtPixel(factor, point.x);
+    target.zoomAtPixel(factor, point.x);
   };
 }

@@ -160,7 +160,9 @@ the debounce belongs on your side, the same as `move`. Every notification also
 carries `via: "direct" | "undo" | "redo"`, so a host-level command stack can
 ignore a drawing-history replay instead of recording it again. Notifications
 (`changes`, `selectionChanges`, `modeChanges`, `historyChanges`) are delivered
-after the call that caused them returns, in the order the state changed — so
+synchronously after the internal mutation finishes, **before the originating
+call returns**, in the order the state changed. A subscriber must use its event
+payload rather than a variable awaiting that call's return value. Thus
 calling back into the toolbox from a subscriber (`clear()` from a selection
 listener, `undo()` from a change listener) is safe, and a mirror that replays
 the events lands on the same state as `list()`. There's a working

@@ -86,3 +86,59 @@ describe("renko", () => {
     expect(bricks.slice(2).every((brick) => brick.closedAt === 2)).toBe(true);
   });
 });
+
+
+describe("fractional Renko grid", () => {
+  it("lays exact decimal boundaries without accepting the preceding double", () => {
+    for (const sign of [1, -1]) {
+      const below = renko([tick(0, 0), tick(1, sign * 0.29999999999999993)], { brickSize: 0.1 });
+      expect(below).toHaveLength(2);
+      const exact = renko([tick(0, 0), tick(1, sign * 0.3)], { brickSize: 0.1 });
+      expect(exact.map(brick => brick.close)).toEqual([sign * 0.1, sign * 0.2, sign * 0.3]);
+    }
+  });
+
+  it("keeps a decimal baseline and the two-brick reversal threshold", () => {
+    const before = [tick(0, 100.1), tick(1, 100.4), tick(2, 100.20000000000002)];
+    expect(renko(before, { brickSize: 0.1 })).toHaveLength(3);
+    const bricks = renko([...before, tick(3, 100.2)], { brickSize: 0.1 });
+    expect(bricks.map(brick => [brick.open, brick.close])).toEqual([
+      [100.1, 100.2], [100.2, 100.3], [100.3, 100.4], [100.3, 100.2],
+    ]);
+    expect(bricks.at(-1)?.closedAt).toBe(3);
+  });
+});
+
+
+it("uses the rounded grid boundary for high-precision and subnormal sizes", () => {
+  for (const brickSize of [0.10000000000000002, Math.PI, Number.MIN_VALUE]) {
+    const close = brickSize * 3;
+    const bricks = renko([tick(0, 0), tick(1, close)], { brickSize });
+    expect(bricks).toHaveLength(3);
+    expect(bricks.at(-1)?.close).toBe(close);
+  }
+});
+
+it("preserves a single-double boundary distinction at large offsets and on upward reversal", () => {
+  expect(renko([tick(0, 1e12), tick(1, 1000000000000.2999)], { brickSize: 0.1 })).toHaveLength(2);
+  expect(renko([tick(0, 1e12), tick(1, 1000000000000.3)], { brickSize: 0.1 })).toHaveLength(3);
+  const before = [tick(0, -100.1), tick(1, -100.4), tick(2, -100.20000000000002)];
+  expect(renko(before, { brickSize: 0.1 })).toHaveLength(3);
+  const bricks = renko([...before, tick(3, -100.2)], { brickSize: 0.1 });
+  expect(bricks.at(-1)).toMatchObject({ open: -100.3, close: -100.2, closedAt: 3 });
+  expect(bricks).toHaveLength(4);
+});
+
+
+it("counts subnormal bricks in their exact binary units across a long run", () => {
+  for (const brickSize of [Number.MIN_VALUE, 1e-323, 1e-320]) {
+    for (const sign of [1, -1]) {
+      const end = sign * brickSize * 100;
+      const bricks = renko([tick(0, 0), tick(1, end)], { brickSize });
+      expect(bricks).toHaveLength(100);
+      expect(bricks.at(-1)?.close).toBe(end);
+      const reversed = renko([tick(0, 0), tick(1, end), tick(2, end - sign * brickSize * 2)], { brickSize });
+      expect(reversed).toHaveLength(101);
+    }
+  }
+});

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { createPlotModel } from "../../plot";
+import { LogScale } from "../../scale";
 import { isLinearGradientParams, LINEAR_GRADIENT } from "../../render";
 import { areaSeries } from "../area-series";
 import { baselineSeries, splitAtBaseline } from "../baseline-series";
@@ -137,6 +138,42 @@ describe("areaSeries", () => {
 });
 
 describe("baselineSeries", () => {
+  it.each([false, true])("should keep threshold colors and crossing geometry when inverted (log: %s)", (logarithmic) => {
+    const data: LineDataPoint[] = [{ x: 0, y: 20 }, { x: 1, y: 5 }, { x: 2, y: 20 }];
+    const { model } = mounted({
+      series: baselineSeries({
+        baseline: 10,
+        style: { topLine: "green", topFill: "lime", bottomLine: "red", bottomFill: "pink" },
+      }),
+      data,
+    });
+    if (logarithmic) model.plot.mainPane.setYScale(new LogScale());
+    const colors = () => model.commands().flatMap((command) => {
+      if (command.type === "drawLine") return [command.style.color];
+      if (command.type === "drawShape" && command.shape.shape === "polygon") return [command.shape.fill];
+      return [];
+    });
+    const expected = ["lime", "green", "pink", "red", "lime", "green"];
+    expect(colors()).toEqual(expected);
+    model.plot.mainPane.applyOptions({ invert: true });
+    expect(colors()).toEqual(expected);
+    const lines = model.commands().filter((command) => command.type === "drawLine");
+    expect(lines[0].points.at(-1)).toEqual(lines[1].points[0]);
+    expect(lines[1].points.at(-1)).toEqual(lines[2].points[0]);
+    expect(lines[0].points.at(-1)?.y).toBeCloseTo(model.plot.mainPane.yScale.scale(10), 6);
+    model.plot.destroy();
+  });
+
+  it("should keep a baseline-only run on the same side after inversion", () => {
+    const data: LineDataPoint[] = [{ x: 0, y: 10 }, { x: 1, y: 10 }];
+    const { model } = mounted({ series: baselineSeries({ baseline: 10 }), data });
+    const colors = () => model.commands().flatMap(command => command.type === "drawLine" ? [command.style.color] : []);
+    const expected = colors();
+    model.plot.mainPane.applyOptions({ invert: true });
+    expect(colors()).toEqual(expected);
+    model.plot.destroy();
+  });
+
   it("should change color exactly at the crossing, not at a bar", () => {
     // baseline at y=0. 10 → -10 crosses it at x 0.5.
     const data: LineDataPoint[] = [

@@ -1,4 +1,5 @@
 import type { BaseDataPoint } from "../data";
+import { runAll, throwable } from "../primitives";
 import type { SeriesHandle } from "../plot/series-handle";
 import { frameScheduler, type SchedulerFactory } from "../render";
 
@@ -92,7 +93,7 @@ export function conflated<T extends BaseDataPoint>(
     pending = null;
     // The registration may have died between push and flush — the same
     // `handle.attached` idiom a socket callback is told to use.
-    if (point !== null && handle.attached) handle.updateLast(point);
+    if (point !== null && handle.attached && !disposed) handle.updateLast(point);
   };
 
   const scheduler = (options.schedule ?? frameScheduler())(deliver);
@@ -101,27 +102,39 @@ export function conflated<T extends BaseDataPoint>(
     push(point) {
       if (disposed) return;
 
-      if (pending !== null && point.x !== pending.x) {
+      const before = pending;
+      if (before !== null && point.x !== before.x) {
         // Bar rollover — the old bar's final state is data, not something
         // to fold away. It goes out now; the new bar starts pending.
         deliver();
       }
-      pending = pending === null ? point : merge(pending, point);
+      if (disposed) return;
+      const next = pending === null ? point : merge(pending, point);
+      // Delivery, attachment and merge callbacks can end this feed.
+      if (disposed) return;
+      pending = next;
       // Deduplicating repeat requests is the scheduler's contract, not ours.
       scheduler.request();
     },
 
     flush() {
+      if (disposed) return;
       scheduler.cancel();
       deliver();
     },
 
     dispose() {
       if (disposed) return;
-      // Flush before stopping — dispose must not be the one path that
-      // drops a tick on the floor.
-      feed.flush();
+      // Close admission before callbacks, while retaining the one tick
+      // already accepted. This final delivery may not enqueue another.
       disposed = true;
+      const point = pending;
+      pending = null;
+      const failures = runAll([
+        () => scheduler.cancel(),
+        () => { if (point !== null && handle.attached) handle.updateLast(point); },
+      ], (step) => step());
+      if (failures) throw throwable(failures, "disposing conflated feed failed");
     },
   };
 

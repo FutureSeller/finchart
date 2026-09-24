@@ -1787,9 +1787,18 @@ export class Plot
      * failures — stays an explicit phase below.
      */
 
+    const failures: unknown[] = [];
+    const attempt = (step: () => void): void => {
+      try {
+        step();
+      } catch (error) {
+        failures.push(error);
+      }
+    };
+
     // Keep an already-scheduled render from touching layers that have already been torn down.
     this.destroyed = true;
-    this.scheduler.cancel();
+    attempt(() => this.scheduler.cancel());
 
     /**
      * **Notifications are cut off first.** If a plugin below removes a pane
@@ -1812,14 +1821,6 @@ export class Plot
      * responsibility for whatever's left when a consumer never called the
      * unsubscribe function.
      */
-    const failures: unknown[] = [];
-    const attempt = (step: () => void): void => {
-      try {
-        step();
-      } catch (error) {
-        failures.push(error);
-      }
-    };
 
     for (let i = this.plugins.length - 1; i >= 0; i--) {
       const api = this.plugins[i];

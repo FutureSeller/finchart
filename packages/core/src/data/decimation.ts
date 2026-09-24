@@ -290,11 +290,21 @@ export class M4Decimation<T extends BaseDataPoint = BaseDataPoint>
     // If the budget can't even fill one column, M4 doesn't hold.
     if (threshold < 4) return [data[start], data[end - 1]];
 
-    const placeOf = screenPlaceOf(this.coordinates, screenXScan);
+    let placeOf = screenPlaceOf(this.coordinates, screenXScan);
 
     const buckets = Math.floor(threshold / 4);
-    const first = placeOf(data[start]);
-    const span = placeOf(data[end - 1]) - first;
+    let first = placeOf(data[start]);
+    const last = placeOf(data[end - 1]);
+    let span = last - first;
+    if (span === Number.POSITIVE_INFINITY) {
+      // Finite opposite-sign ends can overflow their difference. Halving
+      // coordinates preserves the bucket ratio; ordinary spans retain the
+      // exact arithmetic below, including its boundary rounding.
+      const originalPlace = placeOf;
+      placeOf = (point) => originalPlace(point) / 2;
+      first /= 2;
+      span = last / 2 - first;
+    }
 
     const picked: T[] = [];
     // Data is x-ascending, and screen place is a monotonic function of x

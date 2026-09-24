@@ -50,11 +50,70 @@ export interface RenkoOptions {
   brickSize: number;
 }
 
+/** A number's shortest decimal spelling, without introducing a tolerance at a price boundary. */
+function decimal(value: number): { units: bigint; exponent: number } {
+  const [mantissa, power = "0"] = String(value).split("e");
+  const dot = mantissa.indexOf(".");
+  const places = dot < 0 ? 0 : mantissa.length - dot - 1;
+  return { units: BigInt(mantissa.replace(".", "")), exponent: Number(power) - places };
+}
+
+/** Integer brick positions on the initial close's decimal grid. */
+function brickGrid(origin: number, size: number) {
+  // Subnormal shortest spellings can differ appreciably from their actual
+  // value (MIN_VALUE prints as 5e-324). Each is instead an exact integral
+  // multiple of MIN_VALUE; the price guard keeps this division finite.
+  const binary = size < 2 ** -1022;
+  const base = binary ? { units: BigInt(origin / Number.MIN_VALUE), exponent: 0 } : decimal(origin);
+  const step = binary ? { units: BigInt(size / Number.MIN_VALUE), exponent: 0 } : decimal(size);
+  const exponent = Math.min(base.exponent, step.exponent);
+  const scale = (units: bigint, from: number, to: number) => units * 10n ** BigInt(from - to);
+  const baseUnits = scale(base.units, base.exponent, exponent);
+  const stepUnits = scale(step.units, step.exponent, exponent);
+  const baseNumber = Number(baseUnits);
+  const stepNumber = Number(stepUnits);
+  // Ordinary decimal price grids stay in exact integer arithmetic. Powers
+  // through 10^22 are exact doubles; larger coefficients use decimal parsing.
+  const fastLimit = Math.abs(exponent) <= 22 && Number.isSafeInteger(baseNumber) && Number.isSafeInteger(stepNumber)
+    ? Math.floor((Number.MAX_SAFE_INTEGER - Math.abs(baseNumber)) / stepNumber)
+    : -1;
+  const factor = binary ? Number.MIN_VALUE : 10 ** Math.abs(exponent);
+
+  const price = (index: number): number => {
+    if (Math.abs(index) <= fastLimit) {
+      const units = baseNumber + index * stepNumber;
+      return exponent < 0 ? units / factor : units * factor;
+    }
+    const units = baseUnits + BigInt(index) * stepUnits;
+    return binary ? Number(units) * Number.MIN_VALUE : Number(`${units}e${exponent}`);
+  };
+
+  return {
+    bounds(close: number) {
+      const distance = close - origin;
+      // Division only locates the candidate step. Comparing its rounded
+      // grid price decides the boundary, so no epsilon swallows a real move.
+      // Splitting the quotient also handles a difference that overflows.
+      let floor = Math.floor(Number.isFinite(distance) ? distance / size : close / size - origin / size);
+      while (price(floor) > close) floor -= 1;
+      while (price(floor + 1) <= close) floor += 1;
+      return { floor, ceil: price(floor) === close ? floor : floor + 1 };
+    },
+    price,
+  };
+}
+
 /**
  * Traditional Renko, close-based. One brick per brickSize in the same
  * direction, **a reversal takes 2×brickSize** — a reversal brick opens one
  * gap away from the prior close (the classic rule). The first breakout
- * sets the direction.
+ * sets the direction. Boundaries use the shortest decimal spellings of the
+ * initial close, each close, and brickSize: 0.3 reaches three 0.1 bricks,
+ * but the immediately preceding double does not. Prices are rounded from
+ * that integer grid once, rather than accumulated by repeated addition;
+ * reaching the rounded grid price also reaches the boundary. Subnormal
+ * brick sizes use exact binary units instead: their shortest decimal
+ * spelling can have too few digits to preserve a long run's brick count.
  *
  * A close 2⁴⁷ bricks or more from zero cannot be laid — `ContractError` —
  * because past that a brick is under the doubles' own spacing at that
@@ -79,19 +138,6 @@ export function renko(
   const bricks: RenkoBrick[] = [];
   if (source.length === 0) return bricks;
 
-  // A brick is laid only when the close is at least a brick past the level, so every brick's far end lies
-  // between the level and a finite close — inside the doubles, as long as two bricks are.
-  const emit = (open: number, close: number, closedAt: number): void => {
-    bricks.push({
-      x: bricks.length,
-      open,
-      close,
-      high: Math.max(open, close),
-      low: Math.min(open, close),
-      closedAt,
-    });
-  };
-
   // The door a close has to pass to be laid in bricks: within 2⁴⁷ bricks of zero, where a brick is still far
   // above the doubles' spacing at that price (the spacing is under 2⁻⁵² of the price), so every step below
   // moves the level. Past it a step can be absorbed and the loops would never end.
@@ -102,44 +148,51 @@ export function renko(
     return close;
   };
 
-  let level = laid(source[0].close); // the previous brick's close — the baseline for the next brick
+  const grid = brickGrid(laid(source[0].close), brickSize);
+  let level = 0;
   let direction: 1 | -1 | 0 = 0;
+  const emit = (open: number, close: number, closedAt: number): void => {
+    const from = grid.price(open);
+    const to = grid.price(close);
+    bricks.push({ x: bricks.length, open: from, close: to, high: Math.max(from, to), low: Math.min(from, to), closedAt });
+  };
 
   for (const candle of source) {
-    const closedAt = candle.x; // the source candle's x, not an ordinal
-    const close = laid(candle.close);
+    const closedAt = candle.x;
+    // One grid-boundary calculation per candle, never one per brick.
+    const { floor: upTo, ceil: downTo } = grid.bounds(laid(candle.close));
 
     if (direction >= 0) {
-      while (close - level >= brickSize) {
-        emit(level, level + brickSize, closedAt);
-        level += brickSize;
+      while (upTo > level) {
+        emit(level, level + 1, closedAt);
+        level += 1;
         direction = 1;
       }
     }
     if (direction <= 0) {
-      while (level - close >= brickSize) {
-        emit(level, level - brickSize, closedAt);
-        level -= brickSize;
+      while (downTo < level) {
+        emit(level, level - 1, closedAt);
+        level -= 1;
         direction = -1;
       }
     }
 
     // Reversal — two steps opposite from the previous brick's close: one gap + one brick.
-    if (direction === 1 && level - close >= 2 * brickSize) {
-      emit(level - brickSize, level - 2 * brickSize, closedAt);
-      level -= 2 * brickSize;
+    if (direction === 1 && level - downTo >= 2) {
+      emit(level - 1, level - 2, closedAt);
+      level -= 2;
       direction = -1;
-      while (level - close >= brickSize) {
-        emit(level, level - brickSize, closedAt);
-        level -= brickSize;
+      while (downTo < level) {
+        emit(level, level - 1, closedAt);
+        level -= 1;
       }
-    } else if (direction === -1 && close - level >= 2 * brickSize) {
-      emit(level + brickSize, level + 2 * brickSize, closedAt);
-      level += 2 * brickSize;
+    } else if (direction === -1 && upTo - level >= 2) {
+      emit(level + 1, level + 2, closedAt);
+      level += 2;
       direction = 1;
-      while (close - level >= brickSize) {
-        emit(level, level + brickSize, closedAt);
-        level += brickSize;
+      while (upTo > level) {
+        emit(level, level + 1, closedAt);
+        level += 1;
       }
     }
   }
