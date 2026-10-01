@@ -76,6 +76,18 @@ describe("conflation", () => {
     expect(updates).toEqual([bar(10, 102), bar(11, 200)]);
   });
 
+  it("should detect a new bar through the x the series reads", () => {
+    type Tick = OHLC & { time: number };
+    const { updates, handle } = recordingHandle<Tick>();
+    const frame = manualScheduler();
+    const feed = conflated(handle, { schedule: frame, xOf: (point) => point.time });
+
+    feed.push({ ...bar(0, 1), time: 10 });
+    feed.push({ ...bar(0, 2), time: 20 });
+
+    expect(updates.map((point) => point.time)).toEqual([10]);
+  });
+
   it("should flush pending ticks on dispose instead of dropping them", () => {
     const { updates, handle } = recordingHandle<OHLC>();
     const frame = manualScheduler();

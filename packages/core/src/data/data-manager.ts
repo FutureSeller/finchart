@@ -86,7 +86,12 @@ export class SimpleDataManager<
     endX: number;
     width: number;
     result: T[];
-    /** result[i]'s screen place — filled in only when requested. */
+    /** The points just outside the window on each side, if any. */
+    before: T | undefined;
+    after: T | undefined;
+    /** `result` with `before` and `after` around it — built only when drawing asks. */
+    drawn: T[] | null;
+    /** drawn[i]'s screen place — filled in only when requested. */
     places: number[] | null;
     /** The `Viewport.xEpoch` at the time places were computed — since this cache goes stale on a rebuild. */
     placesEpoch: number;
@@ -116,8 +121,8 @@ export class SimpleDataManager<
      *
      * Unguarded, `NaN`, `0` and `-1` all end the same way: the per-pixel
      * threshold floors them to a budget of one (`byWidth >= 1` fails for
-     * all three), and M4 keeps only the two endpoints, collapsing the chart
-     * into a straight line. The manager constructor is the one chokepoint
+     * all three), and M4 keeps a single column, collapsing the chart into
+     * at most four points. The manager constructor is the one chokepoint
      * all paths share, which is why the check lives here too.
      */
     if (options.maxPoints !== undefined) {
@@ -387,20 +392,6 @@ export class SimpleDataManager<
     this.afterIncrement();
   }
 
-  /**
-   * Compatibility for managers built against the earlier caller-owned
-   * landing shape. It deliberately takes the normal full-validation route:
-   * only `adoptHeadRetainingTail` can prove where its suffix came from.
-   */
-  adoptHeadGrown(next: T[], grownBy: number): void {
-    if (!Number.isInteger(grownBy) || grownBy <= 0 || grownBy > next.length) {
-      throw new ContractError(
-        `adoptHeadGrown(next, grownBy): grownBy must be within (0, ${next.length}], got ${describe(grownBy)}`,
-      );
-    }
-    this.setData(next);
-  }
-
   private assertSorted(data: readonly T[]): boolean {
     // `=== 0`, not `< 2` — even a single-element array needs its shape and
     // finiteness checked (there's just nothing to sort).
@@ -443,12 +434,11 @@ export class SimpleDataManager<
     const tier = this.tierFor(viewport, threshold);
 
     // The window is a pair of indices, not a copy — the binary search result passes straight through.
+    const start = this.lowerBound(tier, viewport.startX);
+    const end = this.upperBound(tier, viewport.endX);
     const result = this.decimation.decimate(
       tier,
-      {
-        start: this.lowerBound(tier, viewport.startX),
-        end: this.upperBound(tier, viewport.endX),
-      },
+      { start, end },
       threshold,
       viewport.screenXScan,
       this.gapFree,
@@ -459,6 +449,9 @@ export class SimpleDataManager<
       endX: viewport.endX,
       width: viewport.width,
       result,
+      before: tier[start - 1],
+      after: tier[end],
+      drawn: null,
       places: null,
       placesEpoch: 0,
     };
@@ -467,6 +460,14 @@ export class SimpleDataManager<
   }
 
   /**
+   * What drawing gets: the visible points plus the one neighbour just
+   * outside the window on each side. Without them a line stops at the last
+   * point inside the view — an empty strip at each plot edge, no line at
+   * all around a single visible point — and a candle the edge cuts
+   * vanishes. The clip hides what falls outside. The neighbours sit
+   * outside the decimated window, so they never stretch its buckets, and
+   * `getVisibleData` stays the exact window the y range is built from.
+   *
    * Places are computed once at the cache layer — for a frame where the
    * viewport isn't changing (hover, etc.), this removes drawing having to
    * search the merged x list per point. `xEpoch` is what opens up the
@@ -475,13 +476,24 @@ export class SimpleDataManager<
    * unlike the point cache, a stale place is a wrong picture.
    */
   getVisiblePlaced(viewport: Viewport): VisiblePlaced<T> {
-    const points = this.getVisibleData(viewport);
+    const visible = this.getVisibleData(viewport);
     const cached = this.cached;
+    if (cached === null) return { points: visible, places: null };
+    if (cached.drawn === null) {
+      const { before, after } = cached;
+      cached.drawn =
+        before === undefined && after === undefined
+          ? cached.result
+          : (before === undefined ? [] : [before]).concat(
+              cached.result,
+              after === undefined ? [] : [after],
+            );
+    }
+    const points = cached.drawn;
     const scan = viewport.screenXScan;
-    // Doesn't carry places if there's no cache (empty data) or no separate
-    // place space (continuous coordinate space) — drawing's `toPixel` is
-    // already O(1).
-    if (cached === null || scan === undefined) return { points, places: null };
+    // Doesn't carry places if there's no separate place space (continuous
+    // coordinate space) — drawing's `toPixel` is already O(1).
+    if (scan === undefined) return { points, places: null };
 
     /**
      * Doesn't cache without a key. `xEpoch` traveling together with

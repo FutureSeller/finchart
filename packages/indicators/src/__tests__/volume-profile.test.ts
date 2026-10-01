@@ -112,3 +112,26 @@ describe("volumeProfile extreme volume", () => {
     model.plot.destroy();
   });
 });
+
+describe("volumeProfile per frame", () => {
+  it("reads the visible bars, not the whole history", () => {
+    const history = Array.from({ length: 10_000 }, (_, x) => bar(x, 10 + (x % 7), 5));
+    const model = createPlotModel({ size: { width: 400, height: 300 }, series: { series: candleSeries(), data: history } });
+    model.plot.setVisibleRange(9_900, 9_999);
+    let reads = 0;
+    // Counts index reads, the way a walk from index 0 would pay for every bar.
+    const counted = new Proxy(history, {
+      get(target, key, receiver) {
+        if (typeof key === "string" && /^\d+$/.test(key)) reads++;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    model.plot.mainPane.addDecoration(volumeProfile({ source: { read: () => counted }, bins: 4 }));
+
+    reads = 0;
+    model.plot.render();
+
+    expect(reads).toBeLessThan(500);
+    model.plot.destroy();
+  });
+});

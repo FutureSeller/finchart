@@ -41,6 +41,29 @@ describe("eventChannel", () => {
     expect(later).toHaveBeenCalledTimes(1);
   });
 
+  it("should not run a handler another handler unsubscribed earlier in the same emit", () => {
+    const events = eventChannel<Events>();
+    const removed = vi.fn();
+    let offRemoved = () => {};
+    events.on("a", () => offRemoved());
+    offRemoved = events.on("a", removed);
+
+    events.emit("a", 1);
+
+    expect(removed).not.toHaveBeenCalled();
+  });
+
+  it("should stop the rest of an emit once a handler clears the channel", () => {
+    const events = eventChannel<Events>();
+    const after = vi.fn();
+    events.on("a", () => events.clear());
+    events.on("a", after);
+
+    events.emit("a", 1);
+
+    expect(after).not.toHaveBeenCalled();
+  });
+
   it("should not run a handler subscribed during the same emit", () => {
     const events = eventChannel<Events>();
     const late = vi.fn();

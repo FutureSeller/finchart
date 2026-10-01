@@ -332,6 +332,20 @@ describe("divider moves between frames", () => {
     expect(height(upper)).toBeCloseTo((space * (a + 8)) / (a + b) + 8, 6);
   });
 
+  it("should ignore a move for a handle drawn between panes that are no longer adjacent", () => {
+    const { plot, upper, lower, drag } = mountDragging();
+    const third = plot.addPane();
+    third.addSeries({ series: silentSeries(), data });
+    plot.render();
+    plot.removePane(lower);
+    const before = [upper.flex, third.flex];
+
+    // The handle at index 0 was drawn between `upper` and `lower`; `third` now sits there.
+    drag(8);
+
+    expect([upper.flex, third.flex]).toEqual(before);
+  });
+
   it("should draw no frame and run no render listener for a move", () => {
     // A listener run from inside a move could change the chart again before
     // the move lands — so a move measures without drawing.

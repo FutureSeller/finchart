@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { fillLinearGradient } from "@finchart/core";
 import type { DrawSurface } from "@finchart/core";
-import { browserDeps } from "../browser-deps";
+import { browserDeps, type BrowserDepsOptions } from "../browser-deps";
 import { fakeCanvasContext } from "./fakes";
 
 /**
@@ -74,5 +74,31 @@ describe("browserDeps's resolution observation", () => {
     );
 
     expect(deps.observeResolution).toBeUndefined();
+  });
+});
+
+describe("browserDeps's layers", () => {
+  const { getContext } = HTMLCanvasElement.prototype;
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = getContext;
+  });
+
+  const canvasPosition = (options: BrowserDepsOptions) => {
+    // jsdom has no 2D context; the layers only need one to exist.
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      writable: true,
+      value: () => ({ setTransform: () => undefined }),
+    });
+    const container = document.createElement("div");
+    browserDeps({ pointer: false, ...options })(container).createLayers(100, 100);
+    return container.querySelector("canvas")?.style.position;
+  };
+
+  it("should keep the canvas out of the flow whether or not the size is followed", () => {
+    // The container's own CSS sizes it either way; an in-flow canvas would
+    // stop a followed container from shrinking.
+    expect(canvasPosition({})).toBe("absolute");
+    expect(canvasPosition({ autoSize: true })).toBe("absolute");
   });
 });

@@ -20,6 +20,7 @@
  */
 
 import { runAll, throwable } from "./errors";
+import { requireFunction } from "./guards";
 
 /** The listen-only side of a value stream. This is the face extensions expose on their API. */
 export interface Observable<T> {
@@ -40,18 +41,19 @@ export interface Emitter<T> extends Observable<T> {
 
 /** `who` names the failing side in the thrown message — "a subscriber" unless the owner says otherwise. */
 export function emitter<T>(who = "a subscriber"): Emitter<T> {
-  const listeners: ((value: T) => void)[] = [];
+  // One record per subscription, so the same function subscribed twice stays two subscriptions.
+  const listeners: { listener?: (value: T) => void }[] = [];
 
   return {
     subscribe(listener) {
-      listeners.push(listener);
-      let off = false;
+      requireFunction(listener, "subscribe(listener)");
+      const record: { listener?: (value: T) => void } = { listener };
+      listeners.push(record);
 
       return () => {
-        if (off) return;
-        off = true;
-        const index = listeners.indexOf(listener);
-        if (index !== -1) listeners.splice(index, 1);
+        if (!record.listener) return;
+        record.listener = undefined;
+        listeners.splice(listeners.indexOf(record), 1);
       };
     },
 
@@ -60,9 +62,10 @@ export function emitter<T>(who = "a subscriber"): Emitter<T> {
        * **Iterate over a copy of the list.** If a subscriber calls its own
        * unsubscribe function, the original array shrinks; iterating over it
        * directly would shift indices and skip the next subscriber. Anything
-       * that subscribes mid-emit isn't called this round.
+       * that subscribes mid-emit isn't called this round, and anything
+       * unsubscribed before its turn isn't called either.
        */
-      const failures = runAll(listeners.slice(), (listener) => listener(value));
+      const failures = runAll(listeners.slice(), (record) => record.listener?.(value));
       if (failures) throw throwable(failures, `${who} threw`);
     },
 

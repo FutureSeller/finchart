@@ -7,15 +7,15 @@ import type { ExpandHints, Scale } from "../scale";
  * its own geometry supplies its own arithmetic via `Scale.expand`.
  */
 export function expandRange({ min, max }: Range, ratio: number): [number, number] {
-  // A collapsed interval is padded by ±1 — or, where 1 is below the doubles' spacing at that magnitude and
-  // would be absorbed, by a few of that spacing — so the two ends are always two numbers.
-  const spacing = Math.abs(min) * 2 ** -50;
+  // A collapsed interval is padded by 5% of the value, so a flat 1.0850 opens to about ±0.05 and a flat
+  // 0.0000123 stays above zero; only a flat 0, with no magnitude to scale, gets ±1. 5% of a normal double
+  // is always far above its spacing, so the two ends are always two numbers.
   const span = max - min;
   // Halves keep the span finite where the ends' difference is not — used only then, so an ordinary range's
   // padding is the same bits as ever (halving a subnormal span would lose it). An end whose padding would
   // leave the doubles stays where it is — there is nowhere further to go, and a domain end past the doubles
   // is not a domain.
-  const margin = min === max ? Math.max(1, spacing) : Number.isFinite(span) ? span * ratio : (max / 2 - min / 2) * ratio * 2;
+  const margin = min === max ? Math.abs(min) * 0.05 || 1 : Number.isFinite(span) ? span * ratio : (max / 2 - min / 2) * ratio * 2;
   const low = min - margin;
   const high = max + margin;
   return [Number.isFinite(low) ? low : min, Number.isFinite(high) ? high : max];

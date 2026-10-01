@@ -95,6 +95,14 @@ below. Coming from lightweight-charts? There is a
 
 ## 60 seconds
 
+```html
+<div id="chart" style="height: 400px"></div>
+```
+
+The height matters: the canvas is layered over that element rather than laid
+out in it, so an empty `<div>` stays 0 px tall and what follows it is drawn
+over.
+
 ```ts
 import { candleSeries } from "@finchart/core";
 import { PlotBuilder, browserDeps } from "@finchart/dom";

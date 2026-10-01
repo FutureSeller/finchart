@@ -1,4 +1,5 @@
 import { MIN_PANE_HEIGHT } from "./frame";
+import type { PaneApi } from "./pane";
 
 /** Where a divider sits. `index` is the ordinal of the pane just above it. */
 export interface DividerBoundary {
@@ -14,6 +15,12 @@ export interface DividerBoundary {
    * can't move either way.
    */
   value: { now: number; min: number; max: number };
+  /**
+   * The panes above and below it. When a later frame puts a different pair
+   * at the same `index` (a pane removed or inserted mid-drag), a drag that
+   * grabbed the old pair should end rather than move the new one.
+   */
+  panes: readonly [upper: PaneApi, lower: PaneApi];
 }
 
 export interface DividerRenderer {

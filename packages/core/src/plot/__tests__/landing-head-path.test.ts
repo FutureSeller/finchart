@@ -239,8 +239,8 @@ describe("landing head path", () => {
     expect(derived.read()).toEqual(sma(7)(bars(80, 300)));
   });
 
-  it("should safely fall back when a custom manager has only the legacy landing door", () => {
-    const calls = { full: 0, head: 0, legacy: 0, setData: 0 };
+  it("should safely fall back when a custom manager has no head landing door", () => {
+    const calls = { full: 0, head: 0, setData: 0 };
     const pane = new Pane(
       new LinearScale(),
       <P extends BaseDataPoint>(coordinates: CoordinateAccessor<P>): DataManager<P> => {
@@ -259,12 +259,6 @@ describe("landing head path", () => {
           replaceLast: (point) => inner.replaceLast(point),
           getVisibleData: (viewport) => inner.getVisibleData(viewport),
           getXRange: () => inner.getXRange(),
-          // A manager compiled against the original caller-owned shape.
-          // Entry must not call it with only the changed head.
-          adoptHeadGrown: (next, grownBy) => {
-            calls.legacy++;
-            inner.adoptHeadGrown(next, grownBy);
-          },
         };
       },
     );
@@ -288,7 +282,6 @@ describe("landing head path", () => {
 
     derived.prepend(bars(80, 100));
 
-    expect(calls.legacy).toBe(0);
     expect(calls.head).toBe(0);
     expect(calls.full).toBe(fullBefore + 1);
     expect(calls.setData).toBe(writesBefore + 1);

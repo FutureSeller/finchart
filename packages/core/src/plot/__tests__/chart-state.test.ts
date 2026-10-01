@@ -57,8 +57,8 @@ describe("getState", () => {
     const deps = testBrowserDeps({ createXMapping: barIndexX });
     const { plot } = mountPlot({ deps, series: candleSeries(), data: days });
 
-    // The domain is index [0,4], but the state reports x [0,6] — state speaks data x, not indices
-    expect(plot.getState().xDomain).toEqual({ min: 0, max: 6 });
+    // The domain is index [-0.5,4.5], but the state reports x [-0.5,6.5] — state speaks data x, not indices
+    expect(plot.getState().xDomain).toEqual({ min: -0.5, max: 6.5 });
   });
 
   it("should carry the manual value domain only when autoScale is off", () => {
@@ -104,7 +104,10 @@ describe("stateChange", () => {
   });
 
   it("should stay quiet on data growth", () => {
-    const { handle, seen } = mounted();
+    const { plot, handle, seen } = mounted();
+    // Three points follow their feed until they fill the screen; an explicit fit settles the window.
+    plot.fitDomains();
+    seen.length = 0;
 
     // Data isn't state, and append doesn't touch the domain either.
     handle.append([{ x: 150, y: 30 }]);
@@ -206,6 +209,38 @@ describe("applyState", () => {
     expect(plot.getState().xDomain).toEqual({ min: 1, max: 5 });
   });
 
+  it("should keep a manual value range restored before the data", () => {
+    const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries() });
+    plot.applyState({ panes: [{ flex: 1, autoScale: false, valueDomain: { min: 0, max: 100 } }] });
+
+    handle.setData(data);
+
+    expect(plot.getState().panes[0]).toEqual({ flex: 1, autoScale: false, valueDomain: { min: 0, max: 100 } });
+  });
+
+  it("should validate every slice before applying any", () => {
+    const { plot, seen } = mounted();
+    plot.addPane();
+    const before = plot.getState();
+
+    expect(() => plot.applyState({
+      xDomain: { min: 10, max: 20 },
+      panes: [{ flex: 3, autoScale: true }, { flex: 1, autoScale: false, valueDomain: { min: 5, max: 1 } }],
+    })).toThrow(/min\(5\) must be less than max\(1\)/);
+
+    expect(plot.getState()).toEqual(before);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("should refuse a slice whose autoScale or invert is not a boolean", () => {
+    const { plot } = mounted();
+    // Hand-built state from a URL or storage — typed as anything.
+    for (const slice of ['{"flex":1,"autoScale":"false"}', '{"flex":1,"autoScale":true,"invert":1}']) {
+      expect(() => plot.applyState({ panes: [JSON.parse(slice)] })).toThrow(/must be a boolean/);
+    }
+    expect(plot.mainPane.autoScale).toBe(true);
+  });
+
   it("should apply pane slices and notify once", () => {
     const { plot, seen } = mounted();
     plot.addPane();
@@ -225,18 +260,40 @@ describe("applyState", () => {
     ]);
   });
 
-  it("should drop slices for panes that do not exist yet", () => {
+  it("should pair unkeyed slices only when there is one for every pane", () => {
     const { plot } = mounted();
 
-    // Whoever creates panes (the wrapper) reapplies when the list changes — here it's dropped.
+    // Two slices for one pane: which pane went away is unknowable without keys,
+    // so none is guessed. Whoever creates panes (the wrapper) reapplies once the list matches.
     plot.applyState({
       panes: [
         { flex: 2, autoScale: true },
         { flex: 5, autoScale: true },
       ],
     });
+    expect(plot.getState().panes).toEqual([{ flex: 1, autoScale: true }]);
 
-    expect(plot.getState().panes).toEqual([{ flex: 2, autoScale: true }]);
+    plot.addPane();
+    plot.applyState({
+      panes: [
+        { flex: 2, autoScale: true },
+        { flex: 5, autoScale: true },
+      ],
+    });
+    expect(plot.getState().panes.map((pane) => pane.flex)).toEqual([2, 5]);
+  });
+
+  it("should not pair a saved unkeyed layout with panes after one was removed from the middle", () => {
+    const { plot } = mounted();
+    const middle = plot.addPane({ flex: 3 });
+    plot.addPane({ flex: 7 });
+    const saved = plot.getState();
+
+    plot.removePane(middle);
+    plot.applyState(saved);
+
+    // Index pairing would have put the removed pane's 3 on the pane that was 7.
+    expect(plot.getState().panes.map((pane) => pane.flex)).toEqual([1, 7]);
   });
 
   it("should treat a pre-fit snapshot as nothing to restore", () => {
@@ -335,6 +392,26 @@ describe("setValueDomain", () => {
     handle.setData([{ x: 0, y: 500 }, { x: 10, y: 700 }]);
 
     expect(yScale.getDomain()).not.toEqual([0, 100]);
+  });
+
+  it("should survive the first data when set before it", () => {
+    const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries() });
+    plot.mainPane.setValueDomain(0, 100);
+
+    handle.setData(data);
+
+    expect(plot.mainPane.yScale.getDomain()).toEqual([0, 100]);
+  });
+
+  it("should not outlive a hand-back to autoScale", () => {
+    const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries() });
+    plot.mainPane.setValueDomain(0, 100);
+    plot.mainPane.resetValueAxis();
+    plot.mainPane.applyOptions({ autoScale: false });
+
+    handle.setData(data);
+
+    expect(plot.mainPane.yScale.getDomain()).not.toEqual([0, 100]);
   });
 
   it("should announce itself as a state change", () => {

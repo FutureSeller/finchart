@@ -105,13 +105,17 @@ export function axisDragConsumer(target: AxisDragTarget): InputConsumer {
   };
 
   /**
+   * **Scales on screen, not in values** — the ends move away from (or
+   * toward) the middle of the pane in pixels, and the scale turns them back
+   * into values. Scaling values linearly around their midpoint would pull
+   * a log axis's lower bound below zero on a zoom-out (rejected, so the drag
+   * did nothing) and zoom a log axis in lopsided.
+   *
    * **Just stops when it reaches a range the scale can't live in** — the
-   * gesture doesn't throw. This arithmetic is linear addition, so it can
-   * push a log axis's lower bound below zero; when that's rejected,
-   * `setValueDomain` changes nothing (the scale only turns off `autoScale`
-   * after it accepts the value). Stopping is the right answer for the same
-   * reason as the floor in `XViewport.zoom` — when it can't go further, it
-   * quietly stops.
+   * gesture doesn't throw. When that's rejected, `setValueDomain` changes
+   * nothing (the scale only turns off `autoScale` after it accepts the
+   * value). Stopping is the right answer for the same reason as the floor
+   * in `XViewport.zoom` — when it can't go further, it quietly stops.
    *
    * **The only thing swallowed here is "the scale rejected it".** Catching
    * every `ContractError` would be too broad — `setValueDomain` calls
@@ -121,12 +125,15 @@ export function axisDragConsumer(target: AxisDragTarget): InputConsumer {
    * failure, and it's rethrown.
    */
   const scaleValues = (pane: ValueAxisTarget, factor: number): void => {
-    const [min, max] = pane.yScale.getDomain();
-    const center = (min + max) / 2;
+    const scale = pane.yScale;
+    const [min, max] = scale.getDomain();
+    const low = scale.scale(min);
+    const high = scale.scale(max);
+    const center = (low + high) / 2;
     try {
       pane.setValueDomain(
-        center + (min - center) * factor,
-        center + (max - center) * factor,
+        scale.invert(center + (low - center) * factor),
+        scale.invert(center + (high - center) * factor),
       );
     } catch (error) {
       if (!(error instanceof ContractError)) throw error;

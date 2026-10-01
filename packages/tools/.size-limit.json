@@ -1,16 +1,16 @@
 [
   {
-    "name": "all the drawing tools (@finchart/core is a peer, so excluded) · 11 KB gzip (10647B measured)",
+    "name": "all the drawing tools (@finchart/core is a peer, so excluded) · 10.6 KB gzip (10590B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "11 KB",
+    "limit": "10.8 KB",
     "ignore": [
       "@finchart/core"
     ],
     "gzip": true
   },
   {
-    "name": "serialization only — a consumer that just does the save round trip · 1.5 KB gzip (1486B measured)",
+    "name": "serialization only — a consumer that just does the save round trip · 1.4 KB gzip (1431B measured)",
     "path": "dist/index.mjs",
     "import": "{ parseDrawings, serializeDrawings }",
     "limit": "1.5 KB",

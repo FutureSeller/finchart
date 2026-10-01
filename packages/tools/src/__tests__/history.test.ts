@@ -23,7 +23,7 @@ function mounted() {
     y: pane.yScale.scale(price),
   });
   const at = (x: number, price: number) => ({
-    x: pane.area.left + (x / 10) * (pane.area.right - pane.area.left),
+    x: model.plot.pixelAtX(x),
     y: pane.yScale.scale(price),
   });
   return { model, tools, route, onLine, at };

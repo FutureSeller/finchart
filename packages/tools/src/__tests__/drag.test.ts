@@ -92,13 +92,9 @@ describe("drawingTools drag", () => {
     });
     model.plot.render();
 
-    // Data x -> pixels. The mapping is continuous, so the domain is the
-    // raw data x range as-is (0-10).
-    const frameX = (x: number) => {
-      const { left, right } = pane.area;
-      return left + (x / 10) * (right - left);
-    };
-    const grab = { x: frameX(2), y: pane.yScale.scale(105) };
+    // Data x -> pixels, through the chart — the fit pads the data range
+    // (0-10) by half a bar at each end.
+    const grab = { x: model.plot.pixelAtX(2), y: pane.yScale.scale(105) };
 
     expect(route("pointerdown", grab)).toBe(true);
     route("pointermove", { x: grab.x, y: grab.y - 30 });

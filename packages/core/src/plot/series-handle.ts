@@ -10,7 +10,7 @@
  * it up on its own.
  */
 import type { BaseDataPoint, DataView, Range, Source } from "../data";
-import { ContractError, requireDataArray } from "../primitives";
+import { ContractError, requireDataArray, requireOptionalBoolean } from "../primitives";
 import type { TypedEntry } from "../registration";
 import type { Series } from "../series";
 import type { PaneChange } from "./pane";
@@ -200,6 +200,7 @@ export function createSeriesHandle<
     setData: (data, options) => {
       live("setData");
       entry.setData(data);
+      requireOptionalBoolean(options?.refit, "setData({ refit })");
       host.notify({ data: true, refit: options?.refit !== false });
     },
     /**

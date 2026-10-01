@@ -4,7 +4,7 @@
  * time — if the next person reopens the same spot, this is where it cries out.
  */
 import { describe, expect, it } from "vitest";
-import { defaultCoordinates, OHLCAccessor } from "../accessors";
+import { defaultCoordinates, LINE_COORDINATES, OHLCAccessor } from "../accessors";
 import { M4Decimation, SimpleDecimation } from "../decimation";
 import { SimpleDataManager } from "../data-manager";
 import { ContractError, DataError } from "../../primitives";
@@ -326,5 +326,39 @@ describe("hole presence is rewritten on every mutation", () => {
     m.replaceLast({ x: 299, y: 7 });
 
     expect(visibleHoles(m, 300)).toBe(0);
+  });
+});
+
+describe("M4 with gaps keeps each value run's extremes (a spike in a short run was dropped)", () => {
+  /**
+   * Gaps split the budget across runs; a run whose share rounded below one
+   * column used to keep only its two endpoints, so a spike inside it left
+   * the drawing and the autoscaled y range with it.
+   */
+  it("keeps the spike of a run whose budget share rounds below four", () => {
+    const data: LineDataPoint[] = Array.from({ length: 10_000 }, (_, i) => ({
+      x: i,
+      y: i % 20 === 0 ? null : i === 5010 ? 500 : i === 7013 ? -50 : 100,
+    }));
+    const out = new M4Decimation<LineDataPoint>().decimate(...whole(data), 1200);
+    const values = out.flatMap((p) => (p.y === null ? [] : [p.y]));
+    expect(Math.max(...values)).toBe(500);
+    expect(Math.min(...values)).toBe(-50);
+    // Still x-ascending with no point repeated.
+    for (let i = 1; i < out.length; i++) expect(out[i].x).toBeGreaterThan(out[i - 1].x);
+  });
+
+  it("reaches the visible y extent through the data manager", () => {
+    const data: LineDataPoint[] = Array.from({ length: 10_000 }, (_, i) => ({
+      x: i,
+      y: i % 20 === 0 ? null : i === 5010 ? 500 : 100,
+    }));
+    const manager = new SimpleDataManager<LineDataPoint>({
+      decimation: new M4Decimation(LINE_COORDINATES),
+      coordinates: LINE_COORDINATES,
+    });
+    manager.setData(data);
+    const visible = manager.getVisibleData({ startX: 0, endX: 9999, width: 300, height: 200 });
+    expect(Math.max(...visible.flatMap((p) => (p.y === null ? [] : [p.y])))).toBe(500);
   });
 });

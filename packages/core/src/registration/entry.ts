@@ -37,6 +37,7 @@ import {
   requireFiniteX,
   requireFinite,
   requireObject,
+  requireOptionalBoolean,
   type PlotArea,
 } from "../primitives";
 import type { StyleReader, DrawTarget } from "../render";
@@ -266,15 +267,21 @@ export interface Entry {
   /** Exactly what the registration received. For identity comparison. */
   readonly series: SeriesId;
 
-  /** Display metadata — what the registration gave. `null` if none. */
-  readonly name: string | null;
-  readonly color: string | null;
+  /** The registered series draws bar bodies (`Series.barBody`) — what the fit margin reads. */
+  readonly barBody: boolean;
+
+  /**
+   * Display metadata — what the registration gave. `null` if none. The
+   * declarative sync rewrites these four when a reused spec changes them.
+   */
+  name: string | null;
+  color: string | null;
 
   /** Overlap order — used only for drawing. Default 0. */
-  readonly zIndex: number;
+  zIndex: number;
 
   /** Whether readouts list this registration → `SeriesRegistration.readout`. */
-  readonly readout: boolean;
+  readout: boolean;
 
   /**
    * The drawn point nearest to x. `null` if empty. A binary search built on
@@ -407,6 +414,21 @@ function xValuesDiffer<T extends BaseDataPoint>(
   return false;
 }
 
+/**
+ * **`zIndex` passes through the registration door.** Feed it `NaN` and the
+ * comparator that decides draw order becomes an inconsistent comparator
+ * that returns false on every comparison, so overlap order varies by
+ * browser and by data count. Since this fails quietly instead of throwing,
+ * it's caught right at the door — and `seriesSpec` checks here too, since a
+ * reused spec's display fields reach the entry without building a new one.
+ */
+export function checkDisplay(registration: { zIndex?: number; readout?: boolean }, door: string): void {
+  if (registration.zIndex !== undefined) {
+    requireFinite(registration.zIndex, `${door}({ zIndex })`);
+  }
+  requireOptionalBoolean(registration.readout, `${door}({ readout })`);
+}
+
 export function createEntry<
   TSource extends BaseDataPoint,
   TPoint extends BaseDataPoint,
@@ -426,22 +448,7 @@ export function createEntry<
   requireObject(registration, `${door}(registration)`);
   if ("series" in registration) {
     requireSeries(registration.series, `${door}({ series })`);
-  }
-
-  /**
-   * **`zIndex` passes through the same door.** Feed it `NaN` and the
-   * comparator that decides draw order becomes an inconsistent comparator
-   * that returns false on every comparison, so overlap order varies by
-   * browser and by data count. Since this fails quietly instead of
-   * throwing, it's caught right at the door.
-   */
-  if ("zIndex" in registration && registration.zIndex !== undefined) {
-    requireFinite(registration.zIndex, `${door}({ zIndex })`);
-  }
-  if ("readout" in registration && registration.readout !== undefined && typeof registration.readout !== "boolean") {
-    throw new ContractError(
-      `${door}({ readout }) must be a boolean, got ${describe(registration.readout)}`,
-    );
+    checkDisplay(registration, door);
   }
 
   /**
@@ -468,6 +475,7 @@ export function createEntry<
   }
 
   if (registration.derive) {
+    const { deriveLast } = registration;
     /**
      * The lookback declaration is a chokepoint — unvalidated, a negative
      * value flips `previous.slice(corrected)` into slice-from-the-end and
@@ -487,8 +495,9 @@ export function createEntry<
       registration.series,
       {
         data: registration.data,
-        toPoints: registration.derive,
-        toTail: registration.deriveLast,
+        // Called on the registration, so a derivation written as a method can use `this`.
+        toPoints: (source) => registration.derive(source),
+        toTail: deriveLast && ((previous, source, change) => deriveLast.call(registration, previous, source, change)),
         toHead: registration.deriveFirst,
       },
       (series) => drawSideOf(series, registration, createDataManager),
@@ -1059,6 +1068,10 @@ function entryOf<
       return series;
     },
 
+    get barBody() {
+      return series.barBody === true;
+    },
+
     name: meta?.name ?? null,
     color: meta?.color ?? null,
     zIndex: meta?.zIndex ?? 0,
@@ -1108,6 +1121,16 @@ function entryOf<
 
     prepare(next, data) {
       const nextSeries = requireSeries<TPoint>(next, "syncSeries(series)");
+      // A re-render builds a new series object around the same data. If it
+      // reads and thins points exactly as the current one does, the drawn
+      // points are already right — only the representation changes, and the
+      // history is not validated again.
+      if (data === undefined && nextSeries.coordinates === series.coordinates &&
+          nextSeries.decimation === series.decimation) {
+        return () => {
+          series = nextSeries;
+        };
+      }
       const [nextCoordinates, nextManager] = drawSide(nextSeries);
       const nextSource = data === undefined ? source
         : [...requireDataArray(data, "syncSeries(data)")] as TSource[];

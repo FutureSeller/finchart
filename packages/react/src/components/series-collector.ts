@@ -109,7 +109,7 @@ export function createSeriesCollector<T extends BaseDataPoint>(
 }
 
 /** JSX paths order a pane subtree between the siblings on either side. */
-function compareRank(a: readonly number[], b: readonly number[]): number {
+export function compareRank(a: readonly number[], b: readonly number[]): number {
   for (let i = 0; i < Math.min(a.length, b.length); i++) {
     if (a[i] !== b[i]) return a[i] - b[i];
   }

@@ -1,4 +1,4 @@
-import type { ConfigurablePluginApi, CrosshairPayload, FormatSource, OverlayHost, PlotEventSource, Plugin, StyleSpec } from "@finchart/core";
+import type { ConfigurablePluginApi, CrosshairPayload, FormatSource, OverlayHost, PlotEventSource, Plugin, StyleSpec, XCoordinates } from "@finchart/core";
 import { ContractError, cssVarExpr, pluginApi, styleSpec } from "@finchart/core";
 import { requireOverlayElement } from "./overlay-element";
 import { type RowFormat, sampleText } from "./sample-text";
@@ -51,7 +51,7 @@ export const TOOLTIP_STYLE_SPEC = /* @__PURE__ */ styleSpec({
 export function tooltip(
   options: TooltipOptions = {},
 ): Plugin<
-  OverlayHost & PlotEventSource & FormatSource,
+  OverlayHost & PlotEventSource & FormatSource & XCoordinates,
   ConfigurablePluginApi<TooltipOptions>
 > {
   return (plot) => {
@@ -88,14 +88,25 @@ export function tooltip(
      * switch (setData) — the cursor hasn't moved but the data has. Same
      * judgment call as the legend: data and series changes arrive via
      * render. The pane held is the payload's own — if that pane
-     * disappears, probe comes back empty and the box disappears too.
+     * disappears, probe comes back empty and the box disappears too. The x
+     * is read again from the cursor's pixel: a keyboard pan or a live feed
+     * moves the view under a still pointer, and the crosshair line follows
+     * the pixel, so the rows must too.
      */
     let last: CrosshairPayload | null = null;
+    /**
+     * The box's size for the text it was last measured with. Measuring is a
+     * forced layout, and a live feed re-renders under a still pointer with
+     * the same rows every tick.
+     */
+    let measured = { text: "", width: 0, height: 0 };
 
     const refresh = (): void => {
       // Outside a pane (margin, gap) there's nothing to show.
       // A registration drawn for the eye (a band fill, a marker row) is not read out.
-      const samples = last?.pane ? last.pane.probe(last.x).filter((sample) => sample.readout !== false) : [];
+      const samples = last?.pane
+        ? last.pane.probe(plot.xAt(last.position.x)).filter((sample) => sample.readout !== false)
+        : [];
       if (!last?.pane || samples.length === 0) {
         box.style.display = "none";
         return;
@@ -124,13 +135,17 @@ export function tooltip(
       box.replaceChildren(header, ...rows);
 
       box.style.display = "block";
-      // Flips to the left at the right edge — it can never go off-screen.
-      const flip = position.x > pane.area.right - 160;
-      box.style.left = flip ? "" : `${position.x + offset()}px`;
-      box.style.right = flip
-        ? `${pane.area.right - position.x + offset()}px`
-        : "";
-      box.style.top = `${position.y + offset()}px`;
+      const text = box.textContent;
+      if (text !== measured.text) measured = { text, width: box.offsetWidth, height: box.offsetHeight };
+      // Flips to the other side of the cursor where the box, measured once
+      // it holds its rows, would cross the pane's right or bottom edge — the
+      // drawn chart's, not the container's, which can be larger.
+      const gap = offset();
+      const { width, height } = measured;
+      const left = position.x + gap + width > pane.area.right ? position.x - gap - width : position.x + gap;
+      const top = position.y + gap + height > pane.area.bottom ? position.y - gap - height : position.y + gap;
+      box.style.left = `${left}px`;
+      box.style.top = `${top}px`;
     };
 
     const offCrosshair = plot.on("crosshair", (payload) => {

@@ -48,9 +48,16 @@ When you add a new method, the default must be "touches nothing".
 
 ¹ Two exceptions — if `shiftVisibleRangeOnNewBar` is on and **you were looking
 at the last bar**, the window shifts right with the new bar the moment it
-arrives (off by default); and the first data a chart ever gets is fitted,
+arrives (off by default); and the first data a chart gets is fitted,
 whichever door it came through — unless a visible range was supplied before
-the data arrived, which wins.
+the data arrived, which wins. Data arriving after every series went empty is
+a first arrival again (a value range set by hand on the old data does not
+carry over to it), and while the first fit covered a single x — or a history
+too short to fill the screen at the default spacing — the window keeps
+fitting each data change until something else moves it — filling the screen
+until the bars reach the default spacing, then following the newest bar at
+that width. When any series draws a bar body (candles, bars, histograms),
+every fit pads each end by half a bar; lines alone fit edge to edge.
 
 ² Options **don't touch the points being drawn**, so the value axis isn't
 refit on the spot (the branch where `PaneChange.data` is false). A pane with
@@ -138,8 +145,11 @@ overlay that's already been torn down.
 ## Why it's built this way
 
 - **Only three things refit x** — the first data arrival, the imperative
-  `handle.setData`, and `fitDomains()`. Everything else keeps the
-  range you were looking at.
+  `handle.setData`, and `fitDomains()` — plus the two cases that are a first
+  arrival in disguise: data coming back after every series went empty, and
+  a window still following a feed (a first fit to a single x or to a history
+  too short to fill the screen), which refits on each data change until it
+  is moved. Everything else keeps the range you were looking at.
   - The first one is needed because until then the x domain is the scale's
     default and nothing is in its place.
   - `handle.setData` refits because it's a **new dataset**. If `prepend`/`append`
@@ -553,9 +563,10 @@ a pane is that pane's:
 <<< ../snippets/pane-formats-react.tsx{tsx}
 
 With no format anywhere, the axis prints values as they are and the badges,
-tooltip and legend print two decimals — `293053.22` on a won chart. That split
-is kept deliberately, because changing it would change every chart that never
-set a format; set one and the surfaces agree.
+tooltip and legend print two decimals — `293053.22` on a won chart — or the
+tick step's digits when the step is finer than a cent, so a sub-cent price
+never reads `0.00`. Two decimals stays the floor because changing it would
+change every chart that never set a format; set one and the surfaces agree.
 
 #### Writing a tick strategy
 
@@ -811,7 +822,10 @@ plot.applyState({ xDomain });      // only the pieces you pass land — the maki
 - Dynamic panes should carry a semantic `stateKey` (`<ChartPane stateKey="rsi">`
   or `plot.addPane({ stateKey: "rsi" })`). Keyed slices restore by that name,
   so inserting a volume pane cannot put an RSI range on it. Snapshots with no
-  keys still use the old index pairing.
+  keys still use the old index pairing, but only while the pane count matches:
+  after a pane is added or removed, every unkeyed slice is dropped rather
+  than guessed onto the wrong pane. Give panes a `stateKey` to restore them
+  across layout changes.
 
 ### crosshair
 
@@ -860,13 +874,13 @@ const deps = browserDeps({ pointer: { kineticScroll: true, zoomSpeed: 1.2 } });
 
 | Option | Default | Meaning |
 |---|---|---|
-| `pan` | `true` | drag to pan (touch included; listens on the document so it never loses the pointer) |
+| `pan` | `true` | drag to pan (touch included; listens on the document so it never loses the pointer); a mostly sideways wheel or trackpad swipe pans too |
 | `zoom` | `true` | wheel zoom (x under the cursor pinned); two-finger pinch uses the ratio of x distances |
 | `crosshair` | `true` | hover moves the crosshair |
 | `doubleClickReset` | `true` | double-click resets to the full view (`fitDomains`, so every pane is `autoScale` again). On a y-axis strip (with `axisDrag` on) the double-click is the axis drag consumer's instead — that one pane's axis comes back, nothing else moves; that gesture stays even with `doubleClickReset: false` |
 | `kineticScroll` | `false` | it coasts on release — off by default, it gets in the way of precise work |
 | `keyboard` | `true` | toggles **only the floor gestures** (`←→` pan · `+/−` zoom) — see the section below |
-| `zoomSpeed` | `1.1` | the factor per wheel notch |
+| `zoomSpeed` | `1.1` | the factor per wheel notch — 100 px of wheel travel, so a trackpad zooms by the distance scrolled, not the number of events |
 
 ### Keyboard (accessibility)
 

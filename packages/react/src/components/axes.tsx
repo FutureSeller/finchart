@@ -22,14 +22,18 @@ export function XAxis(props: XAxisProps) {
 
   const { plot } = useChartApi('XAxis');
 
+  const apply = (x: XAxisOptions) => plot.applyOptions({ axis: { ...plot.getOptions().axis, x } });
   useEffect(() => {
-    plot.applyOptions({
-      axis: {
-        ...plot.getOptions().axis,
-        x: { showLabels, format, minTickSpacing, ticks, size },
-      },
-    });
+    apply({ showLabels, format, minTickSpacing, ticks, size });
   }, [plot, showLabels, format, minTickSpacing, ticks, size]);
+  // Unmounting is removing every prop — an explicit undefined reverts each
+  // field to its default. Kept apart from the effect above so a prop change
+  // applies once instead of reverting first.
+  useEffect(
+    () => () =>
+      apply({ showLabels: undefined, format: undefined, minTickSpacing: undefined, ticks: undefined, size: undefined }),
+    [plot],
+  );
 
   return null;
 }
@@ -55,21 +59,22 @@ export function YAxis(props: YAxisProps) {
   const { plot } = useChartApi('YAxis');
   const pane = useContext(PaneContextValue);
 
+  const apply = (y: YAxisOptions) =>
+    pane
+      ? pane.applyOptions({ axis: { showLabels: y.showLabels, format: y.format, minTickSpacing: y.minTickSpacing, ticks: y.ticks } })
+      : plot.applyOptions({ axis: { ...plot.getOptions().axis, y } });
   useEffect(() => {
-    if (pane) {
-      pane.applyOptions({
-        axis: { showLabels, format, minTickSpacing, ticks },
-      });
-      return;
-    }
-
-    plot.applyOptions({
-      axis: {
-        ...plot.getOptions().axis,
-        y: { showLabels, format, minTickSpacing, ticks, size, position },
-      },
-    });
+    apply({ showLabels, format, minTickSpacing, ticks, size, position });
   }, [plot, pane, showLabels, format, minTickSpacing, ticks, size, position]);
+  // Unmounting is removing every prop — an explicit undefined reverts each
+  // field, so a pane that outlives its YAxis (a keyed swap keeps the main
+  // pane) doesn't keep its format. Apart from the effect above, so a prop
+  // change applies once instead of reverting first.
+  useEffect(
+    () => () =>
+      apply({ showLabels: undefined, format: undefined, minTickSpacing: undefined, ticks: undefined, size: undefined, position: undefined }),
+    [plot, pane],
+  );
 
   return null;
 }

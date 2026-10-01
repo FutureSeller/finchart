@@ -14,12 +14,14 @@ function setup(
 
   const x = (mapping === "barIndex" ? barIndexX : continuousX)(scale);
   let data: Range | null = null;
+  let values: number[] = [];
   const changes: { startX: number; endX: number }[] = [];
 
   const viewport = new XViewport({
     scale,
     x,
     dataRange: () => data,
+    xValues: () => [values],
     options: () => ({
       rightOffset: 0,
       shiftVisibleRangeOnNewBar: false,
@@ -36,6 +38,7 @@ function setup(
     /** Announces that data has arrived. Also rebuilds the index for a bar-index mapping. */
     load(xs: number[]) {
       data = xs.length ? { min: xs[0], max: xs[xs.length - 1] } : null;
+      values = xs;
       x.rebuild?.([xs]);
     },
     domain: () => scale.getDomain(),
@@ -53,14 +56,15 @@ describe("first fit", () => {
     expect(changes).toHaveLength(0);
   });
 
-  it("should fit to the data once it arrives", () => {
+  it("should fit to the data once it arrives, half a bar past each end", () => {
     const s = setup();
     s.load([10, 20, 30]);
 
     s.viewport.fit();
 
     expect(s.viewport.fitted).toBe(true);
-    expect(s.viewport.visibleRange()).toEqual({ min: 10, max: 30 });
+    // The bars are 10 apart — 5 of margin keeps the edge candles whole.
+    expect(s.viewport.visibleRange()).toEqual({ min: 5, max: 35 });
   });
 
   it("should leave room after the last bar when asked", () => {
@@ -69,7 +73,8 @@ describe("first fit", () => {
 
     s.viewport.fit();
 
-    expect(s.domain()).toEqual([10, 35]);
+    // The offset adds on top of the half bar.
+    expect(s.domain()).toEqual([5, 40]);
   });
 });
 
@@ -200,11 +205,11 @@ describe("bar spacing limits", () => {
   it("should leave the window alone with no limits set", () => {
     const s = setup();
     s.load([0, 100]);
-    s.viewport.fit();
+    s.viewport.fit(); // [-50, 150]
 
     s.viewport.zoom(2, 50);
 
-    expect(s.domain()).toEqual([25, 75]);
+    expect(s.domain()).toEqual([0, 100]);
   });
 
   /** The mapping declares its own default — bar-index coordinates use bars
@@ -274,26 +279,26 @@ describe("bar spacing limits", () => {
     s.load(Array.from({ length: 2001 }, (_, i) => i * 10));
 
     s.viewport.fit();
-    // Index 0~2000 — wider than the default upper bound (800px/0.5 = 1600), but not clipped.
-    expect(s.domain()).toEqual([0, 2000]);
+    // Index 0~2000 plus half a bar each side — wider than the default upper bound (800px/0.5 = 1600), but not clipped.
+    expect(s.domain()).toEqual([-0.5, 2000.5]);
 
     // A slight zoom in — doesn't jump to the upper bound (1600), only narrows by that much.
     s.viewport.zoom(1.01, 1000);
     const [min, max] = s.domain();
-    expect(max - min).toBeCloseTo(2000 / 1.01);
+    expect(max - min).toBeCloseTo(2001 / 1.01);
 
     // Widening again stops at the current width — it can't go back past the limit.
     s.viewport.zoom(0.5, 1000);
     const [after0, after1] = s.domain();
-    expect(after1 - after0).toBeCloseTo(2000 / 1.01);
+    expect(after1 - after0).toBeCloseTo(2001 / 1.01);
   });
 
   /** The clamp only cuts the width — the cursor decides the position. The
    * invariant of a zoom is that the point under the cursor doesn't move. */
   it("should stand perfectly still when zooming out at the limit", () => {
-    // 800px / 20px = width 40 is the upper bound — fit (width 40) is already exactly at the limit.
+    // 800px / 20px = width 40 is the upper bound — fit ([30, 70] with its half bars) is already exactly at the limit.
     const s = setup({ minBarSpacing: 20 });
-    s.load([30, 70]);
+    s.load([40, 60]);
     s.viewport.fit();
     const before = s.changes.length;
 
@@ -326,17 +331,17 @@ describe("bar spacing limits", () => {
   it("should keep the cursor point fixed when the clamp cuts a zoom", () => {
     const s = setup({ minBarSpacing: 20 });
     s.load([45, 55]);
-    s.viewport.fit();
+    s.viewport.fit(); // [40, 60]
 
-    // Width 10 -> widens only up to 40 (the limit). Cursor 54 was at the
-    // 90% point of the window, and it must still be at the 90% point after
-    // being clamped: [54-36, 54+4].
+    // Width 20 -> widens only up to 40 (the limit). Cursor 54 was at the
+    // 70% point of the window, and it must still be at the 70% point after
+    // being clamped: [54-28, 54+12].
     s.viewport.zoom(0.25, 54);
 
     const [min, max] = s.domain();
     expect(max - min).toBeCloseTo(40);
-    expect(min).toBeCloseTo(18);
-    expect(max).toBeCloseTo(58);
+    expect(min).toBeCloseTo(26);
+    expect(max).toBeCloseTo(66);
   });
 });
 
@@ -352,7 +357,7 @@ describe("pan and zoom", () => {
   it("should turn drag pixels into domain movement, reversed", () => {
     const s = setup();
     s.load([0, 800]);
-    s.viewport.fit();
+    s.viewport.setVisibleRange(0, 800);
 
     // A domain width of 800 spans 800px, so 1px equals 1 domain unit.
     s.viewport.panByPixels(100);
@@ -390,7 +395,7 @@ describe("notifications", () => {
     s.viewport.fit();
     const after = s.changes.length;
 
-    s.viewport.setVisibleRange(0, 100); // the same spot
+    s.viewport.setVisibleRange(-50, 150); // the same spot
     expect(s.changes).toHaveLength(after);
 
     s.viewport.setVisibleRange(10, 90);
@@ -404,8 +409,9 @@ describe("notifications", () => {
 
     // The domain is index-based, but the notification speaks in x —
     // subscribers need to be able to measure "how close to the end are we."
-    expect(s.domain()).toEqual([0, 4]);
-    expect(s.changes.at(-1)).toEqual({ startX: 100, endX: 500 });
+    // Half an index past each end is half a bar's x.
+    expect(s.domain()).toEqual([-0.5, 4.5]);
+    expect(s.changes.at(-1)).toEqual({ startX: 50, endX: 550 });
   });
 
   it("should not announce a fit that has nothing to fit to", () => {
@@ -414,6 +420,7 @@ describe("notifications", () => {
       scale: new LinearScale(),
       x: continuousX(new LinearScale()),
       dataRange: () => null,
+      xValues: () => [],
       options: () => ({ rightOffset: 0, shiftVisibleRangeOnNewBar: false }),
       onChange,
     });
@@ -428,7 +435,7 @@ describe("pan boundaries", () => {
   it("should stop a future fling with the last bar at the left edge", () => {
     const s = setup();
     s.load([0, 800]);
-    s.viewport.fit();
+    s.viewport.setVisibleRange(0, 800);
 
     s.viewport.pan(10_000);
 
@@ -439,7 +446,7 @@ describe("pan boundaries", () => {
   it("should stop a past fling with the first bar at the right edge", () => {
     const s = setup();
     s.load([0, 800]);
-    s.viewport.fit();
+    s.viewport.setVisibleRange(0, 800);
 
     s.viewport.pan(-10_000);
 
@@ -472,49 +479,50 @@ describe("pan boundaries", () => {
   it("should bound in mapping space for bar-index coordinates", () => {
     const s = setup({}, "barIndex");
     s.load([100, 200, 300]);
-    s.viewport.fit();
+    s.viewport.fit(); // [-0.5, 2.5]
 
     s.viewport.pan(100); // by 100 bars — the last bar (index 2) only reaches the left edge
 
-    expect(s.domain()).toEqual([2, 4]);
+    expect(s.domain()).toEqual([2, 5]);
   });
 });
 
 describe("scrollToRealTime", () => {
-  it("should keep the span and land the last bar at the right edge", () => {
+  it("should keep the span and land the last bar half a bar inside the right edge", () => {
     const s = setup();
     s.load([0, 800]);
-    s.viewport.fit();
+    s.viewport.setVisibleRange(0, 800);
     s.viewport.pan(-10_000); // to the far past — [-800, 0]
 
     s.viewport.scrollToRealTime();
 
-    expect(s.domain()).toEqual([0, 800]);
+    // The bars are 800 apart: the live end is 800 + 400.
+    expect(s.domain()).toEqual([400, 1200]);
   });
 
   it("should honor rightOffset in bar-index space", () => {
     const s = setup({ rightOffset: 5 }, "barIndex");
     s.load([100, 200, 300]);
-    s.viewport.fit(); // [0, 7]
-    s.viewport.pan(-100); // [-7, 0]
+    s.viewport.fit(); // [-0.5, 7.5] — half a bar, then the offset
+    s.viewport.pan(-100); // [-8, 0]
 
     s.viewport.scrollToRealTime();
 
-    expect(s.domain()).toEqual([0, 7]);
+    expect(s.domain()).toEqual([-0.5, 7.5]);
   });
 
   it("should preserve the zoom level, unlike fit", () => {
     const s = setup();
     s.load([0, 1000]);
-    s.viewport.fit();
-    s.viewport.zoom(4, 500); // zooms in to width 250
+    s.viewport.fit(); // [-500, 1500]
+    s.viewport.zoom(4, 500); // zooms in to width 500
     s.viewport.pan(-10_000);
 
     s.viewport.scrollToRealTime();
 
     const [min, max] = s.domain();
-    expect(max - min).toBeCloseTo(250);
-    expect(max).toBe(1000);
+    expect(max - min).toBeCloseTo(500);
+    expect(max).toBe(1500);
   });
 
   it("should do nothing without data", () => {
@@ -532,7 +540,7 @@ describe("scrollToRealTime", () => {
 
     s.viewport.scrollToRealTime();
 
-    expect(s.domain()).toEqual([0, 800]);
+    expect(s.domain()).toEqual([-400, 1200]);
     expect(s.viewport.fitted).toBe(true);
   });
 });

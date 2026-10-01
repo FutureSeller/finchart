@@ -107,11 +107,4 @@ describe("adoptHeadRetainingTail", () => {
     const after = m.getVisibleData({ startX: 80, endX: 130, width: 500, height: 300 });
     expect(after[0].x).toBe(90);
   });
-
-  it("keeps the legacy caller-owned door fully validated", () => {
-    const m = manager();
-    const next = [...pts(90, 100), ...pts(100, 120)];
-    next[15] = pt(115, Number.NaN);
-    expect(() => m.adoptHeadGrown(next, 10)).toThrow(DataError);
-  });
 });

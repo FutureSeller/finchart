@@ -379,11 +379,12 @@ describe("pixels stay finite at the edge of the doubles", () => {
     const [lowAtMin, highAtMin] = expandRange({ min: -max, max: -max }, 0.1);
     expect(lowAtMin).toBe(-max);
     expect(highAtMin).toBeGreaterThan(-max);
-    // A collapsed value past 2⁵⁰, where ±1 would be absorbed, still gets two ends; below it, ±1 as ever.
+    // A collapsed value is padded by 5% of itself — two ends at any magnitude, ±1 only around a flat zero.
     const [lowBig, highBig] = expandRange({ min: 1e20, max: 1e20 }, 0.1);
     expect(lowBig).toBeLessThan(1e20);
     expect(highBig).toBeGreaterThan(1e20);
-    expect(expandRange({ min: 100, max: 100 }, 0.1)).toEqual([99, 101]);
+    expect(expandRange({ min: 100, max: 100 }, 0.1)).toEqual([95, 105]);
+    expect(expandRange({ min: 0, max: 0 }, 0.1)).toEqual([-1, 1]);
     expect(expandRange({ min: 0, max }, 0.1)).toEqual([-max * 0.1, max]);
     expect(expandRange({ min: -max, max }, 0.1)).toEqual([-max, max]);
     // The ends' difference overflows while the upper end's own padding does not: it is padded, the lower kept.

@@ -80,24 +80,30 @@ describe("OhlcAggregation", () => {
   });
 
   /**
-   * Checks that the full range is covered with no gaps. Skipping every
+   * Checks that the window is covered with no gaps. Skipping every
    * other bar would still leave "global high, first x, last close"
    * unchanged, so a test that only checks those three catches nothing.
-   * This reconstructs the bucket boundaries directly and compares against them.
+   * This reconstructs the bucket boundaries directly — whole buckets on
+   * the grid from index 0, the edge ones clipped to the window — and
+   * compares against them.
    */
   it("should cover every candle exactly once", () => {
     const data = candles(1000);
     const threshold = 37;
-    const merged = aggregation().decimate(...whole(data), threshold);
+    const range = { start: 5, end: 1000 };
+    const merged = aggregation().decimate(data, range, threshold);
 
-    expect(merged).toHaveLength(threshold);
+    const size = Math.ceil((range.end - range.start) / threshold);
+    const bounds = [range.start];
+    for (let b = size; b < range.end; b += size) if (b > range.start) bounds.push(b);
+    bounds.push(range.end);
+    expect(merged).toHaveLength(bounds.length - 1);
 
-    const step = data.length / threshold;
     let covered = 0;
 
     merged.forEach((candle, i) => {
-      const start = Math.floor(i * step);
-      const end = i === threshold - 1 ? data.length : Math.floor((i + 1) * step);
+      const start = bounds[i];
+      const end = bounds[i + 1];
       const slice = data.slice(start, end);
 
       expect(slice.length).toBeGreaterThan(0);
@@ -110,8 +116,8 @@ describe("OhlcAggregation", () => {
       covered += slice.length;
     });
 
-    // Summing all the buckets gives back the original — no bar missed, none counted twice.
-    expect(covered).toBe(data.length);
+    // Summing all the buckets gives back the window — no bar missed, none counted twice.
+    expect(covered).toBe(range.end - range.start);
   });
 
   it("should emit candles in x order", () => {
@@ -176,4 +182,22 @@ it("OHLC aggregation refuses overflowing volume without altering its input", () 
   expect(data.map(p => p.volume)).toEqual([Number.MAX_VALUE, Number.MAX_VALUE]);
   const finite = data.map(p => ({ ...p, volume: Number.MAX_VALUE / 4 }));
   expect(new OhlcAggregation().decimate(finite, { start: 0, end: 2 }, 1)[0].volume).toBe(Number.MAX_VALUE / 2);
+});
+
+/**
+ * Buckets were counted from the first visible index, so a one-bar pan
+ * moved every boundary and the whole zoomed-out chart shimmered — bodies,
+ * colours and wicks changed on each move.
+ */
+describe("OhlcAggregation buckets stay put while panning", () => {
+  it("leaves every candle away from the window edges unchanged after a one-bar pan", () => {
+    const data = candles(50_000);
+    const before = aggregation().decimate(data, { start: 10_000, end: 40_000 }, 800);
+    const after = aggregation().decimate(data, { start: 10_001, end: 40_001 }, 800);
+    const byX = new Map(after.map((candle) => [candle.x, candle]));
+
+    for (const candle of before.slice(1, -1)) {
+      expect(byX.get(candle.x)).toEqual(candle);
+    }
+  });
 });

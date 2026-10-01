@@ -310,29 +310,31 @@ export function usePlot<T extends BaseDataPoint>({
   }, [themeOn, themeKey]);
 
   /**
-   * Swaps the data. **This is the imperative path, so it re-fits both
-   * axes**.
+   * Swaps the series or the data. **This is the imperative path, so a data
+   * swap re-fits both axes**.
    *
    * The declarative path (`<ChartContainer data>`) rides in through the
    * spec and doesn't re-fit — infinite scroll is the path that hands in a
-   * new array.
+   * new array. One effect for both, so a commit that changes both lands the
+   * new data on the new series in one step; a series swap hands the data
+   * over with it, and an omitted series takes what it drew off the chart.
    */
   useEffect(() => {
-    if (applied.current.data === data) return;
-    applied.current.data = data;
-
+    const last = applied.current;
+    if (last.series !== series) {
+      applied.current = { series, data };
+      if (!series) {
+        handleRef.current?.dispose();
+        handleRef.current = null;
+        return;
+      }
+      handleRef.current = plotRef.current?.setSeries({ series, data }) ?? null;
+      return;
+    }
+    if (last.data === data) return;
+    last.data = data;
     handleRef.current?.setData(data ?? []);
-  }, [data]);
-
-  /** Swaps only the presentation. The data belongs to the registration, so it's handed over together with the new one. */
-  useEffect(() => {
-    if (applied.current.series === series) return;
-    applied.current.series = series;
-    if (!series) return;
-
-    handleRef.current =
-      plotRef.current?.setSeries({ series, data: applied.current.data }) ?? null;
-  }, [series]);
+  }, [series, data]);
 
   return { containerRef, plotRef };
 }

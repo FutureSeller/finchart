@@ -155,3 +155,26 @@ describe("deriveLast — tail-increment door", () => {
     expect(handle.read()).toEqual(before);
   });
 });
+
+describe("a derivation written as methods", () => {
+  it("is called on the registration, so `this` works in derive and deriveLast", () => {
+    const model = createPlotModel({ size: { width: 400, height: 300 }, config: { showGrid: false } });
+    const registration = {
+      series: lineSeries(),
+      data: candles,
+      factor: 2,
+      derive(source: DataView<OHLC>): LineDataPoint[] {
+        return source.map((c) => ({ x: c.x, y: c.close * this.factor }));
+      },
+      deriveLast(_previous: DataView<LineDataPoint>, source: DataView<OHLC>): LineDataPoint[] {
+        const last = source[source.length - 1];
+        return [{ x: last.x, y: last.close * this.factor }];
+      },
+    };
+
+    const handle = model.plot.mainPane.addSeries(registration);
+    handle.updateLast({ ...candles[29], close: 500 });
+
+    expect(handle.read().at(-1)).toEqual({ x: 29, y: 1000 });
+  });
+});

@@ -34,7 +34,7 @@ function mounted(defaults: DrawingToolsOptions["defaults"], series: LineDataPoin
   const pane = model.plot.mainPane;
   model.plot.render();
   const at = (x: number, price: number) => ({
-    x: pane.area.left + (x / 10) * (pane.area.right - pane.area.left),
+    x: model.plot.pixelAtX(x),
     y: pane.yScale.scale(price),
   });
   /** Press at the first point, drag to the second, release — then click any further anchors. */

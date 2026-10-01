@@ -12,6 +12,7 @@ import {
   requireFinite,
   requireNonNegative,
 } from "../primitives";
+import { checkAxisCallbacks } from "./pane-options";
 import { DEFAULT_PADDING } from "./style";
 import type {
   PlotConfig,
@@ -191,6 +192,7 @@ export function checkPlotNumbers(
     if (options.minTickSpacing !== undefined) {
       requireFinite(options.minTickSpacing, `axis ${side} minTickSpacing`);
     }
+    checkAxisCallbacks(options, `axis ${side}`);
   }
 }
 

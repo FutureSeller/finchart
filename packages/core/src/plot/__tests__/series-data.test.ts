@@ -174,6 +174,8 @@ describe("series with different point types in one pane", () => {
         { x: 1, open: 40_500, high: 42_000, low: 40_000, close: 41_800 },
       ] satisfies OHLC[],
     });
+    // Two bars follow their feed until they fill the screen; an explicit fit settles the window.
+    plot.fitDomains();
 
     const eth = plot.mainPane.addSeries({
       series: lineSeries(),
@@ -188,8 +190,9 @@ describe("series with different point types in one pane", () => {
     expect(plot.mainPane.valueExtent()).toEqual({ min: 2_000, max: 42_000 });
 
     // ETH being attached later doesn't jump the window — the refit rules still apply.
-    expect(xScale.getDomain()).toEqual([0, 1]);
+    expect(xScale.getDomain()).toEqual([-0.5, 1.5]);
     plot.fitDomains();
-    expect(xScale.getDomain()).toEqual([0, 4]);
+    // The line takes the candles' half-bar margin.
+    expect(xScale.getDomain()).toEqual([-0.5, 4.5]);
   });
 });

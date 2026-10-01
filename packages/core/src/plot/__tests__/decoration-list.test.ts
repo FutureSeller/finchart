@@ -145,3 +145,46 @@ describe("splits relative to the series' own z", () => {
     expect(seen).toEqual([]);
   });
 });
+
+describe("a decoration that adds another while it draws", () => {
+  it("is visited once even when the new one lands before it", () => {
+    for (const [each, z] of [[forEachBelowSeries, BELOW_SERIES], [forEachAboveSeries, ABOVE_SERIES]] as const) {
+      const list = emptyDecorations<Named>();
+      const visits: string[] = [];
+      addDecoration(list, named("a"), { zIndex: z });
+      let added = false;
+
+      each(list, (decoration) => {
+        visits.push(decoration.name);
+        if (!added) {
+          added = true;
+          addDecoration(list, named("lower"), { zIndex: z - 1 });
+        }
+      });
+
+      expect(visits).toEqual(["a"]);
+    }
+  });
+});
+
+describe("a decoration that removes itself and adds a lower one while it draws", () => {
+  it("does not draw the entry before it again", () => {
+    for (const [each, z] of [[forEachBelowSeries, BELOW_SERIES], [forEachAboveSeries, ABOVE_SERIES]] as const) {
+      const list = emptyDecorations<Named>();
+      const visits: string[] = [];
+      addDecoration(list, named("a"), { zIndex: z });
+      const removeB = addDecoration(list, named("b"), { zIndex: z + 1 });
+      addDecoration(list, named("c"), { zIndex: z + 2 });
+
+      each(list, (decoration) => {
+        visits.push(decoration.name);
+        if (decoration.name === "b") {
+          removeB();
+          addDecoration(list, named("lower"), { zIndex: z - 1 });
+        }
+      });
+
+      expect(visits).toEqual(["a", "b", "c"]);
+    }
+  });
+});

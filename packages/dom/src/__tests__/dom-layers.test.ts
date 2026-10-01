@@ -82,13 +82,30 @@ describe("createDomLayers", () => {
     expect(layers.data.height).toBe(480);
   });
 
-  it("should stack the layers on top of each other", () => {
+  it("should stack the overlay on top of the canvas", () => {
+    const layers = createDomLayers(container, 800, 600);
+
+    expect(container.style.position).toBe("relative");
+    expect(overlayOf(layers).style.position).toBe("absolute");
+    expect(overlayOf(layers).style.inset).toBe("0");
+  });
+
+  it("should pin the canvas to the overlay's origin, so a padded container keeps pixels under the pointer", () => {
+    // jsdom has no layout, so this pins the styles that put both layers on
+    // the padding box's corner — the same origin pointer input measures from.
+    // An in-flow canvas would start at the content edge instead, padding away.
     const layers = createDomLayers(container, 800, 600);
     const canvas = canvasOf(container)!;
 
-    expect(container.style.position).toBe("relative");
     expect(canvas.style.position).toBe("absolute");
-    expect(overlayOf(layers).style.position).toBe("absolute");
+    expect([canvas.style.top, canvas.style.left]).toEqual(["0px", "0px"]);
+    expect(overlayOf(layers).style.inset).toBe("0");
+  });
+
+  it("should hand the container back unpositioned on destroy", () => {
+    createDomLayers(container, 800, 600).destroy();
+
+    expect(container.style.position).toBe("");
   });
 
   it("should not override a container position the caller already set", () => {

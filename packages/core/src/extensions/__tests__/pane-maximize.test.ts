@@ -47,6 +47,25 @@ describe("paneMaximize", () => {
     expect(max.maximizedPane).toBe(added[1]);
   });
 
+  it("refuses a pane that is no longer on the chart, leaving the layout alone", () => {
+    const { plot, added } = setup();
+    const max = plot.use(paneMaximize());
+    plot.removePane(added[0]);
+
+    expect(() => max.maximize(added[0])).toThrow(/pane of this chart/);
+
+    expect(plot.panes.map((pane) => pane.flex)).toEqual([1, 1, 1]);
+  });
+
+  it("refuses calls after it was disposed", () => {
+    const { plot, added } = setup();
+    const max = plot.use(paneMaximize());
+    max.dispose();
+
+    expect(() => max.maximize(added[1])).toThrow(/disposed/);
+    expect(plot.mainPane.flex).toBe(1);
+  });
+
   it("restores every pane's original flex", () => {
     const { plot, added } = setup();
     plot.mainPane.applyOptions({ flex: 2 });
@@ -168,7 +187,8 @@ describe("paneMaximize", () => {
     expect(max.load(JSON.stringify({ version: 999, targetIndex: 0, flex: [] }))).toBe(
       false,
     );
-    expect(max.load(JSON.stringify({ version: 1, targetIndex: 99, flex: [] }))).toBe(
+    const keys = plot.panes.map(() => null);
+    expect(max.load(JSON.stringify({ version: 2, targetIndex: 99, flex: [1, 1, 1, 1], keys }))).toBe(
       false,
     );
   });
@@ -190,7 +210,7 @@ describe("paneMaximize", () => {
     let result: unknown;
     expect(() => {
       result = max.load(
-        JSON.stringify({ version: 1, targetIndex: 1, flex: [1, -2, 1] }),
+        JSON.stringify({ version: 2, targetIndex: 1, flex: [1, -2, 1, 1], keys: [null, null, null, null] }),
       );
     }).not.toThrow();
 
@@ -262,5 +282,57 @@ describe("paneMaximize gestures", () => {
     plot.use(paneMaximize());
 
     expect(plot.routeInput({ type: "keydown", key: "Escape" })).toBe(false);
+  });
+});
+
+describe("paneMaximize load across pane layouts", () => {
+  it("refuses a payload saved for panes with other identities, even at the same count", () => {
+    const deps = testBrowserDeps();
+    const { plot, handle } = mountPlot({ deps, series: lineSeries(), config: defaultConfig });
+    handle.setData([{ x: 0, y: 1 }, { x: 1, y: 2 }]);
+    const rsi = plot.addPane({ stateKey: "rsi" });
+    const max = plot.use(paneMaximize());
+    max.maximize(rsi);
+    const saved = max.serialize();
+    max.restore();
+    if (saved === null) throw new Error("nothing saved");
+
+    // The indicator is swapped for another one: same count, different pane.
+    plot.removePane(rsi);
+    plot.addPane({ stateKey: "macd" });
+
+    expect(max.load(saved)).toBe(false);
+    expect(plot.panes.map((pane) => pane.flex)).toEqual([1, 1]);
+  });
+});
+
+describe("paneMaximize and a pane added while maximized", () => {
+  function maximizedWithVolume() {
+    const deps = testBrowserDeps();
+    const { plot, handle } = mountPlot({ deps, series: lineSeries(), config: defaultConfig });
+    handle.setData([{ x: 0, y: 1 }, { x: 1, y: 2 }]);
+    const volume = plot.addPane({ flex: 0.5 });
+    const max = plot.use(paneMaximize());
+    max.maximize(plot.mainPane);
+    const rsi = plot.addPane();
+    return { plot, max, volume, rsi };
+  }
+
+  it("keeps the maximize, collapsing the new pane with the rest", () => {
+    const { plot, max, volume, rsi } = maximizedWithVolume();
+
+    expect(max.maximizedPane).toBe(plot.mainPane);
+    expect(volume.flex).toBe(0);
+    expect(rsi.flex).toBe(0);
+  });
+
+  it("restores the layout from before the maximize, and the new pane's own flex", () => {
+    const { plot, max, volume, rsi } = maximizedWithVolume();
+
+    max.restore();
+
+    expect(plot.mainPane.flex).toBe(1);
+    expect(volume.flex).toBe(0.5);
+    expect(rsi.flex).toBe(1);
   });
 });

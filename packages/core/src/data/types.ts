@@ -343,14 +343,6 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
    */
   merge?(points: T[]): void;
   /**
-   * @deprecated Legacy caller-owned landing door. Its arguments are still
-   * `next` and `grownBy`; implementations may adopt `next` wholesale. New
-   * entry paths never use it because that shape cannot prove a retained body
-   * came from this manager. Implement `adoptHeadRetainingTail` for the
-   * narrowed path instead.
-   */
-  adoptHeadGrown?(next: T[], grownBy: number): void;
-  /**
    * Swaps out the last point — the tick of a bar in progress.
    * `DataError` if the new point's x is less than the x of the point before
    * it (second-to-last) — or equal to it, when the accessor declares
@@ -359,9 +351,11 @@ export interface DataManager<T extends BaseDataPoint = BaseDataPoint> {
   replaceLast(point: T): void;
   getVisibleData(viewport: Viewport): DataView<T>;
   /**
-   * `getVisibleData` plus places. This gate is optional and additive — if
-   * absent, drawing finds places itself (slower but still correct). The
-   * point array must have the same identity as `getVisibleData`'s.
+   * What drawing gets: `getVisibleData`'s points plus the one point just
+   * outside the window on each side (so lines reach the plot edges and
+   * edge-cut candles still draw), with places. This gate is optional — if
+   * absent, drawing gets `getVisibleData` alone and finds places itself,
+   * and lines stop at the last point inside the view.
    */
   getVisiblePlaced?(viewport: Viewport): VisiblePlaced<T>;
   /**

@@ -162,6 +162,7 @@ describe("the policy a candle series brings with it", () => {
       { ...candleSeries().decimation, pointsPerPixel: 2 },
     );
     byRegistration.setData(candles(100_000));
-    expect(byRegistration.getVisibleData(viewport(800)).length).toBe(1600);
+    // Whole-candle buckets: 100000 in 1600 make 63-candle buckets, 1588 of them.
+    expect(byRegistration.getVisibleData(viewport(800)).length).toBe(1588);
   });
 });

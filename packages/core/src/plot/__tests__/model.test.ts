@@ -69,8 +69,8 @@ describe("createPlotModel", () => {
     });
 
     // With a measurer supplied, the axis width follows the label even headless.
-    const line = model.commands().find((c) => c.type === "drawLine");
+    model.commands();
     // "####" 40px + 12px margin -> rounds up by 8px = 56, plus padding.left 4.
-    expect(line?.points[0].x).toBe(60);
+    expect(model.plot.mainPane.area.left).toBe(60);
   });
 });

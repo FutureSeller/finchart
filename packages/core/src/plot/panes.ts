@@ -79,6 +79,22 @@ export class PaneStack {
     return pane;
   }
 
+  /**
+   * Restacks the panes in `order` — the same panes, each once. Returns
+   * whether anything moved. The list keeps its identity, since layout and
+   * painting read it directly.
+   */
+  reorder(order: readonly PaneApi[]): boolean {
+    const held = new Set<PaneApi>(this.panes);
+    const isHeld = (pane: PaneApi): pane is Pane => held.has(pane);
+    if (order.length !== this.panes.length || new Set(order).size !== order.length || !order.every(isHeld)) {
+      throw new ContractError("setPaneOrder(panes) must list each of this chart's panes exactly once");
+    }
+    if (order.every((pane, index) => pane === this.panes[index])) return false;
+    this.panes.splice(0, this.panes.length, ...order);
+    return true;
+  }
+
   /** State keys are semantic identities, so duplicates would make restoration ambiguous. */
   private assertStateKeyAvailable(key: string): void {
     if (this.panes.some((pane) => pane.stateKey === key)) {
@@ -183,8 +199,8 @@ export class PaneStack {
     return unionOf(this.panes.map((pane) => pane.xRange()));
   }
 
-  /** Every series' x values, pane by pane — what a bar-index mapping recounts from. */
-  xValuesPerSeries(): readonly (readonly number[])[] {
-    return this.panes.flatMap((pane) => pane.xValuesPerSeries());
+  /** Every series' x values, pane by pane — what a bar-index mapping recounts from. `barBodied` keeps only bar-bodied series. */
+  xValuesPerSeries(barBodied = false): readonly (readonly number[])[] {
+    return this.panes.flatMap((pane) => pane.xValuesPerSeries(barBodied));
   }
 }

@@ -194,6 +194,24 @@ export function addDecoration<D>(
 }
 
 /**
+ * The slot a walk continues from once a visit has changed the list under it.
+ * An entry that removed itself is gone, so the walk continues after the one
+ * visited before it — wherever an insertion during the visit has moved it.
+ */
+function resumeAt<D>(
+  list: DecorationList<D>,
+  entry: DecorationEntry<D>,
+  at: number,
+  previous: DecorationEntry<D> | undefined,
+): number {
+  if (list[at] === entry) return at;
+  const moved = list.indexOf(entry);
+  if (moved !== -1) return moved;
+  const before = previous ? list.indexOf(previous) : -1;
+  return before === -1 ? at - 1 : before;
+}
+
+/**
  * Yields everything below the series, in order. Never allocates a new
  * array — this runs every frame. The list is already sorted, so it scans
  * from the front and stops at the series's slot.
@@ -201,19 +219,24 @@ export function addDecoration<D>(
  * **A shrinking list during iteration never skips the next entry.**
  * `addDecoration`'s unsubscribe function can be called from inside
  * `visit` — a notification banner that draws once and then removes itself
- * is exactly that shape. Unlike sibling loops elsewhere, this one **rewinds
- * the index** instead of copying: if the entry at the current slot has
- * changed after a visit, it looks at that same slot again.
+ * is exactly that shape. Unlike sibling loops elsewhere, this one **re-finds
+ * its place** instead of copying: if the entry at the current slot has
+ * changed after a visit, it continues right after that entry's new slot — or,
+ * if the entry itself is gone, right after the entry visited before it. A decoration added
+ * during the visit, before or after, waits for the next frame and nothing is
+ * drawn twice.
  */
 export function forEachBelowSeries<D>(
   list: DecorationList<D>,
   visit: (decoration: D) => void,
 ): void {
+  let previous: DecorationEntry<D> | undefined;
   for (let at = 0; at < list.length; at++) {
     const entry = list[at];
     if (entry.zIndex >= SERIES_Z) return;
     visit(entry.decoration);
-    if (list[at] !== entry) at--;
+    at = resumeAt(list, entry, at, previous);
+    previous = entry;
   }
 }
 
@@ -222,10 +245,12 @@ export function forEachAboveSeries<D>(
   list: DecorationList<D>,
   visit: (decoration: D) => void,
 ): void {
+  let previous: DecorationEntry<D> | undefined;
   for (let at = 0; at < list.length; at++) {
     const entry = list[at];
     if (entry.zIndex >= SERIES_Z) visit(entry.decoration);
-    if (list[at] !== entry) at--;
+    at = resumeAt(list, entry, at, previous);
+    previous = entry;
   }
 }
 

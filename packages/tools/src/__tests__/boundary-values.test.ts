@@ -38,9 +38,9 @@ describe("parseDrawings does not throw", () => {
    * recursive merge. This makes sure that property is never lost.
    */
   it("should never pollute Object.prototype", () => {
-    parseDrawings('{"version":1,"__proto__":{"polluted":true},"drawings":[]}');
+    parseDrawings('{"version":2,"__proto__":{"polluted":true},"drawings":[]}');
     parseDrawings(
-      '{"version":1,"drawings":[{"type":"horizontal","price":1,"__proto__":{"polluted":true}}]}',
+      '{"version":2,"drawings":[{"type":"horizontal","id":"h","price":1,"__proto__":{"polluted":true}}]}',
     );
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });

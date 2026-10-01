@@ -7,7 +7,9 @@ import {
   requireFinite,
   requireNonNegative,
   requireObject,
+  requireOptionalBoolean,
 } from "../primitives";
+import { requireFunction } from "../primitives/guards";
 import type { AxisOptions } from "./types";
 
 export interface PaneOptions {
@@ -83,6 +85,22 @@ export function checkPaneNumbers(options: PaneOptions): void {
   // spacing makes the ticks quietly vanish.
   if (options.axis?.minTickSpacing !== undefined) {
     requireFinite(options.axis.minTickSpacing, "pane axis minTickSpacing");
+  }
+  checkAxisCallbacks(options.axis, "pane axis");
+  // `"false"` from storage or an attribute is truthy.
+  requireOptionalBoolean(options.autoScale, "pane autoScale");
+  requireOptionalBoolean(options.invert, "pane invert");
+}
+
+/**
+ * An axis's callbacks are checked where they are given — accepted as
+ * anything else, they would fail on every frame instead.
+ */
+export function checkAxisCallbacks(axis: AxisOptions | undefined, label: string): void {
+  if (axis?.format !== undefined) requireFunction(axis.format, `${label} format`);
+  if (axis?.ticks !== undefined) {
+    requireObject(axis.ticks, `${label} ticks`);
+    requireFunction(axis.ticks.ticks, `${label} ticks.ticks`);
   }
 }
 

@@ -26,11 +26,11 @@ function mounted() {
     model.plot.routeInput(event);
 
   /**
-   * Domain (x, price) -> pixels. The mapping is continuous, so the
-   * domain is the raw data x range as-is (0-10).
+   * Domain (x, price) -> pixels, through the chart itself — the fit pads
+   * the data range (0-10) by half a bar at each end.
    */
   const at = (x: number, price: number) => ({
-    x: pane.area.left + (x / 10) * (pane.area.right - pane.area.left),
+    x: model.plot.pixelAtX(x),
     y: pane.yScale.scale(price),
   });
 

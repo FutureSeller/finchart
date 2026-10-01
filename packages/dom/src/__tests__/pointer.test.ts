@@ -266,6 +266,95 @@ describe("PointerInteractions wheel", () => {
 
     expect(target.pixelZooms).toEqual([]);
   });
+
+  const product = () => target.pixelZooms.reduce((total, zoom) => total * zoom.factor, 1);
+
+  it("should zoom by how far the wheel moved, not by how many events it sent", () => {
+    new PointerInteractions(element).connect(target.target);
+
+    // A trackpad sends a 100 px scroll as many small events; a mouse notch as one.
+    for (let i = 0; i < 50; i++) wheel(-2);
+
+    expect(product()).toBeCloseTo(1.1);
+  });
+
+  it("should cap one event at one notch, so a flung wheel cannot slam the zoom", () => {
+    new PointerInteractions(element).connect(target.target);
+
+    wheel(-1000);
+
+    expect(product()).toBeCloseTo(1.1);
+  });
+
+  it("should read line-mode deltas as pixels", () => {
+    new PointerInteractions(element).connect(target.target);
+
+    // Firefox reports a notch as three lines.
+    element.dispatchEvent(new WheelEvent("wheel", { deltaY: -3, deltaMode: 1, clientX: 150, cancelable: true }));
+
+    expect(product()).toBeGreaterThan(1.09);
+  });
+
+  it("should pan, not zoom, on a mostly horizontal swipe", () => {
+    new PointerInteractions(element).connect(target.target);
+    const event = new WheelEvent("wheel", { deltaX: -40, deltaY: 1, clientX: 150, cancelable: true });
+
+    element.dispatchEvent(event);
+
+    expect(target.pixelZooms).toEqual([]);
+    expect(target.pixelPans).toEqual([40]);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("should leave a horizontal swipe to the page when panning is off", () => {
+    new PointerInteractions(element, { pan: false }).connect(target.target);
+    const event = new WheelEvent("wheel", { deltaX: -40, clientX: 150, cancelable: true });
+
+    element.dispatchEvent(event);
+
+    expect(target.pixelPans).toEqual([]);
+    expect(target.pixelZooms).toEqual([]);
+    expect(event.defaultPrevented).toBe(false);
+  });
+});
+
+describe("PointerInteractions coordinates", () => {
+  it("should measure from inside the container's border, where the canvas sits", () => {
+    Object.defineProperty(element, "clientLeft", { value: 3 });
+    Object.defineProperty(element, "clientTop", { value: 4 });
+    new PointerInteractions(element).connect(target.target);
+
+    element.dispatchEvent(new MouseEvent("pointermove", { clientX: 100, clientY: 60 }));
+
+    // rect.left 50 + border 3, rect.top 20 + border 4
+    expect(target.crosshairs).toEqual([{ x: 47, y: 36 }]);
+  });
+});
+
+describe("PointerInteractions teardown", () => {
+  it("should hand the element back as it was found", () => {
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+    expect(element.getAttribute("tabindex")).toBe("0");
+
+    interactions.disconnect();
+
+    expect(element.hasAttribute("tabindex")).toBe(false);
+    // jsdom doesn't know touch-action, so unset reads as undefined there rather than "".
+    expect(element.style.touchAction).toBeFalsy();
+  });
+
+  it("should keep a caller's own tabindex and touch-action", () => {
+    element.setAttribute("tabindex", "-1");
+    element.style.touchAction = "none";
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    interactions.disconnect();
+
+    expect(element.getAttribute("tabindex")).toBe("-1");
+    expect(element.style.touchAction).toBe("none");
+  });
 });
 
 describe("PointerInteractions crosshair", () => {
@@ -1213,7 +1302,7 @@ it('ignores zero-delta wheel fallback after offering it to the input stack', () 
   target.target.routeInput = routed;
   const interactions = new PointerInteractions(element);
   interactions.connect(target.target);
-  const event = new WheelEvent('wheel', { deltaX: 100, deltaY: 0, bubbles: true, cancelable: true });
+  const event = new WheelEvent('wheel', { deltaX: 0, deltaY: 0, bubbles: true, cancelable: true });
   element.dispatchEvent(event);
   expect(routed).toHaveBeenCalledOnce();
   expect(target.pixelZooms).toEqual([]);

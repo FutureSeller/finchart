@@ -22,6 +22,10 @@ need to stand a chart up in a browser is here:
 - **DOM overlay extensions** — `legend()` and `tooltip()`. They live here
   because they render into an overlay rather than onto the canvas.
 
+```html
+<div id="chart" style="height: 400px"></div>
+```
+
 ```ts
 import { candleSeries } from "@finchart/core";
 import { PlotBuilder, browserDeps } from "@finchart/dom";
@@ -30,6 +34,11 @@ const plot = PlotBuilder.create(browserDeps({ autoSize: true }), candleSeries())
   .addDataPoints(data)
   .build(document.getElementById("chart")!);
 ```
+
+The container needs a size from CSS — the canvas is layered over it rather
+than laid out in it, so an empty `<div>` stays 0 px tall and the content after
+it is drawn over. With `autoSize` the chart follows that size; without it the
+canvas keeps the builder's `setSize`, so give the container the same height.
 
 Headless consumers (servers, workers, tests) don't install this package —
 `createPlotModel` from `@finchart/core` is all they need.
@@ -41,8 +50,11 @@ the container is `touch-action: pan-y`, so a vertical swipe over a chart that
 sits in a scrolling page scrolls the page. What that gives up on touch is
 dragging the value axis vertically; a mouse is unaffected.
 
-The wheel zooms on every event by default, which means a trackpad's
-two-finger scroll zooms the chart instead of scrolling the page. On a page
+The wheel zooms by how far it moves — `zoomSpeed` per 100 px, the length of
+one mouse notch, so a trackpad's stream of small deltas zooms as gently as it
+scrolls — and a mostly sideways swipe pans instead. By default it takes every
+wheel event, which means a trackpad's two-finger scroll zooms the chart
+instead of scrolling the page. On a page
 with content around the chart, gate it on a modifier:
 
 ```ts

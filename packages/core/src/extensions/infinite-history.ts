@@ -7,15 +7,15 @@ import type { Plot } from "../plot/plot";
 import type { SeriesHandle } from "../plot/series-handle";
 
 /**
- * What the loader needs from the stage — three already-published pieces,
- * so a `Plot` fits as-is: events to hear the view move, pixel conversion
- * to judge "how close to the edge" in a unit that survives both coordinate
- * systems, and one state read so installation doesn't have to wait for a
- * first event.
+ * What the loader needs from the stage — already-published pieces, so a
+ * `Plot` fits as-is: events to hear the view move, pixel conversion to
+ * judge "how close to the edge" in a unit that survives both coordinate
+ * systems, one state read so installation doesn't have to wait for a
+ * first event, and the half bar a fit leaves before the first point.
  */
 export type InfiniteHistoryHost = PlotEventSource &
   XCoordinates &
-  Pick<Plot, "getState">;
+  Pick<Plot, "getState" | "leadingMargin">;
 
 /**
  * Where a landed page goes, when it is a function — a chart with a price
@@ -243,7 +243,8 @@ function orderOnly<T extends BaseDataPoint>(): CoordinateAccessor<T> {
  *
  * Two triggers, deliberately different:
  *
- * - **Gap fill** — the screen shows a stretch with no data (slack < 0).
+ * - **Gap fill** — the screen shows a stretch with no data (more blank
+ *   than the half bar a fit leaves before the first point).
  *   Fires regardless of gesture and chains page after page until the
  *   screen is covered. At the left wall, pan is clamped and emits no
  *   events at all, so this landing-driven loop is the only way out —
@@ -448,11 +449,13 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     // A zero or degenerate width means layout hasn't happened — no judgment.
     if (!(width > 0)) return;
 
-    const slack = left - host.pixelAtX(frontier);
-    if (slack < 0) {
+    // A gap is blank beyond the half bar a fit leaves before the first
+    // point; under half a pixel of it is not blank anyone can see.
+    if (host.pixelAtX(frontier - host.leadingMargin()) - left > 0.5) {
       pull();
       return;
     }
+    const slack = left - host.pixelAtX(frontier);
     if (userWentLeft && slack < screensAhead * width) pull();
   };
 

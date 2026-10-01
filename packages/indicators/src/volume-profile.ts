@@ -72,10 +72,18 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
       let high = Number.NEGATIVE_INFINITY;
       let volumeScale = 0;
       const visible: OHLC[] = [];
-      for (const candle of data) {
-        const x = candle.x;
-        if (x < fromX) continue;
-        if (x > toX) break;
+      // The first visible bar by binary search — the walk then covers only
+      // what is on screen, not the whole history, every frame.
+      let lo = 0;
+      let hi = data.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (data[mid].x < fromX) lo = mid + 1;
+        else hi = mid;
+      }
+      for (let at = lo; at < data.length; at++) {
+        const candle = data[at];
+        if (candle.x > toX) break;
         visible.push(candle);
         if (candle.low < low) low = candle.low;
         if (candle.high > high) high = candle.high;

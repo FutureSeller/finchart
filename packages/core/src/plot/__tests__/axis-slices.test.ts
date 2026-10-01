@@ -346,3 +346,46 @@ describe("axis drag scaling (2.2)", () => {
     expect(xAfter.max - xAfter.min).toBeLessThan(xBefore.max - xBefore.min);
   });
 });
+
+describe("axis drag on a log value axis", () => {
+  async function logDrag(dy: number) {
+    const { createPlotModel } = await import("../model");
+    const { LogScale } = await import("../../scale");
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: {
+        series: lineSeries(),
+        data: Array.from({ length: 100 }, (_, i) => ({ x: i, y: 10 * 1.05 ** i })),
+      },
+      config: { showGrid: false },
+    });
+    const pane = model.plot.mainPane;
+    pane.setYScale(new LogScale());
+    model.plot.render();
+    const before = pane.yScale.getDomain();
+    const grab = { x: 10, y: (pane.area.top + pane.area.bottom) / 2 };
+    model.plot.routeInput({ type: "pointerdown", point: grab, pointerId: 1 });
+    for (let moved = 5; moved <= Math.abs(dy); moved += 5) {
+      model.plot.routeInput({ type: "pointermove", point: { x: 10, y: grab.y + Math.sign(dy) * moved }, pointerId: 1 });
+    }
+    model.plot.routeInput({ type: "pointerup", point: { x: 10, y: grab.y + dy }, pointerId: 1 });
+    return { before, after: pane.yScale.getDomain() };
+  }
+
+  const decades = ([min, max]: [number, number]) => Math.log10(max / min);
+  const middle = ([min, max]: [number, number]) => Math.sqrt(min * max);
+
+  it("zooms out when dragged down", async () => {
+    const { before, after } = await logDrag(50);
+
+    expect(decades(after)).toBeGreaterThan(decades(before));
+    expect(middle(after) / middle(before)).toBeCloseTo(1, 9);
+  });
+
+  it("zooms in around the middle of the screen when dragged up", async () => {
+    const { before, after } = await logDrag(-50);
+
+    expect(decades(after)).toBeLessThan(decades(before));
+    expect(middle(after) / middle(before)).toBeCloseTo(1, 9);
+  });
+});

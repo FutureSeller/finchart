@@ -1,7 +1,7 @@
 import type { Pane, PaneOptions, Scale } from '@finchart/core';
 import { PANE_OPTION_DEFAULTS } from '@finchart/core';
 import type { ReactNode } from 'react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { PaneProvider, SeriesPlacementProvider, useChartApi, useSeriesPlacement } from './chart-context';
 import { createSeriesPlacement } from './series-collector';
 
@@ -109,6 +109,17 @@ export function ChartPane({
       api.releasePane(acquired);
     };
   }, [api]);
+
+  // Where this pane sits in the JSX, every commit — a sibling inserted above
+  // or a keyed reorder moves it. Every pane's layout effect runs before any
+  // pane's passive one, so the first `stackPanes` of a commit sees all the
+  // ranks and the chart restacks once, not once per sibling.
+  useLayoutEffect(() => {
+    if (pane && prefix) api.rankPane(pane, prefix);
+  });
+  useEffect(() => {
+    api.stackPanes();
+  });
 
   // After that, only the field that actually changed gets applied —
   // recreating the pane every time a value changes would unregister

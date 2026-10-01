@@ -229,6 +229,19 @@ export class SeriesList {
             fed ? step.spec.data ?? [] : undefined,
           ));
         }
+        // A new name or colour (a theme change, `MA(${period})`) must reach
+        // the legend even though the drawn points stay.
+        const { entry } = step.reuse;
+        const display = {
+          name: step.spec.name ?? null,
+          color: step.spec.color ?? null,
+          zIndex: step.spec.zIndex ?? 0,
+          readout: step.spec.readout !== false,
+        };
+        if (display.name !== entry.name || display.color !== entry.color ||
+            display.zIndex !== entry.zIndex || display.readout !== entry.readout) {
+          commits.push(() => Object.assign(entry, display));
+        }
 
         next.set(step.spec.id, { spec: step.spec, entry: step.reuse.entry });
         entries.push(step.reuse.entry);
@@ -270,10 +283,10 @@ export class SeriesList {
    * The x list for each registration's drawn points — raw material for the
    * bar-index mapping. Handed over per registration rather than merged:
    * each is already sorted, and merging them into an index is the
-   * mapping's job.
+   * mapping's job. `barBodied` keeps only the series that draw bar bodies.
    */
-  xValuesPerSeries(): readonly (readonly number[])[] {
-    return this.list.map((entry) => entry.xValues());
+  xValuesPerSeries(barBodied = false): readonly (readonly number[])[] {
+    return (barBodied ? this.list.filter((entry) => entry.barBody) : this.list).map((entry) => entry.xValues());
   }
 
   /**

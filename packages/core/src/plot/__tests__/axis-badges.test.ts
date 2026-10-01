@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AxisBadge, AxisLabelsInput } from "../../axis";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import { crosshair } from "../../extensions/crosshair";
+import { crosshair, timeCursor } from "../../extensions/crosshair";
 import type { PlotDecoration } from "../decoration";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -132,5 +132,28 @@ describe("crosshair axis badges", () => {
     moveTo(center.x, center.y);
 
     expect(spy.seen.at(-1)!.badges).toEqual([]);
+  });
+});
+
+describe("time ghost badge", () => {
+  function ghostAt(x: number) {
+    const spy = labelSpy();
+    const deps = testBrowserDeps({ createAxisLabels: spy.createAxisLabels });
+    const { plot, handle } = mountPlot({ deps, series: lineSeries() });
+    handle.setData(Array.from({ length: 101 }, (_, i) => ({ x: i, y: i })));
+    plot.setVisibleRange(20, 100);
+    const ghost = timeCursor();
+    plot.addDecoration(ghost);
+    ghost.follow(x);
+    plot.render();
+    return spy.seen.at(-1)?.badges.filter((entry) => entry.axis === "x") ?? [];
+  }
+
+  it("shows no badge for a synced x outside this chart's window", () => {
+    expect(ghostAt(10)).toEqual([]);
+  });
+
+  it("shows the badge for a synced x inside the window", () => {
+    expect(ghostAt(50)).toHaveLength(1);
   });
 });

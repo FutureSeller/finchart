@@ -1,4 +1,5 @@
-import { isGap, LineDataAccessor } from "../data";
+import { isGap } from "../data";
+import { LINE_COORDINATES } from "../data/accessors";
 import type {
   BaseDataPoint,
   CoordinateAccessor,
@@ -131,7 +132,7 @@ export function areaSeries<T extends BaseDataPoint>(
 export function areaSeries<T extends BaseDataPoint>(
   options?: AreaSeriesStyleOverrides | AreaSeriesOptions<T>,
 ): AreaSeries<T> | AreaSeries<LineDataPoint> {
-  if (options === undefined) return new AreaSeries({ coordinates: new LineDataAccessor() });
+  if (options === undefined) return new AreaSeries({ coordinates: LINE_COORDINATES });
   // Prevents a bad type from passing through quietly and drawing with defaults.
   requireObject(options, "areaSeries(options)");
   if (hasCoordinates(options)) {
@@ -140,7 +141,7 @@ export function areaSeries<T extends BaseDataPoint>(
       style: options.style,
     });
   }
-  return new AreaSeries({ coordinates: new LineDataAccessor(), style: options });
+  return new AreaSeries({ coordinates: LINE_COORDINATES, style: options });
 }
 
 function hasCoordinates<T extends BaseDataPoint>(

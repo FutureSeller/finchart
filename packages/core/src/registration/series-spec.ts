@@ -11,7 +11,7 @@ import type {
   Source,
 } from "../data";
 import type { Series } from "../series";
-import { createEntry } from "./entry";
+import { checkDisplay, createEntry } from "./entry";
 import type { Entry, SeriesId, SeriesRegistration } from "./entry";
 
 /**
@@ -61,6 +61,12 @@ export interface SeriesSpec<TSource extends BaseDataPoint = BaseDataPoint> {
    * coexist with `data` or `deriveKey`.
    */
   readonly input?: Source<BaseDataPoint>;
+
+  /** What the series is shown as — re-read on every sync, so a changed name or colour reaches the legend. */
+  readonly name?: string;
+  readonly color?: string;
+  readonly zIndex?: number;
+  readonly readout?: boolean;
 
   /** What a Pane uses to seal this into an Entry. The point type is concrete only inside this function. */
   readonly toEntry: (createDataManager: DataManagerFactory) => Entry;
@@ -131,12 +137,17 @@ export function seriesSpec<
     TPoint
   >,
 ): SeriesSpec<TSource> {
+  checkDisplay(spec, "seriesSpec");
   return {
     id: spec.id,
     series: spec.series,
     data: spec.data,
     deriveKey: spec.deriveKey,
     input: spec.input,
+    name: spec.name,
+    color: spec.color,
+    zIndex: spec.zIndex,
+    readout: spec.readout,
     toEntry: (createDataManager) =>
       createEntry<TSource, TPoint>(spec, createDataManager, "seriesSpec"),
   };

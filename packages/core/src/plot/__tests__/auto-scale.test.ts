@@ -199,3 +199,41 @@ describe("empty data", () => {
     expect(plot.mainPane.yScale.getDomain()).toEqual(before);
   });
 });
+
+describe("a flat visible window", () => {
+  /** Rises for 50 bars, then sits at one price — zooming into the flat part flattens the window. */
+  function flatTail(level: number, rise: number) {
+    const { plot, handle } = mount();
+    handle.setData(Array.from({ length: 100 }, (_, i) => ({ x: i, y: i < 50 ? level - rise + i * (rise / 50) : level })));
+    plot.look(60, 99);
+    plot.render();
+    return plot.mainPane.yScale.getDomain();
+  }
+
+  it("pads around the price in proportion to it, not by one whole unit", () => {
+    const [min, max] = flatTail(1.085, 0.005);
+
+    expect(min).toBeGreaterThan(1);
+    expect(max).toBeLessThan(1.2);
+    expect(min).toBeLessThan(1.085);
+    expect(max).toBeGreaterThan(1.085);
+  });
+
+  it("keeps a flat sub-cent price above zero", () => {
+    const [min, max] = flatTail(1.234e-5, 1e-6);
+
+    expect(min).toBeGreaterThan(0);
+    expect(min).toBeLessThan(1.234e-5);
+    expect(max).toBeGreaterThan(1.234e-5);
+  });
+
+  it("still opens a window around a flat zero", () => {
+    const { plot, handle } = mount();
+    handle.setData([{ x: 0, y: 0 }, { x: 1, y: 0 }]);
+    plot.render();
+    const [min, max] = plot.mainPane.yScale.getDomain();
+
+    expect(min).toBeLessThan(0);
+    expect(max).toBeGreaterThan(0);
+  });
+});

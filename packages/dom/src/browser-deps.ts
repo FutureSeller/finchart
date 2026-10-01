@@ -30,8 +30,9 @@ export interface BrowserDepsOptions extends PlotDepsOptions {
    * Follows the container's size. Off by default.
    *
    * Turn it on and `size` becomes just the initial size — the container
-   * decides afterward. To change how it's observed, pass `observeSize`
-   * directly.
+   * decides afterward, so it needs a size of its own from CSS (a height,
+   * at least: an empty block is 0 px tall, and a zero size is ignored).
+   * To change how it's observed, pass `observeSize` directly.
    */
   autoSize?: boolean;
 }

@@ -47,8 +47,8 @@ describe("bar-index mapping", () => {
   it("should fit the domain in index space", () => {
     const { xScale } = mounted();
 
-    // Five candles -> index 0~4, not the data x range (0~6).
-    expect(xScale.getDomain()).toEqual([0, 4]);
+    // Five candles -> index 0~4 (not the data x range 0~6), half a bar past each end.
+    expect(xScale.getDomain()).toEqual([-0.5, 4.5]);
   });
 
   it("should render gapped candles at a uniform pitch", () => {
@@ -101,7 +101,12 @@ describe("bar-index mapping", () => {
     xScale.setDomain(-3, -1);
     plot.render();
 
-    expect(bodyCenters(layers)).toHaveLength(3);
+    // The three prepended bars sit inside the plot; the next bar (index 0)
+    // is drawn past the right edge too, where the clip hides it.
+    const right = plot.mainPane.area.right;
+    const centers = bodyCenters(layers);
+    expect(centers.filter((center) => center <= right)).toHaveLength(3);
+    expect(centers).toHaveLength(4);
   });
 
   it("should speak data x in xDomainChange", () => {
@@ -117,8 +122,9 @@ describe("bar-index mapping", () => {
 
     handle.setData(gappedWeek);
 
-    // The domain is index [0,4], but subscribers hear it in x — the same unit as dataRange.
-    expect(seen).toEqual({ startX: 0, endX: 6 });
+    // The domain is index [-0.5,4.5], but subscribers hear it in x — the same
+    // unit as dataRange, half an edge gap past each end.
+    expect(seen).toEqual({ startX: -0.5, endX: 6.5 });
   });
 
   it("should speak data x in crosshair", () => {
@@ -296,6 +302,8 @@ describe("axis labels", () => {
         },
       },
     });
+    // The window this layout was measured on — the data edge to edge.
+    plot.setVisibleRange(0, 10);
     plot.render();
 
     const positions = labels.input().x.map((tick) => tick.position);
@@ -406,6 +414,8 @@ describe("bar-index ticks keep the promoted label", () => {
         },
       },
     });
+    // The window this layout was measured on — the data edge to edge.
+    plot.setVisibleRange(1, 4);
     plot.render();
 
     expect(labels.xTexts()).toEqual(["01:00", "01:15", "01:30", "01:45", "03:00"]);
@@ -426,12 +436,12 @@ describe("ticks never leave the index stale", () => {
   it("a new bar makes it into the index", () => {
     const { plot, handle, xScale } = mounted();
     plot.fitDomains();
-    expect(xScale.getDomain()).toEqual([0, 4]);
+    expect(xScale.getDomain()).toEqual([-0.5, 4.5]);
 
     handle.updateLast(candleAt(9));
     plot.fitDomains();
 
-    expect(xScale.getDomain()).toEqual([0, 5]);
+    expect(xScale.getDomain()).toEqual([-0.5, 5.5]);
   });
 
   it("a new bar actually gets drawn", () => {
@@ -451,7 +461,7 @@ describe("ticks never leave the index stale", () => {
     plot.fitDomains();
     plot.render();
 
-    expect(xScale.getDomain()).toEqual([0, 4]);
+    expect(xScale.getDomain()).toEqual([-0.5, 4.5]);
     expect(bodyCenters(layers)).toHaveLength(TRADING_DAYS.length);
   });
 
@@ -465,7 +475,7 @@ describe("ticks never leave the index stale", () => {
     handle.updateLast(candleAt(9));
     plot.fitDomains();
 
-    expect(xScale.getDomain()).toEqual([0, 5]);
+    expect(xScale.getDomain()).toEqual([-0.5, 5.5]);
   });
 });
 

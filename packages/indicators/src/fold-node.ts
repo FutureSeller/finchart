@@ -10,7 +10,7 @@ import { toneOf } from "./tone";
  * path stand on the same fold" is a fact about this file, not a
  * discipline every factory keeps by hand.
  */
-export interface FoldSpec<T extends BaseDataPoint, F, S, K extends string, TK extends K = never> {
+export interface FoldSpec<T extends BaseDataPoint, F, S, K extends string, TK extends K = never, B extends string = never> {
   /** The output branches — fixed up front, so an empty input still names them. */
   keys: readonly K[];
   /**
@@ -21,6 +21,12 @@ export interface FoldSpec<T extends BaseDataPoint, F, S, K extends string, TK ex
    * so its `headLookback` carries `+ 1`.
    */
   toneKeys?: readonly TK[];
+  /**
+   * A branch that carries two plain branches' values in one point, for a
+   * band fill (`bandSeries`) — `{ key, upper, lower }` names it and the
+   * two branches it pairs.
+   */
+  band?: { key: B; upper: Exclude<K, TK>; lower: Exclude<K, TK> };
   /** Fresh folds (plus whatever scalar state the step needs). */
   make(): F;
   /** A resume checkpoint. Each kernel's own `snapshot` does the copying. */
@@ -100,8 +106,15 @@ export interface FoldSpec<T extends BaseDataPoint, F, S, K extends string, TK ex
 }
 
 /** The plain branches as lines, the toned ones as histogram points — each branch one shape. */
-export type FoldOutput<K extends string, TK extends K> = Record<Exclude<K, TK>, LineDataPoint[]> &
-  Record<TK, HistogramPoint[]>;
+export type FoldOutput<K extends string, TK extends K, B extends string = never> = Record<Exclude<K, TK>, LineDataPoint[]> &
+  Record<TK, HistogramPoint[]> &
+  Record<B, BandPoint[]>;
+
+/** Two line values in one point — the shape `bandSeries` fills between. */
+export interface BandPoint extends BaseDataPoint {
+  upper: number | null;
+  lower: number | null;
+}
 
 /**
  * Builds a computed node whose tick is an increment: `calc` folds the whole
@@ -113,11 +126,13 @@ export type FoldOutput<K extends string, TK extends K> = Record<Exclude<K, TK>, 
  * landing the node runs `calc` once more before trusting them again
  * (that rule lives in core, not here).
  */
-export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK extends K = never>(
+export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK extends K = never, B extends string = never>(
   source: Source<T>,
-  spec: FoldSpec<T, F, S, K, TK>,
-): Computation<FoldOutput<K, TK>> {
+  spec: FoldSpec<T, F, S, K, TK, B>,
+): Computation<FoldOutput<K, TK, B>> {
   const toneKeys: readonly TK[] = spec.toneKeys ?? [];
+  const band = spec.band;
+  const bandKeys: readonly B[] = band ? [band.key] : [];
   const toned = new Set<string>(toneKeys);
   const plainKeys = spec.keys.filter((key): key is Exclude<K, TK> => !toned.has(key));
   const tailFolds = spec.make();
@@ -132,6 +147,7 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
       let nextBeforeLast: S | null = null;
       const lines = record(plainKeys, () => new Array<LineDataPoint>(data.length));
       const bars = record(toneKeys, () => new Array<HistogramPoint>(data.length));
+      const bands = record(bandKeys, () => new Array<BandPoint>(data.length));
       for (let i = 0; i < data.length; i++) {
         if (i === data.length - 1) nextBeforeLast = spec.snapshot(folds);
         const values = spec.step(folds, data[i]);
@@ -140,9 +156,10 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
           const y = reading(values[key]);
           bars[key][i] = { x: data[i].x, y, tone: toneOf(i > 0 ? bars[key][i - 1].y : undefined, y) };
         }
+        if (band) bands[band.key][i] = { x: data[i].x, upper: reading(values[band.upper]), lower: reading(values[band.lower]) };
       }
       const nextAtEnd = spec.snapshot(folds);
-      const output = { ...lines, ...bars };
+      const output = { ...lines, ...bars, ...bands };
       beforeLast = nextBeforeLast;
       atEnd = nextAtEnd;
       return output;
@@ -162,8 +179,10 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
       const from = data.length - count;
       const previousLines: Record<Exclude<K, TK>, LineDataPoint[]> = previous;
       const previousBars: Record<TK, HistogramPoint[]> = previous;
+      const previousBands: Record<B, BandPoint[]> = previous;
       const lineTails = record(plainKeys, () => new Array<LineDataPoint>(count));
       const barTails = record(toneKeys, () => new Array<HistogramPoint>(count));
+      const bandTails = record(bandKeys, () => new Array<BandPoint>(count));
       let nextBeforeLast = beforeLast;
       for (let i = from; i < data.length; i++) {
         if (i === data.length - 1) nextBeforeLast = spec.snapshot(tailFolds);
@@ -176,12 +195,14 @@ export function foldNode<T extends BaseDataPoint, F, S, K extends string, TK ext
           const back = i === from ? previousBars[key][from - 1] : barTails[key][i - from - 1];
           barTails[key][i - from] = { x: data[i].x, y, tone: toneOf(back?.y, y) };
         }
+        if (band) bandTails[band.key][i - from] = { x: data[i].x, upper: reading(values[band.upper]), lower: reading(values[band.lower]) };
       }
       const nextAtEnd = spec.snapshot(tailFolds);
 
       const output = {
         ...record(plainKeys, (key) => previousLines[key].slice(0, from).concat(lineTails[key])),
         ...record(toneKeys, (key) => previousBars[key].slice(0, from).concat(barTails[key])),
+        ...record(bandKeys, (key) => previousBands[key].slice(0, from).concat(bandTails[key])),
       };
       // Publish only after every step and output branch succeeded.
       beforeLast = nextBeforeLast;

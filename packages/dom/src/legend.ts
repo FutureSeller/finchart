@@ -1,4 +1,4 @@
-import type { ConfigurablePluginApi, DataProbe, OverlayHost, PaneHost, PlotEventSource, Plugin, StyleSpec, ValueCoordinates, ValueFormatSource } from "@finchart/core";
+import type { ConfigurablePluginApi, DataProbe, OverlayHost, PaneHost, PlotEventSource, Plugin, StyleSpec, ValueCoordinates, ValueFormatSource, XCoordinates } from "@finchart/core";
 import { ContractError, cssVarExpr, pluginApi, styleSpec } from "@finchart/core";
 import { requireOverlayElement } from "./overlay-element";
 import { type RowFormat, sampleText } from "./sample-text";
@@ -30,7 +30,7 @@ export interface LegendOptions {
 export const LEGEND_STYLE_SPEC = /* @__PURE__ */ styleSpec({
   fontSize: { css: "--chart-label-font-size", fallback: "11px" },
   fontFamily: { css: "--chart-label-font-family", fallback: "inherit" },
-  color: { css: "--chart-legend", fallback: "#334155" },
+  color: { css: "--chart-legend", fallback: "inherit" },
 }) satisfies StyleSpec<{ fontSize: string; fontFamily: string; color: string }>;
 
 /**
@@ -48,7 +48,7 @@ export const LEGEND_STYLE_SPEC = /* @__PURE__ */ styleSpec({
 export function legend(
   options: LegendOptions = {},
 ): Plugin<
-  OverlayHost & PaneHost & PlotEventSource,
+  OverlayHost & PaneHost & PlotEventSource & XCoordinates,
   ConfigurablePluginApi<Omit<LegendOptions, "pane">>
 > {
   return (plot) => {
@@ -81,14 +81,19 @@ export function legend(
     box.style.color = cssVarExpr(LEGEND_STYLE_SPEC.color);
     overlay.appendChild(box);
 
-    /** The cursor's data x. When null, shows the last value. */
-    let cursorX: number | null = null;
+    /**
+     * The cursor's screen x. When null, shows the last value. The data x is
+     * read from it at every refresh — the view can move under a still
+     * pointer (a keyboard pan, a live feed), and the crosshair line follows
+     * the pixel.
+     */
+    let cursorPixel: number | null = null;
 
     const refresh = (): void => {
       box.style.left = `${pane.area.left + 8}px`;
       box.style.top = `${pane.area.top + 6}px`;
 
-      const at = cursorX ?? pane.xRange()?.max ?? null;
+      const at = cursorPixel !== null ? plot.xAt(cursorPixel) : pane.xRange()?.max ?? null;
       const samples = at === null ? [] : pane.probe(at);
 
       const rows = samples
@@ -109,7 +114,7 @@ export function legend(
     };
 
     const offCrosshair = plot.on("crosshair", (payload) => {
-      cursorX = payload?.pane ? payload.x : null;
+      cursorPixel = payload?.pane ? payload.position.x : null;
       refresh();
     });
     // Data and series changes arrive via render — the list and the last value both refresh there.

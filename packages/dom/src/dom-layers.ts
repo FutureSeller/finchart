@@ -131,6 +131,8 @@ export const createDomLayers = (
     destroy() {
       canvas.remove();
       overlay.remove();
+      // The container is the caller's and may be reused after the chart.
+      if (!position) container.style.position = "";
     },
   };
 };

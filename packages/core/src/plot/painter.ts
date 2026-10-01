@@ -317,6 +317,7 @@ function drawDividers(stage: PaintStage, config: ResolvedPlotConfig): void {
       left: pane.area.left,
       right: pane.area.right,
       value: dividerRange(side(pane), side(panes[index + 1])),
+      panes: [pane, panes[index + 1]],
     })),
   );
 }
