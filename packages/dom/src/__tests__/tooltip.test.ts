@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { LineDataPoint } from "@finchart/core";
 import { recordingRenderer } from "@finchart/core";
 import { candleSeries, lineSeries } from "@finchart/core";
@@ -216,6 +216,14 @@ describe("legend", () => {
     expect(box.textContent).not.toBeNull();
     expect(box.children).toHaveLength(1);
   });
+
+  it("should read in the page's text color until a theme sets one", () => {
+    const { plot, overlay } = mounted();
+    plot.use(legend());
+
+    // A fixed dark default vanished on a dark page.
+    expect(overlay.querySelector<HTMLElement>("[data-chart-legend]")?.style.color).toBe("var(--chart-legend, inherit)");
+  });
 });
 
 describe("rows a series describes — tooltip and legend", () => {
@@ -356,5 +364,100 @@ describe("readout: false — a registration drawn for the eye", () => {
     const box = overlay.querySelector("[data-chart-legend]");
     expect(box?.textContent ?? "").toContain("BTC");
     expect(box?.textContent ?? "").not.toContain("fill");
+  });
+});
+
+describe("tooltip and legend after the view moves under a still cursor", () => {
+  it("read the bar now under the cursor, as the crosshair line does", () => {
+    const { plot, overlay, tooltipBox, paneCenter } = mounted();
+    plot.use(tooltip());
+    plot.use(legend());
+    plot.setVisibleRange(0, 10);
+    plot.render();
+    plot.crosshair(paneCenter());
+    expect(tooltipBox().textContent).toContain("120.00");
+
+    // A keyboard pan, a live feed shift or a linked chart moves the view; the pointer stays.
+    plot.setVisibleRange(5, 15);
+    plot.render();
+
+    expect(tooltipBox().textContent).toContain("110.00");
+    const legendBox = overlay.querySelector("[data-chart-legend]") as HTMLElement;
+    expect(legendBox.textContent).toContain("110.00");
+  });
+});
+
+describe("tooltip placement", () => {
+  const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+  const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  afterEach(() => {
+    if (offsetWidth) Object.defineProperty(HTMLElement.prototype, "offsetWidth", offsetWidth);
+    if (offsetHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetHeight);
+  });
+
+  let measured = 0;
+
+  /**
+   * jsdom has no layout: a 270×80 box (a candle row's real width) in an
+   * overlay twice the chart's size — a container wider and taller than the
+   * chart, so flipping against the overlay would still run past the chart.
+   */
+  function laidOut() {
+    const mount = mounted();
+    measured = 0;
+    Object.defineProperty(mount.overlay, "clientWidth", { value: 1600 });
+    Object.defineProperty(mount.overlay, "clientHeight", { value: 1200 });
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => (measured++, 270) });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 80 });
+    mount.plot.use(tooltip());
+    const rect = () => {
+      const box = mount.tooltipBox();
+      const left = Number.parseFloat(box.style.left);
+      const top = Number.parseFloat(box.style.top);
+      return { left, top, right: left + 270, bottom: top + 80 };
+    };
+    return { ...mount, rect };
+  }
+
+  it("should stay inside the chart near the right edge, whatever the box's width", () => {
+    const { plot, rect } = laidOut();
+    const { area } = plot.mainPane;
+
+    plot.crosshair({ x: area.right - 200, y: area.top + 20 });
+
+    expect(rect().right).toBeLessThanOrEqual(area.right);
+    expect(rect().left).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should flip above the cursor near the bottom edge", () => {
+    const { plot, rect } = laidOut();
+    const { area } = plot.mainPane;
+
+    plot.crosshair({ x: area.left + 20, y: area.bottom - 10 });
+
+    expect(rect().bottom).toBeLessThanOrEqual(area.bottom);
+  });
+
+  it("should not measure the box again while its rows read the same", () => {
+    const { plot, rect } = laidOut();
+    const { area } = plot.mainPane;
+    plot.crosshair({ x: area.right - 200, y: area.top + 20 });
+    const before = measured;
+
+    // A live chart renders every tick under a still pointer; each measure is a forced layout.
+    plot.render();
+    plot.render();
+
+    expect(measured).toBe(before);
+    expect(rect().right).toBeLessThanOrEqual(area.right);
+  });
+
+  it("should sit below and to the right of the cursor where there is room", () => {
+    const { plot, rect } = laidOut();
+    const { area } = plot.mainPane;
+
+    plot.crosshair({ x: area.left + 20, y: area.top + 20 });
+
+    expect(rect()).toMatchObject({ left: area.left + 32, top: area.top + 32 });
   });
 });

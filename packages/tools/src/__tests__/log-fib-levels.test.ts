@@ -292,14 +292,12 @@ describe("the stored field", () => {
   // known field used to fail the predicate — and one fib took every saved
   // drawing with it. It is read the way an unknown field is: dropped.
   it("does not kill the ledger when a future build wrote a spacing this one does not know", () => {
-    for (const version of [1, 2]) {
-      const trend = { type: "trend", a: { x: 0, price: 1 }, b: { x: 1, price: 2 }, ...(version === 2 ? { id: "t" } : {}) };
-      const fib = { type: "fib", a: { x: 0, price: 100 }, b: { x: 1, price: 200 }, levelSpacing: "sqrt", ...(version === 2 ? { id: "f" } : {}) };
-      const loaded = parseDrawings(JSON.stringify({ version, drawings: [trend, fib] }));
-      expect(loaded).toHaveLength(2);
-      expect(loaded?.[1]).toMatchObject({ type: "fib", a: { x: 0, price: 100 }, b: { x: 1, price: 200 } });
-      expect(loaded?.[1]).not.toHaveProperty("levelSpacing");
-    }
+    const trend = { type: "trend", id: "t", a: { x: 0, price: 1 }, b: { x: 1, price: 2 } };
+    const fib = { type: "fib", id: "f", a: { x: 0, price: 100 }, b: { x: 1, price: 200 }, levelSpacing: "sqrt" };
+    const loaded = parseDrawings(JSON.stringify({ version: 2, drawings: [trend, fib] }));
+    expect(loaded).toHaveLength(2);
+    expect(loaded?.[1]).toMatchObject({ type: "fib", a: { x: 0, price: 100 }, b: { x: 1, price: 200 } });
+    expect(loaded?.[1]).not.toHaveProperty("levelSpacing");
   });
 });
 

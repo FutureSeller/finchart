@@ -7,7 +7,7 @@ import type { LineDataPoint, Pane, Plot } from '@finchart/core';
 import { browserDeps, legend, tooltip } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef, StrictMode, type ReactElement } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartContainer, ChartLine, ChartPane, Legend, Tooltip } from '../components';
 import { PaneProvider } from '../components/chart-context';
 import { layersSpy } from './fake-layers';
@@ -182,6 +182,24 @@ describe('<Legend> inside a <ChartPane>', () => {
 });
 
 describe('<Tooltip offset>', () => {
+  // jsdom has no layout: the overlay reads as the default 800×600 chart and
+  // the box as 100×40, so the tooltip's edge checks have something to measure.
+  const sizes = { clientWidth: 800, clientHeight: 600, offsetWidth: 100, offsetHeight: 40 };
+  const saved = Object.keys(sizes).map((key) => ({
+    key,
+    descriptor: Object.getOwnPropertyDescriptor(HTMLElement.prototype, key),
+  }));
+  beforeEach(() => {
+    for (const [key, value] of Object.entries(sizes)) {
+      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => value });
+    }
+  });
+  afterEach(() => {
+    for (const { key, descriptor } of saved) {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, key, descriptor);
+    }
+  });
+
   function hover(plot: () => Plot, at: 'left' | 'right') {
     act(() => plot().render());
     const { area } = plot().mainPane;
@@ -222,9 +240,9 @@ describe('<Tooltip offset>', () => {
         <Tooltip offset={20} />
       </ChartContainer>,
     );
-    const { position, area } = hover(plot, 'right');
+    const { position } = hover(plot, 'right');
     const box = overlay().querySelector('[data-chart-tooltip]');
-    expect(box).toHaveProperty('style.left', '');
-    expect(box).toHaveProperty('style.right', `${area.right - position.x + 20}px`);
+    // Flipped left of the cursor: the box's own width, then the gap.
+    expect(box).toHaveProperty('style.left', `${position.x - 20 - 100}px`);
   });
 });

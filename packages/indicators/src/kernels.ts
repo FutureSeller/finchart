@@ -82,8 +82,8 @@ export function ema(values: Values, period: number): (number | null)[] {
  * Windowed population standard deviation — `stddevFold` in a loop, so the
  * array form pays the fold's O(period) per element: 100k × 20 ≈ 7 ms,
  * 100k × 200 ≈ 60 ms (measured). Bollinger's full path is the caller;
- * its tick moves onto the fold's increment next, where a step is one
- * window, not the history.
+ * its tick re-runs only the bars the tick reaches, a window, not the
+ * history.
  */
 export function stddev(values: Values, period: number): (number | null)[] {
   const fold = stddevFold(period);
@@ -94,15 +94,18 @@ export function stddev(values: Values, period: number): (number | null)[] {
 
 /** True Range — `max(high-low, |high-prevClose|, |low-prevClose|)`. The first candle is just high-low (Wilder convention). */
 export function trueRanges(data: readonly OHLC[]): number[] {
-  return data.map((candle, index) => {
-    if (index === 0) return candle.high - candle.low;
-    const previousClose = data[index - 1].close;
-    return Math.max(
-      candle.high - candle.low,
-      Math.abs(candle.high - previousClose),
-      Math.abs(candle.low - previousClose),
-    );
-  });
+  return data.map((candle, index) => trueRange(candle, index === 0 ? null : data[index - 1].close));
+}
+
+/** One bar's True Range — just `high − low` where there is no previous close. */
+export function trueRange(candle: OHLC, previousClose: number | null): number {
+  return previousClose === null
+    ? candle.high - candle.low
+    : Math.max(
+        candle.high - candle.low,
+        Math.abs(candle.high - previousClose),
+        Math.abs(candle.low - previousClose),
+      );
 }
 
 /**

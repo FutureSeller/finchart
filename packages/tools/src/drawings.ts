@@ -574,19 +574,6 @@ export function pitchforkLines(
 const FORMAT_VERSION = 2;
 
 /**
- * v1 drawings get their ids here, derived from position — deliberately
- * deterministic, not random. The save recipe consumers use
- * (`reason !== "move"`) never fires on a session that only loads, so a
- * random id would change on every refresh until the first save — and a
- * side panel keying by id would orphan its state each time. Position is
- * stable for a frozen payload, so parsing the same string twice yields
- * the same ledger.
- */
-function migratedV1Id(index: number): string {
-  return `v1-${index}`;
-}
-
-/**
  * Turns an array of drawings into a string. Rebuilds each one from our own
  * fields before saving — what a consumer passes in might be an object from
  * their own store, and handing it to `JSON.stringify` without normalizing
@@ -688,7 +675,7 @@ export function parseDrawings(payload: string): Drawing[] | null {
     version?: unknown;
     drawings?: unknown;
   };
-  if ((version !== FORMAT_VERSION && version !== 1) || !Array.isArray(drawings)) {
+  if (version !== FORMAT_VERSION || !Array.isArray(drawings)) {
     return null;
   }
   /**
@@ -698,15 +685,8 @@ export function parseDrawings(payload: string): Drawing[] | null {
    */
   const items: unknown[] = drawings;
   const checked: Drawing[] = [];
-  for (const [index, stored] of items.entries()) {
+  for (const stored of items) {
     const item = withoutUnknownSpacing(stored);
-    if (version === 1) {
-      // v1 has no ids — geometry is checked with the same per-kind rules,
-      // and the id is derived from position (see migratedV1Id).
-      if (!hasDrawingShape(item)) return null;
-      checked.push(ownWithId(item, migratedV1Id(index)));
-      continue;
-    }
     if (!isDrawing(item)) return null;
     checked.push(item);
   }
@@ -782,9 +762,8 @@ export function toOwnedDrawing(drawing: Drawing): Drawing {
 
 /**
  * The one place a drawing's own shape is built — `add` stamps a fresh id
- * onto a `DrawingInput` here, `toOwnedDrawing` carries an existing one,
- * and the v1 migration derives one. A single builder keeps all three
- * doors saving the identical shape.
+ * onto a `DrawingInput` here and `toOwnedDrawing` carries an existing one.
+ * A single builder keeps both doors saving the identical shape.
  */
 export function ownWithId(drawing: DrawingInput, id: string): Drawing {
   const style = ownStyle(drawing.style);
@@ -981,9 +960,9 @@ const ownAnchor = (anchor: Anchor): Anchor => ({
 });
 
 /**
- * The per-kind geometry rules, without the identity — what a v1 payload
- * (no ids yet) and a `DrawingInput` at the `add` door both have to
- * satisfy. `isDrawing` is this plus a valid id.
+ * The per-kind geometry rules, without the identity — what a
+ * `DrawingInput` at the `add` door has to satisfy. `isDrawing` is this plus
+ * a valid id.
  */
 export function hasDrawingShape(value: unknown): value is DrawingInput {
   if (typeof value !== "object" || value === null) return false;

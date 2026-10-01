@@ -245,6 +245,8 @@ export function pointAndFigureSeries(options: PointAndFigureSeriesOptions): Seri
   return {
     coordinates: new PnfAccessor(boxSize),
     decimation: { strategy: new PnfAggregation(boxSize), pointsPerPixel: 1 },
+    // Each column is drawn a slot wide, so a fit keeps half a column at each end.
+    barBody: true,
 
     valueExtent(data) {
       if (data.length === 0) return null;

@@ -22,6 +22,7 @@ import {
   type PaneAcquisition,
 } from './chart-context';
 import {
+  compareRank,
   createSeriesCollector,
   createSeriesPlacement,
   type SeriesCollector,
@@ -230,23 +231,42 @@ export function ChartContainer<T extends BaseDataPoint>({
    */
   const structure = useRef(0);
   const appliedStructure = useRef(-1);
+  /** Panes acquired since the last re-apply — the only ones the saved slices restore. */
+  const attached = useRef(new Set<Pane>());
   useEffect(() => {
     const plot = plotRef.current;
     if (!plot || structure.current === appliedStructure.current) return;
 
     appliedStructure.current = structure.current;
     const slices = stateRef.current?.panes;
-    if (slices) plot.applyState({ panes: slices });
+    const fresh = attached.current;
+    attached.current = new Set();
+    if (!slices || fresh.size === 0) return;
+    // A pane already there keeps what the user did to it since (a divider
+    // drag): the saved slice would be stale for it, so it re-applies its own.
+    const now = plot.getState().panes;
+    const panes = plot.panes;
+    plot.applyState({
+      panes: panes.map((pane, at) => {
+        if (!fresh.has(pane)) return now[at];
+        const saved = pane.stateKey !== null
+          ? slices.find((slice) => slice.stateKey === pane.stateKey)
+          : slices.length === panes.length && slices[at]?.stateKey === undefined ? slices[at] : undefined;
+        return saved ?? now[at];
+      }),
+    });
   });
 
   /**
-   * The `Plot` exists only after mount, so children attach once, at that
-   * point.
+   * The `Plot` exists only after mount, so children attach at that point —
+   * and again whenever an effect replay (React's `<Activity>` hiding and
+   * showing the tree) builds a new one: the children unmount with the old
+   * chart and mount against the new, never staying bound to a destroyed one.
    *
    * This effect is declared after `usePlot`, so it runs after the `Plot`
    * is built — effects in the same component run in declaration order.
    */
-  const [ready, setReady] = useState(false);
+  const [plot, setPlot] = useState<Plot | null>(null);
 
   /**
    * **Doesn't put `plotRef` and `onPlot` in the same effect.**
@@ -268,10 +288,11 @@ export function ChartContainer<T extends BaseDataPoint>({
    */
   useEffect(() => {
     if (exposed) exposed.current = plotRef.current;
-    setReady(true);
+    setPlot(plotRef.current);
 
     return () => {
       if (exposed) exposed.current = null;
+      setPlot(null);
     };
   }, [exposed, plotRef]);
 
@@ -307,8 +328,14 @@ export function ChartContainer<T extends BaseDataPoint>({
   const collectors = useRef(new Map<Pane, SeriesCollector<T>>());
 
   const api = useMemo<ChartApi<T> | null>(() => {
-    const plot = plotRef.current;
-    if (!plot || !ready) return null;
+    if (!plot) return null;
+    // A new chart starts with nothing taken, replaced or collected.
+    mainPaneTaken.current = false;
+    previousScale.current = null;
+    collectors.current = new Map();
+    const paneRanks = new Map<Pane, readonly number[]>();
+    /** A rank moved since the last restack. */
+    let restack = false;
 
     return {
       plot,
@@ -317,7 +344,9 @@ export function ChartContainer<T extends BaseDataPoint>({
         structure.current += 1;
         const { yScale, ...pane } = options;
         if (mainPaneTaken.current) {
-          return plot.addPane(yScale ? { ...pane, yScale: yScale() } : pane);
+          const added = plot.addPane(yScale ? { ...pane, yScale: yScale() } : pane);
+          attached.current.add(added);
+          return added;
         }
         mainPaneTaken.current = true;
         plot.mainPane.applyOptions(pane);
@@ -325,11 +354,13 @@ export function ChartContainer<T extends BaseDataPoint>({
           previousScale.current = plot.mainPane.yScale;
           plot.mainPane.setYScale(yScale());
         }
+        attached.current.add(plot.mainPane);
         return plot.mainPane;
       },
 
       releasePane(pane: Pane): void {
         structure.current += 1;
+        attached.current.delete(pane);
         if (pane === plot.mainPane) {
           // Outside series share this collector and survive the pane wrapper.
           mainPaneTaken.current = false;
@@ -341,7 +372,27 @@ export function ChartContainer<T extends BaseDataPoint>({
           return;
         }
         collectors.current.delete(pane);
+        paneRanks.delete(pane);
         plot.removePane(pane);
+      },
+
+      rankPane(pane: Pane, rank: readonly number[]): void {
+        const known = paneRanks.get(pane);
+        if (known && compareRank(known, rank) === 0) return;
+        paneRanks.set(pane, rank);
+        restack = true;
+      },
+
+      stackPanes(): void {
+        // Only when a JSX rank moved — re-sorting on every commit would undo
+        // a `setPaneOrder` the user made since.
+        if (!restack) return;
+        restack = false;
+        // An unclaimed main pane stays on top; a pane added outside the JSX
+        // (through `plotRef`) keeps its place below the declared ones.
+        const rankOf = (candidate: Pane): readonly number[] =>
+          paneRanks.get(candidate) ?? (candidate === plot.mainPane ? [-1] : [Number.POSITIVE_INFINITY]);
+        plot.setPaneOrder([...plot.panes].sort((a, b) => compareRank(rankOf(a), rankOf(b))));
       },
 
       seriesCollector(pane: Pane): SeriesCollector<T> {
@@ -353,7 +404,7 @@ export function ChartContainer<T extends BaseDataPoint>({
         return created;
       },
     };
-  }, [plotRef, ready]);
+  }, [plot]);
 
   // A `<ChartSeries>` placed outside `<ChartPane>` has a JSX order too. If
   // a pane took over `mainPane`, it's the same collector, so the order

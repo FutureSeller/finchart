@@ -9,6 +9,7 @@ function fakeEntry(): TypedEntry<{ x: number }> & { calls: string[] } {
   return {
     calls,
     series: {},
+    barBody: false,
     name: null,
     color: null,
     zIndex: 0,

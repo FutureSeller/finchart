@@ -245,10 +245,12 @@ export function timeCursor(): TimeCursor {
       );
     },
 
-    axisBadges({ x, readStyle, formatX }) {
+    axisBadges({ area, x, readStyle, formatX }) {
       if (at === null) return [];
 
+      // Culled with the line: a synced x outside this chart's window has no place on its axis.
       const pixel = x.toPixel(at);
+      if (pixel < area.left || pixel > area.right) return [];
       const { back, color } = resolveStyle(CROSSHAIR_BADGE_SPEC, readStyle);
       // The badge speaks in the receiving chart's terms — the sending chart's format never reaches here.
       return [{ axis: "x", position: pixel, label: formatX(at), back, color }];

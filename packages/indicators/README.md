@@ -193,12 +193,13 @@ the Keltner multiplier — pass `bbMultiplier` equal to `kcMultiplier`.
 ## The matrix — what each indicator does on a tick
 
 Every node takes the tail door on a tick. The ones built on folds step one
-fold (**increment** — the matrix says which); the rest recompute wholesale and
-hand back the unchanged output objects (**recompute + reuse**), so their
-consumers still read the tick as a tail change — re-validating and re-mapping
-only the bar that moved.
-Either way, what scales with history is the kernel, never the drawings
-downstream. Two rules hold for all of them:
+fold from a checkpoint (**increment** — the matrix says which); the windowed
+rest re-run only the bars a tick can reach — the moved bars plus the window
+behind them — and hand back the unchanged output objects (**recompute +
+reuse**), so their consumers still read the tick as a tail change —
+re-validating and re-mapping only the bar that moved. Either way a tick's
+arithmetic is bounded by the window, not the history. Two rules hold for
+all of them:
 
 - **The node reads the shape of a change from point identity, not from
   the door it came through.** `updateLast` and `append` keep every earlier
@@ -232,20 +233,20 @@ must carry beyond OHLC: `volume` on every bar, or an `anchor` predicate
 | `movingAverage` | increment | ✓ | `MOVING_AVERAGE_DEFAULTS` | — |
 | `macd` | increment | — | `MACD_DEFAULTS` | — |
 | `bollingerBands` | recompute + reuse | ✓ | `BOLLINGER_DEFAULTS` | — |
-| `rsi` | recompute + reuse | — | `RSI_DEFAULTS` | — |
-| `atr` | recompute + reuse | — | `ATR_DEFAULTS` | — |
-| `adx` | recompute + reuse | — | `ADX_DEFAULTS` | — |
-| `parabolicSar` | recompute + reuse | — | `PARABOLIC_SAR_DEFAULTS` | — |
+| `rsi` | increment | — | `RSI_DEFAULTS` | — |
+| `atr` | increment | — | `ATR_DEFAULTS` | — |
+| `adx` | increment | — | `ADX_DEFAULTS` | — |
+| `parabolicSar` | increment | — | `PARABOLIC_SAR_DEFAULTS` | — |
 | `ichimoku` | recompute + reuse | ✓ | `ICHIMOKU_DEFAULTS` | — |
-| `vwap` | recompute + reuse | — | — | volume |
-| `obv` | recompute + reuse | — | — | volume |
+| `vwap` | increment | — | — | volume |
+| `obv` | increment | — | — | volume |
 | `stochastic` | recompute + reuse | ✓ | `STOCHASTIC_DEFAULTS` | — |
 | `cci` | recompute + reuse | ✓ | `CCI_DEFAULTS` | — |
 | `williamsR` | recompute + reuse | ✓ | `WILLIAMS_R_DEFAULTS` | — |
 | `donchianChannels` | recompute + reuse | ✓ | `DONCHIAN_DEFAULTS` | — |
-| `keltnerChannels` | recompute + reuse | — | `KELTNER_DEFAULTS` | — |
-| `superTrend` | recompute + reuse | — | `SUPERTREND_DEFAULTS` | — |
-| `pivotPoints` | recompute + reuse | — | `PIVOT_POINTS_DEFAULTS` | anchor |
+| `keltnerChannels` | increment | — | `KELTNER_DEFAULTS` | — |
+| `superTrend` | increment | — | `SUPERTREND_DEFAULTS` | — |
+| `pivotPoints` | increment | — | `PIVOT_POINTS_DEFAULTS` | anchor |
 | `stochasticRsi` | increment | — | `STOCHASTIC_RSI_DEFAULTS` | — |
 | `mfi` | increment | ✓ | `MFI_DEFAULTS` | volume |
 | `ultimateOscillator` | increment | ✓ | `ULTIMATE_OSCILLATOR_DEFAULTS` | — |

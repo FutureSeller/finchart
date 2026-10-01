@@ -490,8 +490,8 @@ export class LogScale implements Scale {
     }
 
     // An interval collapsed to a single point. Where a linear axis pads
-    // by ±1, log pads by ×÷2 — the unit of distance on this axis is a
-    // multiple, not a value.
+    // by 5% of the value (±1 only at 0), log pads by ×÷2 — the unit of
+    // distance on this axis is a multiple, not a value.
     //
     // For a denormalized number (`5e-324`), even `min / 2` underflows to
     // 0. That branch would then **restore exactly the condition the

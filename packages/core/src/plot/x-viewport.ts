@@ -1,7 +1,14 @@
 import { requireFinite, requirePositive } from "../primitives";
 import type { Range } from "../data";
 import type { Scale, XMapping } from "../scale";
-import { expandFor } from "./range";
+import { FALLBACK_SLOT } from "../series/slot";
+
+/**
+ * The bars' worth of window a lone x gets — one bar alone would fill the
+ * screen — and how many bars a first history needs before the first layout
+ * to count as filling it.
+ */
+const FEW_BARS = 10;
 
 /**
  * The **fields of `PlotConfig` the x window reads**. Taken as a function to
@@ -27,6 +34,12 @@ export interface XViewportDeps {
   x: XMapping;
   /** The x range of data the chart has. The result of asking every series. */
   dataRange: () => Range | null;
+  /**
+   * Every series' x, each ascending — where the bar spacing at each end is
+   * measured. `barBodied` asks for only the series that draw bar bodies —
+   * the ones the fit margin is for.
+   */
+  xValues: (barBodied?: boolean) => readonly (readonly number[])[];
   options: () => XViewportOptions;
   /**
    * The domain **actually** changed. Not called when set to the same
@@ -63,8 +76,31 @@ export class XViewport {
   /** The right edge of data as last known (in data x). The basis for detecting a new bar. */
   private lastMax: number | null = null;
 
+  /**
+   * Whether the window is still the fit of a chart that started from a
+   * single x (mounted empty, fed from a socket). A fit to one bar says
+   * nothing about the window the data wants, so until something else
+   * sets the window, each data change fits again — filling the screen,
+   * then following the newest bar at the default spacing — otherwise the
+   * chart stays zoomed onto its first bar for good.
+   */
+  private following = false;
+
+  /**
+   * The last bar spacing measured (domain units). A lone bar has no
+   * neighbour to measure against, so it borrows the spacing the chart last
+   * knew — one unit per bar until data has said otherwise, the same
+   * reading the bar-index mapping gives a single bar.
+   */
+  private gap = 1;
+
   get fitted(): boolean {
     return this.fittedOnce;
+  }
+
+  /** Whether a data change should fit x again → `following`. */
+  get followsData(): boolean {
+    return this.following;
   }
 
   /**
@@ -111,12 +147,20 @@ export class XViewport {
    * applied in place of the fit — if it touches the data's x range at all
    * (an endpoint in common counts). One that misses the data entirely is
    * dropped and the ordinary fit runs.
+   *
+   * `follow` keeps a window that is following the data (`followsData`)
+   * following; any other fit follows only when it fits a single x, or when
+   * it is the first fit and the data is too short to fill the screen at
+   * the default bar spacing.
    */
-  fit(): void {
+  fit(follow = false): void {
     const range = this.deps.dataRange();
     if (!range) return;
 
     // Once fit has run at least once, the window belongs to the user from then on.
+    // The first window is announced even if it happens to equal the scale's
+    // starting domain — it is the first one fitted to data.
+    const first = !this.fittedOnce;
     this.fittedOnce = true;
 
     // If a restoration arrived before data did, apply it instead of
@@ -130,15 +174,43 @@ export class XViewport {
       // an endpoint counts; a window with no point inside it (sparse data)
       // is still the caller's window. Otherwise the ordinary fit below.
       if (max >= range.min && min <= range.max) {
-        this.setDomain(this.deps.x.toDomain(min), this.deps.x.toDomain(max));
+        this.setDomain(this.deps.x.toDomain(min), this.deps.x.toDomain(max), first);
         return;
       }
     }
 
-    // The domain is the mapping's own space — for bar index, x becomes the
-    // index here. **Padding is asked of the scale** — using linear
-    // addition directly could push a log axis's lower bound past zero.
-    const [min, max] = expandFor(this.deps.scale, range, 0);
+    /**
+     * **Half a bar at each end**, so the first and last candles are drawn
+     * whole instead of cut down the middle by the plot edge. Worked in the
+     * domain — for bar index, x becomes the index here and half a bar is
+     * half an index.
+     */
+    const [left, right] = this.halfBars();
+    let domainMin = this.deps.x.toDomain(range.min) - left;
+    const end = this.deps.x.toDomain(range.max) + right;
+    // A bar's width in the domain — measured over every series, margin or not.
+    const bar = this.spacing(this.deps.xValues())[1];
+    const [rangeLeft, rangeRight] = this.deps.scale.getRange();
+    const width = Math.abs(rangeRight - rangeLeft);
+    // How many bars the screen holds at the default spacing; before the first
+    // layout the pixel width is meaningless, so a few bars.
+    const fits = Math.max(width / FALLBACK_SLOT, FEW_BARS);
+    const lone = range.min === range.max;
+    // A first history too short to fill the screen at the default spacing is
+    // the head of a feed: it fills now and keeps fitting as bars arrive.
+    const following = follow || lone || (first && end - domainMin < fits * bar);
+
+    /**
+     * A window following streamed data fills the screen only until its bars
+     * would be squeezed below the default bar spacing; from there it keeps
+     * that width and follows the newest bar. Until then it is the same window
+     * a fit of that data gives. Before the first layout the pixel width is
+     * meaningless, so there is no limit yet.
+     */
+    // Never narrower than the default bar spacing — the width a lone bar is drawn at.
+    if (following && width >= FALLBACK_SLOT) domainMin = Math.max(domainMin, end - (width / FALLBACK_SLOT) * bar);
+    // A lone x would fill the screen: it gets a few bars' width, anchored at the live end.
+    if (lone) domainMin = Math.min(domainMin, end - FEW_BARS * bar);
 
     /**
      * Empty space after the last bar, so an in-progress bar doesn't sit
@@ -151,14 +223,51 @@ export class XViewport {
      * range is a programmatic call and must not fail — if padding can't be
      * given, it shows the whole range without padding instead.
      */
-    const offset = this.deps.options().rightOffset;
-    const domainMin = this.deps.x.toDomain(min);
-    const domainMax = this.deps.x.toDomain(max) + offset;
+    const domainMax = end + this.deps.options().rightOffset;
 
-    this.setDomain(
-      domainMin,
-      domainMax > domainMin ? domainMax : this.deps.x.toDomain(max),
-    );
+    // Set even when announcing the window throws — the window has moved.
+    try {
+      this.setDomain(domainMin, domainMax > domainMin ? domainMax : end, first);
+    } finally {
+      this.following = following;
+    }
+  }
+
+  /**
+   * The fit margin at each end, in domain units: half the bar spacing of the
+   * series that draw bar bodies, so the end bodies are drawn whole. `0`
+   * with none — a line's end point sits on the plot edge.
+   */
+  halfBars(): [number, number] {
+    const bodied = this.deps.xValues(true);
+    if (bodied.length === 0) return [0, 0];
+    const [left, right] = this.spacing(bodied);
+    return [left / 2, right / 2];
+  }
+
+  /**
+   * The bar spacing at each end of `lists`, in domain units — the gap
+   * between the two outermost x of each series, the narrowest across
+   * series. With no end measurable (a single x), the last known spacing.
+   * O(series) reads of cached arrays, plus the mapping's `toDomain`.
+   */
+  private spacing(lists: readonly (readonly number[])[]): [number, number] {
+    const { x } = this.deps;
+    let left = Infinity;
+    let right = Infinity;
+    for (const xs of lists) {
+      const n = xs.length;
+      if (n < 2) continue;
+      // A repeated x (legal for lines) is no spacing — it would collapse the window.
+      const first = x.toDomain(xs[1]) - x.toDomain(xs[0]);
+      const last = x.toDomain(xs[n - 1]) - x.toDomain(xs[n - 2]);
+      if (first > 0 && first < left) left = first;
+      if (last > 0 && last < right) right = last;
+    }
+    if (right < Infinity) this.gap = right;
+    else right = this.gap;
+    if (left === Infinity) left = right;
+    return [left, right];
   }
 
   /**
@@ -172,6 +281,8 @@ export class XViewport {
   noteData(range: Range | null): number | null {
     const previous = this.lastMax;
     this.lastMax = range?.max ?? null;
+    // With no data left, nothing is in its place again — the next data is a first arrival and gets fitted.
+    if (!range) this.fittedOnce = this.following = false;
     return previous;
   }
 
@@ -198,7 +309,7 @@ export class XViewport {
      * deep into the future (`max ≥ target`).
      */
     const offset = this.deps.options().rightOffset;
-    const target = this.deps.x.toDomain(range.max) + offset;
+    const target = this.deps.x.toDomain(range.max) + this.halfBars()[1] + offset;
     if (max >= target) return;
 
     const delta = Math.min(
@@ -210,8 +321,9 @@ export class XViewport {
 
   /**
    * Keeps the window's width and snaps the right edge to live (last bar +
-   * `rightOffset`). This is the manual return path from browsing history —
-   * the automatic half is `followNewBar` (`shiftVisibleRangeOnNewBar`).
+   * half a bar + `rightOffset` — where a fit puts it). This is the manual
+   * return path from browsing history — the automatic half is
+   * `followNewBar` (`shiftVisibleRangeOnNewBar`).
    * Unlike `fitDomains`, the zoom level survives. If there's no window yet
    * (before the first fit), fitting is itself the live position.
    */
@@ -226,7 +338,7 @@ export class XViewport {
 
     const [min, max] = this.deps.scale.getDomain();
     const offset = this.deps.options().rightOffset;
-    const newMax = this.deps.x.toDomain(range.max) + offset;
+    const newMax = this.deps.x.toDomain(range.max) + this.halfBars()[1] + offset;
     this.setDomain(newMax - (max - min), newMax);
   }
 
@@ -331,9 +443,13 @@ export class XViewport {
    * render** — the visible range is state, and state changes
    * synchronously.
    */
-  private setDomain(min: number, max: number): void {
+  private setDomain(min: number, max: number, announce = false): void {
     const [previousMin, previousMax] = this.deps.scale.getDomain();
-    if (min === previousMin && max === previousMax) return;
+    if (!announce && min === previousMin && max === previousMax) return;
+    // Any window set other than by a fit is the window from now on — but
+    // only one that moves: a syncX peer echoing this very window must not
+    // end following.
+    this.following = false;
 
     this.deps.scale.setDomain(min, max);
     this.deps.onChange({

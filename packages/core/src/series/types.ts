@@ -156,6 +156,14 @@ export interface Series<T extends BaseDataPoint = BaseDataPoint> {
    * This is the series' answer only — a registration cannot override it.
    */
   describe?(point: T): readonly SeriesRow[];
+
+  /**
+   * Whether each point is drawn as a body one bar slot wide — a candle, a
+   * bar, a histogram column. A fit pads the chart by half a bar at each end
+   * when any series says so, so the end bodies are drawn whole; a chart of
+   * lines alone fits edge to edge.
+   */
+  readonly barBody?: boolean;
 }
 
 /**

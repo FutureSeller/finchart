@@ -16,6 +16,7 @@ const managers: DataManagerFactory = () => {
 function fakeEntry(over: Partial<Entry> = {}): Entry {
   return {
     series: {},
+    barBody: false,
     name: null,
     color: null,
     zIndex: 0,

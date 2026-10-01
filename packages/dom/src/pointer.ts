@@ -35,7 +35,9 @@ export interface PointerInteractionsOptions {
    */
   keyboard?: boolean;
   /**
-   * Zoom factor per wheel notch. 1.1 means 10% at a time. Default 1.1.
+   * Zoom factor per wheel notch (100 px of wheel travel; a trackpad scroll
+   * zooms in proportion to its distance). 1.1 means 10% at a time. Default
+   * 1.1.
    *
    * The domain is finite positive numbers, and three ranges behave
    * differently:
@@ -155,7 +157,13 @@ export class PointerInteractions implements InteractionHandler {
      * `pointercancel` the same as on leaving. What this gives up on touch
      * is dragging the value axis vertically; a mouse is unaffected.
      */
+    // Handed back as found on disconnect: the element is the caller's and
+    // may outlive the chart (a reused SPA container).
+    const touchAction = element.style.touchAction;
     element.style.touchAction = "pan-y";
+    scope.add(() => {
+      element.style.touchAction = touchAction;
+    });
     listen(scope, element, "pointerdown", this.onPointerDown);
     listen(scope, element, "pointermove", this.onHover);
     listen(scope, element, "pointerenter", this.onEnter);
@@ -185,7 +193,10 @@ export class PointerInteractions implements InteractionHandler {
      * value must never be overwritten. This is a contract in the published
      * `.d.ts`, so from here on it can only change additively.
      */
-    if (!element.hasAttribute("tabindex")) element.tabIndex = 0;
+    if (!element.hasAttribute("tabindex")) {
+      element.tabIndex = 0;
+      scope.add(() => element.removeAttribute("tabindex"));
+    }
     listen(scope, element, "keydown", this.onKeyDown);
 
     // Registered last, so it runs first on dispose: a drag or inertia still
@@ -212,12 +223,17 @@ export class PointerInteractions implements InteractionHandler {
     this.target?.crosshair(position);
   }
 
-  /** Coordinates relative to the element. Computed by hand because offsetX varies by browser. */
+  /**
+   * Coordinates relative to the element's padding edge — where the canvas
+   * and overlay are placed — so a bordered container doesn't shift every hit
+   * by its border width. Computed by hand because offsetX varies by browser.
+   */
   private localPoint(event: MouseEvent): Point {
-    const rect = this.element.getBoundingClientRect();
+    const { element } = this;
+    const rect = element.getBoundingClientRect();
     return {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      x: event.clientX - rect.left - element.clientLeft,
+      y: event.clientY - rect.top - element.clientTop,
     };
   }
 
@@ -386,7 +402,7 @@ export class PointerInteractions implements InteractionHandler {
 
     const midClient = (clientX + otherX) / 2;
     const rect = this.element.getBoundingClientRect();
-    this.target.zoomAtPixel(after / before, midClient - rect.left);
+    this.target.zoomAtPixel(after / before, midClient - rect.left - this.element.clientLeft);
   }
 
   private onDragEnd = (event: PointerEvent): void => {
@@ -673,16 +689,27 @@ export class PointerInteractions implements InteractionHandler {
     }
     if (!this.isCurrent(target, connection)) return;
 
-    if (!this.options.zoom || event.deltaY === 0) return;
+    // A mostly sideways swipe is a pan — a trackpad's horizontal scroll
+    // always carries some stray deltaY, which must not zoom.
+    const { deltaX, deltaY, deltaMode } = event;
+    const horizontal = Math.abs(deltaX) > Math.abs(deltaY);
+    if (!(horizontal ? this.options.pan : this.options.zoom && deltaY !== 0)) return;
     // Asked to zoom only with a modifier, a plain wheel is the page's —
     // and a trackpad pinch arrives as a wheel with Ctrl, so it still zooms.
     if (this.options.wheel === "modifier" && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
 
-    // Scrolling up (deltaY < 0) zooms in.
-    const factor =
-      event.deltaY < 0 ? this.options.zoomSpeed : 1 / this.options.zoomSpeed;
-
-    target.zoomAtPixel(factor, point.x);
+    // Deltas in pixels: a line is about 33 px (a Firefox notch is 3 lines),
+    // a page is the element's width.
+    const unit = deltaMode === 1 ? 33 : deltaMode === 2 ? this.element.clientWidth : 1;
+    if (horizontal) {
+      target.panByPixels(-deltaX * unit);
+      return;
+    }
+    // Zooms by how far the wheel moved — a trackpad sends one scroll as many
+    // small events — with 100 px (one mouse notch) worth `zoomSpeed`, and at
+    // most that per event. Scrolling up (deltaY < 0) zooms in.
+    const notches = Math.min(Math.max((-deltaY * unit) / 100, -1), 1);
+    target.zoomAtPixel(this.options.zoomSpeed ** notches, point.x);
   };
 }

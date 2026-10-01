@@ -43,6 +43,13 @@ export interface ConflatedOptions<T extends BaseDataPoint> {
    * last-wins and throw away that frame's high and low.
    */
   merge?: (pending: T, incoming: T) => T;
+  /**
+   * Where a tick sits on x, for telling a new bar from the same one.
+   * Defaults to `point.x`; pass the series' own `getX` when its
+   * `coordinates` read x from another field, or every tick would fold into
+   * one bar.
+   */
+  xOf?: (point: T) => number;
 }
 
 /**
@@ -85,6 +92,7 @@ export function conflated<T extends BaseDataPoint>(
   options: ConflatedOptions<T> = {},
 ): ConflatedFeed<T> {
   const merge = options.merge ?? ((_pending: T, incoming: T) => incoming);
+  const xOf = options.xOf ?? ((point: T) => point.x);
   let pending: T | null = null;
   let disposed = false;
 
@@ -103,7 +111,7 @@ export function conflated<T extends BaseDataPoint>(
       if (disposed) return;
 
       const before = pending;
-      if (before !== null && point.x !== before.x) {
+      if (before !== null && xOf(point) !== xOf(before)) {
         // Bar rollover — the old bar's final state is data, not something
         // to fold away. It goes out now; the new bar starts pending.
         deliver();

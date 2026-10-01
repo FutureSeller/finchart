@@ -113,10 +113,11 @@ describe("derive", () => {
     xScale.setDomain(40, 60);
     plot.render();
 
-    for (const point of series.seen.at(-1)!) {
-      expect(Number(point.x)).toBeGreaterThanOrEqual(40);
-      expect(Number(point.x)).toBeLessThanOrEqual(60);
-    }
+    // The window, plus the one neighbour on each side that carries the
+    // line out to the plot edges.
+    expect(series.seen.at(-1)!.map((point) => Number(point.x))).toEqual(
+      Array.from({ length: 23 }, (_, i) => 39 + i),
+    );
   });
 
   it("should not recompute while the source is unchanged", () => {
@@ -192,10 +193,11 @@ describe("series without derive", () => {
     xScale.setDomain(40, 60);
     plot.render();
 
-    for (const point of series.seen.at(-1)!) {
-      expect(Number(point.x)).toBeGreaterThanOrEqual(40);
-      expect(Number(point.x)).toBeLessThanOrEqual(60);
-    }
+    // The window, plus the one neighbour on each side that carries the
+    // line out to the plot edges.
+    expect(series.seen.at(-1)!.map((point) => Number(point.x))).toEqual(
+      Array.from({ length: 23 }, (_, i) => 39 + i),
+    );
   });
 
   it("should get the full data for its extent, as before", () => {

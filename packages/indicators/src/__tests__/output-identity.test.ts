@@ -41,8 +41,8 @@ import {
 /**
  * Every indicator's tick must read downstream as a tail change — so a tick
  * keeps every earlier output object on every branch (a displaced line like
- * Ichimoku's chikou legitimately fills one more slot). The fifteen without a
- * cheap resume point recompute wholesale and reuse what did not change; the
+ * Ichimoku's chikou legitimately fills one more slot). The windowed ones
+ * re-run the window a tick reaches and reuse what did not change; the
  * fold-node increments rebuild only the tail. Without this, every tick would
  * read downstream as a full change: re-validate, copy, re-map the whole
  * history per drawn branch.

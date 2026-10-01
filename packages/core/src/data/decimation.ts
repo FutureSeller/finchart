@@ -287,12 +287,12 @@ export class M4Decimation<T extends BaseDataPoint = BaseDataPoint>
   ): T[] {
     const count = end - start;
     if (count <= threshold) return passthrough(data, start, end);
-    // If the budget can't even fill one column, M4 doesn't hold.
-    if (threshold < 4) return [data[start], data[end - 1]];
-
     let placeOf = screenPlaceOf(this.coordinates, screenXScan);
 
-    const buckets = Math.floor(threshold / 4);
+    // A budget below one column still gets one: gaps split the budget
+    // across runs, and a short run kept to its endpoints loses its spike
+    // from the drawing and from the y range built from these points.
+    const buckets = Math.floor(threshold / 4) || 1;
     let first = placeOf(data[start]);
     const last = placeOf(data[end - 1]);
     let span = last - first;

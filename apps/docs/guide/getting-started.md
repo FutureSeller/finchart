@@ -34,19 +34,23 @@ bun add @finchart/core @finchart/dom
 
 ## Quick Start
 
-Give the chart an element to mount into:
+Give the chart an element to mount into, with a height:
 
 ```html
-<div id="chart"></div>
+<div id="chart" style="height: 400px"></div>
 ```
 
 Then:
 
 <<< ../snippets/getting-started.ts{ts}
 
-That is the whole file. The canvas takes its size from `setSize`, so the
-container needs no CSS of its own, and `build()` schedules the first frame —
-there is no `render()` to call.
+That is the whole file. The canvas takes its size from `setSize`, but it is
+layered over the container rather than laid out in it, so the container's own
+CSS decides how much of the page the chart takes — without the height, an
+empty `<div>` is 0 px tall and whatever follows it is drawn over. (With
+`browserDeps({ autoSize: true })` the chart follows that size instead of
+`setSize`.) `build()` schedules the first frame — there is no `render()` to
+call.
 
 Here's that same chart, live (resized to fit this page — the code above uses
 a fixed 800×400):

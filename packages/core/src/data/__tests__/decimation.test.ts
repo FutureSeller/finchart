@@ -59,12 +59,16 @@ describe("M4Decimation", () => {
     }
   });
 
-  /** If the budget doesn't cover even one column, it falls back to the two endpoints — even a budget of 1 gives 2 points. */
-  it("should fall back to two endpoints below one column", () => {
+  /**
+   * A budget below one column still gets one column — endpoints and
+   * extremes — so a spike is never traded for the budget. Even a budget
+   * of 1 gives up to 4 points.
+   */
+  it("should keep one column's endpoints and extremes below one column", () => {
     const data = sawtooth(100);
 
     for (const threshold of [0, 1, 2, 3]) {
-      expect(m4().decimate(...whole(data), threshold)).toEqual([data[0], data[99]]);
+      expect(m4().decimate(...whole(data), threshold)).toEqual([data[0], data[16], data[99]]);
     }
   });
 
@@ -146,11 +150,6 @@ describe("M4Decimation", () => {
 
     expect(decimated.length).toBeGreaterThan(0);
     expect(decimated.map((point) => point.y)).toContain(99);
-  });
-
-  it("should degrade to endpoints for a threshold below one column", () => {
-    const data = sawtooth(100);
-    expect(m4().decimate(...whole(data), 3)).toEqual([data[0], data[99]]);
   });
 
   it("should never emit undefined entries", () => {

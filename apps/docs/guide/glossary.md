@@ -268,7 +268,22 @@ Refitting the domain to the data. `fitDomains()` (which also hands every pane ba
 `handle.setData`, and `fitDomains()`. Incremental adds
 (`handle.prepend`/`append`) do not fit, and neither does a declarative `data`
 update: otherwise the view would zoom out the more history you loaded, and a
-series mounted later would jerk your window out to the union.
+series mounted later would jerk your window out to the union. Data that
+arrives after every series went empty counts as a first arrival again — a
+value range set by hand on the old data goes with it — and a first fit to a
+single x (a chart mounted empty and fed bar by bar), or to a history too
+short to fill the screen at the default spacing, keeps fitting each data
+change until the window is moved: it fills the screen until the bars would
+be narrower than the default spacing (8px), then keeps that width and
+follows the newest bar. A lone bar gets a window ten bars wide.
+
+When a series draws a bar body (candles, OHLC bars, histograms — a series
+says so with `barBody`), a fit shows the data plus **half a bar at each
+end** (the gap to the neighbouring bar, halved; half an index under
+bar-index x), so the first and last bodies are drawn whole. A chart of lines
+alone fits edge to edge. `rightOffset` adds on top, and "the live edge" that
+`scrollToRealTime` and `shiftVisibleRangeOnNewBar` return to is that padded
+end.
 
 ---
 
@@ -276,8 +291,8 @@ series mounted later would jerk your window out to the union.
 
 ### Series
 
-Knows only **what shape to draw the data in**. Two required answers and three
-optional ones, five in all.
+Knows only **what shape to draw the data in**. Two required answers and four
+optional ones, six in all.
 
 ```ts
 valueExtent(data): Range   // how much y it occupies
@@ -285,6 +300,7 @@ draw(renderer, context)    // how it draws
 decimation?                // how its points are thinned
 coordinates?               // how their coordinates are read
 describe?                  // what a tooltip says about one of its points
+barBody?                   // whether a point is a body a bar wide (a fit keeps half a bar at each end)
 ```
 
 The optional ones (`describe` is the series' alone — a registration does not

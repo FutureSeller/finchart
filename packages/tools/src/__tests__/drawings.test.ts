@@ -15,31 +15,14 @@ describe("serialization", () => {
   });
 
   /**
-   * v1 is read forever — that's the contract from the moment it ships. A
-   * round-trip test alone can't guarantee this: if the serializer and
-   * parser change together, the round trip stays green while an old
-   * string sitting in a consumer's storage (localStorage, a server, a
-   * URL) can break. So this payload is pinned as a literal string, not
-   * as code. The ids are the migration's — derived from position, so the
-   * same string parses to the same ledger on every read (a random mint
-   * here would orphan a side panel's id-keyed state on every refresh,
-   * since a load-only session never runs the save recipe).
+   * Only the current format is read. Nothing was ever published in an
+   * earlier one, so an old `version` is refused like any unknown one.
    */
-  it("a frozen v1 payload is read forever, with deterministic ids", () => {
-    const savedByV1 =
-      '{"version":1,"drawings":[{"type":"horizontal","price":105},{"type":"trend","a":{"x":3,"price":100},"b":{"x":9,"price":110}},{"type":"fib","a":{"x":1,"price":90},"b":{"x":5,"price":120}}]}';
-
-    const expected = [
-      { type: "horizontal", id: "v1-0", price: 105 },
-      { type: "trend", id: "v1-1", a: { x: 3, price: 100 }, b: { x: 9, price: 110 } },
-      { type: "fib", id: "v1-2", a: { x: 1, price: 90 }, b: { x: 5, price: 120 } },
-    ];
-    expect(parseDrawings(savedByV1)).toEqual(expected);
-    // Parsing twice yields the same ledger — determinism is the contract.
-    expect(parseDrawings(savedByV1)).toEqual(expected);
+  it("refuses a version-1 payload", () => {
+    expect(parseDrawings('{"version":1,"drawings":[{"type":"horizontal","price":105}]}')).toBeNull();
   });
 
-  /** The v2 counterpart of the frozen-v1 pin — from the day v2 ships, this string is read forever too. */
+  /** From the day v2 ships, this string is read forever — pinned as a literal so a serializer and parser changed together cannot hide a break. */
   it("a frozen v2 payload is read forever", () => {
     const savedByV2 =
       '{"version":2,"drawings":[{"type":"horizontal","id":"h1","price":105},{"type":"trend","id":"t1","a":{"x":3,"price":100},"b":{"x":9,"price":110}}]}';

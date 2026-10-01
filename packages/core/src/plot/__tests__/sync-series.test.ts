@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DataView, LineDataPoint } from "../../data";
+import type { BaseDataPoint, DataView, LineDataPoint, OHLC } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { seriesSpec } from "../../registration";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
 import { createPlotModel } from "../model";
-import { lineSeries } from "../../series";
+import { barSeries, candleSeries, histogramSeries, lineSeries } from "../../series";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 10 },
@@ -364,5 +364,49 @@ describe("syncSeries rollback", () => {
     expect(plot.mainPane.probe(0).map(sample => sample.value)).toEqual([99, 3]);
     expect(changed).toHaveBeenCalledTimes(1);
     plot.destroy();
+  });
+});
+
+describe("a re-render that rebuilds only the series object", () => {
+  /** How many data managers the chart builds while the same data is re-synced under fresh series objects. */
+  function rebuilds<T extends BaseDataPoint>(make: () => Series<T>, points: T[]): number {
+    const deps = testBrowserDeps();
+    let managers = 0;
+    const { plot } = mountPlot({ deps: { ...deps, createDataManager: (coords, policy) => {
+      managers++;
+      return deps.createDataManager(coords, policy);
+    } } });
+    const spec = () => seriesSpec<T>({ id: "s", series: make(), data: points });
+    plot.mainPane.syncSeries([spec()]);
+    const before = managers;
+    plot.mainPane.syncSeries([spec()]);
+    plot.mainPane.syncSeries([spec()]);
+    return managers - before;
+  }
+
+  it("keeps the registration's data manager when the data is unchanged", () => {
+    const bars: OHLC[] = [{ x: 0, open: 1, high: 2, low: 0, close: 1 }, { x: 1, open: 1, high: 2, low: 0, close: 2 }];
+    expect(rebuilds(() => candleSeries(), bars)).toBe(0);
+    expect(rebuilds(() => barSeries(), bars)).toBe(0);
+    expect(rebuilds(() => lineSeries(), data)).toBe(0);
+    expect(rebuilds(() => histogramSeries(), data)).toBe(0);
+  });
+
+  it("still rebuilds when the new series reads points another way", () => {
+    expect(rebuilds(() => lineSeries({ coordinates: { getX: (p: LineDataPoint) => p.x, getY: (p: LineDataPoint) => p.y } }), data)).toBe(2);
+  });
+});
+
+describe("a re-synced spec with new display fields", () => {
+  it("updates the name, colour, readout and draw order it reports", () => {
+    const plot = loaded();
+    const spec = (name: string, color: string, readout: boolean, zIndex: number) =>
+      seriesSpec<LineDataPoint>({ id: "s", series: lineSeries(), data, name, color, readout, zIndex });
+    plot.mainPane.syncSeries([spec("MA(5)", "red", true, 0)]);
+
+    plot.mainPane.syncSeries([spec("MA(20)", "blue", false, 3)]);
+
+    const [sample] = plot.mainPane.probe(50);
+    expect(sample).toMatchObject({ name: "MA(20)", color: "blue", readout: false });
   });
 });

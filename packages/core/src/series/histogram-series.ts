@@ -88,8 +88,12 @@ class HistogramAccessor implements CoordinateAccessor<HistogramPoint> {
   }
 }
 
+/** Shared and frozen, like the built-in line and candle accessors. */
+const HISTOGRAM_COORDINATES = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ new HistogramAccessor());
+
 export class HistogramSeries implements Series<HistogramPoint> {
-  readonly coordinates = new HistogramAccessor();
+  readonly coordinates = HISTOGRAM_COORDINATES;
+  readonly barBody = true;
   private readonly baseline: number;
   private readonly overrides: HistogramSeriesStyleOverrides;
 

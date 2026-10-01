@@ -218,6 +218,12 @@ describe("a divider as a separator", () => {
   });
 });
 
+/** Two real panes for a boundary drawn without a chart around it. */
+function paneFixture(): readonly [Pane, Pane] {
+  const [upper, lower] = setup().plot.panes;
+  return [upper, lower];
+}
+
 describe("createDomDividers on its own", () => {
   const boundary = (index: number, now: number) => ({
     index,
@@ -225,6 +231,7 @@ describe("createDomDividers on its own", () => {
     left: 0,
     right: 200,
     value: { now, min: 40, max: 300 },
+    panes: paneFixture(),
   });
 
   it("reports each render's values, and sends Home/End as a move to the limit", () => {
@@ -277,7 +284,11 @@ describe("createDomDividers on its own", () => {
   });
 
   describe("a handle that cannot move", () => {
-    const at = (value: { now: number; min: number; max: number }) => ({ index: 0, y: 100, left: 0, right: 200, value });
+    const at = (value: { now: number; min: number; max: number }) => ({ index: 0, y: 100, left: 0, right: 200, value, panes: pair });
+    let pair: readonly [Pane, Pane];
+    beforeEach(() => {
+      pair = paneFixture();
+    });
     const mountOne = () => {
       const overlay = document.createElement("div");
       container.appendChild(overlay);
@@ -364,7 +375,7 @@ describe("createDomDividers on its own", () => {
 it("ignores moves and releases belonging to a different pointer", () => {
   const drag = vi.fn();
   const dividers = createDomDividers(container, drag);
-  dividers.render([{ index: 0, y: 50, left: 0, right: 100, value: { now: 50, min: 10, max: 90 } }]);
+  dividers.render([{ index: 0, y: 50, left: 0, right: 100, value: { now: 50, min: 10, max: 90 }, panes: paneFixture() }]);
   const handle = container.querySelector('[data-chart-divider]');
   if (!handle) throw new Error('missing divider');
   const send = (target: EventTarget, type: string, id: number, y: number) => {
@@ -383,4 +394,28 @@ it("ignores moves and releases belonging to a different pointer", () => {
   send(document, 'pointermove', 1, 70);
   expect(drag).toHaveBeenCalledTimes(1);
   dividers.destroy();
+});
+
+describe("a drag whose panes change under it", () => {
+  it("stops moving anything once the handle no longer sits between the panes it grabbed", () => {
+    const { plot, divider } = setup();
+    const lower = plot.panes[1];
+    const third = plot.addPane();
+    third.addSeries({ series: lineSeries(), data });
+    plot.render();
+    const flexes = () => plot.panes.map((pane) => pane.flex);
+
+    // Grab the handle between the main pane and `lower`, then an indicator toggle removes `lower`.
+    divider().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientY: 100 }));
+    plot.removePane(lower);
+    const before = flexes();
+
+    document.dispatchEvent(new MouseEvent("pointermove", { clientY: 140 }));
+    plot.render();
+    document.dispatchEvent(new MouseEvent("pointermove", { clientY: 180 }));
+    plot.render();
+
+    expect(flexes()).toEqual(before);
+    document.dispatchEvent(new MouseEvent("pointerup", {}));
+  });
 });

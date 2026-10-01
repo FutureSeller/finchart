@@ -22,22 +22,21 @@ export class OhlcAggregation implements DecimationStrategy<OHLC> {
     // If there's nothing to reduce, use the same gate as the sibling strategies — one copy of it instead of two.
     if (count <= threshold) return passthrough(data, range.start, range.end);
 
-    const buckets = Math.max(1, Math.floor(threshold));
     /**
-     * Boundaries are set as fractions. Cutting the candle count to whole
-     * numbers (`ceil(n/threshold)`) can leave the budget half-empty — fitting
-     * 3125 candles into 1000 by grouping 4 per bucket produces only 782.
-     * Splitting by fraction mixes 3-candle and 4-candle buckets to land on
-     * exactly 1000.
+     * Boundaries sit on a whole-candle grid anchored at index 0, not at the
+     * window's first candle — counted from the window, a one-bar pan moved
+     * every boundary and the whole chart shimmered. Only the edge buckets
+     * are clipped to the window, so a pan changes those two alone. The
+     * cost of whole buckets: the budget can go partly unused (3125 candles
+     * in 1000 make 782), and a window off the grid can take one more.
      */
-    const step = count / buckets;
+    const size = Math.ceil(count / Math.max(1, Math.floor(threshold)));
     const merged: OHLC[] = [];
 
-    for (let i = 0; i < buckets; i++) {
-      const start = range.start + Math.floor(i * step);
-      const end =
-        i === buckets - 1 ? range.end : range.start + Math.floor((i + 1) * step);
+    for (let start = range.start; start < range.end; ) {
+      const end = Math.min(range.end, (Math.floor(start / size) + 1) * size);
       merged.push(merge(data, start, end));
+      start = end;
     }
 
     return merged;
@@ -83,3 +82,9 @@ function merge(data: OHLC[], start: number, end: number): OHLC {
 
   return candle;
 }
+
+/** The candle and bar decimation — shared and frozen for the same reason as `OHLC_COORDINATES`. */
+export const OHLC_DECIMATION = /* @__PURE__ */ Object.freeze({
+  strategy: /* @__PURE__ */ Object.freeze(/* @__PURE__ */ new OhlcAggregation()),
+  pointsPerPixel: 1,
+});

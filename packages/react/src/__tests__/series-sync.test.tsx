@@ -409,10 +409,10 @@ describe('<ChartContainer data>', () => {
  * this shape didn't exist at all.
  */
 describe('<ChartData> · <ChartSeries data>', () => {
-  const btc: LineDataPoint[] = [
-    { x: 0, y: 40 },
-    { x: 10, y: 42 },
-  ];
+  // x 0..10 in 200 steps — enough bars to fill the screen at the default
+  // spacing, so the first fit settles; a shorter first history keeps fitting
+  // as data arrives, until it fills.
+  const btc: LineDataPoint[] = Array.from({ length: 201 }, (_, i) => ({ x: i / 20, y: 40 + i / 100 }));
   const eth: LineDataPoint[] = [
     { x: 100, y: 2 },
     { x: 110, y: 3 },
@@ -626,4 +626,21 @@ it('retains the derived ChartLine cache when default coordinates are unchanged',
   mounted.rerender(view('blue'));
   expect(calls.n).toBe(1);
   expect(plot().mainPane.probe(0)[0].value).toBe(20);
+});
+
+describe('a re-rendered line with a new colour or name', () => {
+  it('shows the new colour and name wherever the series is read, not only in the stroke', () => {
+    const deps = browserDeps({ createLayers: layersSpy().createLayers });
+    const ref = { current: null as Plot | null };
+    const ui = (color: string, name: string) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartLine style={{ line: { color } }} name={name} />
+      </ChartContainer>
+    );
+    const view = render(ui('red', 'MA(5)'));
+
+    act(() => view.rerender(ui('blue', 'MA(20)')));
+
+    expect(ref.current?.mainPane.probe(50)[0]).toMatchObject({ color: 'blue', name: 'MA(20)' });
+  });
 });

@@ -383,6 +383,9 @@ export interface FakeElement {
   removeEventListener(type: string, listener: (event: unknown) => void): void;
   dispatch(type: string, event: unknown): void;
   getBoundingClientRect(): { left: number; top: number };
+  /** Border widths — pointer input measures from inside them. */
+  clientLeft: number;
+  clientTop: number;
   listeners: Map<string, Array<(event: unknown) => void>>;
   ownerDocument: FakeElement & { createElement(tag: string): FakeElement };
 }
@@ -411,6 +414,8 @@ export function fakeElement(tagName = "div"): FakeElement {
       for (const listener of listeners.get(type) ?? []) listener(event);
     },
     getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    clientLeft: 0,
+    clientTop: 0,
     setAttribute(name, value) {
       element.attributes[name] = value;
     },

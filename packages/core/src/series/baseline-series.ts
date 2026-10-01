@@ -1,4 +1,5 @@
-import { isGap, LineDataAccessor } from "../data";
+import { isGap } from "../data";
+import { LINE_COORDINATES } from "../data/accessors";
 import type { DataView, LineDataPoint, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
@@ -63,7 +64,7 @@ export interface BaselineSeriesOptions {
  * the same as area's — both fill and line break there.
  */
 export class BaselineSeries implements Series<LineDataPoint> {
-  readonly coordinates = new LineDataAccessor();
+  readonly coordinates = LINE_COORDINATES;
   private readonly baseline: number;
   private readonly overrides: BaselineSeriesStyleOverrides;
 

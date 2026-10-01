@@ -7,6 +7,7 @@ const DATE_RANGE_MS = 8.64e15;
 /** 0002-01-01T00:00:00Z — from here on the zone's year is 1 or more whatever the zone, so no era question arises. */
 const FROM_YEAR_TWO_MS = -62104060800000;
 import type { TickStrategy } from "./types";
+import { requireFunction } from "../primitives/guards";
 
 /**
  * The time-tick strategy. Places ticks at calendar boundaries instead of
@@ -61,6 +62,8 @@ const PIXEL_SLACK = 1e-6;
 export function timeTicks(options: TimeTicksOptions = {}): TickStrategy {
   const epochOf = options.epochOf ?? ((x: number) => x);
   const xOfEpoch = options.xOfEpoch ?? ((ms: number) => ms);
+  requireFunction(epochOf, "timeTicks({ epochOf })");
+  requireFunction(xOfEpoch, "timeTicks({ xOfEpoch })");
   const zone = new Zone(options.timeZone);
   const labels = new Labels(options.locale, options.timeZone);
 

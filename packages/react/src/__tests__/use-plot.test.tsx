@@ -257,3 +257,30 @@ describe('chart state props', () => {
     expect(seen.at(-1)?.xDomain).toEqual({ min: 0, max: 200 });
   });
 });
+
+describe('usePlot series changes', () => {
+  it('stops drawing the series when it is omitted, and draws the next one given', () => {
+    const { deps, series } = setup();
+    let plotRef: RefObject<Plot | null> = { current: null };
+    const expose = (ref: RefObject<Plot | null>) => { plotRef = ref; };
+    const { rerender } = render(<Harness deps={deps} series={series} data={data} expose={expose} />);
+
+    rerender(<Harness deps={deps} data={data} expose={expose} />);
+    expect(plotRef.current?.mainPane.probe(50)).toEqual([]);
+
+    rerender(<Harness deps={deps} series={lineSeries()} data={data} expose={expose} />);
+    expect(plotRef.current?.mainPane.probe(50)).toHaveLength(1);
+  });
+
+  it('draws new data with the new series when both change in one commit', () => {
+    const { deps, series } = setup();
+    let plotRef: RefObject<Plot | null> = { current: null };
+    const expose = (ref: RefObject<Plot | null>) => { plotRef = ref; };
+    const { rerender } = render(<Harness deps={deps} series={series} data={data} expose={expose} />);
+    const next = lineSeries();
+
+    rerender(<Harness deps={deps} series={next} data={[{ x: 0, y: 1 }, { x: 50, y: 99 }]} expose={expose} />);
+
+    expect(plotRef.current?.mainPane.probe(50)).toMatchObject([{ series: next, value: 99 }]);
+  });
+});

@@ -178,15 +178,58 @@ describe("removePane removes its own pane even when cleanup re-enters", () => {
 });
 
 
-describe("coalesceState notifies the mirror even when it throws", () => {
-  it("stateChange fires even when applyState throws partway through", () => {
+/**
+ * A custom scale that accepts a range when asked, then refuses the same
+ * range when it is applied — the one way left for a restore to fail after
+ * every check passed.
+ */
+class RefusesOnApply extends LinearScale {
+  private calls = -Infinity;
+  /** Counts from here — installing the scale sets its domain too. */
+  arm(): this {
+    this.calls = 0;
+    return this;
+  }
+  override setDomain(min: number, max: number): void {
+    this.calls += 1;
+    // The chart asks (1) and puts back (2); the third call is the apply.
+    if (this.calls === 3) throw new ContractError("refused on apply");
+    super.setDomain(min, max);
+  }
+}
+
+describe("applyState and a scale that refuses the range", () => {
+  it("changes nothing when the pane's scale refuses a well-formed range", () => {
     const { plot } = mount();
+    plot.mainPane.setYScale(new LogScale());
     const seen = vi.fn();
     plot.on("stateChange", seen);
 
     expect(() =>
       plot.applyState({
-        panes: [{ flex: 7, autoScale: false, valueDomain: { min: 5, max: 5 } }],
+        xDomain: { min: 10, max: 20 },
+        panes: [{ flex: 7, autoScale: false, valueDomain: { min: 0, max: 5 } }],
+      }),
+    ).toThrow(ContractError);
+
+    expect(plot.mainPane.flex).toBe(1);
+    expect(plot.mainPane.autoScale).toBe(true);
+    expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+describe("coalesceState notifies the mirror even when it throws", () => {
+  it("stateChange fires even when applyState throws partway through", () => {
+    const { plot } = mount();
+    const scale = new RefusesOnApply();
+    plot.mainPane.setYScale(scale);
+    scale.arm();
+    const seen = vi.fn();
+    plot.on("stateChange", seen);
+
+    expect(() =>
+      plot.applyState({
+        panes: [{ flex: 7, autoScale: false, valueDomain: { min: 0, max: 5 } }],
       }),
     ).toThrow(ContractError);
 
@@ -195,6 +238,7 @@ describe("coalesceState notifies the mirror even when it throws", () => {
     expect(seen).toHaveBeenCalled();
   });
 });
+
 
 describe("a divider drag's clamp limit does not flip sign", () => {
   /**
@@ -464,6 +508,9 @@ describe("coalesceState's notification does not obscure the cause", () => {
   /** A bug where emitting from a finally block let a subscriber's exception replace the original one. */
   it("the cause survives even when a stateChange subscriber throws too", () => {
     const { plot } = mount();
+    const scale = new RefusesOnApply();
+    plot.mainPane.setYScale(scale);
+    scale.arm();
     plot.on("stateChange", () => {
       throw new Error("subscriber threw");
     });
@@ -471,7 +518,7 @@ describe("coalesceState's notification does not obscure the cause", () => {
     let caught: unknown = null;
     try {
       plot.applyState({
-        panes: [{ flex: 7, autoScale: false, valueDomain: { min: 5, max: 5 } }],
+        panes: [{ flex: 7, autoScale: false, valueDomain: { min: 0, max: 5 } }],
       });
     } catch (error) {
       caught = error;

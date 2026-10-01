@@ -47,6 +47,10 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
   let shown = 0;
   /** Per slot: the last render said this boundary can't move either way. */
   const locked: boolean[] = [];
+  /** Per slot: the panes the last render put either side of it. */
+  const pairs: (readonly [unknown, unknown])[] = [];
+  /** Per slot: ends a drag in progress on it. */
+  const ends: (() => void)[] = [];
 
   function handle(): HTMLElement {
     const element = document.createElement("div");
@@ -105,6 +109,7 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
       drag?.dispose();
       drag = null;
     };
+    ends[index] = end;
 
     listen(scope, element, "pointerdown", (event: PointerEvent) => {
       // Without stopping this, the container's pan handler gets dragged along too.
@@ -173,6 +178,12 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
         // Judged on the limits themselves: rounded ARIA text can read equal
         // while a fraction of a pixel of room is left.
         locked[slot] = boundary.value.min === boundary.value.max;
+        // A different pair now sits at this slot — the drag grabbed panes
+        // that are no longer either side of it.
+        const [upper, lower] = boundary.panes;
+        const last = pairs[slot];
+        if (last && (last[0] !== upper || last[1] !== lower)) ends[slot]?.();
+        pairs[slot] = [upper, lower];
         if (locked[slot]) {
           element.setAttribute("aria-disabled", "true");
           element.style.cursor = "default";
@@ -181,6 +192,10 @@ export const createDomDividers: DividerFactory = (rawOverlay, onDrag) => {
           element.style.cursor = "row-resize";
         }
       });
+
+      // A slot that is gone ends whatever drag was on it.
+      for (let slot = boundaries.length; slot < pairs.length; slot++) ends[slot]?.();
+      pairs.length = boundaries.length;
 
       // Only when the count changes — re-inserting a handle that stays
       // would take the focus off it on every frame its own key causes.

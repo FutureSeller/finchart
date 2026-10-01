@@ -9,12 +9,10 @@ import type {
 } from "@finchart/core";
 import { computation, ContractError, reuseUnchanged } from "@finchart/core";
 import {
-  ema,
   highest,
   lowest,
   meanAbsDeviation,
   requireOptions,
-  rma,
   sma,
   stddev,
   emaFold,
@@ -35,13 +33,14 @@ import {
   lowestFold,
   rmaFold,
   seededRmaFold,
-  trueRanges,
+  trueRange,
   stddevFold,
   sumFold,
   volumeOf,
 } from "./kernels";
 import type { ExtremumState, LagState, LinregState, SeededRecursiveState, SmaState, StddevState, SumState } from "./kernels";
 import { foldNode } from "./fold-node";
+import type { BandPoint } from "./fold-node";
 import { toneOf } from "./tone";
 
 /**
@@ -73,20 +72,60 @@ function reading(value: number | null): number | null {
 }
 
 /**
- * A kernel with no cheap resume point recomputes wholesale on every tick
- * — but its consumers still get the tail path, because the previous
- * output objects are handed back wherever the recompute produced the
- * same point. The output points are this file's own `{ x, y }` literals,
- * which is what makes them comparable as plain data.
+ * A windowed calculation's tick: output i reads inputs back to
+ * `i − reach`, so a tick that moved the last `count` bars is re-run on
+ * those bars plus `reach` before them, and spliced onto the previous
+ * output. `behind` is for an output that also reads *ahead* (Ichimoku's
+ * lagging span): the splice starts that many bars earlier. The re-run
+ * window's unchanged points are handed back as the previous objects, so
+ * consumers read the tick as the tail change it is. The output points are
+ * this file's own literals, which is what makes them comparable as plain
+ * data.
  */
-function recomputing<
-  const TIn extends readonly Source<any>[],
-  TOut extends Record<string, BaseDataPoint[]>,
->(spec: ComputationSpec<TIn, TOut>): ComputationSpec<TIn, TOut> {
+function recomputing<T extends BaseDataPoint, TOut extends Record<string, BaseDataPoint[]>>(
+  spec: ComputationSpec<readonly [Source<T>], TOut>,
+  reach: number,
+  behind = 0,
+): ComputationSpec<readonly [Source<T>], TOut> {
   return {
     ...spec,
-    calcLast: (previous, inputs) => reuseUnchanged(previous, spec.calc(...inputs)),
+    calcLast: (previous, [data], [change]) => {
+      if (change.kind === "none") return previous;
+      const cut = Math.max(0, data.length - change.count - behind);
+      const start = Math.max(0, cut - reach);
+      const fresh = spec.calc(data.slice(start));
+      const next = { ...fresh };
+      for (const key in fresh) {
+        const window = reuseUnchanged({ key: previous[key].slice(cut) }, { key: fresh[key].slice(cut - start) }).key;
+        Reflect.set(next, key, previous[key].slice(0, cut).concat(window));
+      }
+      return next;
+    },
   };
+}
+
+/**
+ * A stateful indicator's fold state: its Wilder/EMA recursions, and the
+ * plain values its step keeps beside them (the previous bar, a trend, a
+ * ratcheted band). One checkpoint shape for all of them — each fold copies
+ * its own state, the plain values are copied whole.
+ */
+interface Carried<P> {
+  folds: RecursiveFold[];
+  plain: P;
+}
+interface CarriedState<P> {
+  folds: RecursiveState[];
+  plain: P;
+}
+
+function snapshotCarried<P>(carried: Carried<P>): CarriedState<P> {
+  return { folds: carried.folds.map((fold) => fold.snapshot()), plain: { ...carried.plain } };
+}
+
+function restoreCarried<P>(carried: Carried<P>, state: CarriedState<P>): void {
+  state.folds.forEach((fold, index) => carried.folds[index].restore(fold));
+  carried.plain = { ...state.plain };
 }
 
 function valuesOf<T extends BaseDataPoint>(
@@ -381,10 +420,7 @@ export interface BollingerOptions {
 /** Single source of truth for defaults — see `MACD_DEFAULTS`. */
 export const BOLLINGER_DEFAULTS = { period: 20, multiplier: 2 } as const;
 
-export interface BandPoint extends BaseDataPoint {
-  upper: number | null;
-  lower: number | null;
-}
+export type { BandPoint };
 
 export type BollingerBands = Computation<{
   upper: LineDataPoint[];
@@ -450,7 +486,7 @@ export function bollingerBands<T extends BaseDataPoint>(
         })),
       };
     },
-  }));
+  }, period - 1));
 }
 
 // --- RSI ---
@@ -464,6 +500,11 @@ export interface RsiOptions {
 export const RSI_DEFAULTS = { period: 14 } as const;
 
 export type Rsi = Computation<{ rsi: LineDataPoint[] }>;
+
+/** The previous bar's raw value — a change needs both ends. */
+interface RsiPlain {
+  previous: number | null;
+}
 
 /**
  * RSI — the ratio of Wilder averages (rma) of gains and losses. 0 to 100.
@@ -484,35 +525,21 @@ export function rsi<T extends BaseDataPoint>(
   const period = options.period ?? RSI_DEFAULTS.period;
   assertPeriod(period);
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const values = valuesOf(data, value);
-
-      const gains: (number | null)[] = new Array(values.length).fill(null);
-      const losses: (number | null)[] = new Array(values.length).fill(null);
-      for (let index = 1; index < values.length; index++) {
-        const current = values[index];
-        const previous = values[index - 1];
-        if (current === null || previous === null) continue;
-        const change = current - previous;
-        gains[index] = Math.max(change, 0);
-        losses[index] = Math.max(-change, 0);
-      }
-
-      const avgGain = rma(gains, period);
-      const avgLoss = rma(losses, period);
-
-      const out = avgGain.map((gain, index) => {
-        const loss = avgLoss[index];
-        if (gain === null || loss === null) return null;
-        if (loss === 0) return 100;
-        return 100 - 100 / (1 + gain / loss);
-      });
-
-      return { rsi: points(data, out) };
+  return foldNode<T, Carried<RsiPlain>, CarriedState<RsiPlain>, "rsi">(source, {
+    keys: ["rsi"],
+    make: () => ({ folds: [rmaFold(period), rmaFold(period)], plain: { previous: null } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ folds: [gains, losses], plain }, point) => {
+      const current = value(point);
+      const change = current === null || plain.previous === null ? null : current - plain.previous;
+      plain.previous = current;
+      const gain = gains.step(change === null ? null : Math.max(change, 0));
+      const loss = losses.step(change === null ? null : Math.max(-change, 0));
+      if (gain === null || loss === null) return { rsi: null };
+      return { rsi: loss === 0 ? 100 : 100 - 100 / (1 + gain / loss) };
     },
-  }));
+  });
 }
 
 // --- ATR ---
@@ -527,16 +554,28 @@ export const ATR_DEFAULTS = { period: 14 } as const;
 
 export type Atr = Computation<{ atr: LineDataPoint[] }>;
 
+/** The previous close — null on the first bar. */
+interface PreviousClose {
+  previous: number | null;
+}
+
 /** ATR — the Wilder average of True Range. No `value` overload — it's a computation that uses high, low, and close together, so a single-value accessor doesn't fit. */
 export function atr(source: Source<OHLC>, options: AtrOptions = {}): Atr {
   requireOptions(options, "atr");
   const period = options.period ?? ATR_DEFAULTS.period;
   assertPeriod(period);
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => ({ atr: points(data, rma(trueRanges(data), period)) }),
-  }));
+  return foldNode<OHLC, Carried<PreviousClose>, CarriedState<PreviousClose>, "atr">(source, {
+    keys: ["atr"],
+    make: () => ({ folds: [rmaFold(period)], plain: { previous: null } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ folds: [average], plain }, candle) => {
+      const range = trueRange(candle, plain.previous);
+      plain.previous = candle.close;
+      return { atr: average.step(range) };
+    },
+  });
 }
 
 // --- ADX ---
@@ -555,6 +594,11 @@ export type Adx = Computation<{
   minusDi: LineDataPoint[];
 }>;
 
+/** The previous bar — the first bar has no DM or TR. */
+interface PreviousBar {
+  previous: OHLC | null;
+}
+
 /**
  * ADX — the directional index. Smooths ±DM and TR with rma to make DI±,
  * then smooths their ratio (DX) with rma again — a double warmup, so adx
@@ -566,46 +610,34 @@ export function adx(source: Source<OHLC>, options: AdxOptions = {}): Adx {
   const period = options.period ?? ADX_DEFAULTS.period;
   assertPeriod(period);
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const plusDm: (number | null)[] = new Array(data.length).fill(null);
-      const minusDm: (number | null)[] = new Array(data.length).fill(null);
-      for (let index = 1; index < data.length; index++) {
-        const up = data[index].high - data[index - 1].high;
-        const down = data[index - 1].low - data[index].low;
-        plusDm[index] = up > down && up > 0 ? up : 0;
-        minusDm[index] = down > up && down > 0 ? down : 0;
+  return foldNode<OHLC, Carried<PreviousBar>, CarriedState<PreviousBar>, "adx" | "plusDi" | "minusDi">(source, {
+    keys: ["adx", "plusDi", "minusDi"],
+    make: () => ({ folds: [rmaFold(period), rmaFold(period), rmaFold(period), rmaFold(period)], plain: { previous: null } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ folds: [trs, pluses, minuses, dxs], plain }, candle) => {
+      const before = plain.previous;
+      plain.previous = candle;
+      let range: number | null = null;
+      let plusDm: number | null = null;
+      let minusDm: number | null = null;
+      if (before !== null) {
+        const up = candle.high - before.high;
+        const down = before.low - candle.low;
+        plusDm = up > down && up > 0 ? up : 0;
+        minusDm = down > up && down > 0 ? down : 0;
+        range = trueRange(candle, before.close);
       }
-      const tr = trueRanges(data).map((value, index) =>
-        index === 0 ? null : value,
-      );
-
-      const smoothTr = rma(tr, period);
-      const di = (dm: (number | null)[]) =>
-        rma(dm, period).map((value, index) => {
-          const range = smoothTr[index];
-          return value === null || range === null || range === 0
-            ? null
-            : (100 * value) / range;
-        });
-      const plusDi = di(plusDm);
-      const minusDi = di(minusDm);
-
-      const dx = plusDi.map((plus, index) => {
-        const minus = minusDi[index];
-        if (plus === null || minus === null) return null;
-        const sum = plus + minus;
-        return sum === 0 ? null : (100 * Math.abs(plus - minus)) / sum;
-      });
-
-      return {
-        adx: points(data, rma(dx, period)),
-        plusDi: points(data, plusDi),
-        minusDi: points(data, minusDi),
-      };
+      const smoothTr = trs.step(range);
+      const di = (dm: number | null) =>
+        dm === null || smoothTr === null || smoothTr === 0 ? null : (100 * dm) / smoothTr;
+      const plusDi = di(pluses.step(plusDm));
+      const minusDi = di(minuses.step(minusDm));
+      const sum = plusDi === null || minusDi === null ? 0 : plusDi + minusDi;
+      const dx = plusDi === null || minusDi === null || sum === 0 ? null : (100 * Math.abs(plusDi - minusDi)) / sum;
+      return { adx: dxs.step(dx), plusDi, minusDi };
     },
-  }));
+  });
 }
 
 // --- Parabolic SAR ---
@@ -621,6 +653,16 @@ export interface ParabolicSarOptions {
 export const PARABOLIC_SAR_DEFAULTS = { step: 0.02, max: 0.2 } as const;
 
 export type ParabolicSar = Computation<{ sar: LineDataPoint[] }>;
+
+/** The state machine plus the two bars before — the Wilder clamp reads both. */
+interface SarState {
+  previous: OHLC | null;
+  older: OHLC | null;
+  rising: boolean;
+  sar: number;
+  extreme: number;
+  af: number;
+}
 
 /**
  * Parabolic SAR — Wilder's trend-reversal state machine. It updates
@@ -639,56 +681,52 @@ export function parabolicSar(
   assertRatio(step, "step", "parabolicSar");
   assertRatio(max, "max", "parabolicSar");
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const out: (number | null)[] = new Array(data.length).fill(null);
-      if (data.length >= 2) {
-        let rising = data[1].close >= data[0].close;
-        let sar = rising ? data[0].low : data[0].high;
-        let extreme = rising
-          ? Math.max(data[0].high, data[1].high)
-          : Math.min(data[0].low, data[1].low);
-        let af = step;
+  return foldNode<OHLC, Carried<SarState>, CarriedState<SarState>, "sar">(source, {
+    keys: ["sar"],
+    make: () => ({ folds: [], plain: { previous: null, older: null, rising: true, sar: 0, extreme: 0, af: step } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ plain: f }, candle) => {
+      const first = f.previous;
+      const older = f.older;
+      f.older = first;
+      f.previous = candle;
+      if (first === null) return { sar: null };
+      // The second bar seeds the trend from the first two.
+      if (older === null) {
+        f.rising = candle.close >= first.close;
+        f.sar = f.rising ? first.low : first.high;
+        f.extreme = f.rising ? Math.max(first.high, candle.high) : Math.min(first.low, candle.low);
+      }
+      const second = older ?? first;
+      f.sar += f.af * (f.extreme - f.sar);
 
-        for (let index = 1; index < data.length; index++) {
-          sar += af * (extreme - sar);
-
-          const first = data[index - 1];
-          const second = data[Math.max(index - 2, 0)];
-          const candle = data[index];
-
-          if (rising) {
-            sar = Math.min(sar, first.low, second.low);
-            if (candle.low < sar) {
-              rising = false;
-              sar = extreme;
-              extreme = candle.low;
-              af = step;
-            } else if (candle.high > extreme) {
-              extreme = candle.high;
-              af = Math.min(af + step, max);
-            }
-          } else {
-            sar = Math.max(sar, first.high, second.high);
-            if (candle.high > sar) {
-              rising = true;
-              sar = extreme;
-              extreme = candle.high;
-              af = step;
-            } else if (candle.low < extreme) {
-              extreme = candle.low;
-              af = Math.min(af + step, max);
-            }
-          }
-
-          out[index] = sar;
+      if (f.rising) {
+        f.sar = Math.min(f.sar, first.low, second.low);
+        if (candle.low < f.sar) {
+          f.rising = false;
+          f.sar = f.extreme;
+          f.extreme = candle.low;
+          f.af = step;
+        } else if (candle.high > f.extreme) {
+          f.extreme = candle.high;
+          f.af = Math.min(f.af + step, max);
+        }
+      } else {
+        f.sar = Math.max(f.sar, first.high, second.high);
+        if (candle.high > f.sar) {
+          f.rising = true;
+          f.sar = f.extreme;
+          f.extreme = candle.high;
+          f.af = step;
+        } else if (candle.low < f.extreme) {
+          f.extreme = candle.low;
+          f.af = Math.min(f.af + step, max);
         }
       }
-
-      return { sar: points(data, out) };
+      return { sar: f.sar };
     },
-  }));
+  });
 }
 
 // --- Ichimoku ---
@@ -866,7 +904,7 @@ export function ichimoku(
       if (!conversion || !base || !spanA || !spanB || !lagging || !cloud) return null;
       return { conversion, base, spanA, spanB, lagging, cloud };
     },
-  }));
+  }, look, displacement));
 }
 
 // --- VWAP ---
@@ -907,6 +945,15 @@ export interface VwapOptions {
 
 export type Vwap = Computation<{ vwap: LineDataPoint[] }>;
 
+/** The session's running sums, and the bar count and previous bar an anchor is asked with. */
+interface VwapState {
+  weighted: number;
+  total: number;
+  broken: boolean;
+  index: number;
+  previous: OHLC | null;
+}
+
 /**
  * VWAP — the volume-weighted cumulative average of the typical price
  * ((high+low+close)/3). It's a cumulative indicator, so from the candle
@@ -919,52 +966,54 @@ export function vwap(source: Source<OHLC>, options: VwapOptions = {}): Vwap {
   requireOptions(options, "vwap");
   const anchor = options.anchor;
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const out: (number | null)[] = new Array(data.length).fill(null);
-      let weighted = 0;
-      let total = 0;
-      let broken = false;
-
-      for (let index = 0; index < data.length; index++) {
-        const candle = data[index];
-        if (anchor?.(candle, index, index === 0 ? null : data[index - 1])) {
-          weighted = 0;
-          total = 0;
-          broken = false;
-        }
-
-        // A gap is `null` as much as `undefined` — a feed's JSON says
-        // `"volume": null`, and `=== undefined` let it through as 0.
-        const volume = volumeOf(candle);
-        if (broken || volume === null) {
-          broken = true;
-          continue;
-        }
-
-        const typical = (candle.high + candle.low + candle.close) / 3;
-        const nextWeighted = weighted + typical * volume;
-        const nextTotal = total + volume;
-        if (!committable(nextWeighted) || !committable(nextTotal)) {
-          // An unknown contribution makes this session's weights unknown,
-          // just as missing volume does. The next anchor starts afresh.
-          broken = true;
-          continue;
-        }
-        weighted = nextWeighted;
-        total = nextTotal;
-        out[index] = total === 0 ? null : reading(weighted / total);
+  return foldNode<OHLC, Carried<VwapState>, CarriedState<VwapState>, "vwap">(source, {
+    keys: ["vwap"],
+    make: () => ({ folds: [], plain: { weighted: 0, total: 0, broken: false, index: 0, previous: null } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ plain: f }, candle) => {
+      const index = f.index++;
+      const previous = f.previous;
+      f.previous = candle;
+      if (anchor?.(candle, index, previous)) {
+        f.weighted = 0;
+        f.total = 0;
+        f.broken = false;
       }
 
-      return { vwap: points(data, out) };
+      // A gap is `null` as much as `undefined` — a feed's JSON says
+      // `"volume": null`, and `=== undefined` let it through as 0.
+      const volume = volumeOf(candle);
+      if (f.broken || volume === null) {
+        f.broken = true;
+        return { vwap: null };
+      }
+
+      const typical = (candle.high + candle.low + candle.close) / 3;
+      const weighted = f.weighted + typical * volume;
+      const total = f.total + volume;
+      if (!committable(weighted) || !committable(total)) {
+        // An unknown contribution makes this session's weights unknown,
+        // just as missing volume does. The next anchor starts afresh.
+        f.broken = true;
+        return { vwap: null };
+      }
+      f.weighted = weighted;
+      f.total = total;
+      return { vwap: total === 0 ? null : weighted / total };
     },
-  }));
+  });
 }
 
 // --- OBV ---
 
 export type Obv = Computation<{ obv: LineDataPoint[] }>;
+
+/** The running sum (null until the first bar with volume) and the previous close, gap or not. */
+interface ObvState {
+  total: number | null;
+  close: number;
+}
 
 /**
  * OBV — a running sum of volume, signed by the direction of the close.
@@ -979,31 +1028,28 @@ export type Obv = Computation<{ obv: LineDataPoint[] }>;
  * gap is missing volume, not a missing price.
  */
 export function obv(source: Source<OHLC>): Obv {
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const out: (number | null)[] = new Array(data.length).fill(null);
-      let state: number | null = null;
-
-      for (let index = 0; index < data.length; index++) {
-        const volume = volumeOf(data[index]);
-        if (volume === null || !committable(volume)) continue;
-
-        if (state === null) {
-          state = volume;
-        } else {
-          const change = data[index].close - data[index - 1].close;
-          const next: number = change > 0 ? state + volume : change < 0 ? state - volume : state;
-          // Skip an unrepresentable contribution without poisoning later bars.
-          if (!committable(next)) continue;
-          state = next;
-        }
-        out[index] = state;
+  return foldNode<OHLC, Carried<ObvState>, CarriedState<ObvState>, "obv">(source, {
+    keys: ["obv"],
+    make: () => ({ folds: [], plain: { total: null, close: 0 } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ plain: f }, candle) => {
+      const close = candle.close;
+      const change = close - f.close;
+      f.close = close;
+      const volume = volumeOf(candle);
+      if (volume === null || !committable(volume)) return { obv: null };
+      if (f.total === null) {
+        f.total = volume;
+        return { obv: volume };
       }
-
-      return { obv: points(data, out) };
+      const next: number = change > 0 ? f.total + volume : change < 0 ? f.total - volume : f.total;
+      // Skip an unrepresentable contribution without poisoning later bars.
+      if (!committable(next)) return { obv: null };
+      f.total = next;
+      return { obv: next };
     },
-  }));
+  });
 }
 
 // --- Stochastic RSI ---
@@ -2454,7 +2500,7 @@ export function stochastic(
 
       return { k: points(data, k), d: points(data, d) };
     },
-  }));
+  }, period - 1 + (smooth - 1) + (signal - 1)));
 }
 
 // --- CCI ---
@@ -2498,7 +2544,7 @@ export function cci(source: Source<OHLC>, options: CciOptions = {}): Cci {
 
       return { cci: points(data, out) };
     },
-  }));
+  }, period - 1));
 }
 
 // --- Williams %R ---
@@ -2543,7 +2589,7 @@ export function williamsR(
 
       return { r: points(data, out) };
     },
-  }));
+  }, period - 1));
 }
 
 // --- Donchian Channels ---
@@ -2598,7 +2644,7 @@ export function donchianChannels(
         })),
       };
     },
-  }));
+  }, period - 1));
 }
 
 // --- Keltner Channels ---
@@ -2626,6 +2672,8 @@ export type KeltnerChannels = Computation<{
   band: BandPoint[];
 }>;
 
+
+
 /**
  * Keltner Channels — middle (ema) ± multiplier × ATR. Bollinger's
  * volatility counterpart (ATR instead of standard deviation). Also used
@@ -2644,34 +2692,21 @@ export function keltnerChannels(
   assertPeriod(period);
   assertPeriod(atrPeriod);
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const middle = ema(data.map((candle) => candle.close), period);
-      const width = rma(trueRanges(data), atrPeriod);
-
+  return foldNode<OHLC, Carried<PreviousClose>, CarriedState<PreviousClose>, "upper" | "middle" | "lower", never, "band">(source, {
+    keys: ["upper", "middle", "lower"],
+    band: { key: "band", upper: "upper", lower: "lower" },
+    make: () => ({ folds: [emaFold(period), rmaFold(atrPeriod)], plain: { previous: null } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ folds: [middle, width], plain }, candle) => {
+      const center = middle.step(candle.close);
+      const range = width.step(trueRange(candle, plain.previous));
+      plain.previous = candle.close;
       const edge = (sign: 1 | -1) =>
-        middle.map((center, index) => {
-          const range = width[index];
-          return center === null || range === null
-            ? null
-            : reading(center + sign * multiplier * range);
-        });
-      const upper = edge(1);
-      const lower = edge(-1);
-
-      return {
-        upper: points(data, upper),
-        middle: points(data, middle),
-        lower: points(data, lower),
-        band: data.map((point, index) => ({
-          x: point.x,
-          upper: upper[index],
-          lower: lower[index],
-        })),
-      };
+        center === null || range === null ? null : center + sign * multiplier * range;
+      return { upper: edge(1), middle: center, lower: edge(-1) };
     },
-  }));
+  });
 }
 
 // --- SuperTrend ---
@@ -2693,6 +2728,15 @@ export type SuperTrend = Computation<{
   down: LineDataPoint[];
 }>;
 
+interface SuperTrendPlain {
+  /** The previous close — the ratchet's release test reads it. */
+  previous: number | null;
+  direction: 1 | -1;
+  /** The ratcheted bands — NaN until the ATR has warmed up. */
+  upper: number;
+  lower: number;
+}
+
 /**
  * SuperTrend — a ratcheting band around (high+low)/2 ± multiplier × ATR.
  * During an uptrend the lower band is the support line (a band never
@@ -2712,57 +2756,39 @@ export function superTrend(
   const multiplier = options.multiplier ?? SUPERTREND_DEFAULTS.multiplier;
   assertRatio(multiplier, "multiplier", "superTrend");
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const width = rma(trueRanges(data), period);
-      const up: (number | null)[] = new Array(data.length).fill(null);
-      const down: (number | null)[] = new Array(data.length).fill(null);
+  return foldNode<OHLC, Carried<SuperTrendPlain>, CarriedState<SuperTrendPlain>, "up" | "down">(source, {
+    keys: ["up", "down"],
+    make: () => ({ folds: [rmaFold(period)], plain: { previous: null, direction: 1, upper: Number.NaN, lower: Number.NaN } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ folds: [width], plain: f }, candle) => {
+      const range = width.step(trueRange(candle, f.previous));
+      const previousClose = f.previous ?? candle.close;
+      f.previous = candle.close;
+      if (range === null) return { up: null, down: null }; // ATR warmup — both branches null
 
-      let direction: 1 | -1 = 1;
-      let finalUpper = Number.NaN;
-      let finalLower = Number.NaN;
-
-      for (let index = 0; index < data.length; index++) {
-        const range = width[index];
-        if (range === null) continue; // ATR warmup — both branches null
-
-        const candle = data[index];
-        const mid = (candle.high + candle.low) / 2;
-        // The first valid candle decides direction — a constant seed would
-        // plot a false support line until the first reversal if a downtrend starts.
-        if (Number.isNaN(finalUpper) && Number.isNaN(finalLower)) {
-          direction = candle.close >= mid ? 1 : -1;
-        }
-        const basicUpper = mid + multiplier * range;
-        const basicLower = mid - multiplier * range;
-        const previousClose = index > 0 ? data[index - 1].close : candle.close;
-
-        // Ratchet — a band never retreats against the trend. If the previous
-        // close was outside the band, release the ratchet and restart from the raw value.
-        finalUpper =
-          Number.isNaN(finalUpper) ||
-          basicUpper < finalUpper ||
-          previousClose > finalUpper
-            ? basicUpper
-            : finalUpper;
-        finalLower =
-          Number.isNaN(finalLower) ||
-          basicLower > finalLower ||
-          previousClose < finalLower
-            ? basicLower
-            : finalLower;
-
-        if (direction === 1 && candle.close < finalLower) direction = -1;
-        else if (direction === -1 && candle.close > finalUpper) direction = 1;
-
-        if (direction === 1) up[index] = finalLower;
-        else down[index] = finalUpper;
+      const mid = (candle.high + candle.low) / 2;
+      // The first valid candle decides direction — a constant seed would
+      // plot a false support line until the first reversal if a downtrend starts.
+      if (Number.isNaN(f.upper) && Number.isNaN(f.lower)) {
+        f.direction = candle.close >= mid ? 1 : -1;
       }
+      const basicUpper = mid + multiplier * range;
+      const basicLower = mid - multiplier * range;
 
-      return { up: points(data, up), down: points(data, down) };
+      // Ratchet — a band never retreats against the trend. If the previous
+      // close was outside the band, release the ratchet and restart from the raw value.
+      f.upper =
+        Number.isNaN(f.upper) || basicUpper < f.upper || previousClose > f.upper ? basicUpper : f.upper;
+      f.lower =
+        Number.isNaN(f.lower) || basicLower > f.lower || previousClose < f.lower ? basicLower : f.lower;
+
+      if (f.direction === 1 && candle.close < f.lower) f.direction = -1;
+      else if (f.direction === -1 && candle.close > f.upper) f.direction = 1;
+
+      return f.direction === 1 ? { up: f.lower, down: null } : { up: null, down: f.upper };
     },
-  }));
+  });
 }
 
 // --- Pivot Points ---
@@ -2787,6 +2813,20 @@ export type PivotPoints = Computation<{
 }>;
 
 /**
+ * The extremes of the period in progress — they become the material for
+ * the next period's levels once it closes — and the bar count and previous
+ * bar an anchor is asked with.
+ */
+interface PivotState {
+  high: number;
+  low: number;
+  close: number;
+  levels: Record<"p" | "r1" | "r2" | "r3" | "s1" | "s2" | "s3", number> | null;
+  index: number;
+  previous: OHLC | null;
+}
+
+/**
  * Pivot Points (Floor/Classic) — draws this period's pivot, support, and
  * resistance from the previous period's high, low, and close:
  * the pivot is P=(H+L+C)/3, then resistance R1=2P−L, R2=P+(H−L),
@@ -2805,77 +2845,42 @@ export function pivotPoints(
   // vwap's anchor is optional (`anchor?.()`), but here it's required.
   assertPredicate(anchor, "anchor", "pivotPoints");
 
-  return computation(recomputing({
-    inputs: [source],
-    calc: (data) => {
-      const branches = {
-        p: new Array<number | null>(data.length).fill(null),
-        r1: new Array<number | null>(data.length).fill(null),
-        r2: new Array<number | null>(data.length).fill(null),
-        r3: new Array<number | null>(data.length).fill(null),
-        s1: new Array<number | null>(data.length).fill(null),
-        s2: new Array<number | null>(data.length).fill(null),
-        s3: new Array<number | null>(data.length).fill(null),
-      };
+    const none = { p: null, r1: null, r2: null, r3: null, s1: null, s2: null, s3: null };
+  return foldNode<OHLC, Carried<PivotState>, CarriedState<PivotState>, "p" | "r1" | "r2" | "r3" | "s1" | "s2" | "s3">(source, {
+    keys: ["p", "r1", "r2", "r3", "s1", "s2", "s3"],
+    make: () => ({ folds: [], plain: { high: Number.NaN, low: Number.NaN, close: Number.NaN, levels: null, index: 0, previous: null } }),
+    snapshot: snapshotCarried,
+    restore: restoreCarried,
+    step: ({ plain: f }, candle) => {
+      const index = f.index++;
+      const previous = f.previous;
+      f.previous = candle;
 
-      /** The extremes of the period in progress — become the material for the next period's levels once it closes. */
-      let high = Number.NaN;
-      let low = Number.NaN;
-      let close = Number.NaN;
-      let levels: {
-        p: number; r1: number; r2: number; r3: number;
-        s1: number; s2: number; s3: number;
-      } | null = null;
-
-      for (let index = 0; index < data.length; index++) {
-        const candle = data[index];
-        const opens = index === 0 || anchor(candle, index, data[index - 1]);
-
-        if (opens) {
-          // Closes the previous period — its H, L, C become this period's levels.
-          if (!Number.isNaN(high)) {
-            const p = (high + low + close) / 3;
-            levels = {
-              p,
-              r1: 2 * p - low,
-              s1: 2 * p - high,
-              r2: p + (high - low),
-              s2: p - (high - low),
-              r3: high + 2 * (p - low),
-              s3: low - 2 * (high - p),
-            };
-          }
-          high = candle.high;
-          low = candle.low;
-          close = candle.close;
-
-          continue; // A period's first candle is null — the gap that breaks the diagonal connector
+      if (previous === null || anchor(candle, index, previous)) {
+        // Closes the previous period — its H, L, C become this period's levels.
+        if (!Number.isNaN(f.high)) {
+          const { high, low, close } = f;
+          const p = (high + low + close) / 3;
+          f.levels = {
+            p,
+            r1: 2 * p - low,
+            s1: 2 * p - high,
+            r2: p + (high - low),
+            s2: p - (high - low),
+            r3: high + 2 * (p - low),
+            s3: low - 2 * (high - p),
+          };
         }
-
-        high = Math.max(high, candle.high);
-        low = Math.min(low, candle.low);
-        close = candle.close;
-
-        if (levels) {
-          branches.p[index] = levels.p;
-          branches.r1[index] = levels.r1;
-          branches.r2[index] = levels.r2;
-          branches.r3[index] = levels.r3;
-          branches.s1[index] = levels.s1;
-          branches.s2[index] = levels.s2;
-          branches.s3[index] = levels.s3;
-        }
+        f.high = candle.high;
+        f.low = candle.low;
+        f.close = candle.close;
+        return none; // A period's first candle is null — the gap that breaks the diagonal connector
       }
 
-      return {
-        p: points(data, branches.p),
-        r1: points(data, branches.r1),
-        r2: points(data, branches.r2),
-        r3: points(data, branches.r3),
-        s1: points(data, branches.s1),
-        s2: points(data, branches.s2),
-        s3: points(data, branches.s3),
-      };
+      f.high = Math.max(f.high, candle.high);
+      f.low = Math.min(f.low, candle.low);
+      f.close = candle.close;
+      return f.levels ?? none;
     },
-  }));
+  });
 }

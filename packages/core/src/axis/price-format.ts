@@ -5,6 +5,7 @@ import {
   requireObject,
   requirePositive,
 } from "../primitives";
+import { decimalsOf } from "./format";
 
 /**
  * A price-format helper — a pure function that plugs into an axis
@@ -133,14 +134,6 @@ export function priceFormat(
 
     return base.format(snapped);
   };
-}
-
-/** Count decimal places without discarding valid ticks below 1e-8. */
-function decimalsOf(move: number): number {
-  // Fifteen significant digits remove arithmetic noise, not leading zeros.
-  const [coefficient, exponent = "0"] = Number(move.toPrecision(15)).toString().split("e");
-  const fraction = coefficient.split(".")[1]?.length ?? 0;
-  return Math.max(0, fraction - Number(exponent));
 }
 
 function snapToMove(value: number, move: number): number {

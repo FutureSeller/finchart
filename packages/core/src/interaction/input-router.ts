@@ -1,4 +1,5 @@
 import type { Point } from "../primitives";
+import { requireFunction } from "../primitives/guards";
 import {
   ContractError,
   describe,
@@ -134,6 +135,10 @@ export class InputRouter {
   private readonly captures = new Map<number, InputConsumer>();
 
   add(consumer: InputConsumer, options: InputConsumerOptions = {}): () => void {
+    // A consumer without `handle` would fail on every input that reaches it.
+    requireObject(consumer, "addInputConsumer(consumer)");
+    requireFunction(consumer.handle, "addInputConsumer(consumer) handle");
+    if (options.priority !== undefined) requireFinite(options.priority, "addInputConsumer priority");
     const entry: InputEntry = {
       consumer,
       priority: options.priority ?? 0,

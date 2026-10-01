@@ -1,7 +1,8 @@
 import type { Point } from "../primitives";
 import { requireObject } from "../primitives";
 import type { BaseDataPoint, CoordinateAccessor, DataView, LineDataPoint, Range } from "../data";
-import { isGap, LineDataAccessor } from "../data";
+import { isGap } from "../data";
+import { LINE_COORDINATES } from "../data/accessors";
 import type { DrawTarget, LineStyle, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
 import { styleSpec } from "../render/style-spec";
@@ -167,7 +168,7 @@ export function lineSeries<T extends BaseDataPoint>(
 export function lineSeries<T extends BaseDataPoint>(
   options?: LineSeriesStyleOverrides | LineSeriesOptions<T>,
 ): LineSeries<T> | LineSeries<LineDataPoint> {
-  if (options === undefined) return new LineSeries({ coordinates: new LineDataAccessor() });
+  if (options === undefined) return new LineSeries({ coordinates: LINE_COORDINATES });
   // Prevents a bad type from passing through quietly and drawing with defaults.
   requireObject(options, "lineSeries(options)");
   if (hasCoordinates(options)) {
@@ -176,7 +177,7 @@ export function lineSeries<T extends BaseDataPoint>(
       style: options.style,
     });
   }
-  return new LineSeries({ coordinates: new LineDataAccessor(), style: options });
+  return new LineSeries({ coordinates: LINE_COORDINATES, style: options });
 }
 
 /** Which of the two calls this is — the key, not its value, decides (a present `coordinates` is then checked). */
@@ -215,5 +216,5 @@ export function stepLineSeries(
   style?: LineSeriesStyleOverrides,
 ): StepLineSeries<LineDataPoint> {
   if (style !== undefined) requireObject(style, "stepLineSeries(style)");
-  return new StepLineSeries({ coordinates: new LineDataAccessor(), style });
+  return new StepLineSeries({ coordinates: LINE_COORDINATES, style });
 }

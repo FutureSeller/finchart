@@ -90,8 +90,8 @@ describe("drawingTools drawing", () => {
     // the screen.
     expect(handles()).toHaveLength(0);
 
-    // Grab endpoint a to select it.
-    const a = { x: pane.area.left, y: pane.yScale.scale(100) };
+    // Grab endpoint a to select it — half a bar inside the left edge.
+    const a = { x: model.plot.pixelAtX(0), y: pane.yScale.scale(100) };
     model.plot.routeInput({ type: "pointerdown", point: a, pointerId: 1 });
     model.plot.routeInput({ type: "pointerup", point: a, pointerId: 1 });
 

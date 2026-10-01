@@ -200,3 +200,12 @@ export function defaultCoordinates<
 function readY(point: BaseDataPoint & { y?: number | null }): number | null | undefined {
   return point.y;
 }
+
+/**
+ * One accessor each for the built-in series to share. They hold no state, so
+ * sharing is safe, and frozen so no series can rewrite them for the others.
+ * Sharing is what lets a rebuilt series (a React re-render) be recognized as
+ * reading its points the same way, keeping its data instead of re-validating it.
+ */
+export const LINE_COORDINATES: CoordinateAccessor<LineDataPoint> = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ new LineDataAccessor());
+export const OHLC_COORDINATES: CoordinateAccessor<OHLC> = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ new OHLCAccessor());

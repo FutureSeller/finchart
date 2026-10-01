@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";
 import { OHLCAccessor } from "../../data";
 import { ContractError, DataError } from "../../primitives";
-import { lineSeries } from "../../series";
+import { histogramSeries, lineSeries, type Series } from "../../series";
 import { createPlotModel } from "../../plot/model";
 import { infiniteHistory, type HistoryStatus, type InfiniteHistoryHost } from "../infinite-history";
 
@@ -23,9 +23,9 @@ const points = (from: number, to: number): LineDataPoint[] => {
 };
 
 /** A real headless plot showing x 100..119 — events, pixels, and state are the live ones. */
-function chart(data = points(100, 120)) {
+function chart(data = points(100, 120), series: Series<LineDataPoint> = lineSeries()) {
   const model = createPlotModel({ size: { width: 800, height: 600 }, series: null });
-  const handle = model.plot.mainPane.addSeries({ series: lineSeries(), data });
+  const handle = model.plot.mainPane.addSeries({ series, data });
   return { plot: model.plot, handle };
 }
 
@@ -232,6 +232,32 @@ describe("infiniteHistory", () => {
     await settle();
 
     expect(calls).toEqual([]);
+  });
+
+  it("a plain fit's half-bar margin is not a gap — no fetch at install, on fitDomains, or on a refill", async () => {
+    // Columns draw a bar body, so their fit carries the margin.
+    const { plot, handle } = chart(points(100, 120), histogramSeries());
+    const { calls, fetch } = servedFetch(points(80, 100));
+    infiniteHistory(plot, recordingSink().sink, fetch, { from: 100 });
+    // The fit shows half a bar of blank before the first point.
+    expect(plot.getState().xDomain?.min).toBe(99.5);
+
+    plot.fitDomains();
+    handle.setData(points(100, 140));
+    await settle();
+
+    expect(calls).toEqual([]);
+  });
+
+  it("more than half a bar of blank before the data is a gap", async () => {
+    const { plot } = chart();
+    const { calls, fetch } = servedFetch(points(80, 100));
+    // Judged at install, with no move at all — only the gap fill can fire.
+    plot.setVisibleRange(99.4, 119.4);
+    infiniteHistory(plot, recordingSink().sink, fetch, { from: 100 });
+    await settle();
+
+    expect(calls).toEqual([100]);
   });
 
   it("guard 4: events during an in-flight fetch do not stack requests", async () => {
@@ -486,6 +512,7 @@ function countingHost(plot: ReturnType<typeof chart>["plot"]) {
     pixelAtX: (x: number) => plot.pixelAtX(x),
     xAt: (px: number) => plot.xAt(px),
     getState: () => plot.getState(),
+    leadingMargin: () => plot.leadingMargin(),
   };
   return { host, live };
 }
@@ -1047,6 +1074,7 @@ describe("infiniteHistory — a loader that stops", () => {
       pixelAtX: (x) => plot.pixelAtX(x),
       xAt: (px) => plot.xAt(px),
       getState: () => plot.getState(),
+      leadingMargin: () => plot.leadingMargin(),
     };
     const loader = infiniteHistory(host, recordingSink().sink, heldFetch().fetch, { from: 100 });
     loader.dispose();

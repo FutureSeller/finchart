@@ -31,6 +31,14 @@ export interface ChartApi<T extends BaseDataPoint = BaseDataPoint> {
    * it's the same collector and neither clears the other's list.
    */
   seriesCollector(pane: Pane): SeriesCollector<T>;
+  /**
+   * Where a `<ChartPane>` sits in the JSX. Recorded only; `stackPanes`
+   * moves the chart's panes to follow, so a pane inserted above others, or
+   * keyed panes reordered, land where the tree puts them.
+   */
+  rankPane(pane: Pane, rank: readonly number[]): void;
+  /** Restacks the panes if a rank moved since the last time, and only then. */
+  stackPanes(): void;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: the context erases the data type

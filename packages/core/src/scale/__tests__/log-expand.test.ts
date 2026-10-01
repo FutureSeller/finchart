@@ -80,7 +80,7 @@ describe("linear is unchanged", () => {
 
   it("should keep the collapsed-domain fallback", () => {
     expect(expandFor(new LinearScale(), { min: 5, max: 5 }, PADDING)).toEqual([
-      4, 6,
+      4.75, 5.25,
     ]);
   });
 });

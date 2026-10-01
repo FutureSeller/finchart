@@ -161,10 +161,17 @@ mainPane. Later panes are created and removed by their wrapper, so changing a
 later **ChartPane key** can replace its stateKey.
 
 This restriction concerns replacing pane identity, not rearranging panes.
-`mainPane` retains its identity independently of visual position. A future
-drag-and-drop ordering API belongs to Plot/ChartContainer and must preserve
-pane keys, instances, series and scales; it must not remount the container.
-Changing JSX order currently does not reorder the plot's panes.
+Panes stack in JSX order: a `ChartPane` inserted above others, or keyed panes
+reordered, move on the chart (`plot.setPaneOrder`) while keeping their
+instances, series, scales and state. `mainPane` retains its identity
+wherever it lands.
+
+The JSX owns the order of the panes it declares, but only when that order
+changes: a `plot.setPaneOrder` you make through `plotRef` holds across
+re-renders until some `ChartPane`'s place in the tree moves (a pane mounted
+among them, one above it gone, keyed panes reordered), which restacks the
+panes to the JSX again, once per commit. A pane added through `plotRef`
+stays where you put it until then, and below the declared panes after.
 
 Naming: the `Chart*` prefix marks structure and series (`ChartContainer`,
 `ChartPane`, `ChartLine`, …); no prefix marks attachments (`XAxis`,

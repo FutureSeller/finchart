@@ -17,8 +17,8 @@ import { PANE_OPTION_DEFAULTS, lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { cleanup, render } from '@testing-library/react';
 import { createRef } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { ChartContainer, ChartPane, ChartSeries } from '../components';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ChartContainer, ChartPane, ChartSeries, XAxis, YAxis } from '../components';
 import { layersSpy } from './fake-layers';
 
 afterEach(cleanup);
@@ -100,6 +100,93 @@ describe('prop removal = revert to default', () => {
     );
 
     expect(plot().panes[0].flex).toBe(PANE_OPTION_DEFAULTS.flex);
+  });
+
+  const pct = (value: number) => `${value}%`;
+  const tx = (x: number) => `t${x}`;
+
+  it('unmounting an axis component reverts what it applied', () => {
+    const { deps, ref, plot } = setup();
+    const chart = (on: boolean) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        {on && <XAxis format={tx} />}
+        <ChartPane>
+          {on && <YAxis format={pct} />}
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>
+    );
+    const view = render(chart(true));
+    expect(plot().mainPane.formatValue(5)).toBe('5%');
+    expect(plot().getOptions().axis.x.format).toBe(tx);
+
+    view.rerender(chart(false));
+
+    expect(plot().mainPane.formatValue(5)).not.toBe('5%');
+    expect(plot().getOptions().axis.x.format).toBeUndefined();
+  });
+
+  it('unmounting a chart-wide YAxis reverts it', () => {
+    const { deps, ref, plot } = setup();
+    const chart = (on: boolean) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        {on && <YAxis format={pct} position="right" />}
+        <ChartSeries series={lineSeries()} />
+      </ChartContainer>
+    );
+    const view = render(chart(true));
+    expect(plot().getOptions().axis.y.position).toBe('right');
+
+    view.rerender(chart(false));
+
+    expect(plot().getOptions().axis.y.format).toBeUndefined();
+    expect(plot().getOptions().axis.y.position).toBe('left');
+  });
+
+  it('changing an axis prop applies once, not a revert and then the new value', () => {
+    const { deps, ref, plot } = setup();
+    const chart = (format: (value: number) => string) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <XAxis format={format} />
+        <ChartPane>
+          <YAxis format={format} />
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>
+    );
+    const view = render(chart(pct));
+    const chartWide = vi.spyOn(plot(), 'applyOptions');
+    const paneWide = vi.spyOn(plot().mainPane, 'applyOptions');
+
+    view.rerender(chart(tx));
+
+    // A revert in between drops the format for a moment and re-lays the chart twice.
+    expect(chartWide).toHaveBeenCalledTimes(1);
+    expect(paneWide).toHaveBeenCalledTimes(1);
+    expect(plot().mainPane.formatValue(5)).toBe('t5');
+  });
+
+  it('a keyed first-pane swap does not inherit the old pane\'s YAxis', () => {
+    const { deps, ref, plot } = setup();
+    const view = render(
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane key="a">
+          <YAxis format={pct} />
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>,
+    );
+    expect(plot().mainPane.formatValue(5)).toBe('5%');
+
+    view.rerender(
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane key="b">
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>,
+    );
+
+    expect(plot().mainPane.formatValue(5)).not.toBe('5%');
   });
 
 

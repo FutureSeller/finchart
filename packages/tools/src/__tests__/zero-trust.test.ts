@@ -222,8 +222,8 @@ describe("validation and storage see the same object", () => {
   /**
    * Both doors (add and load) store the same shape -- whichever one it
    * enters through, it goes through the same normalization. Ids are the
-   * one legitimate difference: add mints a fresh one, load keeps (or
-   * derives) the payload's — so the comparison strips them, and asserts
+   * one legitimate difference: add mints a fresh one, load keeps the
+   * payload's — so the comparison strips them, and asserts
    * separately that both doors produced one.
    */
   it("should store the same shape through add and load", () => {
@@ -232,7 +232,7 @@ describe("validation and storage see the same object", () => {
 
     const viaLoad = mount2();
     viaLoad.load(
-      '{"version":1,"drawings":[{"type":"horizontal","price":100,"junk":"x"}]}',
+      '{"version":2,"drawings":[{"type":"horizontal","id":"h","price":100,"junk":"x"}]}',
     );
 
     const shapeOf = (api: typeof viaAdd) =>

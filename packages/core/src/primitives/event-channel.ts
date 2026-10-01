@@ -5,6 +5,7 @@
  * payload never leaves the type.**
  */
 import { runAll, throwable } from "./errors";
+import { requireFunction } from "./guards";
 
 export interface EventChannel<Events extends object> {
   /** Returns an unsubscribe function. Safe to call twice. */
@@ -31,12 +32,14 @@ export interface EventChannel<Events extends object> {
  * render belongs." Keeping a separate array per name keeps the pairing in
  * the type.
  *
- * It's an array because the same function can be registered twice — then
- * there are two unsubscribe functions, and each removes one. A `Set` would
- * let both point at the same entry, so removing one would remove both.
+ * Each registration is its own record, so the same function registered twice
+ * is two records with two unsubscribe functions, and removing one leaves the
+ * other. A record whose `handler` is gone has been removed — an emit already
+ * under way checks that before each call.
  */
+type Registration<T> = { handler?: (payload: T) => void };
 type ListenerStore<Events extends object> = {
-  [E in keyof Events]?: ((payload: Events[E]) => void)[];
+  [E in keyof Events]?: Registration<Events[E]>[];
 };
 
 export function eventChannel<Events extends object>(): EventChannel<Events> {
@@ -44,28 +47,20 @@ export function eventChannel<Events extends object>(): EventChannel<Events> {
 
   return {
     on(event, handler) {
+      requireFunction(handler, `on("${String(event)}", handler)`);
       // The store type pairs name with payload, but TS narrows push on an
       // array indexed by a generic key to never. This one line is where that
       // narrowing limitation is contained — the store type already guarantees
       // the pairing is actually correct.
-      const handlers = (listeners[event] ??= []) as (typeof handler)[];
-      handlers.push(handler);
-      let off = false;
+      const registrations = (listeners[event] ??= []) as Registration<Parameters<typeof handler>[0]>[];
+      const registration: Registration<Parameters<typeof handler>[0]> = { handler };
+      registrations.push(registration);
 
       return () => {
-        /**
-         * **The flag protects both of these at once.** The same function can
-         * be registered twice (then there are two unsubscribe functions too
-         * → `ListenerStore`), and an unsubscribe function must be safe to
-         * call twice. Without the flag these two promises break each other —
-         * calling the first unsubscribe twice would have `indexOf` **find the
-         * remaining registration instead** and remove both. It only looked
-         * safe when each registration used a distinct closure.
-         */
-        if (off) return;
-        off = true;
-        const index = handlers.indexOf(handler);
-        if (index !== -1) handlers.splice(index, 1);
+        // Safe to call twice: the second call finds the record already removed.
+        if (!registration.handler) return;
+        registration.handler = undefined;
+        registrations.splice(registrations.indexOf(registration), 1);
       };
     },
 
@@ -77,11 +72,13 @@ export function eventChannel<Events extends object>(): EventChannel<Events> {
      * next subscriber.** That's exactly effect cleanup's shape, so it gets
      * silently swallowed. Anything subscribed mid-iteration isn't called
      * this round either — otherwise a handler could grow the list on itself
-     * indefinitely.
+     * indefinitely. A handler removed mid-iteration — by an earlier handler,
+     * or by `clear()` when an earlier handler destroys the chart — is not
+     * called: it was removed before its turn came.
      */
     emit(event, payload) {
-      const handlers = listeners[event];
-      if (!handlers) return;
+      const registrations = listeners[event];
+      if (!registrations) return;
 
       /**
        * **If one subscriber throws, the rest are still called.**
@@ -94,7 +91,7 @@ export function eventChannel<Events extends object>(): EventChannel<Events> {
        * Still, it doesn't **swallow** anything (*"explicit error handling"*)
        * — everyone is called, then the failures are collected and thrown.
        */
-      const failures = runAll(handlers.slice(), (handler) => handler(payload));
+      const failures = runAll(registrations.slice(), (registration) => registration.handler?.(payload));
       if (failures) {
         throw throwable(failures, `"${String(event)}" subscriber threw`);
       }
@@ -105,6 +102,9 @@ export function eventChannel<Events extends object>(): EventChannel<Events> {
     },
 
     clear() {
+      for (const registrations of Object.values<Registration<never>[] | undefined>(listeners)) {
+        for (const registration of registrations ?? []) registration.handler = undefined;
+      }
       listeners = {};
     },
   };

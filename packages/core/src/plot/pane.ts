@@ -209,6 +209,13 @@ export class Pane implements PaneApi {
   /** Every option, settled. Rewritten as a whole by `applyOptions` → `pane-options.ts` */
   private settings: PaneSettings;
 
+  /**
+   * Whether the value range was set by hand (`setValueDomain`, a restored
+   * state) and not handed back to `autoScale` since. The chart's first data
+   * fit leaves such a range alone — it was chosen before there was data.
+   */
+  manualDomain = false;
+
   /** The assigned vertical slice. The Plot sets this before every render. */
   private assignedArea: PlotArea = EMPTY_AREA;
 
@@ -269,23 +276,18 @@ export class Pane implements PaneApi {
   }
 
   /**
-   * **When a format is set, five surfaces use the same ruler — down to
-   * the tick spacing.** Axis, badge, tooltip, legend and priceLine all
-   * read this, so their formatting can't drift apart → `formatOnAxis`.
-   * With no format set they deliberately differ: ticks print the value
-   * as-is while the badge surfaces fall back to two decimals — a split
-   * kept on purpose, because unifying it changes every chart that never
-   * touched formatting. An arrow function because it's carried into
-   * decoration contexts as `formatY`.
+   * **Five surfaces use the same ruler — down to the tick spacing.**
+   * Axis, badge, tooltip, legend and priceLine all read this, so their
+   * formatting can't drift apart → `formatOnAxis`. With no format set the
+   * badge surfaces get `DEFAULT_Y_FORMAT` on that same ruler: two
+   * decimals, more where the ticks are finer than a cent. An arrow
+   * function because it's carried into decoration contexts as `formatY`.
    */
   formatValue = (value: number): string => {
     const inherited = this.inheritedYAxis?.();
-    const format = this.settings.axis.format ?? inherited?.format;
-    if (!format) return DEFAULT_Y_FORMAT(value);
-
     return formatOnAxis(
       this.scale,
-      format,
+      this.settings.axis.format ?? inherited?.format ?? DEFAULT_Y_FORMAT,
       this.settings.axis.minTickSpacing ?? inherited?.minTickSpacing,
       value,
     );
@@ -589,6 +591,7 @@ export class Pane implements PaneApi {
       this.assertStateKeyAvailable,
     );
     this.settings = next;
+    if (next.autoScale) this.manualDomain = false;
 
     // Options don't touch the drawn points — the index and the value range both stay the same.
     this.notify({ data: false, refit: false, state });
@@ -610,9 +613,9 @@ export class Pane implements PaneApi {
     return this.series.xRange();
   }
 
-  /** The x list for each registration's drawn points — raw material for the bar-index mapping. */
-  xValuesPerSeries(): readonly (readonly number[])[] {
-    return this.series.xValuesPerSeries();
+  /** The x list for each registration's drawn points — raw material for the bar-index mapping. `barBodied` keeps only bar-bodied series. */
+  xValuesPerSeries(barBodied = false): readonly (readonly number[])[] {
+    return this.series.xValuesPerSeries(barBodied);
   }
 
   /**
@@ -641,6 +644,7 @@ export class Pane implements PaneApi {
      */
     this.yScale.setDomain(min, max);
     this.settings = { ...this.settings, autoScale: false };
+    this.manualDomain = true;
     this.notify({ data: false, refit: false, state: true });
   }
 

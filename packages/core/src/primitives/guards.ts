@@ -158,6 +158,17 @@ export function requireOptionalBoolean(
 }
 
 /**
+ * For input APIs. A callback must be a function where it is handed over —
+ * accepted as anything else, it fails on whichever later frame, pan or
+ * input first calls it, far from the line that made the mistake.
+ */
+export function requireFunction(value: unknown, label: string): void {
+  if (typeof value !== "function") {
+    throw new ContractError(`${label} must be a function, got ${describe(value)}`);
+  }
+}
+
+/**
  * For input APIs. Throws `ContractError` if not an object — options are
  * written by the consumer, so there's nothing to catch, only code to fix.
  * This pairs with `DataError` for data shape.

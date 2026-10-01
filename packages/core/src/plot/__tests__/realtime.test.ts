@@ -21,6 +21,9 @@ function mounted() {
     series: lineSeries(),
     data,
   });
+  // Three points follow their feed until they fill the screen; an explicit
+  // fit settles the window these tests watch.
+  model.plot.fitDomains();
   return { model, handle };
 }
 
@@ -137,6 +140,7 @@ describe("shiftVisibleRangeOnNewBar", () => {
       series: lineSeries(),
       data,
     });
+    model.plot.fitDomains();
     return { model, handle };
   }
 

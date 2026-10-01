@@ -1,0 +1,5 @@
+---
+"@finchart/core": patch
+---
+
+A listener removed during an emit — by an earlier listener, or by `destroy()` called from one — is no longer called later in that same emit; this holds for `plot.on`, `pane.subscribe` and every extension stream. A listener that throws still has its error reported, but the change it was told about now finishes: the first data's value-axis fit runs, `xDomainChange` still rings when a `stateChange` listener threw, and the frame is still requested (after `addPane`, `removePane`, pane option changes and `applyState` too). `addPane` still returns its pane when a `stateChange` listener throws; the listener's error is rethrown out of band. `applyState` checks every pane slice — `flex`, boolean `autoScale`/`invert`, an ordered finite `valueDomain`, and whether the pane's scale accepts that range (a log axis refuses zero) — before applying any, so a bad restore changes nothing. A manual value range set before the first data arrives (`setValueDomain`, or a restored state) is kept by the first data fit instead of being overwritten.

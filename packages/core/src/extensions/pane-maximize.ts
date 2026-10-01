@@ -1,4 +1,4 @@
-import { asFinite, asIndex } from "../primitives";
+import { asFinite, asIndex, ContractError } from "../primitives";
 import type { PaneApi } from "../plot/pane";
 import type { InputHost, PaneHost, PlotEventSource } from "../plot/capabilities";
 import type { Plugin, PluginApi } from "../primitives";
@@ -22,7 +22,8 @@ import { pluginApi } from "../primitives";
  * It never fights the divider drag for ownership — if flex changes from
  * outside while maximized, that change becomes the new truth and the
  * snapshot is discarded without restoring. If a pane disappears, only the
- * surviving panes get restored from the snapshot.
+ * surviving panes get restored from the snapshot; a pane added while
+ * maximized collapses with the rest and gets its own flex back on restore.
  *
  * Restoring via Esc is built in; toggling via a pane double-click is
  * opt-in — double-click already belongs to `doubleClickReset` (default
@@ -58,12 +59,18 @@ interface Snapshot {
   flexByPane: ReadonlyMap<PaneApi, number>;
 }
 
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION = 2;
 
 interface SerializedMaximize {
   version: number;
   targetIndex: number;
   flex: number[];
+  /**
+   * Each pane's `stateKey` (`null` for none). A payload only loads onto
+   * panes with the same keys in the same order — an indicator swapped for
+   * another leaves the count equal but the panes different.
+   */
+  keys: (string | null)[];
 }
 
 function serializeSnapshot(
@@ -77,6 +84,7 @@ function serializeSnapshot(
     version: FORMAT_VERSION,
     targetIndex,
     flex: panes.map((pane) => snapshot.flexByPane.get(pane) ?? pane.flex),
+    keys: panes.map((pane) => pane.stateKey),
   };
   return JSON.stringify(payload);
 }
@@ -93,8 +101,10 @@ function parseSnapshot(
   }
 
   if (typeof parsed !== "object" || parsed === null) return null;
-  const { version, targetIndex, flex } = parsed as Partial<SerializedMaximize>;
+  const { version, targetIndex, flex, keys } = parsed as Partial<SerializedMaximize>;
   if (version !== FORMAT_VERSION) return null;
+  if (!Array.isArray(keys) || keys.length !== panes.length ||
+      !panes.every((pane, at) => pane.stateKey === keys[at])) return null;
 
   // Finiteness alone isn't enough for an index — checking only
   // `0 <= v < length` would let a fractional index through, making
@@ -184,6 +194,12 @@ export function paneMaximize(
     }
 
     function maximize(pane: PaneApi): void {
+      live();
+      // A stale reference (a pane removed by an indicator toggle) would
+      // otherwise collapse every live pane to flex 0.
+      if (!plot.panes.includes(pane)) {
+        throw new ContractError("maximize(pane) needs a pane of this chart");
+      }
       if (snapshot?.target === pane) {
         restore();
         return;
@@ -195,7 +211,13 @@ export function paneMaximize(
       applyMaximization(pane, flexByPane);
     }
 
+    // Declared below; a call can only arrive after it exists.
+    function live(): void {
+      if (api.disposed) throw new ContractError("paneMaximize was disposed");
+    }
+
     function restore(): void {
+      live();
       if (!snapshot) return;
       const { flexByPane } = snapshot;
       snapshot = null;
@@ -215,14 +237,25 @@ export function paneMaximize(
         return;
       }
 
-      const target = snapshot.target;
+      const { target, flexByPane } = snapshot;
       const divergedElsewhere = plot.panes.some(
-        (pane) => pane !== target && pane.flex !== 0,
+        (pane) => pane !== target && flexByPane.has(pane) && pane.flex !== 0,
       );
       if (divergedElsewhere) {
         // flex changed from outside (a divider drag, etc.) — that's the new truth.
         // Don't restore over it: the layout the user just arranged must not be erased.
         snapshot = null;
+        return;
+      }
+
+      // A pane added while maximized (an indicator turned on) joins the snapshot with its
+      // own flex and collapses with the rest — so the maximize holds and restore brings it back too.
+      const added = plot.panes.filter((pane) => !flexByPane.has(pane));
+      if (added.length > 0) {
+        const grown = new Map(flexByPane);
+        for (const pane of added) grown.set(pane, pane.flex);
+        snapshot = { target, flexByPane: grown };
+        applyMaximization(target, grown);
       }
     });
 
@@ -263,6 +296,7 @@ export function paneMaximize(
           return snapshot ? serializeSnapshot(plot.panes, snapshot) : null;
         },
         load(payload: string): boolean {
+          live();
           const parsed = parseSnapshot(plot.panes, payload);
           if (parsed === null) return false;
 

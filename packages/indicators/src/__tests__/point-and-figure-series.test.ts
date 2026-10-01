@@ -47,6 +47,15 @@ const rects = (commands: readonly DrawCommand[]) =>
   commands.flatMap((c) => (c.type === "drawShape" && c.shape.shape === "rect" ? [c.shape] : []));
 
 describe("pointAndFigureSeries", () => {
+  it("a fit keeps half a column at each end — the columns are drawn a slot wide", () => {
+    const { plot } = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: pointAndFigureSeries({ boxSize: 1 }), data: [column(0, "up", 101, 103), column(2, "down", 100, 102)] },
+    });
+
+    expect(plot.getState().xDomain).toEqual({ min: -1, max: 3 });
+  });
+
   it("refuses non-object options and a box that is not a positive normal number", () => {
     expect(() => Reflect.apply(pointAndFigureSeries, undefined, [null])).toThrow(ContractError);
     expect(() => Reflect.apply(pointAndFigureSeries, undefined, [{}])).toThrow(ContractError);

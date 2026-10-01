@@ -128,6 +128,12 @@ export interface PlotOptions {
   scope?: Scope;
 }
 
+/** Every event name `on` accepts — a record, so the compiler flags one left out. */
+const PLOT_EVENT_NAMES: Readonly<Record<keyof PlotEvents, true>> = {
+  stateChange: true, render: true, crosshair: true, click: true, dblclick: true,
+  contextmenu: true, xDomainChange: true,
+};
+
 /**
  * The chart. Owns the layers, scales, grid, and interaction.
  *
@@ -176,8 +182,8 @@ export class Plot
   private readonly measurer: TextMeasurer | null;
   /** null unless supplied. Pane heights are then set by flex alone. */
   private readonly dividers: DividerRenderer | null;
-  /** How many divider handles the last frame put up. */
-  private shownDividers = 0;
+  /** The pane pair each divider handle the last frame put up sits between. */
+  private shownDividers: readonly (readonly [PaneApi, PaneApi])[] = [];
 
   /**
    * The default pane that holds series. Always exists.
@@ -331,11 +337,11 @@ export class Plot
       // frame put up (see `resizeBetween`).
       this.dividers = dividers && {
         render: (boundaries) => {
-          this.shownDividers = boundaries.length;
+          this.shownDividers = boundaries.map((boundary) => boundary.panes);
           dividers.render(boundaries);
         },
         clear: () => {
-          this.shownDividers = 0;
+          this.shownDividers = [];
           dividers.clear();
         },
         destroy: () => dividers.destroy(),
@@ -367,28 +373,13 @@ export class Plot
         scale: this.xScale,
         x: this.x,
         dataRange: () => this.dataRange,
+        xValues: (barBodied) => this.paneStack.xValuesPerSeries(barBodied),
         // A reader function, not a value — changed via applyOptions.
         options: () => this.config,
         onChange: (visible) => {
-          this.emitStateChange();
-
-          /**
-           * **Don't build the payload if nobody's listening** — the same door
-           * its sibling `emitStateChange` puts up before building a snapshot.
-           *
-           * `dataRange` is a walk over every series in every pane
-           * (`Plot.dataRange`), and this spot runs on **every pointermove**
-           * of a drag pan (state is synchronous, it doesn't coalesce into a
-           * frame). On a high-polling-rate trackpad this fires more
-           * often than frames do.
-           */
-          if (!this.events.has("xDomainChange")) return;
-          this.events.emit("xDomainChange", {
-            ...visible,
-            // Series decide "empty means null" themselves — Plot doesn't
-            // second-guess it.
-            dataRange: this.dataRange,
-          });
+          // Both announcements ring even when the first one's listener throws.
+          const failures = runAll([() => this.emitStateChange(), () => this.emitXDomain(visible)], (announce) => announce());
+          if (failures) throw throwable(failures, "announcing the x window failed");
         },
       });
 
@@ -560,8 +551,13 @@ export class Plot
      * sort of every point under bar-index coordinates.
      */
     if (!change.data) {
-      if (change.state) this.emitStateChange();
-      this.scheduleRender();
+      // A listener that throws reports its error, but must not leave the
+      // change undrawn.
+      try {
+        if (change.state) this.emitStateChange();
+      } finally {
+        this.scheduleRender();
+      }
       return;
     }
 
@@ -581,20 +577,29 @@ export class Plot
     // a refit must update the baseline so the next bar is recognized.
     const range = this.dataRange;
     const previousMax = this.xViewport.noteData(range);
+    // Data gone means the next data is a first arrival for y too: a range set
+    // by hand on the old data has no claim on it. One set while empty does.
+    if (!range && previousMax !== null) for (const pane of this.paneStack.list) pane.manualDomain = false;
 
-    if (change.state) this.emitStateChange();
-
-    if (change.refit || !this.xViewport.fitted) {
-      this.refit();
-      return;
-    }
-
-    this.xViewport.followNewBar(previousMax, range);
-
+    // Every step runs and the frame is requested even when a listener throws
+    // in one of them; the failures come out at the end.
+    const failures = runAll([
+      () => {
+        if (change.state) this.emitStateChange();
+      },
+      () => {
+        if (change.refit || !this.xViewport.fitted) this.refit(!this.xViewport.fitted);
+        // Only x: an autoScale value axis follows the new window on the render, and a
+        // full value refit here would scan every point on each streamed tick.
+        else if (this.xViewport.followsData) this.xViewport.fit(true);
+        else this.xViewport.followNewBar(previousMax, range);
+      },
+    ], (step) => step());
     // An autoScale pane is fitted to the settled visible range by the render.
     // Do not scan its full value extent here; prepend notifications can arrive
     // many times before that scheduled render.
     this.scheduleRender();
+    if (failures) throw throwable(failures, "announcing a data change failed");
   }
 
   /**
@@ -621,6 +626,13 @@ export class Plot
    *
    * Its value axis is its own — linear by default, with log available if
    * you need it.
+   *
+   * A `stateChange` listener that throws here is rethrown in a microtask,
+   * where `removePane` and `setPaneOrder` rethrow it to the caller. The
+   * pane is already on the chart when the announcement runs, and the
+   * caller holds no other way to reach it — throwing would strand a live
+   * pane nobody can remove. The other two hand back nothing, so the error
+   * can be theirs.
    */
   addPane(options: PaneOptions & { yScale?: Scale } = {}): PaneApi {
     requireObject(options, "addPane(options)");
@@ -645,11 +657,35 @@ export class Plot
 
     const pane = this.paneStack.add(options.yScale ?? new LinearScale(), options);
     // The state's panes array grew by one — keyed panes match semantically
-    // and legacy panes by index, so a shape change is state too.
-    this.emitStateChange();
+    // and legacy panes by index, so a shape change is state too. The pane is
+    // on the chart either way, so the caller must get it back: a listener
+    // that throws is reported out of band instead of taking the pane away.
+    try {
+      this.emitStateChange();
+    } catch (error) {
+      queueMicrotask(() => {
+        throw error;
+      });
+    }
     this.scheduleRender();
 
     return pane;
+  }
+
+  /**
+   * Restacks the panes top to bottom in `panes` — every pane of this chart,
+   * each once, the main pane anywhere. For a host that declares the layout
+   * (a JSX tree inserting a pane above others). Pane state keeps following
+   * each pane by its `stateKey`.
+   */
+  setPaneOrder(panes: readonly PaneApi[]): void {
+    if (!Array.isArray(panes)) throw new ContractError("setPaneOrder(panes) must be an array");
+    if (!this.paneStack.reorder(panes)) return;
+    try {
+      this.emitStateChange();
+    } finally {
+      this.scheduleRender();
+    }
   }
 
   /** mainPane always survives — otherwise series would have nowhere to go. */
@@ -664,8 +700,11 @@ export class Plot
     // Unsubscribing happened first, so the pane side won't report in —
     // recount directly.
     this.rebuildX();
-    this.emitStateChange();
-    this.scheduleRender();
+    try {
+      this.emitStateChange();
+    } finally {
+      this.scheduleRender();
+    }
 
     if (failures.length > 0) {
       throw throwable(failures, "cleaning up a pane's extensions failed");
@@ -689,6 +728,20 @@ export class Plot
   /** The screen x (px) where a data x lands. */
   pixelAtX(x: number): number {
     return this.x.toPixel(x);
+  }
+
+  /**
+   * How far a fit reaches before the first bar, **in data x** — half the
+   * gap to its neighbour, so the first candle is drawn whole. `0` with no
+   * data, and with no series that draws a bar body (lines fit edge to
+   * edge). An infinite-history loader reads it so that margin does not look
+   * like missing history.
+   */
+  leadingMargin(): number {
+    const range = this.dataRange;
+    if (!range) return 0;
+    const start = this.x.toDomain(range.min);
+    return range.min - this.x.fromDomain(start - this.xViewport.halfBars()[0]);
   }
 
   /**
@@ -780,8 +833,8 @@ export class Plot
   }
 
   /**
-   * Keeps the window's width and returns to live (last bar + rightOffset)
-   * (the lightweight `scrollToRealTime`). Unlike `fitDomains`, the zoom
+   * Keeps the window's width and returns to live (last bar + half a bar +
+   * rightOffset) (the lightweight `scrollToRealTime`). Unlike `fitDomains`, the zoom
    * level survives — this is the destination of the "jump back to now"
    * button after browsing the past.
    */
@@ -850,14 +903,18 @@ export class Plot
    * swap must not release another pane's manual range. Only the public
    * `fitDomains()` changes modes.
    */
-  private refit(): void {
-    this.xViewport.fit();
+  private refit(first: boolean): void {
     // A refit also refits a manual value range — this is where it diverges
-    // from the path incremental data takes (fitValueDomain on render).
-    for (const pane of this.paneStack.list) {
-      pane.fitValueDomain();
-    }
-    this.scheduleRender();
+    // from the path incremental data takes (fitValueDomain on render). The x
+    // fit announces the new window, and a listener that throws there must
+    // not leave the value axes on the old data: every step runs, then the
+    // failures are thrown.
+    const panes = [...this.paneStack.list];
+    const failures = runAll([() => this.xViewport.fit(), ...panes.map((pane) => () => {
+      // A range set by hand before the first data was chosen for that data.
+      if (this.paneStack.list.includes(pane) && !(first && pane.manualDomain)) pane.fitValueDomain();
+    })], (step) => step());
+    if (failures) throw throwable(failures, "refit failed");
   }
 
   /**
@@ -978,6 +1035,10 @@ export class Plot
     event: E,
     handler: (payload: PlotEvents[E]) => void,
   ): () => void {
+    // A misspelled name would be accepted and never ring.
+    if (!Object.hasOwn(PLOT_EVENT_NAMES, event)) {
+      throw new ContractError(`on(event): the chart emits no "${String(event)}" event`);
+    }
     return this.events.on(event, handler);
   }
 
@@ -1152,6 +1213,8 @@ export class Plot
    * screenshot requires `createCanvasAxisLabels` wiring.
    */
   takeScreenshot(): string {
+    // The layers still hold the last picture, which is not this chart any more.
+    if (this.destroyed) throw new ContractError("cannot take a screenshot of a destroyed Plot");
     if (!this.layers.screenshot) {
       throw new RenderError(
         "this layer has no pixels to capture — a headless chart uses commands() instead",
@@ -1223,6 +1286,26 @@ export class Plot
       xDomain: this.xViewport.visibleRange(),
       panes: this.paneStack.list.map(paneStateOf),
     };
+  }
+
+  private emitXDomain(visible: { startX: number; endX: number }): void {
+    /**
+     * **Don't build the payload if nobody's listening** — the same door
+     * its sibling `emitStateChange` puts up before building a snapshot.
+     *
+     * `dataRange` is a walk over every series in every pane
+     * (`Plot.dataRange`), and this spot runs on **every pointermove**
+     * of a drag pan (state is synchronous, it doesn't coalesce into a
+     * frame). On a high-polling-rate trackpad this fires more
+     * often than frames do.
+     */
+    if (!this.events.has("xDomainChange")) return;
+    this.events.emit("xDomainChange", {
+      ...visible,
+      // Series decide "empty means null" themselves — Plot doesn't
+      // second-guess it.
+      dataRange: this.dataRange,
+    });
   }
 
   /**
@@ -1322,6 +1405,11 @@ export class Plot
    * panes with no keys retain the legacy index pairing. A slice whose pane
    * does not currently exist is dropped — whoever creates panes (the
    * wrapper) reapplies it once the list changes.
+   *
+   * **Unkeyed slices pair by position only when the counts match.** With a
+   * pane added or removed since the save, which one moved is unknowable, so
+   * every unkeyed slice is dropped rather than put on the wrong pane. Give
+   * panes a `stateKey` to restore them across layout changes.
    */
   applyState(state: Partial<ChartState>): void {
     /**
@@ -1362,16 +1450,27 @@ export class Plot
     const paneChanges = state.panes === undefined
       ? []
       : matchPaneState(this.paneStack.list, state.panes);
+    // A scale can refuse a well-formed range — a log axis given zero. Each
+    // one is asked before anything is applied, then put back, so a restore
+    // it refuses changes nothing.
+    for (const { pane, slice } of paneChanges) {
+      if (slice.autoScale || !slice.valueDomain) continue;
+      const [min, max] = pane.yScale.getDomain();
+      pane.yScale.setDomain(slice.valueDomain.min, slice.valueDomain.max);
+      pane.yScale.setDomain(min, max);
+    }
 
-    this.coalesceState(() => {
-      // If there's no data yet, the window holds it as pending and consumes
-      // it at the first fit.
-      if (state.xDomain != null) this.xViewport.restore(state.xDomain);
+    try {
+      this.coalesceState(() => {
+        // If there's no data yet, the window holds it as pending and consumes
+        // it at the first fit.
+        if (state.xDomain != null) this.xViewport.restore(state.xDomain);
 
-      for (const { pane, slice } of paneChanges) applyPaneState(pane, slice);
-    });
-
-    this.scheduleRender();
+        for (const { pane, slice } of paneChanges) applyPaneState(pane, slice);
+      });
+    } finally {
+      this.scheduleRender();
+    }
   }
 
   // --- domain ---
@@ -1746,7 +1845,7 @@ export class Plot
       this.viewportSize.height,
       // Not heights, but the ground a move stands on: a frame that took the
       // handles down, or data that changed (emptied, replaced).
-      this.shownDividers,
+      ...this.shownDividers.flat(),
       this.dataChanges,
     ];
     for (const pane of this.paneStack.list) {
@@ -1757,9 +1856,13 @@ export class Plot
 
   /** Whether a move for the handle at `index` has nothing to act on. */
   private moveRefused(index: number): boolean {
+    // A handle drawn for another pair — a pane removed or inserted above
+    // it since the frame — has nothing of its own to move.
+    const drawn = this.shownDividers[index];
+    const { list } = this.paneStack;
     return (
       this.destroyed ||
-      index >= this.shownDividers ||
+      !drawn || drawn[0] !== list[index] || drawn[1] !== list[index + 1] ||
       !this.dataRange ||
       !this.config.resizablePanes
     );

@@ -1,5 +1,6 @@
 import { requireObject, requireOptionalBoolean } from "../primitives";
-import { OhlcAggregation, OHLCAccessor } from "../data";
+import { OHLC_COORDINATES } from "../data/accessors";
+import { OHLC_DECIMATION } from "../data/aggregation";
 import type { DataView, OHLC, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
@@ -57,13 +58,11 @@ export class CandleSeries implements Series<OHLC> {
    * candles into one pixel just means the later one covers the earlier
    * one.
    */
-  readonly decimation = {
-    strategy: new OhlcAggregation(),
-    pointsPerPixel: 1,
-  };
+  readonly decimation = OHLC_DECIMATION;
+  readonly barBody = true;
 
   /** A candle's value is `close`. `OHLC` has no `y`, so the default accessor can't read it. */
-  readonly coordinates = new OHLCAccessor();
+  readonly coordinates = OHLC_COORDINATES;
 
   /** O/H/L/C, and V when the bar carries a volume — a gap (`null` or absent) is left out, not shown as a dash. */
   describe(point: OHLC): readonly SeriesRow[] {

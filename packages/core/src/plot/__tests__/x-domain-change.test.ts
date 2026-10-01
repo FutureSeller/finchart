@@ -71,8 +71,10 @@ describe("xDomainChange", () => {
   });
 
   it("should stay quiet for data appended without moving the window", () => {
-    const { handle, seen } = mount();
+    const { plot, handle, seen } = mount();
     handle.setData(data);
+    // Five points follow their feed until they fill the screen; an explicit fit settles the window.
+    plot.fitDomains();
     const before = seen.length;
 
     // An incremental add does not touch the domain

@@ -1,5 +1,5 @@
 import type { Range } from "../data";
-import { ContractError, requireObject } from "../primitives";
+import { ContractError, requireInterval, requireNonNegative, requireObject, requireOptionalBoolean } from "../primitives";
 import type { Pane, PaneApi } from "./pane";
 /**
  * State slice for one pane → `ChartState.panes`
@@ -46,7 +46,9 @@ export interface ChartState {
   /**
    * Stacking order from the top. A `stateKey` follows its matching pane even
    * when dynamic pane structure changes; snapshots with no keys retain the
-   * legacy index pairing.
+   * legacy index pairing — and only while the pane count is the same: with
+   * a pane added or removed, `applyState` drops every unkeyed slice. Give
+   * panes a `stateKey` to restore them across layout changes.
    */
   panes: PaneState[];
 }
@@ -79,7 +81,9 @@ export function applyPaneState(pane: PaneApi, slice: PaneState): void {
  * Pairs saved state with live panes without making ordering a semantic
  * identity. In keyed mode an unkeyed legacy slice may only reach an unkeyed
  * pane at the same position — it never falls through to a differently named
- * pane.
+ * pane. Pairing by position at all needs one slice for every pane: with a
+ * pane added or removed since the save, which one moved is unknowable, and
+ * a guess puts one pane's layout on another.
  */
 export function matchPaneState(
   panes: readonly PaneApi[],
@@ -92,6 +96,14 @@ export function matchPaneState(
   const seen = new Set<string>();
   for (const slice of slices) {
     requireObject(slice, "applyState({ panes }) slice");
+    // Every slice is checked before any is applied, so a bad restore changes nothing.
+    if (slice.flex !== undefined) requireNonNegative(slice.flex, "applyState pane flex");
+    requireOptionalBoolean(slice.autoScale, "applyState pane autoScale");
+    requireOptionalBoolean(slice.invert, "applyState pane invert");
+    if (!slice.autoScale && slice.valueDomain != null) {
+      requireObject(slice.valueDomain, "applyState pane valueDomain");
+      requireInterval(slice.valueDomain.min, slice.valueDomain.max, "applyState pane valueDomain");
+    }
     if (slice.stateKey === undefined) continue;
     if (typeof slice.stateKey !== "string" || slice.stateKey.trim().length === 0) {
       throw new ContractError("applyState pane stateKey must be a non-empty string");
@@ -104,7 +116,9 @@ export function matchPaneState(
 
   const keyed = slices.some((slice) => slice.stateKey !== undefined) ||
     panes.some((pane) => pane.stateKey !== null);
+  const positional = slices.length === panes.length;
   if (!keyed) {
+    if (!positional) return [];
     return slices.flatMap((slice, index) => {
       const pane = panes[index];
       return pane ? [{ pane, slice }] : [];
@@ -121,6 +135,6 @@ export function matchPaneState(
       return pane ? [{ pane, slice }] : [];
     }
     const pane = panes[index];
-    return pane?.stateKey === null ? [{ pane, slice }] : [];
+    return positional && pane?.stateKey === null ? [{ pane, slice }] : [];
   });
 }

@@ -142,6 +142,8 @@ describe("state notifications", () => {
 
   it("should not announce state on data alone", () => {
     const { plot, handle } = setup();
+    // A short history follows its feed until it fills the screen; an explicit fit settles the window.
+    plot.fitDomains();
     const seen = vi.fn();
     plot.on("stateChange", seen);
 

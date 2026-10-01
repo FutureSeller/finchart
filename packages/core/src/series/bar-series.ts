@@ -1,5 +1,6 @@
 import { requireObject } from "../primitives";
-import { OhlcAggregation, OHLCAccessor } from "../data";
+import { OHLC_COORDINATES } from "../data/accessors";
+import { OHLC_DECIMATION } from "../data/aggregation";
 import type { DataView, OHLC, Range } from "../data";
 import type { DrawTarget, StyleOverridesOf, StyleSpec } from "../render";
 import { noStyle, resolveStyle } from "../render";
@@ -48,12 +49,10 @@ export const DEFAULT_BAR_STYLE: BarSeriesStyle = /* @__PURE__ */ resolveStyle(
  */
 export class BarSeries implements Series<OHLC> {
   /** Aggregated for the same reason as a candle, with one per pixel as the ceiling. */
-  readonly decimation = {
-    strategy: new OhlcAggregation(),
-    pointsPerPixel: 1,
-  };
+  readonly decimation = OHLC_DECIMATION;
+  readonly barBody = true;
 
-  readonly coordinates = new OHLCAccessor();
+  readonly coordinates = OHLC_COORDINATES;
 
   constructor(private overrides: BarSeriesStyleOverrides = {}) {}
 
