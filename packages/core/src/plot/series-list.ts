@@ -10,7 +10,7 @@
  * the chart asks of every registration at once.
  */
 import type { DataManagerFactory, Range, Viewport } from "../data";
-import { ContractError, type PlotArea } from "../primitives";
+import { ContractError, forEachStill, mapStill, type PlotArea } from "../primitives";
 import type { DrawTarget, StyleReader } from "../render";
 import type { Scale, XMapping } from "../scale";
 import type { Entry, SeriesId, SeriesSpec } from "../registration";
@@ -271,12 +271,14 @@ export class SeriesList {
    * all to measure.
    */
   valueExtent(visible: Viewport | null): Range | null {
-    return unionOf(this.list.map((entry) => entry.valueExtent(visible)));
+    // Each entry reads someone else's code (a series' `valueExtent`, a
+    // source's `read`) that may dispose a registration → `mapStill`.
+    return unionOf(mapStill(this.list, (entry) => entry.valueExtent(visible)));
   }
 
   /** The x range drawn. `null` if all are empty. */
   xRange(): Range | null {
-    return unionOf(this.list.map((entry) => entry.xRange()));
+    return unionOf(mapStill(this.list, (entry) => entry.xRange()));
   }
 
   /**
@@ -286,7 +288,7 @@ export class SeriesList {
    * mapping's job. `barBodied` keeps only the series that draw bar bodies.
    */
   xValuesPerSeries(barBodied = false): readonly (readonly number[])[] {
-    return (barBodied ? this.list.filter((entry) => entry.barBody) : this.list).map((entry) => entry.xValues());
+    return mapStill(barBodied ? this.list.filter((entry) => entry.barBody) : this.list, (entry) => entry.xValues());
   }
 
   /**
@@ -296,11 +298,11 @@ export class SeriesList {
    */
   minPositive(visible: Viewport | null): number | null {
     let smallest: number | null = null;
-    for (const entry of this.list) {
+    forEachStill(this.list, (entry) => {
       const candidate = entry.positiveFloor(visible);
-      if (candidate === null) continue;
+      if (candidate === null) return;
       if (smallest === null || candidate < smallest) smallest = candidate;
-    }
+    });
     return smallest;
   }
 
@@ -324,9 +326,9 @@ export class SeriesList {
 
     const samples: SeriesSample[] = [];
 
-    for (const entry of this.list) {
+    forEachStill(this.list, (entry) => {
       const nearest = entry.nearest(x);
-      if (!nearest) continue;
+      if (!nearest) return;
 
       samples.push({
         series: entry.series,
@@ -340,7 +342,7 @@ export class SeriesList {
         ...(nearest.rows !== undefined && { rows: nearest.rows }),
         ...(!entry.readout && { readout: false }),
       });
-    }
+    });
 
     return samples;
   }

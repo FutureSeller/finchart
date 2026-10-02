@@ -10,6 +10,7 @@
 import {
   ContractError,
   describe,
+  forEachStill,
   requirePoint,
   type PlotArea,
   type Point,
@@ -119,11 +120,13 @@ export function focusClaims(): FocusClaims {
            * order.** Everyone is asked so the verdict never depends on order.
            */
           let contested = false;
-          for (const other of entries) {
-            if (other === claim) continue;
+          // `areaOf` is someone else's code and may release a claim →
+          // `forEachStill`, so the claimant after it is still asked.
+          forEachStill(entries, (other) => {
+            if (other === claim) return;
             const area = focusAreaOf(other);
             if (area !== null && containsFocus(area, at)) contested = true;
-          }
+          });
           return contested;
         },
         release: () => {

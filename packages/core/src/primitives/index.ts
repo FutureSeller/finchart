@@ -4,6 +4,7 @@ export { ContractError, DataError, RenderError, runAll, throwable } from "./erro
 export type { Disposer, Scope } from "./scope";
 export { createScope } from "./scope";
 export { emitter } from "./emitter";
+export { forEachStill, mapStill } from "./still";
 export type { Emitter, Observable } from "./emitter";
 export { eventChannel } from "./event-channel";
 export type { EventChannel } from "./event-channel";

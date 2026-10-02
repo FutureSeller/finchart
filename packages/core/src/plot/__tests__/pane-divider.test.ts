@@ -568,6 +568,7 @@ describe("a divider drag whose subscriber removes a pane mid-write", () => {
   it("gives each surviving pane its own height — not the one of the pane removed before it", () => {
     const { plot, a, b, height, drag } = threePanes();
     const bHeight = height(b);
+    const mainHeight = height(plot.mainPane);
     const aFlex = a.flex;
     plot.mainPane.subscribe((change) => {
       if (change.settings && plot.panes.includes(a)) plot.removePane(a);
@@ -576,9 +577,57 @@ describe("a divider drag whose subscriber removes a pane mid-write", () => {
     drag(0, 30);
 
     expect(plot.panes).toEqual([plot.mainPane, b]);
-    // b's share is the height b had on screen; a's shrunk height must not land on it.
-    expect(b.flex).toBeCloseTo(bHeight, 6);
+    // b's share is the height b had on screen; a's shrunk height must not land
+    // on it. Every share is scaled by the same factor, so the ratio to the
+    // dragged pane (30px taller) says which height b got.
+    expect(b.flex / plot.mainPane.flex).toBeCloseTo(bHeight / (mainHeight + 30), 6);
     // The removed pane is no longer the chart's to write.
     expect(a.flex).toBe(aFlex);
+  });
+});
+
+describe("a divider drag keeps flex in the units the panes were given", () => {
+  function threeEven() {
+    let drag: DividerDragHandler = () => undefined;
+    const deps = testBrowserDeps({
+      createDividers: (_overlay, onDrag) => {
+        drag = onDrag;
+        return { render: () => undefined, clear: () => undefined, destroy: () => undefined };
+      },
+    });
+    const { plot } = mountPlot({ deps, series: silentSeries(), data, config: { ...defaultConfig, showGrid: false } });
+    for (let i = 0; i < 2; i++) plot.addPane().addSeries({ series: silentSeries(), data });
+    plot.render();
+    const heights = (): number[] => {
+      plot.render();
+      return plot.panes.map((pane) => pane.area.bottom - pane.area.top);
+    };
+    return { plot, heights, drag: (index: number, dy: number) => drag(index, dy) };
+  }
+
+  it("keeps the flex total near what it was, so the heights on screen hold and the units don't jump", () => {
+    const { plot, heights, drag } = threeEven();
+
+    drag(0, 30);
+    const dragged = heights();
+
+    // Scaled by a power of two (exact in floating point), so within √2 of 3.
+    const total = plot.panes.reduce((sum, pane) => sum + pane.flex, 0);
+    expect(total).toBeGreaterThanOrEqual(3 / Math.SQRT2);
+    expect(total).toBeLessThanOrEqual(3 * Math.SQRT2);
+    expect(dragged[0] - dragged[1]).toBeCloseTo(60, 0);
+  });
+
+  it("gives a pane added after a drag its fair share at the default flex", () => {
+    const { plot, heights, drag } = threeEven();
+    drag(0, 30);
+
+    plot.addPane().addSeries({ series: silentSeries(), data });
+
+    const all = heights();
+    const late = all[3];
+    const average = (all[0] + all[1] + all[2]) / 3;
+    // Flex 1 among panes whose flex averages about 1 — a fair share, not squeezed to its floor.
+    expect(late).toBeGreaterThan(average * 0.6);
   });
 });
