@@ -90,6 +90,14 @@ export interface FrameInput {
 export interface Frame {
   slices: AxisSlices;
   ticks: { x: Tick[]; y: PaneTicks[] };
+  /**
+   * The panes this frame was laid out for, in order — `ticks.y[i]` belongs to
+   * `panes[i]`. A copy taken when the frame began: an axis `format`, a
+   * measurer or a decoration that removes or reorders a pane mid-frame
+   * changes the chart's list, not this one, so the pairing holds and the
+   * change shows on the next frame.
+   */
+  panes: readonly Pane[];
 }
 
 /**
@@ -215,9 +223,14 @@ export function layoutPaneHeights(input: PaneHeightInput): {
 }
 
 export function layoutFrame(input: FrameInput): Frame | null {
-  const { area, panes, gap, axis, xScale, x, labels } = input;
+  // The scene is fixed before anyone else's code runs (a measurer, an axis
+  // `format`) — heights, slices and ticks are paired with panes by position,
+  // and a pane removed mid-layout must not shift them onto its neighbours.
+  const panes = [...input.panes];
+  const scene: FrameInput = { ...input, panes, shares: input.shares ? [...input.shares] : undefined };
+  const { area, gap, axis, xScale, x, labels } = scene;
 
-  const vertical = layoutPaneHeights(input);
+  const vertical = layoutPaneHeights(scene);
   if (vertical === null) return null;
   const { heights, collapsed, xHeight } = vertical;
 
@@ -248,7 +261,7 @@ export function layoutFrame(input: FrameInput): Frame | null {
 
   // 4) y-axis width — decided by the longest label.
   const shown = y.filter((group) => group.showLabels);
-  const yWidth = !labels || shown.length === 0 ? 0 : yAxisWidth(input, shown);
+  const yWidth = !labels || shown.length === 0 ? 0 : yAxisWidth(scene, shown);
 
   // 5) Slices settle — a pane's final area and the x scale's range both come out of this.
   //    x is shared by every pane, so the data area's width is used as-is.
@@ -276,7 +289,7 @@ export function layoutFrame(input: FrameInput): Frame | null {
   xScale.setRange(slices.data.left, slices.data.right);
 
   // 6) x ticks — can only be counted once the range is settled.
-  return { slices, ticks: { x: xTicks(xScale, x, axis.x), y } };
+  return { slices, ticks: { x: xTicks(xScale, x, axis.x), y }, panes };
 }
 
 /**

@@ -24,6 +24,7 @@ import type {
 import {
   emptyDecorations,
   forEachAboveSeries,
+  forEachEntry,
   forEachBelowSeries,
   mountDecoration,
 } from "./decoration";
@@ -505,9 +506,10 @@ export class Pane implements PaneApi {
   /** What this pane's decorations describe to put on the axis. In registration order — later ones on top. */
   collectAxisBadges(context: PaneDecorationContext): AxisBadge[] {
     const badges: AxisBadge[] = [];
-    for (const { decoration } of this.decorations) {
+    // `axisBadges` is someone else's code and may unmount a decoration → `forEachEntry`.
+    forEachEntry(this.decorations, (decoration) => {
       badges.push(...(decoration.axisBadges?.(context) ?? []));
-    }
+    });
     return badges;
   }
 

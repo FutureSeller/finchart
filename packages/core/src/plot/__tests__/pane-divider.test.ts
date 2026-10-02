@@ -544,3 +544,41 @@ describe("divider moves between frames", () => {
     expect(changes).toBe(0);
   });
 });
+
+describe("a divider drag whose subscriber removes a pane mid-write", () => {
+  /** Three populated panes with the divider drag captured, heights read after a render. */
+  function threePanes() {
+    let drag: DividerDragHandler = () => undefined;
+    const deps = testBrowserDeps({
+      createDividers: (_overlay, onDrag) => {
+        drag = onDrag;
+        return { render: () => undefined, clear: () => undefined, destroy: () => undefined };
+      },
+    });
+    const { plot } = mountPlot({ deps, series: silentSeries(), data, config: { ...defaultConfig, showGrid: false } });
+    const a = plot.addPane();
+    a.addSeries({ series: silentSeries(), data });
+    const b = plot.addPane();
+    b.addSeries({ series: silentSeries(), data });
+    plot.render();
+    const height = (pane: typeof a): number => pane.area.bottom - pane.area.top;
+    return { plot, a, b, height, drag: (index: number, dy: number) => drag(index, dy) };
+  }
+
+  it("gives each surviving pane its own height — not the one of the pane removed before it", () => {
+    const { plot, a, b, height, drag } = threePanes();
+    const bHeight = height(b);
+    const aFlex = a.flex;
+    plot.mainPane.subscribe((change) => {
+      if (change.settings && plot.panes.includes(a)) plot.removePane(a);
+    });
+
+    drag(0, 30);
+
+    expect(plot.panes).toEqual([plot.mainPane, b]);
+    // b's share is the height b had on screen; a's shrunk height must not land on it.
+    expect(b.flex).toBeCloseTo(bHeight, 6);
+    // The removed pane is no longer the chart's to write.
+    expect(a.flex).toBe(aFlex);
+  });
+});

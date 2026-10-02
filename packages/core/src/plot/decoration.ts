@@ -126,6 +126,20 @@ export interface DecorationOptions {
 export interface DecorationEntry<D> {
   readonly decoration: D;
   readonly zIndex: number;
+  /**
+   * When it was added, relative to the list — one past the largest `seq` it
+   * held. Within one z the list keeps insertion order, so `(zIndex, seq)` is
+   * exactly the list's order — a walk can always tell where it is, whatever
+   * was removed around it, and what arrived after it began.
+   */
+  readonly seq: number;
+}
+
+/** One past the largest `seq` in the list — what the next entry gets. */
+function nextSeqOf<D>(list: DecorationList<D>): number {
+  let next = 0;
+  for (const entry of list) if (entry.seq >= next) next = entry.seq + 1;
+  return next;
 }
 
 /** **Kept in ascending z order.** The drawing side never has to sort. */
@@ -181,6 +195,7 @@ export function addDecoration<D>(
   const entry: DecorationEntry<D> = {
     decoration,
     zIndex: options.zIndex ?? ABOVE_SERIES,
+    seq: nextSeqOf(list),
   };
 
   let at = list.length;
@@ -193,65 +208,80 @@ export function addDecoration<D>(
   };
 }
 
-/**
- * The slot a walk continues from once a visit has changed the list under it.
- * An entry that removed itself is gone, so the walk continues after the one
- * visited before it — wherever an insertion during the visit has moved it.
- */
-function resumeAt<D>(
-  list: DecorationList<D>,
-  entry: DecorationEntry<D>,
-  at: number,
-  previous: DecorationEntry<D> | undefined,
-): number {
-  if (list[at] === entry) return at;
-  const moved = list.indexOf(entry);
-  if (moved !== -1) return moved;
-  const before = previous ? list.indexOf(previous) : -1;
-  return before === -1 ? at - 1 : before;
+/** Whether `entry` comes after the place `(zIndex, seq)` in the list's order. */
+function after<D>(entry: DecorationEntry<D>, zIndex: number, seq: number): boolean {
+  return entry.zIndex > zIndex || (entry.zIndex === zIndex && entry.seq > seq);
 }
 
 /**
- * Yields everything below the series, in order. Never allocates a new
- * array — this runs every frame. The list is already sorted, so it scans
- * from the front and stops at the series's slot.
+ * Walks the list in order while a visit may change it — `visit` is someone
+ * else's `draw` or `axisBadges`, and the unmount function `addDecoration`
+ * returned can run inside it, for that decoration or any other.
  *
- * **A shrinking list during iteration never skips the next entry.**
- * `addDecoration`'s unsubscribe function can be called from inside
- * `visit` — a notification banner that draws once and then removes itself
- * is exactly that shape. Unlike sibling loops elsewhere, this one **re-finds
- * its place** instead of copying: if the entry at the current slot has
- * changed after a visit, it continues right after that entry's new slot — or,
- * if the entry itself is gone, right after the entry visited before it. A decoration added
- * during the visit, before or after, waits for the next frame and nothing is
- * drawn twice.
+ * **It never loses its place and never allocates.** After each visit it
+ * finds the first entry that comes after the one just visited, by
+ * `(zIndex, seq)` rather than by slot, so a visit that removes entries —
+ * itself, the one before it, several — skips nothing. An entry added during
+ * the walk (its `seq` is past where the walk began) waits for the next
+ * frame, and nothing is visited twice. The search starts from the last
+ * slot, so a list nobody touched costs one step per entry, as before.
+ *
+ * `visit` returns `true` to stop.
+ */
+function walk<D>(list: DecorationList<D>, visit: (entry: DecorationEntry<D>) => boolean | void): void {
+  const limit = nextSeqOf(list);
+  let zIndex = -Infinity;
+  let seq = -1;
+  let at = 0;
+  for (;;) {
+    // Back up past anything that now sits after the place (a removal above
+    // shifted the slots down), then forward past anything at or before it.
+    if (at > list.length) at = list.length;
+    while (at > 0 && after(list[at - 1], zIndex, seq)) at--;
+    while (at < list.length && !after(list[at], zIndex, seq)) at++;
+    // Skip what arrived after the walk began.
+    while (at < list.length && list[at].seq >= limit) at++;
+    const entry = list[at];
+    if (entry === undefined) return;
+    zIndex = entry.zIndex;
+    seq = entry.seq;
+    if (visit(entry) === true) return;
+    at++;
+  }
+}
+
+/**
+ * Yields everything below the series, in order, and stops at the series's
+ * slot. Safe against visits that unmount decorations → `walk`.
  */
 export function forEachBelowSeries<D>(
   list: DecorationList<D>,
   visit: (decoration: D) => void,
 ): void {
-  let previous: DecorationEntry<D> | undefined;
-  for (let at = 0; at < list.length; at++) {
-    const entry = list[at];
-    if (entry.zIndex >= SERIES_Z) return;
+  walk(list, (entry) => {
+    if (entry.zIndex >= SERIES_Z) return true;
     visit(entry.decoration);
-    at = resumeAt(list, entry, at, previous);
-    previous = entry;
-  }
+  });
 }
 
-/** Yields everything above the series, in order. */
+/** Yields everything at or above the series, in order → `walk`. */
 export function forEachAboveSeries<D>(
   list: DecorationList<D>,
   visit: (decoration: D) => void,
 ): void {
-  let previous: DecorationEntry<D> | undefined;
-  for (let at = 0; at < list.length; at++) {
-    const entry = list[at];
+  walk(list, (entry) => {
     if (entry.zIndex >= SERIES_Z) visit(entry.decoration);
-    at = resumeAt(list, entry, at, previous);
-    previous = entry;
-  }
+  });
+}
+
+/** Yields every decoration, in order — for the axis badges → `walk`. */
+export function forEachEntry<D>(
+  list: DecorationList<D>,
+  visit: (decoration: D) => void,
+): void {
+  walk(list, (entry) => {
+    visit(entry.decoration);
+  });
 }
 
 /**

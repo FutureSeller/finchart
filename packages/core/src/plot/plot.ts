@@ -1776,9 +1776,14 @@ export class Plot
         this.maximized = null;
         this.emitPanesChange();
       }
-      panes.forEach((pane, slot) => {
-        pane.applyOptions({ flex: heights[slot] });
-      });
+      // Each pane is paired with its height before anything is written: a
+      // subscriber reacting to one write can remove a pane, and walking the
+      // live list by position would then hand a later pane the removed one's
+      // height. A pane gone by its turn is left alone.
+      const shares = panes.map((pane, slot) => ({ pane, flex: heights[slot] }));
+      for (const { pane, flex } of shares) {
+        if (this.paneStack.list.includes(pane)) pane.applyOptions({ flex });
+      }
     });
 
     this.scheduleRender();

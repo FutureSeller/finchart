@@ -349,13 +349,20 @@ export class SeriesList {
    * Draws every registration — zIndex ascending, registration order (stable
    * sort) on ties. This is where a band fill turned on late still lands
    * underneath the candles. Skips sorting entirely when all are 0.
+   *
+   * **Walks a copy.** A series `draw` is someone else's code, and disposing
+   * a handle from inside it splices this list — walking it live would skip
+   * the next registration for the frame. One taken at the start keeps every
+   * registration's turn; one removed before its turn is skipped, and one
+   * added mid-frame draws next frame.
    */
   draw(target: DrawTarget, context: SeriesDrawContext): void {
     const ordered = this.list.some((entry) => entry.zIndex !== 0)
       ? [...this.list].sort((a, b) => a.zIndex - b.zIndex)
-      : this.list;
+      : [...this.list];
 
     for (const entry of ordered) {
+      if (!this.list.includes(entry)) continue;
       // Drawing is an ascending scan — this opens a scanning plane instead
       // of a per-point binary search (`toPixel`). The plane is born and
       // dies with a single registration's draw, so registrations can't
