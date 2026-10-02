@@ -16,6 +16,7 @@ import type { ValueFormat } from "../axis";
 import {
   forEachAboveSeries,
   forEachBelowSeries,
+  forEachEntry,
   type DecorationList,
   type PlotDecoration,
   type PlotDecorationContext,
@@ -62,6 +63,16 @@ export function paintFrame(
 ): void {
   const { renderer, panes, x, formatX } = stage;
   const { slices, ticks } = frame;
+  /**
+   * **The frame draws the scene it was laid out for** (`frame.panes`, paired
+   * by position with `ticks.y`), and skips a pane that has left the chart
+   * since. Plot decorations, pane decorations, series and axis callbacks are
+   * someone else's code, and they hold `PaneHost` — walking the chart's own
+   * list here would let one of them remove a pane and hand its ticks to the
+   * pane after it. A pane that arrives mid-frame is drawn next frame.
+   */
+  const onChart = (pane: Pane): boolean => panes.includes(pane);
+  const scene = frame.panes;
 
   drawDividers(stage, config);
 
@@ -104,19 +115,9 @@ export function paintFrame(
     decoration.draw(renderer, decorationContext),
   );
 
-  panes.forEach((pane, index) => {
-    /**
-     * **The ticks were baked from the pane list as it stood at layout
-     * time.** The plot decoration running just above is someone else's
-     * code, and it holds `PaneHost` (`addPane`, `removePane`) — if one of
-     * those `draw` calls grows the list, the pairing here is thrown off
-     * — `ticks.y[index]` becomes `undefined`, throwing a `TypeError`
-     * inside an rAF callback, and the next frame does the same, so **the
-     * chart dies permanently.** A pane that arrives late this frame is
-     * drawn next frame instead.
-     */
+  scene.forEach((pane, index) => {
     const group = ticks.y[index];
-    if (!group) return;
+    if (!group || !onChart(pane)) return;
 
     renderer.clip?.(pane.area);
     pane.draw(renderer, {
@@ -129,7 +130,7 @@ export function paintFrame(
   });
 
   renderer.clip?.(slices.data);
-  drawPaneBoundaries(stage, config, readStyle);
+  drawPaneBoundaries(stage, scene.filter(onChart), config, readStyle);
   forEachAboveSeries(stage.decorations, (decoration) =>
     decoration.draw(renderer, decorationContext),
   );
@@ -150,7 +151,9 @@ export function paintFrame(
     ticks,
     slices,
     readStyle,
-    collectAxisBadges(stage, decorationContext, slices, ticks),
+    collectAxisBadges(stage, decorationContext, slices, ticks, scene, onChart),
+    // x labels sit below the bottom pane of the scene still on the chart.
+    scene.filter(onChart).at(-1) ?? scene.at(-1),
   );
 }
 
@@ -170,6 +173,8 @@ function collectAxisBadges(
   context: PlotDecorationContext,
   slices: AxisSlices,
   ticks: { x: Tick[]; y: PaneTicks[] },
+  scene: readonly Pane[],
+  onChart: (pane: Pane) => boolean,
 ): AxisBadge[] {
   if (!stage.axisLabels) return [];
 
@@ -178,11 +183,13 @@ function collectAxisBadges(
     if (badge.axis === "x" ? slices.x : slices.y) badges.push(badge);
   };
 
-  for (const { decoration } of stage.decorations) {
+  // A decoration's `axisBadges` is someone else's code and may unmount a
+  // decoration — the walk goes over the list as it stood, skipping what left.
+  forEachEntry(stage.decorations, (decoration) => {
     for (const badge of decoration.axisBadges?.(context) ?? []) keep(badge);
-  }
+  });
 
-  stage.panes.forEach((pane, index) => {
+  scene.forEach((pane, index) => {
     /**
      * **A pane that mounts no labels mounts no badges either.**
      *
@@ -203,9 +210,8 @@ function collectAxisBadges(
      * neighboring pane has labels on and the axis strip is perfectly
      * intact. The only pane with no space is a collapsed one.
      */
-    // Checked for the same reason as the draw loop — a decoration can add a pane.
     const group = ticks.y[index];
-    if (!group || group.collapsed) return;
+    if (!group || group.collapsed || !onChart(pane)) return;
 
     const paneContext = {
       area: pane.area,
@@ -237,6 +243,7 @@ function drawAxisLabels(
   slices: AxisSlices,
   readStyle: StyleReader,
   badges: AxisBadge[],
+  bottomPane: Pane | undefined,
 ): void {
   if (!stage.axisLabels) return;
 
@@ -250,13 +257,12 @@ function drawAxisLabels(
     return;
   }
 
-  const bottomPane = stage.panes[stage.panes.length - 1];
   stage.axisLabels.render({
     x: showX ? ticks.x : [],
     y: yTicks,
     badges,
     // x labels sit below the bottom pane.
-    area: { ...slices.data, bottom: bottomPane.area.bottom },
+    area: { ...slices.data, bottom: bottomPane?.area.bottom ?? slices.data.bottom },
     axes: { x: slices.x, y: slices.y },
     readStyle,
   });
@@ -272,10 +278,11 @@ function drawAxisLabels(
  */
 function drawPaneBoundaries(
   stage: PaintStage,
+  panes: readonly Pane[],
   config: ResolvedPlotConfig,
   readStyle: StyleReader,
 ): void {
-  const { panes, renderer } = stage;
+  const { renderer } = stage;
   if (panes.length < 2) return;
 
   const gap = config.paneGap;
