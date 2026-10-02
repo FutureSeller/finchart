@@ -234,6 +234,20 @@ whole pane imperatively only when it has no series components. Indicators
 that create their own pane (RSI, MACD, and friends) mix with `<ChartPane>`
 freely: the panes they add stack below the declared ones.
 
+**Refused data.** Declarative `data` the chart can't take — out of x order,
+a non-finite value — is checked whole before any of it applies, so the chart
+keeps what it had. Left alone, the `DataError` goes to the nearest error
+boundary (around a Next.js page, that's the whole page). On a live screen,
+hand it to `onError` instead: the chart keeps drawing its last good data and
+the next good `data` lands as usual.
+
+```tsx
+<ChartContainer deps={deps} data={bars} onError={(error) => report(error)}>
+```
+
+Only data errors go there; a `ContractError` — a series that isn't one, a
+wrong option — is a mistake in the code and still throws.
+
 ## Across containers: `onPlot` and `<SyncX>`
 
 The vocabulary *inside* a container assumes a single chart. Wiring that spans

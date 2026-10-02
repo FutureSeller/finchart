@@ -1,5 +1,6 @@
 import type {
   BaseDataPoint,
+  DataError,
   CrosshairPayload,
   LineStyle,
   Pane,
@@ -100,6 +101,17 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
    */
   onXDomainChange?: (change: XDomainChangePayload) => void;
   /**
+   * Data the chart refused — out of order, not finite — reported instead of
+   * thrown. The chart keeps drawing the data it had (a sync is checked whole
+   * before any of it applies), and the next good `data` lands as usual, so a
+   * live screen survives one bad tick. Only `DataError`: a `ContractError`
+   * is a mistake in the code and still goes to the nearest error boundary.
+   *
+   * Left out, refused data throws to the nearest error boundary — the
+   * default never hides a bug.
+   */
+  onError?: (error: DataError) => void;
+  /**
    * For when you need the imperative API — things like `fitDomains` or
    * `pan`.
    *
@@ -168,6 +180,7 @@ export function ChartContainer<T extends BaseDataPoint>({
   followTheme,
   onCrosshair,
   onXDomainChange,
+  onError,
   plotRef: exposed,
   containerRef: exposedContainer,
   onPlot,
@@ -249,6 +262,10 @@ export function ChartContainer<T extends BaseDataPoint>({
     return () => onPlot?.(null);
   }, [onPlot, plotRef]);
 
+  // Read at the moment of a refusal, so a new handler each render is fine.
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
   const mainPaneTaken = useRef(false);
   // The main pane's scale before a `<ChartPane yScale>` replaced it — put
   // back on release, so a keyed swap to a pane without `yScale` returns to
@@ -328,7 +345,7 @@ export function ChartContainer<T extends BaseDataPoint>({
         const existing = collectors.current.get(pane);
         if (existing) return existing;
 
-        const created = createSeriesCollector(pane);
+        const created = createSeriesCollector<T>(pane, () => onErrorRef.current);
         collectors.current.set(pane, created);
         return created;
       },

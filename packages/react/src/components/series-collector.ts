@@ -1,4 +1,4 @@
-import type { BaseDataPoint, Pane, SeriesSpec } from '@finchart/core';
+import { DataError, type BaseDataPoint, type Pane, type SeriesSpec } from '@finchart/core';
 
 /**
  * Collects the list of series one pane will draw, in JSX order. One per
@@ -37,9 +37,18 @@ export interface SeriesCollector<T extends BaseDataPoint> {
 
 export function createSeriesCollector<T extends BaseDataPoint>(
   pane: Pane,
+  /**
+   * Who hears about data the chart refused (`DataError`), read at the
+   * moment of the refusal — `undefined` throws it instead, to the nearest
+   * error boundary. The core checks a whole sync before applying any of it,
+   * so a refusal leaves the previous data on the chart either way.
+   */
+  refused: () => ((error: DataError) => void) | undefined = () => undefined,
 ): SeriesCollector<T> {
   /** What's mounted on the chart. Only a committed effect admits a spec. */
   const specs = new Map<string, SeriesSpec<T>>();
+  /** The last list the chart refused as data — not tried again until a spec changes. */
+  let refusedList: readonly SeriesSpec<T>[] | null = null;
   /** Which position it was in JSX. The only basis for deciding a slot. */
   const ranks = new Map<string, readonly number[]>();
   /** The order last applied to the chart. The tiebreaker when ranks are equal. */
@@ -103,7 +112,21 @@ export function createSeriesCollector<T extends BaseDataPoint>(
       if (list.length === 0 && !owned) return;
 
       owned = true;
-      pane.syncSeries(list);
+      // One commit flushes more than once (the series' effect, then the
+      // pane's or container's). A list already refused, spec for spec, is
+      // not tried — or reported — again; the next render builds new specs.
+      if (refusedList !== null && sameSpecs(refusedList, list)) return;
+      try {
+        pane.syncSeries(list);
+        refusedList = null;
+      } catch (error) {
+        const report = refused();
+        // Only refused data — a `ContractError` is a mistake in the code
+        // and still goes to the boundary.
+        if (!(error instanceof DataError) || report === undefined) throw error;
+        refusedList = list;
+        report(error);
+      }
     },
   };
 }
@@ -135,4 +158,9 @@ export function createSeriesPlacement(prefix: readonly number[] = []): SeriesPla
     },
     commit() { committed = true; },
   };
+}
+
+/** The same specs, by identity, in the same order. */
+function sameSpecs<T extends BaseDataPoint>(a: readonly SeriesSpec<T>[], b: readonly SeriesSpec<T>[]): boolean {
+  return a.length === b.length && a.every((spec, at) => spec === b[at]);
 }
