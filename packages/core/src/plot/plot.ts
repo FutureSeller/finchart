@@ -60,7 +60,7 @@ import {
   type ViewportDimensions,
 } from "./config";
 import { cursorClaims, type CursorClaims, focusClaims } from "../interaction";
-import { eventChannel } from "../primitives";
+import { eventChannel, forEachStill } from "../primitives";
 import type { CrosshairPayload, PlotEvents } from "./events";
 import { DEFAULT_X_FORMAT } from "../axis";
 import { layoutFrame, layoutPaneHeights, type PaneHeightInput, type Frame } from "./frame";
@@ -1441,9 +1441,11 @@ export class Plot
    * it's on, the value domain isn't state — it's derived.**
    */
   private trackVisibleValues(viewport: Viewport): void {
-    for (const pane of this.paneStack.list) {
+    // A fit reads someone else's code (a series' `valueExtent`, a source's
+    // `read`) that may remove a pane → `forEachStill`.
+    forEachStill(this.paneStack.list, (pane) => {
       if (pane.autoScale) pane.fitValueDomain(viewport);
-    }
+    });
   }
 
   /**
@@ -1696,13 +1698,14 @@ export class Plot
    * by dy.
    *
    * The distance is clamped against both sides' minHeight. The result is
-   * frozen by writing the current pixel heights straight into flex — since
-   * flex is relative, the ratio survives exactly, and if the window resizes,
-   * the ratio the user set follows proportionally.
+   * frozen by writing the current heights into flex, scaled so the flex
+   * total stays what it was — since flex is relative, the ratio survives
+   * exactly, the window resizing carries it proportionally, and a pane added
+   * later at the default flex 1 lands in the same units as the rest.
    *
-   * Even untouched panes are all rewritten because converting just the two
-   * to pixels would leave the rest out of unit sync with whatever flex they
-   * were still holding.
+   * Even untouched panes are all rewritten: a height split pins some panes
+   * at their floor, so only the whole set, frozen together, reproduces the
+   * heights on screen.
    *
    * **Writes through the proper door (`applyOptions`).** This used to
    * assign `pane.flex` directly and fill in the panes notification by hand
@@ -1780,7 +1783,13 @@ export class Plot
       // subscriber reacting to one write can remove a pane, and walking the
       // live list by position would then hand a later pane the removed one's
       // height. A pane gone by its turn is left alone.
-      const shares = panes.map((pane, slot) => ({ pane, flex: heights[slot] }));
+      //
+      // The heights become the split, but in the units the panes were given:
+      // scaled so the flex total stays near what it was. Written as raw
+      // pixels, a pane added later at the default flex 1 would sit next to
+      // shares in the hundreds and be squeezed to its floor.
+      const scale = unitsPerPixel(panes.map((pane) => pane.flex), heights);
+      const shares = panes.map((pane, slot) => ({ pane, flex: heights[slot] * scale }));
       for (const { pane, flex } of shares) {
         if (this.paneStack.list.includes(pane)) pane.applyOptions({ flex });
       }
@@ -1920,4 +1929,22 @@ export class Plot
 /** Same length, same items in the same slots. */
 function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean {
   return a.length === b.length && a.every((item, slot) => item === b[slot]);
+}
+
+/**
+ * The factor that turns pixel heights into flex near the total the panes
+ * had — so a split frozen from the screen keeps the panes' own units.
+ *
+ * **A power of two**, the one nearest the exact ratio: scaling by it is exact
+ * in floating point, so the split lays the panes out at precisely the
+ * heights that were on screen (a pane at its floor stays exactly at it),
+ * while the total lands within a factor of √2 of what it was. Panes that
+ * were all collapsed (total 0) fall back to one unit per pane.
+ */
+function unitsPerPixel(flexes: readonly number[], heights: readonly number[]): number {
+  const pixels = heights.reduce((sum, height) => sum + height, 0);
+  if (!(pixels > 0)) return 1;
+  const total = flexes.reduce((sum, flex) => sum + flex, 0);
+  const exact = (total > 0 ? total : flexes.length) / pixels;
+  return 2 ** Math.round(Math.log2(exact));
 }

@@ -13,6 +13,7 @@ import type { DataManagerFactory, Range } from "../data";
 import {
   contains,
   ContractError,
+  mapStill,
   type Point,
 } from "../primitives";
 import type { Scale } from "../scale";
@@ -188,11 +189,12 @@ export class PaneStack {
    * every pane is empty — that null itself is the answer "nothing to draw."
    */
   xRange(): Range | null {
-    return unionOf(this.panes.map((pane) => pane.xRange()));
+    // A pane's x range reads its sources (someone else's `read`) → `mapStill`.
+    return unionOf(mapStill(this.panes, (pane) => pane.xRange()));
   }
 
   /** Every series' x values, pane by pane — what a bar-index mapping recounts from. `barBodied` keeps only bar-bodied series. */
   xValuesPerSeries(barBodied = false): readonly (readonly number[])[] {
-    return this.panes.flatMap((pane) => pane.xValuesPerSeries(barBodied));
+    return mapStill(this.panes, (pane) => pane.xValuesPerSeries(barBodied)).flat();
   }
 }

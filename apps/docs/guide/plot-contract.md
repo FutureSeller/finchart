@@ -864,11 +864,15 @@ the cursor shape and the hit area, and so redrawing the canvas doesn't make the
 handle you're dragging disappear.
 
 - The travel is **clamped by the `minHeight` on both sides.**
-- The result is frozen by writing the current pixel heights straight into `flex`.
-  `flex` is relative, so what remains is the ratio, and the proportions you set
-  follow along when the window resizes.
-- **Every pane's flex is rewritten, including the ones you didn't touch.**
-  Convert only two to pixels and the old flex the others still hold is in the wrong units.
+- The result is frozen by writing the current heights into `flex`, **scaled so
+  the flex total stays near what it was** (by a power of two, which is exact,
+  so the heights on screen come back to the pixel). `flex` is relative, so what remains is the
+  ratio, the proportions you set follow along when the window resizes, and a
+  pane added afterwards at the default `flex: 1` gets a share in the same units
+  as the rest — not squeezed to its `minHeight` next to shares in the hundreds.
+- **Every pane's flex is rewritten, including the ones you didn't touch.** A
+  split pins some panes at their floor, so only the whole set, frozen together,
+  reproduces the heights on screen.
 - The value domain isn't touched — writing `pane.flex` directly bypasses the
   subscriber notification.
 - The divider calls `stopPropagation()` on `pointerdown`. Without that the
