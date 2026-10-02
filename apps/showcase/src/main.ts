@@ -117,7 +117,7 @@ function setLayout(total: number): void {
 
   // A new cell inherits the anchor's window, and the last noise from a departing cell is painted over.
   const anchor = charts[0];
-  const window = anchor?.plot.getState().xDomain;
+  const window = anchor?.plot.getVisibleRange();
   if (anchor && window) anchor.plot.setVisibleRange(window.min, window.max);
 
   if (focusIndex >= total) setFocus(0);
@@ -158,7 +158,7 @@ function setSymbol(slot: number, symbol: string): void {
 
   rewireSync();
   const anchor = charts[0];
-  const window = anchor?.plot.getState().xDomain;
+  const window = anchor?.plot.getVisibleRange();
   if (anchor && window) anchor.plot.setVisibleRange(window.min, window.max);
 
   if (focusIndex === slot) setFocus(slot);

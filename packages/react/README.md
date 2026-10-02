@@ -131,9 +131,6 @@ worker builds — would carry the entire browser shell. Measured: +21.6KB raw /
 const deps = browserDeps({ autoSize: true, createXMapping: barIndexX });
 ```
 
-Viewport state can live outside the chart via `state` / `onStateChange` — for
-URLs, undo, or syncing.
-
 ## The components don't render DOM
 
 The only DOM is `<ChartContainer>`'s single div. For every other component,
@@ -154,16 +151,10 @@ reader. Changing that reference reinstalls the registration so drawing,
 decimation and readouts agree; for a derived series this also rebuilds its
 cached output. Keep a custom accessor stable when its meaning is unchanged.
 
-`ChartPane.stateKey` identifies saved pane state. The first `ChartPane` borrows
-the plot's persistent `mainPane`, so changing that identity requires changing
-the **ChartContainer key**. Changing only the first pane's key does not replace
-mainPane. Later panes are created and removed by their wrapper, so changing a
-later **ChartPane key** can replace its stateKey.
-
-This restriction concerns replacing pane identity, not rearranging panes.
-Panes stack in JSX order: a `ChartPane` inserted above others, or keyed panes
+The first `ChartPane` borrows the plot's persistent `mainPane`; later panes
+are created and removed by their wrapper. Panes stack in JSX order: a `ChartPane` inserted above others, or keyed panes
 reordered, move on the chart (`plot.setPaneOrder`) while keeping their
-instances, series, scales and state. `mainPane` retains its identity
+instances, series, scales and settings. `mainPane` retains its identity
 wherever it lands.
 
 The JSX owns the order of the panes it declares, but only when that order
@@ -239,10 +230,9 @@ array is not re-applied; feed the handle with `price.append(...)` /
 declarative lane owns that pane's series list — add an `addSeries` or an
 `attach*` indicator (which uses `addSeries` internally) imperatively on top,
 and the core throws a `ContractError` before either side is detached. Drive a
-whole pane imperatively only when it has no series components. Indicators that create their own pane (RSI, MACD, and friends) can push
-pane indices out of alignment when mixed with `<ChartPane>`, which breaks
-saving and restoring `state` — so on screens that round-trip state, keep pane
-structure in one lane.
+whole pane imperatively only when it has no series components. Indicators
+that create their own pane (RSI, MACD, and friends) mix with `<ChartPane>`
+freely: the panes they add stack below the declared ones.
 
 ## Across containers: `onPlot` and `<SyncX>`
 
@@ -286,15 +276,21 @@ order — no `useChartPlot` + `useEffect` shim needed:
 `deps.mainPaneYScale`, so an inline arrow is fine and the factory must be pure. `autoScale` and `invert` are props too; both are
 directives applied when they change, and an axis drag turning a fixed range
 on flips `autoScale` off on the pane the way a divider drag moves `flex` — and
-a double-click on that axis, or `fitDomains()`, flips it back on.
-Two things saved `state` does not carry: the scale kind (persist it
-alongside, and drop `valueDomain` when it differs — a domain the scale
-cannot hold is a `ContractError` at the error boundary around the container),
-and a `valueDomain` restored before the first data arrives, which the first
-fit overwrites (restore after data, or through a later `state` change). And
-one thing a scale swap does not announce: when the new scale cannot hold the
-fixed range and refits to the data, no `stateChange` fires — read the domain
-off the pane if you persist it at that moment.
+a double-click on that axis, or `fitDomains()`, flips it back on. To follow
+those changes in React state (an "Auto" toggle that tracks an axis drag),
+subscribe through `onPlot`:
+
+```tsx
+const [plot, setPlot] = useState<Plot | null>(null);
+const [auto, setAuto] = useState(true);
+useEffect(() => {
+  if (!plot) return;
+  const read = () => setAuto(plot.mainPane.autoScale);
+  read();
+  return plot.on("panesChange", read);
+}, [plot]);
+// <ChartContainer onPlot={setPlot} …>
+```
 
 **The theme is a prop.** Canvas colors are CSS variables read at draw time,
 so a theme switch changes the axis labels at once and the candles only on the

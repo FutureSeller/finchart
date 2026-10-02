@@ -282,10 +282,6 @@ What the key needs to carry:
   [plot contract](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
   says how to restore across that boundary, and it is best effort.
 
-The chart's own view state (`plot.getState()`) is keyed the same way; the
-plot contract's `applyState` notes say why a window saved on another
-symbol's history is dropped by the first fit.
-
 ## Pointing at what you restored
 
 `serialize()` / `load()` carry drawings **across sessions**. Restored drawings
@@ -344,6 +340,6 @@ your own UI around them.**
 - **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md)
 - **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
 - **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
-- **Saving per symbol and interval** — [above](#saving-per-symbol-and-interval); the chart's own view state follows the same rule in the plot contract
+- **Saving per symbol and interval** — [above](#saving-per-symbol-and-interval)
 - **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
 - **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)

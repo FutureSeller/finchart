@@ -376,7 +376,7 @@ describe('<ChartContainer data>', () => {
 
     mount(view(deps, data, ref));
 
-    expect(plot().getState().xDomain).toEqual({ min: 0, max: 100 });
+    expect(plot().getVisibleRange()).toEqual({ min: 0, max: 100 });
     expect(plot().mainPane.xRange()).toEqual({ min: 0, max: 100 });
   });
 
@@ -391,11 +391,11 @@ describe('<ChartContainer data>', () => {
     const mounted = mount(view(deps, data, ref));
 
     act(() => plot().pan(-20));
-    const viewing = plot().getState().xDomain;
+    const viewing = plot().getVisibleRange();
 
     mounted.rerender(view(deps, [{ x: -50, y: 5 }, ...data], ref));
 
-    expect(plot().getState().xDomain).toEqual(viewing);
+    expect(plot().getVisibleRange()).toEqual(viewing);
     // The new point is still on the stage, though.
     expect(plot().mainPane.xRange()).toEqual({ min: -50, max: 100 });
   });
@@ -439,9 +439,9 @@ describe('<ChartData> · <ChartSeries data>', () => {
      * the viewport to the union, infinite scroll would break — the update
      * rule applies unchanged here. Call `fitDomains()` to see everything.
      */
-    expect(plot().getState().xDomain).toEqual({ min: 0, max: 10 });
+    expect(plot().getVisibleRange()).toEqual({ min: 0, max: 10 });
     act(() => plot().fitDomains());
-    expect(plot().getState().xDomain).toEqual({ min: 0, max: 110 });
+    expect(plot().getVisibleRange()).toEqual({ min: 0, max: 110 });
   });
 
   it('should hand a subtree its own source', () => {
@@ -458,7 +458,7 @@ describe('<ChartData> · <ChartSeries data>', () => {
     );
 
     expect(plot().mainPane.xRange()).toEqual({ min: 0, max: 110 });
-    expect(plot().getState().xDomain).toEqual({ min: 0, max: 10 });
+    expect(plot().getVisibleRange()).toEqual({ min: 0, max: 10 });
   });
 });
 

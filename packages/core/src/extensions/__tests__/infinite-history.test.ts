@@ -240,7 +240,7 @@ describe("infiniteHistory", () => {
     const { calls, fetch } = servedFetch(points(80, 100));
     infiniteHistory(plot, recordingSink().sink, fetch, { from: 100 });
     // The fit shows half a bar of blank before the first point.
-    expect(plot.getState().xDomain?.min).toBe(99.5);
+    expect(plot.getVisibleRange()?.min).toBe(99.5);
 
     plot.fitDomains();
     handle.setData(points(100, 140));
@@ -442,9 +442,9 @@ describe("infiniteHistory", () => {
     expect(loader.status()).toBe("done");
   });
 
-  it("judges at install from getState — a restored view already past the data starts filling", async () => {
+  it("judges at install from getVisibleRange — a view already past the data starts filling", async () => {
     const { plot } = chart();
-    plot.setVisibleRange(90, 110); // the view was restored before the loader existed
+    plot.setVisibleRange(90, 110); // the view was set before the loader existed
     const { calls, fetch } = servedFetch(points(80, 100));
     infiniteHistory(plot, recordingSink().sink, fetch, { from: 100 });
 
@@ -511,7 +511,7 @@ function countingHost(plot: ReturnType<typeof chart>["plot"]) {
     },
     pixelAtX: (x: number) => plot.pixelAtX(x),
     xAt: (px: number) => plot.xAt(px),
-    getState: () => plot.getState(),
+    getVisibleRange: () => plot.getVisibleRange(),
     leadingMargin: () => plot.leadingMargin(),
   };
   return { host, live };
@@ -1046,16 +1046,16 @@ describe("infiniteHistory — a loader that stops", () => {
     expect(live.count).toBe(0);
   });
 
-  it("a host whose getState throws at install unwinds the subscription and throws", () => {
+  it("a host whose getVisibleRange throws at install unwinds the subscription and throws", () => {
     const { plot } = chart();
     const { host: counted, live } = countingHost(plot);
     const host: InfiniteHistoryHost = {
       ...counted,
-      getState: () => {
-        throw new Error("state unavailable");
+      getVisibleRange: () => {
+        throw new Error("view unavailable");
       },
     };
-    expect(() => infiniteHistory(host, recordingSink().sink, heldFetch().fetch, { from: 100 })).toThrow("state unavailable");
+    expect(() => infiniteHistory(host, recordingSink().sink, heldFetch().fetch, { from: 100 })).toThrow("view unavailable");
     expect(live.count).toBe(0);
   });
 
@@ -1073,7 +1073,7 @@ describe("infiniteHistory — a loader that stops", () => {
       },
       pixelAtX: (x) => plot.pixelAtX(x),
       xAt: (px) => plot.xAt(px),
-      getState: () => plot.getState(),
+      getVisibleRange: () => plot.getVisibleRange(),
       leadingMargin: () => plot.leadingMargin(),
     };
     const loader = infiniteHistory(host, recordingSink().sink, heldFetch().fetch, { from: 100 });

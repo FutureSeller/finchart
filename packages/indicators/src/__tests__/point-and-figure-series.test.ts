@@ -53,7 +53,7 @@ describe("pointAndFigureSeries", () => {
       series: { series: pointAndFigureSeries({ boxSize: 1 }), data: [column(0, "up", 101, 103), column(2, "down", 100, 102)] },
     });
 
-    expect(plot.getState().xDomain).toEqual({ min: -1, max: 3 });
+    expect(plot.getVisibleRange()).toEqual({ min: -1, max: 3 });
   });
 
   it("refuses non-object options and a box that is not a positive normal number", () => {

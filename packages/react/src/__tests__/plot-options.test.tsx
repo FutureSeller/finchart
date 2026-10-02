@@ -219,23 +219,7 @@ describe('<ChartContainer options>', () => {
       </ChartContainer>,
     );
     // continuousX: the domain is the data's x plus the offset.
-    expect(plot().getState().xDomain).toEqual({ min: 0, max: 105 });
-  });
-
-  it('lets a restored x domain win over the offset fit', () => {
-    const { deps, ref, plot } = setup();
-    render(
-      <ChartContainer
-        deps={deps}
-        data={data}
-        plotRef={ref}
-        options={{ rightOffset: 5 }}
-        state={{ xDomain: { min: 10, max: 20 } }}
-      >
-        <ChartSeries series={lineSeries()} />
-      </ChartContainer>,
-    );
-    expect(plot().getState().xDomain).toEqual({ min: 10, max: 20 });
+    expect(plot().getVisibleRange()).toEqual({ min: 0, max: 105 });
   });
 
   it('does not re-apply an inline literal whose values did not change', () => {

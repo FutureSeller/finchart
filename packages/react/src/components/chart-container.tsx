@@ -1,6 +1,5 @@
 import type {
   BaseDataPoint,
-  ChartState,
   CrosshairPayload,
   LineStyle,
   Pane,
@@ -101,19 +100,6 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
    */
   onXDomainChange?: (change: XDomainChangePayload) => void;
   /**
-   * Supplies the view state from outside. Applied every time the
-   * reference changes — same as `usePlot.state`.
-   *
-   * The pane slice finds its own slot **even if the pane attaches
-   * later**: a child pane attaches on a second commit, and the container
-   * re-applies the slice after the commit where the pane list changed
-   * (running after `<ChartPane flex>`), so the restored state wins over
-   * the mount default.
-   */
-  state?: Partial<ChartState>;
-  /** Fires when the view state changes — the starting point for URL persistence, undo, and chart sync. */
-  onStateChange?: (state: ChartState) => void;
-  /**
    * For when you need the imperative API — things like `fitDomains` or
    * `pan`.
    *
@@ -182,8 +168,6 @@ export function ChartContainer<T extends BaseDataPoint>({
   followTheme,
   onCrosshair,
   onXDomainChange,
-  state,
-  onStateChange,
   plotRef: exposed,
   containerRef: exposedContainer,
   onPlot,
@@ -206,55 +190,6 @@ export function ChartContainer<T extends BaseDataPoint>({
     followTheme,
     onCrosshair,
     onXDomainChange,
-    state,
-    onStateChange,
-  });
-
-  const stateRef = useRef(state);
-  stateRef.current = state;
-
-  /**
-   * Re-applies the pane slice after the commit where the pane structure
-   * changed.
-   *
-   * A child pane attaches later than the container, and at that point the
-   * state prop's reference hasn't changed, so `usePlot`'s apply doesn't
-   * re-run — the slice never meets its pane. A parent's effect runs after
-   * its children's, so this re-apply lands after `<ChartPane>`'s acquire:
-   * **restoring wins over the mount default.** Does nothing when the
-   * structure is unchanged.
-   *
-   * Watches the **count of acquire/release calls**, not the pane list's
-   * identity — the first `ChartPane` reuses the existing `mainPane`, so
-   * the list doesn't change, and StrictMode's double mount discards and
-   * recreates a pane, returning the count right back to where it was.
-   */
-  const structure = useRef(0);
-  const appliedStructure = useRef(-1);
-  /** Panes acquired since the last re-apply — the only ones the saved slices restore. */
-  const attached = useRef(new Set<Pane>());
-  useEffect(() => {
-    const plot = plotRef.current;
-    if (!plot || structure.current === appliedStructure.current) return;
-
-    appliedStructure.current = structure.current;
-    const slices = stateRef.current?.panes;
-    const fresh = attached.current;
-    attached.current = new Set();
-    if (!slices || fresh.size === 0) return;
-    // A pane already there keeps what the user did to it since (a divider
-    // drag): the saved slice would be stale for it, so it re-applies its own.
-    const now = plot.getState().panes;
-    const panes = plot.panes;
-    plot.applyState({
-      panes: panes.map((pane, at) => {
-        if (!fresh.has(pane)) return now[at];
-        const saved = pane.stateKey !== null
-          ? slices.find((slice) => slice.stateKey === pane.stateKey)
-          : slices.length === panes.length && slices[at]?.stateKey === undefined ? slices[at] : undefined;
-        return saved ?? now[at];
-      }),
-    });
   });
 
   /**
@@ -341,12 +276,9 @@ export function ChartContainer<T extends BaseDataPoint>({
       plot,
 
       acquirePane(options: PaneAcquisition): Pane {
-        structure.current += 1;
         const { yScale, ...pane } = options;
         if (mainPaneTaken.current) {
-          const added = plot.addPane(yScale ? { ...pane, yScale: yScale() } : pane);
-          attached.current.add(added);
-          return added;
+          return plot.addPane(yScale ? { ...pane, yScale: yScale() } : pane);
         }
         mainPaneTaken.current = true;
         plot.mainPane.applyOptions(pane);
@@ -354,13 +286,10 @@ export function ChartContainer<T extends BaseDataPoint>({
           previousScale.current = plot.mainPane.yScale;
           plot.mainPane.setYScale(yScale());
         }
-        attached.current.add(plot.mainPane);
         return plot.mainPane;
       },
 
       releasePane(pane: Pane): void {
-        structure.current += 1;
-        attached.current.delete(pane);
         if (pane === plot.mainPane) {
           // Outside series share this collector and survive the pane wrapper.
           mainPaneTaken.current = false;

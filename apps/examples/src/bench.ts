@@ -1131,7 +1131,7 @@ function tickBurstPair(points: number, ticksPerFrame: number): Pair {
 function zoomedTo(build: Build, fraction: number): Build {
   return (host, createRenderer) => {
     const subject = build(host, createRenderer);
-    const domain = subject.plot.getState().xDomain;
+    const domain = subject.plot.getVisibleRange();
     if (domain) {
       subject.plot.setVisibleRange(
         domain.max - (domain.max - domain.min) * fraction,

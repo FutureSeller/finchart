@@ -50,7 +50,7 @@ describe("drawingTools drag", () => {
   it("should eat the drag so pan cannot move — and follow the cursor", () => {
     const { model, tools, pane, route } = mounted();
     tools.add({ type: "horizontal", price: 110 });
-    const xDomainBefore = model.plot.getState().xDomain;
+    const xDomainBefore = model.plot.getVisibleRange();
 
     const grabX = (pane.area.left + pane.area.right) / 2;
     const grabY = pane.yScale.scale(110);
@@ -67,7 +67,7 @@ describe("drawingTools drag", () => {
 
     // Consumed, so pan never gets to run -- the x domain is unchanged
     // (the invariant this locks in).
-    expect(model.plot.getState().xDomain).toEqual(xDomainBefore);
+    expect(model.plot.getVisibleRange()).toEqual(xDomainBefore);
   });
 
   it("should decline a press away from every drawing", () => {

@@ -102,10 +102,8 @@ export interface TickGeometry {
  * `LogScale.expand`'s `min <= 0` branch.
  *
  * Why this isn't just a field on `Range`: adding a field there broke
- * things along several paths in quiet ways — `unionRange` drops fields
- * when there are two series, and `asRange` reconstructs the object,
- * losing it on a round trip through a URL. An unfilled field failed
- * silently instead of throwing.
+ * things in quiet ways — `unionRange` drops fields when there are two
+ * series. An unfilled field failed silently instead of throwing.
  */
 export interface ExpandHints {
   /**

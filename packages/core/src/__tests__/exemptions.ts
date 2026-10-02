@@ -161,6 +161,7 @@ export const EXEMPT: Record<string, Exemption> = {
   syncCrosshair: { tag: "no-amplifier", note: "extension — no amplifier" },
   syncX: { tag: "delegated", note: "extension — the domain is guarded by chokepoint 1" },
   timeCursor: { tag: "no-amplifier", note: "extension — no amplifier" },
+  paneMaximize: { tag: "assembly", note: "extension — has no numeric slot (gestures is a boolean; the flex it writes is read from the panes)" },
   // Not "no amplifier" — there is simply no door to measure. Keep the tag honest.
   watermark: { tag: "assembly", note: "extension — has no numeric slot (text, font, and color are all strings)" },
 
@@ -213,7 +214,6 @@ export const GUARDED: Record<string, string> = {
     + "(delayed). This used to be exempted as "
     + "\"assembly — takes a collaborator\", but that reason only counted the "
     + "collaborator and never counted the two numbers",
-  paneMaximize: "chokepoint 4 — load() comes from a URL or localStorage (persisted)",
   infiniteHistory:
     "chokepoint 8 — options.from seeds every `before` the fetch is asked for, "
     + "and screensAhead scales the pull threshold (both throw at the door; "
@@ -237,6 +237,7 @@ export const SHAPE_GUARDED: Record<string, string> = {
   priceLine: "used to pass even when value was a string",
   span: "the from/to range",
   watermark: "the options object",
+  paneMaximize: "the options object and its gestures flag, which used to throw a raw TypeError on every input event",
   /**
    * The exemption reason was "the result shows up on the label
    * immediately," but there was no result — it threw. The `tickSize` an
@@ -344,7 +345,6 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
   syncCrosshair: { tag: "assembly", note: "extension — takes two stages" },
   syncX: { tag: "assembly", note: "extension — takes two stages" },
   timeCursor: { tag: "assembly", note: "extension — takes two stages" },
-  paneMaximize: { tag: "delegated", note: "chokepoint 4 checks load()" },
 
   // Decimation and classes — constructor arguments are assembly vocabulary.
   LttbDecimation: { tag: "assembly", note: "decimation — assembly vocabulary" },

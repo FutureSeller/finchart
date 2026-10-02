@@ -75,10 +75,10 @@ export function mount(container: HTMLElement): () => void {
     }
   };
   refresh();
-  // Dragging a divider can also release the maximize — listen for state
+  // Dragging a divider can also release the maximize — listen for pane
   // changes so the display follows even when it changes
   // outside a button click.
-  const unsubscribe = plot.on("stateChange", refresh);
+  const unsubscribe = plot.on("panesChange", refresh);
 
   return Object.assign(
     () => {

@@ -10,8 +10,6 @@ export type { EventChannel } from "./event-channel";
 export { install, pluginApi, teardown } from "./plugin";
 export type { ConfigurablePluginApi, Plugin, PluginApi } from "./plugin";
 export {
-  asFinite,
-  asIndex,
   requireFinite,
   requireInterval,
   requireDataArray,

@@ -16,8 +16,8 @@ export interface EventChannel<Events extends object> {
   emit<E extends keyof Events>(event: E, payload: Events[E]): void;
   /**
    * Whether anyone is listening. **Check this first when the payload is
-   * expensive to build** — a `stateChange` snapshot walks every pane, and
-   * `xDomainChange` runs on every pointermove of a drag.
+   * expensive to build** — `xDomainChange` walks every series for its data
+   * range, and runs on every pointermove of a drag.
    */
   has(event: keyof Events): boolean;
   /** Drops every handler at once — the chart's last breath cuts notifications before teardown. */

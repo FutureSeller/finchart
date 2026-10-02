@@ -47,7 +47,7 @@ export function requireFinite(value: number, label: string): number {
  * number.
  *
  * Not "must be positive" — `flex`, `minHeight`, `valuePadding` all give zero
- * a meaning: `flex: 0` is `paneMaximize`'s idiom for collapsing a pane
+ * a meaning: `flex: 0` collapses a pane to its `minHeight`
  * This uses `!(value >= 0)` because `NaN >= 0` is false —
  * `value < 0` would miss `NaN`.
  */
@@ -249,33 +249,6 @@ export function describe(value: unknown): string {
   if (kind === "string") return `string ${JSON.stringify(value)}`;
   if (kind === "symbol" || kind === "function" || kind === "bigint") return kind;
   return String(value);
-}
-
-/**
- * For parsers. Returns the value if it's a finite number, otherwise
- * `undefined`.
- *
- * Why `undefined` and not `null`: some schema fields have `null` as a real
- * value (`ChartState.xDomain: Range | null`), so this keeps "couldn't parse
- * it" from getting confused with "it really said `null`."
- */
-export function asFinite(value: unknown): number | undefined {
-  return isFiniteNumber(value) ? value : undefined;
-}
-
-/**
- * For parsers. Returns the value if it's an integer with
- * `0 <= value < limit`, otherwise `undefined`.
- *
- * Finiteness alone isn't enough for an index — something like
- * `targetIndex: 0.5` produces `panes[0.5] === undefined`, and that
- * `undefined` can then sit quietly where a different type was expected.
- */
-export function asIndex(value: unknown, limit: number): number | undefined {
-  if (!isFiniteNumber(value)) return undefined;
-  if (!Number.isInteger(value)) return undefined;
-  if (value < 0 || value >= limit) return undefined;
-  return value;
 }
 
 /**

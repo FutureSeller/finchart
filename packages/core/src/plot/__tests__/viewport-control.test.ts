@@ -25,17 +25,17 @@ describe("setVisibleRange (2.3)", () => {
 
     model.plot.setVisibleRange(20, 60);
 
-    expect(model.plot.getState().xDomain).toEqual({ min: 20, max: 60 });
+    expect(model.plot.getVisibleRange()).toEqual({ min: 20, max: 60 });
   });
 
-  it("should wait for data like a restored state", () => {
+  it("should wait for data like any window set before it", () => {
     const model = createPlotModel({ size: { width: 800, height: 600 }, config: bare });
     model.plot.setVisibleRange(20, 60);
 
     model.plot.mainPane.addSeries({ series: lineSeries(), data });
 
     // Once data arrives, the held window wins over a fit (the same path as H1's pending).
-    expect(model.plot.getState().xDomain).toEqual({ min: 20, max: 60 });
+    expect(model.plot.getVisibleRange()).toEqual({ min: 20, max: 60 });
   });
 });
 
@@ -47,10 +47,10 @@ describe("rightOffset (2.3)", () => {
       config: { ...bare, rightOffset: 10 },
     });
 
-    expect(model.plot.getState().xDomain!.max).toBe(110);
+    expect(model.plot.getVisibleRange()!.max).toBe(110);
     // A user's pan is unconstrained.
     model.plot.pan(-5);
-    expect(model.plot.getState().xDomain!.max).toBe(105);
+    expect(model.plot.getVisibleRange()!.max).toBe(105);
   });
 });
 
@@ -66,7 +66,7 @@ describe("barSpacing limits (2.3)", () => {
     // Zoom in without bound — it must stop at 40px per bar.
     for (let i = 0; i < 30; i++) model.plot.zoom(2, 50);
 
-    const { min, max } = model.plot.getState().xDomain!;
+    const { min, max } = model.plot.getVisibleRange()!;
     expect(width / (max - min)).toBeLessThanOrEqual(40 + 1e-9);
   });
 
@@ -80,7 +80,7 @@ describe("barSpacing limits (2.3)", () => {
 
     for (let i = 0; i < 30; i++) model.plot.zoom(0.5, 50);
 
-    const { min, max } = model.plot.getState().xDomain!;
+    const { min, max } = model.plot.getVisibleRange()!;
     expect(width / (max - min)).toBeGreaterThanOrEqual(2 - 1e-9);
   });
 });
@@ -101,14 +101,14 @@ describe("syncX (2.3)", () => {
     const release = syncX(a, b);
 
     a.setVisibleRange(10, 40);
-    expect(b.getState().xDomain).toEqual({ min: 10, max: 40 });
+    expect(b.getVisibleRange()).toEqual({ min: 10, max: 40 });
 
     b.pan(5);
-    expect(a.getState().xDomain).toEqual(b.getState().xDomain);
+    expect(a.getVisibleRange()).toEqual(b.getVisibleRange());
 
     release();
     a.pan(10);
-    expect(a.getState().xDomain).not.toEqual(b.getState().xDomain);
+    expect(a.getVisibleRange()).not.toEqual(b.getVisibleRange());
   });
 
   it("should star-wire three plots through the hub without kickback", () => {
@@ -118,26 +118,26 @@ describe("syncX (2.3)", () => {
 
     // The hub's (a) change reaches every leaf.
     a.setVisibleRange(10, 40);
-    expect(b.getState().xDomain).toEqual({ min: 10, max: 40 });
-    expect(c.getState().xDomain).toEqual({ min: 10, max: 40 });
-    expect(d.getState().xDomain).toEqual({ min: 10, max: 40 });
+    expect(b.getVisibleRange()).toEqual({ min: 10, max: 40 });
+    expect(c.getVisibleRange()).toEqual({ min: 10, max: 40 });
+    expect(d.getVisibleRange()).toEqual({ min: 10, max: 40 });
 
     // A leaf's (c) change reaches the other leaves through the hub — each
     // strand's flag only cuts off its own echo, so it doesn't block
     // propagation through the hub.
     c.pan(5);
-    const window = c.getState().xDomain;
-    expect(a.getState().xDomain).toEqual(window);
-    expect(b.getState().xDomain).toEqual(window);
-    expect(d.getState().xDomain).toEqual(window);
+    const window = c.getVisibleRange();
+    expect(a.getVisibleRange()).toEqual(window);
+    expect(b.getVisibleRange()).toEqual(window);
+    expect(d.getVisibleRange()).toEqual(window);
 
     // No kickback — the origin stays put once propagation ends (an echo would push the window further).
-    expect(c.getState().xDomain).toEqual(window);
+    expect(c.getVisibleRange()).toEqual(window);
 
     release();
     b.pan(10);
-    expect(a.getState().xDomain).not.toEqual(b.getState().xDomain);
-    expect(c.getState().xDomain).toEqual(window);
+    expect(a.getVisibleRange()).not.toEqual(b.getVisibleRange());
+    expect(c.getVisibleRange()).toEqual(window);
   });
 
   it("should not double-shift on new bars when every synced plot follows", () => {
@@ -156,7 +156,7 @@ describe("syncX (2.3)", () => {
     const b = make();
     syncX(a.plot, b.plot);
 
-    const before = a.plot.getState().xDomain;
+    const before = a.plot.getVisibleRange();
     expect(before).not.toBeNull();
 
     // The same minute closes — each stage receives its own new bar. The
@@ -166,8 +166,8 @@ describe("syncX (2.3)", () => {
     a.handle.append([{ x: 150, y: 100 }]);
     b.handle.append([{ x: 150, y: 101 }]);
 
-    const after = a.plot.getState().xDomain;
+    const after = a.plot.getVisibleRange();
     expect(after!.max - before!.max).toBe(50); // one new bar = 50, not double
-    expect(b.plot.getState().xDomain).toEqual(after);
+    expect(b.plot.getVisibleRange()).toEqual(after);
   });
 });

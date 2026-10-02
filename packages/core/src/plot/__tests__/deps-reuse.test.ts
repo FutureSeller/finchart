@@ -28,12 +28,12 @@ describe("reusing one PlotDeps across plots", () => {
     const deps = testBrowserDeps();
     const first = mountPlot({ deps, series: lineSeries(), data }).plot;
     const second = mountPlot({ deps, series: lineSeries(), data }).plot;
-    const before = second.getState().xDomain;
+    const before = second.getVisibleRange();
 
     first.pan(25);
 
-    expect(first.getState().xDomain).not.toEqual(before);
-    expect(second.getState().xDomain).toEqual(before);
+    expect(first.getVisibleRange()).not.toEqual(before);
+    expect(second.getVisibleRange()).toEqual(before);
   });
 
   it("should keep each plot's main-pane value axis its own", () => {

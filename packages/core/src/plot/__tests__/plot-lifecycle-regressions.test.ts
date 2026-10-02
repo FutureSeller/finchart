@@ -80,33 +80,6 @@ describe("a render request made while drawing does not reopen the frame", () => 
   });
 });
 
-describe("applyState's x slice is caught at the door too", () => {
-  it("should reject a zero-width xDomain at the door", () => {
-    const model = createPlotModel({ size: { width: 400, height: 300 } });
-
-    // This used to pass silently and blow up inside the consumer's first setData.
-    expect(() =>
-      model.plot.applyState({ xDomain: { min: 5, max: 5 } }),
-    ).toThrow();
-  });
-
-  it("should reject a malformed xDomain instead of seeding NaN", () => {
-    const model = createPlotModel({ size: { width: 400, height: 300 } });
-
-    expect(() =>
-      // @ts-expect-error a hand-built slice — this can arrive without going through the parser.
-      model.plot.applyState({ xDomain: { min: 10 } }),
-    ).toThrow();
-  });
-
-  it("should still accept a real interval", () => {
-    const model = stage();
-    expect(() =>
-      model.plot.applyState({ xDomain: { min: 0, max: 2 } }),
-    ).not.toThrow();
-  });
-});
-
 describe("destroy is safe to call twice", () => {
   it("should not throw on a second destroy", () => {
     const model = stage();

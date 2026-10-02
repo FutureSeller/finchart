@@ -185,7 +185,7 @@ export function App() {
     const anchor = plots[0];
     if (!anchor) return;
 
-    const window = anchor.getState().xDomain;
+    const window = anchor.getVisibleRange();
     if (window) anchor.setVisibleRange(window.min, window.max);
   }, [plots]);
 

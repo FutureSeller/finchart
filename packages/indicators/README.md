@@ -111,16 +111,13 @@ pane instead — mount the first with `plot.use(...)`, the rest with
 one's 0–100 axis and reference lines serve all three):
 
 ```ts
-const rsi = plot.use(attachRsi({ source: price, ownPane: { stateKey: "oscillators" } }));
+const rsi = plot.use(attachRsi({ source: price }));
 if (rsi.pane) {
   plot.use(attachMfi({ source: price, pane: rsi.pane }));
   plot.use(attachStochasticRsi({ source: price, pane: rsi.pane }));
   plot.use(legend({ pane: rsi.pane }));
 }
 ```
-
-`ownPane.stateKey` names the pane in persisted view state, so a saved layout
-follows it instead of matching panes by position.
 
 ## Sharing one calculation — use the factory directly
 

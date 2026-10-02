@@ -25,7 +25,7 @@ export function mount(container: HTMLElement): () => void {
   // Continuous x has no default zoom limit (unlike bar-index, which
   // defaults to 0.5–200 px/bar) — with only 3 points on a wide screen,
   // leaving it unbounded lets you zoom in absurdly far or out to near-nothing.
-  const domain = plot.getState().xDomain;
+  const domain = plot.getVisibleRange();
   if (domain) {
     const pxPerUnit = width / (domain.max - domain.min);
     plot.applyOptions({

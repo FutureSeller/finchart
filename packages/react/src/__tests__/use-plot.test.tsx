@@ -211,52 +211,6 @@ describe('onXDomainChange', () => {
   });
 });
 
-describe('chart state props', () => {
-  it('should let the state prop win over the initial fit', () => {
-    const { deps, series } = setup();
-    let plotRef: RefObject<Plot | null> | undefined;
-
-    render(
-      <StrictMode>
-        <Harness
-          deps={deps}
-          series={series}
-          data={data}
-          state={{ xDomain: { min: 10, max: 20 } }}
-          expose={(ref) => { plotRef = ref; }}
-        />
-      </StrictMode>,
-    );
-
-    // This is the restored window, not the data's fit ([0, 100]) — even under double mounting.
-    expect(plotRef?.current?.getState().xDomain).toEqual({ min: 10, max: 20 });
-  });
-
-  it('should mirror internal changes through onStateChange', () => {
-    const { deps, series } = setup();
-    const seen: import('@finchart/core').ChartState[] = [];
-    const listen = (state: import('@finchart/core').ChartState) =>
-      seen.push(state);
-
-    const { rerender } = render(
-      <Harness deps={deps} series={series} data={data} onStateChange={listen} />,
-    );
-
-    rerender(
-      <Harness
-        deps={deps}
-        series={series}
-        data={[
-          { x: 0, y: 1 },
-          { x: 200, y: 2 },
-        ]}
-        onStateChange={listen}
-      />,
-    );
-
-    expect(seen.at(-1)?.xDomain).toEqual({ min: 0, max: 200 });
-  });
-});
 
 describe('usePlot series changes', () => {
   it('stops drawing the series when it is omitted, and draws the next one given', () => {

@@ -21,7 +21,6 @@ export type {
 } from "./data";
 export type { Series } from "./series";
 export type {
-  ChartState,
   PaneApi as Pane,
   PaneOptions,
   PlotModel,

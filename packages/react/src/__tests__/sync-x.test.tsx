@@ -35,7 +35,7 @@ function makeDeps() {
 }
 
 function domainOf(plot: Plot | null) {
-  const domain = plot?.getState().xDomain;
+  const domain = plot?.getVisibleRange();
   if (!domain) throw new Error('xDomain does not exist yet');
   return domain;
 }

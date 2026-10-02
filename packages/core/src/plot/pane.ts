@@ -74,7 +74,7 @@ export interface PaneChange {
    * belong here too — the union of drawn points changed.
    *
    * If false, only the picture needs redrawing: value axis swap,
-   * decorations, and the state fields below.
+   * decorations, and the pane settings below.
    */
   data: boolean;
   /** The imperative `SeriesHandle.setData` replaced the source outright. Only meaningful when `data` is true. */
@@ -91,13 +91,14 @@ export interface PaneChange {
    */
   xValues?: boolean;
   /**
-   * A state field (flex, autoScale — `PaneState`) changed.
+   * The pane's layout (flex, minHeight) or its value axis's mode (autoScale,
+   * invert, the scale instance, a value range set by hand) changed.
    *
-   * Kept separate from data changes because `stateChange` is a promise that
-   * "state changed" — firing it on every append would waste effort for
-   * anything holding a mirror of it.
+   * Kept separate from data changes because `panesChange` is a promise that
+   * "the panes changed" — firing it on every append would waste effort for
+   * anything following the layout.
    */
-  state?: boolean;
+  settings?: boolean;
 }
 
 const DATA_CHANGED: PaneChange = { data: true, refit: false };
@@ -139,8 +140,6 @@ export interface PaneApi
   readonly axis: Readonly<AxisOptions>;
   /** Whether the value axis is inverted → `PaneOptions.invert` */
   readonly invert: boolean;
-  /** Stable state identity, or null when this pane intentionally uses legacy index state. */
-  readonly stateKey: string | null;
   /** The value axis. Can be swapped out — the log/linear toggle arrives via `setYScale`. */
   readonly yScale: Scale;
 
@@ -210,8 +209,8 @@ export class Pane implements PaneApi {
   private settings: PaneSettings;
 
   /**
-   * Whether the value range was set by hand (`setValueDomain`, a restored
-   * state) and not handed back to `autoScale` since. The chart's first data
+   * Whether the value range was set by hand (`setValueDomain`) and not
+   * handed back to `autoScale` since. The chart's first data
    * fit leaves such a range alone — it was chosen before there was data.
    */
   manualDomain = false;
@@ -263,10 +262,6 @@ export class Pane implements PaneApi {
     return this.settings.invert;
   }
 
-  get stateKey(): string | null {
-    return this.settings.stateKey;
-  }
-
   /**
    * The value axis. **Can be swapped out** — the log/linear toggle arrives
    * via `setYScale`. The constructor's is just the initial wiring.
@@ -309,13 +304,8 @@ export class Pane implements PaneApi {
      * a function rather than a value because `applyOptions` can change the config.
      */
     private readonly inheritedYAxis?: () => ResolvedYAxisOptions,
-    /** Plot-owned uniqueness check for the persistent state identity. */
-    private readonly assertStateKeyAvailable?: (key: string) => void,
   ) {
     this.settings = settleOptions(options);
-    if (this.settings.stateKey !== null) {
-      this.assertStateKeyAvailable?.(this.settings.stateKey);
-    }
   }
 
   /**
@@ -335,6 +325,8 @@ export class Pane implements PaneApi {
    * axis, so the screen stays alive.
    */
   setYScale(next: Scale): void {
+    // The scale already installed — nothing to swap, nothing to announce.
+    if (next === this.scale) return;
     replantScale(
       next,
       this.scale,
@@ -345,8 +337,9 @@ export class Pane implements PaneApi {
 
     this.scale = next;
 
-    // Both the drawn points and the state fields stay the same — just redraw.
-    this.notify(PICTURE_ONLY);
+    // The drawn points stay the same, but the value axis's mode (its scale)
+    // changed — a log toggle is announced like an invert toggle.
+    this.notify({ data: false, refit: false, settings: true });
   }
 
   /**
@@ -581,20 +574,15 @@ export class Pane implements PaneApi {
 
   /**
    * Changes only what's given. Same rule as `Plot.applyOptions` — omitting
-   * means "leave as is." Which changes count as state, and why a stateKey
-   * can't be changed once claimed → `applyPaneOptions`
+   * means "leave as is." Which changes are announced → `applyPaneOptions`
    */
   applyOptions(options: PaneOptions): void {
-    const { next, state } = applyPaneOptions(
-      this.settings,
-      options,
-      this.assertStateKeyAvailable,
-    );
+    const { next, settings } = applyPaneOptions(this.settings, options);
     this.settings = next;
     if (next.autoScale) this.manualDomain = false;
 
     // Options don't touch the drawn points — the index and the value range both stay the same.
-    this.notify({ data: false, refit: false, state });
+    this.notify({ data: false, refit: false, settings });
   }
 
   /** The value range spanning every series in this pane. `null` if there's nothing at all to measure. */
@@ -624,7 +612,7 @@ export class Pane implements PaneApi {
    * value, not state).
    *
    * Differs from calling `yScale.setDomain` directly in two ways: it
-   * notifies that state changed (raw material for `stateChange`), and the
+   * notifies that the pane changed (raw material for `panesChange`), and the
    * Plot's data-change path respects this range — RSI's fixed 0-100 doesn't
    * get overwritten by a streaming append.
    */
@@ -642,10 +630,15 @@ export class Pane implements PaneApi {
      * **the two siblings answered differently** (the exact shape of a bug
      * this once caused).
      */
+    const [previousMin, previousMax] = this.yScale.getDomain();
+    const wasManual = !this.settings.autoScale && this.manualDomain;
     this.yScale.setDomain(min, max);
     this.settings = { ...this.settings, autoScale: false };
     this.manualDomain = true;
-    this.notify({ data: false, refit: false, state: true });
+    // Restating the manual range already held is not a change.
+    const [nextMin, nextMax] = this.yScale.getDomain();
+    const changed = !wasManual || nextMin !== previousMin || nextMax !== previousMax;
+    this.notify({ data: false, refit: false, settings: changed });
   }
 
   resetValueAxis(): void {

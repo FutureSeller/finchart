@@ -56,14 +56,6 @@ describe("PaneStack", () => {
     expect(() => stack.remove(stack.main)).toThrow(ContractError);
   });
 
-  it("should reject a duplicate stateKey", () => {
-    const { stack } = setup();
-    stack.add(new LinearScale(), { stateKey: "rsi" });
-    expect(() => stack.add(new LinearScale(), { stateKey: "rsi" })).toThrow(
-      /stateKey/,
-    );
-  });
-
   it("should report a pane it does not hold as not removed", () => {
     const { stack } = setup();
     const other = setup().stack.add(new LinearScale(), {});

@@ -125,7 +125,7 @@ export const noStyle: StyleReader = () => "";
 
 /**
  * Whether an override says anything. `undefined` and `null` both mean "no
- * value" — state serialization and a React props round trip turn one into
+ * value" — JSON serialization and a React props round trip turn one into
  * the other, and neither should win over a CSS variable. Every place that
  * asks "did the consumer give this leaf a value?" asks here, so the answer
  * cannot drift between the resolver and a series that reads its own

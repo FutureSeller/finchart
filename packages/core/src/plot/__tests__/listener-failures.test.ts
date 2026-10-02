@@ -43,7 +43,7 @@ describe("a throwing listener", () => {
 
   it("does not stop the frame after a pane option change", () => {
     const { plot, scheduler } = mount();
-    plot.on("stateChange", boom);
+    plot.on("panesChange", boom);
 
     expect(() => plot.mainPane.applyOptions({ flex: 2 })).toThrow(/listener boom/);
 
@@ -53,7 +53,7 @@ describe("a throwing listener", () => {
 
   it("still hands back the pane from addPane, and reports the error out of band", () => {
     const { plot, scheduler } = mount();
-    plot.on("stateChange", boom);
+    plot.on("panesChange", boom);
     const later: (() => void)[] = [];
     vi.spyOn(globalThis, "queueMicrotask").mockImplementation((task) => void later.push(task));
 
@@ -64,18 +64,6 @@ describe("a throwing listener", () => {
     expect(later).toHaveLength(1);
     expect(later[0]).toThrow(/listener boom/);
     vi.restoreAllMocks();
-  });
-
-  it("still announces the x window when a stateChange listener throws", () => {
-    const { plot } = mount();
-    const handle = plot.mainPane.addSeries({ series: lineSeries(), data: [{ x: 0, y: 1 }, { x: 10, y: 2 }] });
-    const windows: number[] = [];
-    plot.on("stateChange", boom);
-    plot.on("xDomainChange", ({ startX }) => windows.push(startX));
-
-    expect(() => handle.setData([{ x: 100, y: 1 }, { x: 110, y: 2 }])).toThrow(/listener boom/);
-
-    expect(windows).toHaveLength(1);
   });
 });
 

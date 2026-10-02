@@ -78,28 +78,28 @@ describe("first fit", () => {
   });
 });
 
-describe("when a restore arrives before the data", () => {
-  /** The order for URL restoration — data arrives after mount. The first data's fit must not overwrite the restored window. */
-  it("should hold the restored window until data arrives", () => {
+describe("when a window is set before the data", () => {
+  /** Set at mount, before the data arrives — the first data's fit must not overwrite the chosen window. */
+  it("should hold the window until data arrives", () => {
     const s = setup();
 
-    s.viewport.restore({ min: 15, max: 25 });
+    s.viewport.setVisibleRange(15, 25);
     expect(s.viewport.fitted).toBe(false);
     expect(s.changes).toHaveLength(0);
 
     s.load([10, 20, 30]);
     s.viewport.fit();
 
-    // The restored window won, not the fit.
+    // The held window won, not the fit.
     expect(s.viewport.visibleRange()).toEqual({ min: 15, max: 25 });
   });
 
   /** In bar-index coordinates, capturing it before the data means toDomain
    * is the identity, so the raw x — not the index — ends up baked into the domain. */
-  it("should convert the restored window in index space, not before", () => {
+  it("should convert the held window in index space, not before", () => {
     const s = setup({}, "barIndex");
 
-    s.viewport.restore({ min: 200, max: 400 });
+    s.viewport.setVisibleRange(200, 400);
     s.load([100, 200, 300, 400, 500]);
     s.viewport.fit();
 
@@ -108,11 +108,11 @@ describe("when a restore arrives before the data", () => {
     expect(s.viewport.visibleRange()).toEqual({ min: 200, max: 400 });
   });
 
-  it("should apply the restore immediately when data is already there", () => {
+  it("should apply the window immediately when data is already there", () => {
     const s = setup();
     s.load([10, 20, 30]);
 
-    s.viewport.restore({ min: 15, max: 25 });
+    s.viewport.setVisibleRange(15, 25);
 
     expect(s.viewport.visibleRange()).toEqual({ min: 15, max: 25 });
   });
@@ -262,7 +262,7 @@ describe("bar spacing limits", () => {
     expect(max - min).toBeGreaterThan(1600);
   });
 
-  it("should not widen a narrow restored window by default", () => {
+  it("should not widen a narrow chosen window by default", () => {
     // The reason there's no default on the zoom-in side (max) — restoring
     // a two-bar window must not silently widen it.
     const s = setup({}, "barIndex");
@@ -273,7 +273,7 @@ describe("bar spacing limits", () => {
   });
 
   /** The limit only applies to zoom — a window widened past the limit by
-   * fit or restore must not have its first zoom yanked to the limit. */
+   * fit or setVisibleRange must not have its first zoom yanked to the limit. */
   it("should fit past the limit and not yank the first zoom to it", () => {
     const s = setup({}, "barIndex");
     s.load(Array.from({ length: 2001 }, (_, i) => i * 10));
@@ -456,7 +456,7 @@ describe("pan boundaries", () => {
   it("should let an out-of-bounds window come home but not drift further", () => {
     const s = setup();
     s.load([0, 800]);
-    // A restore pointing into empty space — a shared URL can genuinely look like this.
+    // A window pointing into empty space — set by hand, or by a jump to a date the data does not reach.
     s.viewport.setVisibleRange(2000, 2800);
 
     const before = s.changes.length;
@@ -571,51 +571,51 @@ describe("zoom center clamp", () => {
   });
 });
 
-describe("when a restore arrives before the data and misses it", () => {
-  /** The order for URL restoration on a different symbol — the saved window has no data under it. */
+describe("when a window set before the data misses it", () => {
+  /** A window chosen before the data, on data that never reaches it. */
   it("should fall back to the ordinary fit — the same window a fresh fit gives, right offset and all", () => {
-    const restored = setup({ rightOffset: 2 });
-    restored.viewport.restore({ min: 100, max: 200 });
-    restored.load([10, 20, 30]);
-    restored.viewport.fit();
+    const held = setup({ rightOffset: 2 });
+    held.viewport.setVisibleRange(100, 200);
+    held.load([10, 20, 30]);
+    held.viewport.fit();
 
     const fresh = setup({ rightOffset: 2 });
     fresh.load([10, 20, 30]);
     fresh.viewport.fit();
 
-    expect(restored.viewport.visibleRange()).toEqual(fresh.viewport.visibleRange());
-    expect(restored.changes).toEqual(fresh.changes);
+    expect(held.viewport.visibleRange()).toEqual(fresh.viewport.visibleRange());
+    expect(held.changes).toEqual(fresh.changes);
   });
 
   it("should do the same under bar-index coordinates", () => {
-    const restored = setup({}, "barIndex");
-    restored.viewport.restore({ min: 100, max: 200 });
-    restored.load([10, 20, 30]);
-    restored.viewport.fit();
+    const held = setup({}, "barIndex");
+    held.viewport.setVisibleRange(100, 200);
+    held.load([10, 20, 30]);
+    held.viewport.fit();
 
     const fresh = setup({}, "barIndex");
     fresh.load([10, 20, 30]);
     fresh.viewport.fit();
 
-    expect(restored.domain()).toEqual(fresh.domain());
+    expect(held.domain()).toEqual(fresh.domain());
   });
 
   it("should fall back for a window wholly before the data too", () => {
-    const restored = setup();
-    restored.viewport.restore({ min: -50, max: 5 });
-    restored.load([10, 20, 30]);
-    restored.viewport.fit();
+    const held = setup();
+    held.viewport.setVisibleRange(-50, 5);
+    held.load([10, 20, 30]);
+    held.viewport.fit();
 
     const fresh = setup();
     fresh.load([10, 20, 30]);
     fresh.viewport.fit();
 
-    expect(restored.viewport.visibleRange()).toEqual(fresh.viewport.visibleRange());
+    expect(held.viewport.visibleRange()).toEqual(fresh.viewport.visibleRange());
   });
 
   it("should keep a window that overlaps the data, even partly", () => {
     const s = setup();
-    s.viewport.restore({ min: 25, max: 40 });
+    s.viewport.setVisibleRange(25, 40);
     s.load([10, 20, 30]);
     s.viewport.fit();
     expect(s.viewport.visibleRange()).toEqual({ min: 25, max: 40 });
@@ -623,13 +623,13 @@ describe("when a restore arrives before the data and misses it", () => {
 
   it("should keep a window that touches the data at an endpoint — either end", () => {
     const right = setup();
-    right.viewport.restore({ min: 30, max: 50 });
+    right.viewport.setVisibleRange(30, 50);
     right.load([10, 20, 30]);
     right.viewport.fit();
     expect(right.viewport.visibleRange()).toEqual({ min: 30, max: 50 });
 
     const left = setup();
-    left.viewport.restore({ min: -5, max: 10 });
+    left.viewport.setVisibleRange(-5, 10);
     left.load([10, 20, 30]);
     left.viewport.fit();
     expect(left.viewport.visibleRange()).toEqual({ min: -5, max: 10 });
@@ -637,7 +637,7 @@ describe("when a restore arrives before the data and misses it", () => {
 
   it("should hold the window through empty data — only data can say whether it misses", () => {
     const s = setup();
-    s.viewport.restore({ min: 15, max: 25 });
+    s.viewport.setVisibleRange(15, 25);
     s.load([]);
     s.viewport.fit();
     s.load([]);

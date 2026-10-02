@@ -6,8 +6,6 @@
 import { describe, expect, it } from "vitest";
 import { ContractError } from "../errors";
 import {
-  asFinite,
-  asIndex,
   requireFinite,
   requireInterval,
   requireNonNegative,
@@ -93,47 +91,3 @@ describe("requireInterval", () => {
   });
 });
 
-describe("asFinite", () => {
-  it("should return the number when finite", () => {
-    expect(asFinite(0)).toBe(0);
-    expect(asFinite(-3.25)).toBe(-3.25);
-  });
-
-  it("should return undefined for non-finite and non-numbers", () => {
-    for (const bad of [NaN, Infinity, -Infinity, JSON_INFINITY, "1", null, undefined, {}, []]) {
-      expect(asFinite(bad)).toBeUndefined();
-    }
-  });
-
-  it("should not throw — parsers report absence, not error", () => {
-    expect(() => asFinite(NaN)).not.toThrow();
-  });
-});
-
-describe("asIndex", () => {
-  it("should accept in-range integers", () => {
-    expect(asIndex(0, 3)).toBe(0);
-    expect(asIndex(2, 3)).toBe(2);
-  });
-
-  it("should reject fractions — the 36th-review hole", () => {
-    // `0 <= 0.5 < 3` is true, but `panes[0.5]` is undefined.
-    expect(asIndex(0.5, 3)).toBeUndefined();
-    expect(asIndex(1.0000001, 3)).toBeUndefined();
-  });
-
-  it("should reject out-of-range and negative", () => {
-    expect(asIndex(3, 3)).toBeUndefined();
-    expect(asIndex(-1, 3)).toBeUndefined();
-  });
-
-  it("should reject non-finite and non-numbers", () => {
-    for (const bad of [NaN, JSON_INFINITY, "0", null, undefined]) {
-      expect(asIndex(bad, 3)).toBeUndefined();
-    }
-  });
-
-  it("should reject everything when the limit is zero", () => {
-    expect(asIndex(0, 0)).toBeUndefined();
-  });
-});

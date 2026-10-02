@@ -15,7 +15,7 @@ import type { SeriesHandle } from "../plot/series-handle";
  */
 export type InfiniteHistoryHost = PlotEventSource &
   XCoordinates &
-  Pick<Plot, "getState" | "leadingMargin">;
+  Pick<Plot, "getVisibleRange" | "leadingMargin">;
 
 /**
  * Where a landed page goes, when it is a function — a chart with a price
@@ -715,9 +715,10 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     off = release;
   }
 
-  // A restored view can already sit past the data before any event fires.
+  // A view set before the loader mounted can already sit past the data
+  // before any event fires.
   try {
-    const domain = host.getState().xDomain;
+    const domain = host.getVisibleRange();
     if (domain) {
       lastStartX = domain.min;
       lastView = { startX: domain.min, endX: domain.max };

@@ -719,17 +719,6 @@ describe("histogram colour shortcuts", () => {
   });
 });
 
-describe("ownPane.stateKey", () => {
-  it("names the own pane in persisted state, and stays off when not given", () => {
-    const { model, price } = pricedModel();
-    model.plot.use(attachRsi({ source: price, period: 5, ownPane: { stateKey: "rsi" } }));
-    model.plot.use(attachMfi({ source: price, period: 5 }));
-    expect(model.plot.panes[1].stateKey).toBe("rsi");
-    expect(model.plot.panes[2].stateKey).toBeNull();
-    expect(model.plot.getState().panes.map((pane) => pane.stateKey)).toEqual([undefined, "rsi", undefined]);
-  });
-});
-
 describe("the node door — an attach draws a node you built", () => {
   it("draws the node handed over and builds none of its own; the name is the label", () => {
     const { model, price } = pricedModel();

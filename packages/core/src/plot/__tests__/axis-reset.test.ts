@@ -58,7 +58,7 @@ describe("a double-click on the y axis", () => {
 
     expect(second.autoScale).toBe(true);
     expect(plot.mainPane.autoScale).toBe(false);
-    expect(plot.getState().xDomain).toEqual({ min: 50, max: 60 });
+    expect(plot.getVisibleRange()).toEqual({ min: 50, max: 60 });
     expect(seen).toEqual([]);
   });
 

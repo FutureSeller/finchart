@@ -55,7 +55,7 @@ describe("lineSeries and areaSeries take a coordinate accessor", () => {
     ];
     for (const series of [lineSeries({ coordinates: shifted }), areaSeries({ coordinates: shifted })]) {
       const model = createPlotModel({ size: { width: 400, height: 300 }, series: { series, data }, config: { showGrid: false } });
-      const range = model.plot.getState().xDomain;
+      const range = model.plot.getVisibleRange();
       expect(range?.min).toBeGreaterThan(900);
       const line = model.commands().find((command) => command.type === "drawLine");
       expect(line?.type === "drawLine" ? line.points.map((point) => point.y) : []).toEqual(

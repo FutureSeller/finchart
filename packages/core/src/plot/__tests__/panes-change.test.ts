@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";
-import { barIndexX, LinearScale } from "../../scale";
+import { barIndexX, LinearScale, LogScale } from "../../scale";
 import { manualScheduler } from "../../render";
 import { candleSeries, lineSeries } from "../../series";
 import { testBrowserDeps, testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
-import type { ChartState } from "../state";
 import { mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -12,6 +11,16 @@ const data: LineDataPoint[] = [
   { x: 50, y: 20 },
   { x: 100, y: 15 },
 ];
+
+interface PaneLayout {
+  flex: number;
+  autoScale: boolean;
+}
+
+/** What a follower reads when `panesChange` rings — the event carries no payload. */
+function layoutOf(plot: { panes: readonly { flex: number; autoScale: boolean }[] }): PaneLayout[] {
+  return plot.panes.map(({ flex, autoScale }) => ({ flex, autoScale }));
+}
 
 function mounted() {
   const { deps, xScale, yScale } = testBrowserDepsWithScales();
@@ -21,29 +30,35 @@ function mounted() {
     data,
   });
 
-  const seen: ChartState[] = [];
-  plot.on("stateChange", (state) => seen.push(state));
+  const seen: PaneLayout[][] = [];
+  plot.on("panesChange", () => seen.push(layoutOf(plot)));
 
   return { plot, handle, xScale, yScale, layers, seen };
 }
 
-describe("getState", () => {
+describe("getVisibleRange", () => {
 
-  it("should have no xDomain before the first fit", () => {
+  it("should be null before the first fit", () => {
     const deps = testBrowserDeps();
     const { plot } = mountPlot({ deps, series: lineSeries() });
 
-    // The scale's default [0,1] is not state the user created.
-    expect(plot.getState()).toEqual({
-      xDomain: null,
-      panes: [{ flex: 1, autoScale: true }],
-    });
+    // The scale's default [0,1] is not a window anyone chose.
+    expect(plot.getVisibleRange()).toBeNull();
   });
 
   it("should read the visible x span in data x", () => {
     const { plot } = mounted();
 
-    expect(plot.getState().xDomain).toEqual({ min: 0, max: 100 });
+    expect(plot.getVisibleRange()).toEqual({ min: 0, max: 100 });
+  });
+
+  it("should keep a window set before the data over the offset fit", () => {
+    const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries(), config: { rightOffset: 10 } });
+    plot.setVisibleRange(10, 60);
+
+    handle.setData(data);
+
+    expect(plot.getVisibleRange()).toEqual({ min: 10, max: 60 });
   });
 
   it("should speak data x even in bar-index mode", () => {
@@ -57,48 +72,46 @@ describe("getState", () => {
     const deps = testBrowserDeps({ createXMapping: barIndexX });
     const { plot } = mountPlot({ deps, series: candleSeries(), data: days });
 
-    // The domain is index [-0.5,4.5], but the state reports x [-0.5,6.5] — state speaks data x, not indices
-    expect(plot.getState().xDomain).toEqual({ min: -0.5, max: 6.5 });
-  });
-
-  it("should carry the manual value domain only when autoScale is off", () => {
-    const { plot } = mounted();
-    expect(plot.getState().panes[0].valueDomain).toBeUndefined();
-
-    plot.mainPane.applyOptions({ autoScale: false });
-
-    const pane = plot.getState().panes[0];
-    expect(pane.autoScale).toBe(false);
-    expect(pane.valueDomain).toBeDefined();
+    // The domain is index [-0.5,4.5], but the range reads x [-0.5,6.5] — data x, not indices
+    expect(plot.getVisibleRange()).toEqual({ min: -0.5, max: 6.5 });
   });
 });
 
-describe("stateChange", () => {
-  it("should fire on pan with the new xDomain", () => {
+describe("panesChange", () => {
+  it("should stay quiet on pan — the x window has its own event", () => {
     const { plot, seen } = mounted();
 
     plot.pan(10);
 
-    expect(seen.at(-1)?.xDomain).toEqual({ min: 10, max: 110 });
+    expect(plot.getVisibleRange()).toEqual({ min: 10, max: 110 });
+    expect(seen).toHaveLength(0);
   });
 
-  it("should fire when a pane option changes a state slice", () => {
+  it("should fire when a pane's minHeight changes — it is layout", () => {
+    const { plot, seen } = mounted();
+
+    plot.mainPane.applyOptions({ minHeight: 60 });
+
+    expect(seen).toHaveLength(1);
+  });
+
+  it("should fire when a pane setting changes", () => {
     const { plot, seen } = mounted();
 
     plot.mainPane.applyOptions({ autoScale: false });
 
     expect(seen).toHaveLength(1);
-    expect(seen[0].panes[0].autoScale).toBe(false);
+    expect(seen[0][0].autoScale).toBe(false);
   });
 
-  it("should stay quiet when the option merely restates the state", () => {
+  it("should stay quiet when the option merely restates the setting", () => {
     const { plot, seen } = mounted();
 
-    // Restating the same value is not a state change — React pushing the
-    // same options on every render must not spin the mirror for nothing.
+    // Restating the same value is not a change — React pushing the same
+    // options on every render must not spin a follower for nothing.
     plot.mainPane.applyOptions({ flex: 1, autoScale: true });
-    // Options that aren't state slices stay quiet too.
-    plot.mainPane.applyOptions({ minHeight: 60 });
+    // How a pane draws isn't its layout or its axis mode — those stay quiet too.
+    plot.mainPane.applyOptions({ valuePadding: 0.3, axis: { showLabels: false } });
 
     expect(seen).toHaveLength(0);
   });
@@ -109,7 +122,7 @@ describe("stateChange", () => {
     plot.fitDomains();
     seen.length = 0;
 
-    // Data isn't state, and append doesn't touch the domain either.
+    // Data isn't a pane change.
     handle.append([{ x: 150, y: 30 }]);
     handle.prepend([{ x: -50, y: 5 }]);
 
@@ -121,246 +134,85 @@ describe("stateChange", () => {
 
     plot.addPane({ flex: 2 });
 
-    expect(seen.at(-1)?.panes.map((pane) => pane.flex)).toEqual([1, 2]);
+    expect(seen.at(-1)?.map((pane) => pane.flex)).toEqual([1, 2]);
   });
 
   it("should fire when a divider drag reshapes the panes", () => {
-    // The DOM divider moved to @finchart/dom — what's tested here is the
-    // core wiring by which a drag callback reaches the state event, so a
-    // fake divider that just captures the callback is enough.
-    const captured: {
-      drag: ((index: number, dy: number) => void) | null;
-    } = { drag: null };
-    const deps = testBrowserDeps({
-      createDividers: (_overlay, onDrag) => {
-        captured.drag = onDrag;
-        return {
-          render: () => undefined,
-          clear: () => undefined,
-          destroy: () => undefined,
-        };
-      },
-    });
-    const { plot } = mountPlot({ deps, series: lineSeries(), data });
-    const seen: ChartState[] = [];
-    plot.on("stateChange", (state) => seen.push(state));
-    plot.addPane();
-    plot.render();
+    const { plot, drag, seen } = dragging();
 
-    if (!captured.drag) throw new Error("the divider wiring never received a drag callback");
-    captured.drag(0, 40);
+    drag(0, 40);
 
-    const panes = seen.at(-1)?.panes ?? [];
+    // One for the added pane, one for the drag — the drag rewrites both
+    // panes' flex, and runs on every pointermove, so it rings once, not per pane.
+    expect(seen).toHaveLength(2);
+    const panes = seen.at(-1) ?? [];
     // The top pane grew by 40px — flex is frozen as a pixel height -> resizeBetween
     expect(panes[0].flex).toBeGreaterThan(panes[1].flex);
+    expect(layoutOf(plot)).toEqual(panes);
+  });
+
+  it("should still announce a drag that a pane subscriber broke off part-way", () => {
+    const { plot, drag, seen } = dragging();
+    const before = plot.mainPane.flex;
+    const boom = new Error("pane subscriber failed");
+    plot.mainPane.subscribe((change) => {
+      if (change.settings) throw boom;
+    });
+
+    expect(caught(() => drag(0, 40))).toBe(boom);
+
+    // The first pane already moved before the loop broke — a follower must hear of it.
+    expect(plot.mainPane.flex).not.toBe(before);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("should keep the subscriber's error first when the announcement throws too", () => {
+    const { plot, drag } = dragging();
+    const boom = new Error("pane subscriber failed");
+    const late = new Error("follower failed");
+    plot.mainPane.subscribe((change) => {
+      if (change.settings) throw boom;
+    });
+    plot.on("panesChange", () => {
+      throw late;
+    });
+
+    const error = caught(() => drag(0, 40));
+
+    expect(error).toBeInstanceOf(AggregateError);
+    const errors = error instanceof AggregateError ? error.errors : [];
+    expect(errors).toEqual([boom, late]);
   });
 });
 
-describe("applyState", () => {
-  it("should round trip through getState", () => {
-    const { plot } = mounted();
-    plot.pan(10);
-    const saved = plot.getState();
-
-    const restored = mounted();
-    restored.plot.applyState(saved);
-
-    expect(restored.plot.getState()).toEqual(saved);
+/** A two-pane chart whose divider drag is driven by hand — the fake divider just captures the callback. */
+function dragging() {
+  // The DOM divider moved to @finchart/dom — what's tested here is the core
+  // wiring by which a drag callback reaches the panes event.
+  const captured: {
+    drag: ((index: number, dy: number) => void) | null;
+  } = { drag: null };
+  const deps = testBrowserDeps({
+    createDividers: (_overlay, onDrag) => {
+      captured.drag = onDrag;
+      return {
+        render: () => undefined,
+        clear: () => undefined,
+        destroy: () => undefined,
+      };
+    },
   });
-
-  it("should only touch the slices it was given", () => {
-    const { plot } = mounted();
-    plot.mainPane.applyOptions({ flex: 3 });
-
-    plot.applyState({ xDomain: { min: 20, max: 60 } });
-
-    expect(plot.getState().panes[0].flex).toBe(3);
-    expect(plot.getState().xDomain).toEqual({ min: 20, max: 60 });
-  });
-
-  it("should hold a restore that arrives before the data", () => {
-    const deps = testBrowserDeps();
-    const { plot, handle } = mountPlot({ deps, series: lineSeries() });
-
-    // The real order for URL restoration — state first, data second.
-    plot.applyState({ xDomain: { min: 10, max: 50 } });
-    handle.setData(data);
-
-    // The first data's fit must not overwrite the restored window.
-    expect(plot.getState().xDomain).toEqual({ min: 10, max: 50 });
-  });
-
-  it("should land the held restore in index space for bar-index", () => {
-    const days: OHLC[] = [0, 1, 2, 5, 6].map((x) => ({
-      x,
-      open: 1,
-      high: 2,
-      low: 0,
-      close: 1,
-    }));
-    const { deps, xScale } = testBrowserDepsWithScales({ createXMapping: barIndexX });
-    const { plot, handle } = mountPlot({ deps, series: candleSeries() });
-
-    plot.applyState({ xDomain: { min: 1, max: 5 } });
-    handle.setData(days);
-
-    // x 1~5 covers bars 1~3 — a value that can only be counted once the data has arrived.
-    expect(xScale.getDomain()).toEqual([1, 3]);
-    expect(plot.getState().xDomain).toEqual({ min: 1, max: 5 });
-  });
-
-  it("should keep a manual value range restored before the data", () => {
-    const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries() });
-    plot.applyState({ panes: [{ flex: 1, autoScale: false, valueDomain: { min: 0, max: 100 } }] });
-
-    handle.setData(data);
-
-    expect(plot.getState().panes[0]).toEqual({ flex: 1, autoScale: false, valueDomain: { min: 0, max: 100 } });
-  });
-
-  it("should validate every slice before applying any", () => {
-    const { plot, seen } = mounted();
-    plot.addPane();
-    const before = plot.getState();
-
-    expect(() => plot.applyState({
-      xDomain: { min: 10, max: 20 },
-      panes: [{ flex: 3, autoScale: true }, { flex: 1, autoScale: false, valueDomain: { min: 5, max: 1 } }],
-    })).toThrow(/min\(5\) must be less than max\(1\)/);
-
-    expect(plot.getState()).toEqual(before);
-    expect(seen).toHaveLength(1);
-  });
-
-  it("should refuse a slice whose autoScale or invert is not a boolean", () => {
-    const { plot } = mounted();
-    // Hand-built state from a URL or storage — typed as anything.
-    for (const slice of ['{"flex":1,"autoScale":"false"}', '{"flex":1,"autoScale":true,"invert":1}']) {
-      expect(() => plot.applyState({ panes: [JSON.parse(slice)] })).toThrow(/must be a boolean/);
-    }
-    expect(plot.mainPane.autoScale).toBe(true);
-  });
-
-  it("should apply pane slices and notify once", () => {
-    const { plot, seen } = mounted();
-    plot.addPane();
-    seen.length = 0;
-
-    plot.applyState({
-      panes: [
-        { flex: 3, autoScale: true },
-        { flex: 1, autoScale: false, valueDomain: { min: 0, max: 100 } },
-      ],
-    });
-
-    expect(seen).toHaveLength(1);
-    expect(plot.getState().panes).toEqual([
-      { flex: 3, autoScale: true },
-      { flex: 1, autoScale: false, valueDomain: { min: 0, max: 100 } },
-    ]);
-  });
-
-  it("should pair unkeyed slices only when there is one for every pane", () => {
-    const { plot } = mounted();
-
-    // Two slices for one pane: which pane went away is unknowable without keys,
-    // so none is guessed. Whoever creates panes (the wrapper) reapplies once the list matches.
-    plot.applyState({
-      panes: [
-        { flex: 2, autoScale: true },
-        { flex: 5, autoScale: true },
-      ],
-    });
-    expect(plot.getState().panes).toEqual([{ flex: 1, autoScale: true }]);
-
-    plot.addPane();
-    plot.applyState({
-      panes: [
-        { flex: 2, autoScale: true },
-        { flex: 5, autoScale: true },
-      ],
-    });
-    expect(plot.getState().panes.map((pane) => pane.flex)).toEqual([2, 5]);
-  });
-
-  it("should not pair a saved unkeyed layout with panes after one was removed from the middle", () => {
-    const { plot } = mounted();
-    const middle = plot.addPane({ flex: 3 });
-    plot.addPane({ flex: 7 });
-    const saved = plot.getState();
-
-    plot.removePane(middle);
-    plot.applyState(saved);
-
-    // Index pairing would have put the removed pane's 3 on the pane that was 7.
-    expect(plot.getState().panes.map((pane) => pane.flex)).toEqual([1, 7]);
-  });
-
-  it("should treat a pre-fit snapshot as nothing to restore", () => {
-    const { plot, seen } = mounted();
-
-    plot.applyState({ xDomain: null });
-
-    expect(seen).toHaveLength(0);
-    expect(plot.getState().xDomain).toEqual({ min: 0, max: 100 });
-  });
-
-  it("should restore keyed panes by meaning after dynamic panes shift their positions", () => {
-    const { plot } = mounted();
-    plot.mainPane.applyOptions({ stateKey: "price", flex: 3, autoScale: false });
-    plot.mainPane.setValueDomain(10, 90);
-    const rsi = plot.addPane({ stateKey: "rsi", flex: 2, autoScale: false });
-    rsi.setValueDomain(20, 80);
-    const saved = plot.getState();
-
-    const target = mounted();
-    target.plot.mainPane.applyOptions({ stateKey: "price" });
-    const volume = target.plot.addPane({ stateKey: "volume", flex: 7 });
-    const targetRsi = target.plot.addPane({ stateKey: "rsi", flex: 1 });
-
-    target.plot.applyState(saved);
-
-    expect(target.plot.getState().panes).toEqual([
-      { stateKey: "price", flex: 3, autoScale: false, valueDomain: { min: 10, max: 90 } },
-      { stateKey: "volume", flex: 7, autoScale: true },
-      { stateKey: "rsi", flex: 2, autoScale: false, valueDomain: { min: 20, max: 80 } },
-    ]);
-    expect(volume.flex).toBe(7);
-    expect(targetRsi.flex).toBe(2);
-  });
-
-  it("should never apply an unkeyed legacy slice to a keyed pane", () => {
-    const { plot } = mounted();
-    plot.mainPane.applyOptions({ stateKey: "price", flex: 1 });
-    const rsi = plot.addPane({ stateKey: "rsi", flex: 1 });
-
-    plot.applyState({
-      panes: [
-        { flex: 9, autoScale: true },
-        { stateKey: "rsi", flex: 4, autoScale: true },
-      ],
-    });
-
-    expect(plot.mainPane.flex).toBe(1);
-    expect(rsi.flex).toBe(4);
-  });
-
-  it("should reject duplicate or rewritten state keys", () => {
-    const { plot } = mounted();
-    plot.mainPane.applyOptions({ stateKey: "price" });
-
-    expect(() => plot.addPane({ stateKey: "price" })).toThrow(/Duplicate pane stateKey/);
-    expect(() => plot.mainPane.applyOptions({ stateKey: "other" })).toThrow(/cannot be changed/);
-    expect(() =>
-      plot.applyState({
-        panes: [
-          { stateKey: "rsi", flex: 1, autoScale: true },
-          { stateKey: "rsi", flex: 1, autoScale: true },
-        ],
-      }),
-    ).toThrow(/Duplicate pane stateKey/);
-  });
-});
+  const { plot } = mountPlot({ deps, series: lineSeries(), data });
+  const seen: PaneLayout[][] = [];
+  plot.on("panesChange", () => seen.push(layoutOf(plot)));
+  plot.addPane();
+  plot.render();
+  const drag = (index: number, dy: number): void => {
+    if (!captured.drag) throw new Error("the divider wiring never received a drag callback");
+    captured.drag(index, dy);
+  };
+  return { plot, drag, seen };
+}
 
 describe("setValueDomain", () => {
   it("should survive streaming appends", () => {
@@ -414,16 +266,76 @@ describe("setValueDomain", () => {
     expect(plot.mainPane.yScale.getDomain()).not.toEqual([0, 100]);
   });
 
-  it("should announce itself as a state change", () => {
+  it("should announce itself as a panes change", () => {
     const { plot, seen } = mounted();
 
     plot.mainPane.setValueDomain(0, 100);
 
-    expect(seen.at(-1)?.panes[0]).toEqual({
-      flex: 1,
-      autoScale: false,
-      valueDomain: { min: 0, max: 100 },
-    });
+    expect(seen.at(-1)?.[0]).toEqual({ flex: 1, autoScale: false });
+  });
+
+  it("should stay quiet when it restates the manual range already held", () => {
+    const { plot, seen } = mounted();
+    plot.mainPane.setValueDomain(0, 100);
+    const before = seen.length;
+
+    plot.mainPane.setValueDomain(0, 100);
+
+    expect(seen).toHaveLength(before);
+  });
+
+  it("should announce a scale swap once — a log toggle is a mode, like invert", () => {
+    const { plot, seen } = mounted();
+
+    plot.mainPane.setYScale(new LogScale());
+    plot.mainPane.setYScale(new LinearScale());
+
+    expect(seen).toHaveLength(2);
+  });
+
+  it("should stay quiet when the scale handed in is the one installed", () => {
+    const { plot, seen } = mounted();
+
+    // A render that passes the same cached scale again is not a toggle.
+    plot.mainPane.setYScale(plot.mainPane.yScale);
+
+    expect(seen).toHaveLength(0);
+  });
+
+  it("should announce a swap that refits a manual range once, for the swap", () => {
+    const { plot, seen } = mounted();
+    // A floor below zero — a log axis cannot hold it, so the swap refits.
+    plot.mainPane.setValueDomain(-10, 100);
+    const before = seen.length;
+
+    plot.mainPane.setYScale(new LogScale());
+
+    expect(plot.mainPane.autoScale).toBe(false);
+    expect(plot.mainPane.yScale.getDomain()[0]).toBeGreaterThan(0);
+    expect(seen).toHaveLength(before + 1);
+  });
+
+  it("should stay quiet when new data refits a manual range — data is not a setting", () => {
+    const { plot, handle, seen } = mounted();
+    plot.mainPane.setValueDomain(0, 100);
+    const before = seen.length;
+
+    handle.setData([{ x: 0, y: 500 }, { x: 10, y: 700 }]);
+
+    expect(plot.mainPane.yScale.getDomain()).not.toEqual([0, 100]);
+    expect(seen).toHaveLength(before);
+  });
+
+  it("should announce a range set by hand on a pane that had only turned autoScale off", () => {
+    const { plot, seen } = mounted();
+    plot.mainPane.applyOptions({ autoScale: false });
+    const [min, max] = plot.mainPane.yScale.getDomain();
+    const before = seen.length;
+
+    // The same numbers the axis already shows — but now they are the user's.
+    plot.mainPane.setValueDomain(min, max);
+
+    expect(seen).toHaveLength(before + 1);
   });
 });
 
@@ -456,26 +368,44 @@ describe("fitDomains and the value axis mode", () => {
     expect(yScale.getDomain()[1]).toBeGreaterThanOrEqual(999);
   });
 
-  it("an explicit fitDomains still fits x — the window you scrolled to is gone", () => {
-    const { plot } = mounted();
-    const whole = plot.getState().xDomain;
+  it("fitDomains with every pane already following stays quiet — an x-only fit is not a pane change", () => {
+    const { plot, seen } = mounted();
     plot.setVisibleRange(50, 60);
-    expect(plot.getState().xDomain).not.toEqual(whole);
+
     plot.fitDomains();
-    expect(plot.getState().xDomain).toEqual(whole);
+
+    expect(seen).toHaveLength(0);
   });
 
-  it("rings stateChange once for the whole fit, and a listener that removes a pane does not hide the next one", () => {
+  it("fitDomains with one manual pane rings exactly once", () => {
     const { plot, seen } = mounted();
-    const whole = plot.getState().xDomain;
+    plot.addPane();
+    plot.mainPane.setValueDomain(0, 100);
+    const before = seen.length;
+
+    plot.fitDomains();
+
+    expect(seen).toHaveLength(before + 1);
+  });
+
+  it("an explicit fitDomains still fits x — the window you scrolled to is gone", () => {
+    const { plot } = mounted();
+    const whole = plot.getVisibleRange();
+    plot.setVisibleRange(50, 60);
+    expect(plot.getVisibleRange()).not.toEqual(whole);
+    plot.fitDomains();
+    expect(plot.getVisibleRange()).toEqual(whole);
+  });
+
+  it("rings panesChange once for the whole fit, and a listener that removes a pane does not hide the next one", () => {
+    const { plot, seen } = mounted();
     const a = plot.addPane();
     const b = plot.addPane();
     for (const pane of [plot.mainPane, a, b]) pane.setValueDomain(0, 100);
-    // x narrowed too — the x fit inside must not ring on its own, ahead of the mode flips.
     plot.setVisibleRange(50, 60);
     const before = seen.length;
-    // A mirror that, on seeing `a` follow the data again, drops the pane — the stack is `[main, a, b]`.
-    plot.on("stateChange", () => {
+    // A follower that, on seeing `a` follow the data again, drops the pane — the stack is `[main, a, b]`.
+    plot.on("panesChange", () => {
       if (a.autoScale && plot.panes.includes(a)) plot.removePane(a);
     });
 
@@ -484,11 +414,9 @@ describe("fitDomains and the value axis mode", () => {
     expect(plot.panes).toEqual([plot.mainPane, b]);
     expect(plot.mainPane.autoScale).toBe(true);
     expect(b.autoScale).toBe(true);
-    // One for the fit (x and three panes together); the removal rings its own afterwards.
+    // One for the fit (three panes together); the removal rings its own afterwards.
     expect(seen.length - before).toBe(2);
-    const fit = seen[before];
-    expect(fit?.xDomain).toEqual(whole);
-    expect(fit?.panes.map((pane) => pane.autoScale)).toEqual([true, true, true]);
+    expect(seen[before]?.map((pane) => pane.autoScale)).toEqual([true, true, true]);
   });
 
   it("a listener that throws on the fit's notification does not undo the fit — every pane is reset and the error is the listener's own", () => {
@@ -496,8 +424,8 @@ describe("fitDomains and the value axis mode", () => {
     const a = plot.addPane();
     for (const pane of [plot.mainPane, a]) pane.setValueDomain(0, 100);
     plot.setVisibleRange(50, 60);
-    const boom = new Error("mirror failed");
-    plot.on("stateChange", () => {
+    const boom = new Error("follower failed");
+    plot.on("panesChange", () => {
       throw boom;
     });
 
@@ -505,14 +433,14 @@ describe("fitDomains and the value axis mode", () => {
 
     expect(plot.mainPane.autoScale).toBe(true);
     expect(a.autoScale).toBe(true);
-    expect(plot.getState().xDomain).not.toEqual({ min: 50, max: 60 });
+    expect(plot.getVisibleRange()).not.toEqual({ min: 50, max: 60 });
   });
 
   it("a listener that throws mid-fit (xDomainChange) does not stop it — y is fitted and the panes reset, the error is still its own", () => {
     // A manual scheduler: nothing renders on its own, so what the fit did is all there is.
     const { deps, yScale } = testBrowserDepsWithScales({ createScheduler: manualScheduler() });
     const { plot } = mountPlot({ deps, series: lineSeries(), data });
-    const whole = plot.getState().xDomain;
+    const whole = plot.getVisibleRange();
     const a = plot.addPane();
     // A manual range nowhere near the data: only the fit itself can move it before the next frame.
     for (const pane of [plot.mainPane, a]) pane.setValueDomain(1000, 2000);
@@ -524,7 +452,7 @@ describe("fitDomains and the value axis mode", () => {
 
     expect(caught(() => plot.fitDomains())).toBe(boom);
 
-    expect(plot.getState().xDomain).toEqual(whole);
+    expect(plot.getVisibleRange()).toEqual(whole);
     // Before any render — the y fit ran despite the x listener.
     expect(yScale.getDomain()[1]).toBeLessThan(1000);
     expect(plot.mainPane.autoScale).toBe(true);
@@ -539,17 +467,17 @@ describe("fitDomains and the value axis mode", () => {
     plot.setVisibleRange(50, 60);
     const xBoom = new Error("x");
     const paneBoom = new Error("pane");
-    const stateBoom = new Error("state");
+    const panesBoom = new Error("panes");
     let notified = 0;
     plot.on("xDomainChange", () => {
       throw xBoom;
     });
     a.subscribe((change) => {
-      if (change.state) throw paneBoom;
+      if (change.settings) throw paneBoom;
     });
-    plot.on("stateChange", () => {
+    plot.on("panesChange", () => {
       notified += 1;
-      throw stateBoom;
+      throw panesBoom;
     });
 
     const error = caught(() => plot.fitDomains());
@@ -559,7 +487,7 @@ describe("fitDomains and the value axis mode", () => {
     expect(errors).toHaveLength(3);
     expect(errors[0]).toBe(xBoom);
     expect(errors[1]).toBe(paneBoom);
-    expect(errors[2]).toBe(stateBoom);
+    expect(errors[2]).toBe(panesBoom);
     expect(notified).toBe(1);
     expect(plot.mainPane.autoScale).toBe(true);
     expect(a.autoScale).toBe(true);
@@ -571,7 +499,7 @@ describe("fitDomains and the value axis mode", () => {
     for (const pane of [plot.mainPane, a]) pane.setValueDomain(0, 100);
     const boom = new Error("pane mirror failed");
     plot.mainPane.subscribe((change) => {
-      if (change.state) throw boom;
+      if (change.settings) throw boom;
     });
 
     expect(caught(() => plot.fitDomains())).toBe(boom);
@@ -649,7 +577,7 @@ describe("fitDomains and the value axis mode", () => {
     for (const pane of [plot.mainPane, a, b, c]) pane.setValueDomain(0, 100);
     // On its own reset, `a` takes itself and `c` off the chart — `b` must still be reached, `c` must not.
     a.subscribe((change) => {
-      if (change.state && a.autoScale) {
+      if (change.settings && a.autoScale) {
         plot.removePane(a);
         plot.removePane(c);
       }

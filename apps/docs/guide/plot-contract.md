@@ -73,7 +73,7 @@ stays pinned and only the width is clipped, and when the width is clipped away
 entirely the domain is **unchanged, so no `xDomainChange` goes out either**.
 Turning the limits off doesn't buy you infinity — once the width reaches the
 floor of floating point (the ulp of the domain values), zooming in stops
-quietly. Fit and restore (`fitDomains`, `setVisibleRange`, state restore) don't
+quietly. A fit or a window you set (`fitDomains`, `setVisibleRange`) doesn't
 pass through these limits.
 
 **Position has bounds too** — a gesture can't push the data off
@@ -81,8 +81,8 @@ screen. Pan travels only as far as `domain.min ≤ last bar` and
 `domain.max ≥ first bar` (a screen width of padding is left on both sides), and
 zoom's center is clamped to the data range — meaning you can keep zooming in on
 empty space and never lose the chart.
-From a window that points outside the bounds (restoring a shared URL that saved
-empty space), only the direction that moves back through passes.
+From a window that points outside the bounds (one set with `setVisibleRange`
+pointing into empty space), only the direction that moves back through passes.
 With no data there are no bounds, and the programmatic path doesn't go through here either.
 
 ⁴ A claim on the cursor shape — nothing is drawn, so there's no render. **The
@@ -646,7 +646,7 @@ Plugins are divided by one more line of the same kind. The criterion is
 | `attachMacd` | `plot.use` | it has to **create** a pane, so it needs `PaneHost` |
 | `attachMovingAverage`, `attachBollingerBands` | `pane.use` | one `addSeries` is enough |
 | `drawingTools` | `pane.use` | it draws on that pane |
-| `paneMaximize` | `plot.use` | it has to see every pane's flex (`PaneHost`) |
+| `paneMaximize` | `plot.use` | it toggles the chart's maximized pane and hit-tests every pane (`PaneHost`) |
 
 **What you install on a pane dies with that pane.** `plot.removePane(rsi)` cleans
 up the extensions attached to it — the old convention was passing a `pane?`
@@ -742,7 +742,7 @@ const off = plot.on("xDomainChange", (payload) => { ... });   // disposer
 | `xDomainChange` | when the x range you're looking at changed | `startX`, `endX`, `dataRange` |
 | `crosshair` | when the cursor passes — **during a pan drag too**⁵ — and **once with `null` when it leaves** | `position`, `x`, `pane`, `value`, or `null` |
 | `click` · `dblclick` · `contextmenu` | when you press on what's under the cursor | a `CrosshairPayload` — never `null` |
-| `stateChange` | when a piece of the view state changed | the whole new `ChartState` snapshot |
+| `panesChange` | when the pane layout (a pane added, removed or reordered, `flex`, `minHeight`) or a pane's value-axis mode (`autoScale`, `invert`, the scale, a range set by hand) changed | nothing — read `plot.panes` |
 
 ⁵ The crosshair stays under the pointer during a pan too (since 2026-08-14) —
 anything subscribing to `crosshair`, a tooltip for instance, keeps getting
@@ -759,8 +759,8 @@ verbatim, except that a click is always somewhere: only `crosshair` can be
 interactions say it when the pointer leaves the chart, or when a drag that
 left is released outside. They arrive even if you never mounted a crosshair.
 
-`xDomainChange` **doesn't wait for a frame.** The range you're looking at is
-state, and state changes synchronously.
+`xDomainChange` **doesn't wait for a frame.** The range you're looking at
+changes synchronously, and so does the announcement.
 
 - It fires on pan, zoom and fit. It fires **only when the value actually changed.**
 - `handle.prepend`/`append` and declarative `data` updates don't touch the
@@ -789,43 +789,56 @@ plot.on("xDomainChange", async ({ startX, dataRange }) => {
 });
 ```
 
-### stateChange — a mirror of the view state
+### panesChange — the pane layout or a value-axis mode moved
 
-`getState()` / `stateChange` / `applyState(partial)` are one set.
+`panesChange` says *that* the panes changed; read what changed from
+`plot.panes`. It covers the **layout** — a pane added, removed or reordered,
+a pane's `flex` (a divider drag rewrites every pane's) or `minHeight` — and
+each pane's **value-axis mode**: `autoScale`, `invert`, the scale
+(`setYScale` with a different instance — a log toggle) and a value range set by hand (`setValueDomain`,
+an axis drag). The x window has its own event (`xDomainChange`), and its own
+reader:
 
 ```ts
-const state = plot.getState();     // { xDomain, panes: [{stateKey?, flex, autoScale, valueDomain?, invert?}] }
-plot.applyState({ xDomain });      // only the pieces you pass land — the makings of partial control
+plot.getVisibleRange();   // { min, max } in data x, or null before the first fit
+plot.on("panesChange", () => renderPaneList(plot.panes));
 ```
 
-- It **doesn't ring** on a data change (append, prepend, a declarative update) —
-  data isn't state.
-- A pane's mode is state too: `resetValueAxis()`, a y-axis double-click and
-  `fitDomains()` ring when a pane's `autoScale` flips (not when it was already
-  on). `fitDomains()` rings **once** for the whole stack, after every pane has
-  flipped — a mirror never sees a half-reset stack. A listener that throws
-  mid-way (`xDomainChange`, a pane subscriber, `stateChange` itself) does not
-  stop the fit either: it completes, and the error comes out of `fitDomains()`
-  at the end — one alone as itself, several as an `AggregateError`.
-- `applyState({ xDomain })` may arrive before the data — it lands in place of the
-  fit, at the first-fit slot, **if it touches the data's x range** (an endpoint
-  in common counts; a window between two sparse points still counts). A window
-  that misses the data entirely — a snapshot from another symbol's history —
-  is dropped and the first fit runs as usual, with no extra event. Key persisted
-  state by symbol and interval so that fallback stays rare — the same rule
-  the [drawing tools](https://github.com/finchart/finchart/tree/main/packages/tools#saving-per-symbol-and-interval)
-  follow for saved drawings. This is only about
-  the pre-data restore; `setVisibleRange` after data is applied as given.
-- During a drag it arrives on every pointermove. If saving is expensive, the
-  listener defers it.
-- React assembles the same thing with `<ChartContainer state onStateChange>`.
-- Dynamic panes should carry a semantic `stateKey` (`<ChartPane stateKey="rsi">`
-  or `plot.addPane({ stateKey: "rsi" })`). Keyed slices restore by that name,
-  so inserting a volume pane cannot put an RSI range on it. Snapshots with no
-  keys still use the old index pairing, but only while the pane count matches:
-  after a pane is added or removed, every unkeyed slice is dropped rather
-  than guessed onto the wrong pane. Give panes a `stateKey` to restore them
-  across layout changes.
+- It **doesn't ring** on a data change (append, prepend, a declarative update),
+  on the x window, or for a fit to the data: a manual range that `setData`
+  refits, that a scale swap can't hold and refits (the swap itself rings,
+  once), or that `fitValueDomain()` fits moves without a ring of its own. Read
+  `pane.yScale.getDomain()` when you need the range itself.
+- `valuePadding` and `axis` don't ring: they shape how a pane draws, not where
+  it sits or how its axis follows.
+- It doesn't ring for a setting restated with its current value — React
+  pushing the same props on every render, `setValueDomain` with the range
+  the pane already holds, or `setYScale` with the scale already installed,
+  stays quiet.
+- `resetValueAxis()`, a y-axis double-click and `fitDomains()` ring when a
+  pane's `autoScale` flips (not when it was already on). `fitDomains()` rings
+  **at most once** for the whole stack, after every pane has flipped — a
+  follower never sees a half-reset stack, and an x-only fit stays quiet. A
+  listener that throws mid-way (`xDomainChange`, a pane subscriber,
+  `panesChange` itself) does not stop the fit either: it completes, and the
+  error comes out of `fitDomains()` at the end — one alone as itself, several
+  as an `AggregateError`.
+- A divider drag rewrites every pane's flex on every pointermove and rings
+  once per move, not once per pane. Separate `pane.applyOptions` calls ring
+  once each.
+- A maximize rings once, a lone pane included. `plot.maximizePane(pane)` lets
+  one pane fill the chart and lays the rest at their `minHeight`;
+  `plot.maximizePane(null)` gives the split back; `plot.maximizedPane` reads
+  it. It is a layout mode, not a rewrite — no pane's `flex` changes, so the
+  user's split is still there underneath, a pane added meanwhile collapses
+  and comes back at its own flex, and a flex set while maximized shows when
+  the split does. It goes on its own when its pane is removed, and when a
+  divider is dragged (the heights on screen become the panes' flex).
+
+The chart keeps no restore door for its view. A window chosen before the data
+arrives (`setVisibleRange` at mount, a date jump) lands in place of the first
+fit **if it touches the data's x range** (an endpoint in common counts); one
+that misses the data entirely is dropped and the first fit runs as usual.
 
 ### crosshair
 

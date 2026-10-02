@@ -54,6 +54,12 @@ table see the interaction options table in
 the same gesture by default, that reset would die quietly on every pane
 click — which is why you turn it on explicitly.
 
+The plugin is the toggle and the gestures; the state is the chart's
+(`plot.maximizedPane`, set with `plot.maximizePane`). A maximize writes no
+pane's flex — the split the user arranged is still there when it ends — and
+every change rings `panesChange` once, even for a lone pane whose height
+doesn't move, so a pressed-state toolbar follows that one event.
+
 ::: warning Using it alongside the drawing tools — **install order** decides who owns the double-click
 `paneMaximize` with `gestures: true` and the drawing tools **both watch
 dblclick.** Whether a double-click on a shape picks the shape or maximizes the
