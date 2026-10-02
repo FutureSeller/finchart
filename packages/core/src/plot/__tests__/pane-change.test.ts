@@ -124,28 +124,13 @@ describe("cheap path", () => {
   });
 });
 
-describe("state notifications", () => {
-  /** Every pane's flex is rewritten, but only one notification fires — this runs on every pointermove, so firing once per pane would be wasted work. */
-  it("should coalesce one state change per resize", () => {
-    const { plot, added } = setup(2);
-    const seen = vi.fn();
-    plot.on("stateChange", seen);
-
-    // The same thing a divider drag triggers — rewrites every flex.
-    plot.applyState({
-      panes: plot.panes.map((pane) => ({ flex: pane.flex + 1, autoScale: true })),
-    });
-
-    expect(added).toHaveLength(2);
-    expect(seen).toHaveBeenCalledTimes(1);
-  });
-
-  it("should not announce state on data alone", () => {
+describe("pane notifications", () => {
+  it("should not announce the panes on data alone", () => {
     const { plot, handle } = setup();
     // A short history follows its feed until it fills the screen; an explicit fit settles the window.
     plot.fitDomains();
     const seen = vi.fn();
-    plot.on("stateChange", seen);
+    plot.on("panesChange", seen);
 
     handle.append([{ x: 150, y: 25 }]);
 

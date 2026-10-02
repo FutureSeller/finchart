@@ -1,4 +1,4 @@
-/** Pane options with no pane — defaults, the numeric door, and what counts as a state change. */
+/** Pane options with no pane — defaults, the numeric door, and which changes are announced. */
 import { describe, expect, it } from "vitest";
 import { ContractError } from "../../primitives";
 import {
@@ -16,7 +16,6 @@ describe("settleOptions", () => {
     expect(settings.valuePadding).toBe(PANE_OPTION_DEFAULTS.valuePadding);
     expect(settings.autoScale).toBe(PANE_OPTION_DEFAULTS.autoScale);
     expect(settings.invert).toBe(PANE_OPTION_DEFAULTS.invert);
-    expect(settings.stateKey).toBeNull();
     expect(settings.axis).toEqual({});
   });
 });
@@ -55,10 +54,6 @@ describe("checkPaneNumbers", () => {
       ContractError,
     );
   });
-
-  it("should reject an empty stateKey", () => {
-    expect(() => checkPaneNumbers({ stateKey: "  " })).toThrow(ContractError);
-  });
 });
 
 describe("applyPaneOptions", () => {
@@ -76,32 +71,15 @@ describe("applyPaneOptions", () => {
     expect(next.axis).toEqual({ showLabels: false, minTickSpacing: 30 });
   });
 
-  it("should flag a state change only when a state field actually moves", () => {
+  it("should flag a settings change only when an announced field actually moves", () => {
     const current = settleOptions({ flex: 2 });
-    expect(applyPaneOptions(current, { flex: 2 }).state).toBe(false);
-    expect(applyPaneOptions(current, { minHeight: 99 }).state).toBe(false);
-    expect(applyPaneOptions(current, { flex: 3 }).state).toBe(true);
-    expect(applyPaneOptions(current, { autoScale: false }).state).toBe(true);
-    expect(applyPaneOptions(current, { invert: true }).state).toBe(true);
-  });
-
-  it("should let a pane claim a stateKey once, through the chart's check", () => {
-    const seen: string[] = [];
-    const current = settleOptions({});
-    const { next, state } = applyPaneOptions(current, { stateKey: "rsi" }, (key) =>
-      void seen.push(key),
-    );
-    expect(next.stateKey).toBe("rsi");
-    expect(state).toBe(true);
-    expect(seen).toEqual(["rsi"]);
-  });
-
-  it("should refuse to change a stateKey already claimed", () => {
-    const current = settleOptions({ stateKey: "rsi" });
-    expect(() => applyPaneOptions(current, { stateKey: "macd" })).toThrow(
-      /already "rsi"/,
-    );
-    expect(applyPaneOptions(current, { stateKey: "rsi" }).state).toBe(false);
+    expect(applyPaneOptions(current, { flex: 2 }).settings).toBe(false);
+    expect(applyPaneOptions(current, { valuePadding: 0.3 }).settings).toBe(false);
+    expect(applyPaneOptions(current, { axis: { showLabels: false } }).settings).toBe(false);
+    expect(applyPaneOptions(current, { minHeight: 99 }).settings).toBe(true);
+    expect(applyPaneOptions(current, { flex: 3 }).settings).toBe(true);
+    expect(applyPaneOptions(current, { autoScale: false }).settings).toBe(true);
+    expect(applyPaneOptions(current, { invert: true }).settings).toBe(true);
   });
 
   it("should not touch the current settings object", () => {

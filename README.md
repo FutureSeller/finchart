@@ -28,13 +28,12 @@ const lines = model.commands().filter((c) => c.type === "drawLine");
 expect(lines[0].points).toHaveLength(data.length);
 ```
 
-**The view state is a single value.** What the user built with pan, zoom and
-drag reads and writes through three contracts, so restore, undo and linking two
-charts are all the same move.
+**Linking two charts is a helper, not a feature.** The x window is moved with
+`setVisibleRange()` and announced by `xDomainChange` — that is all `syncX`
+needs; `getVisibleRange()` reads it when you want it once.
 
 ```ts
-const state = plot.getState();   // { xDomain, panes: [...] }
-plot.applyState(state);          // fine before data arrives — it lands at the first fit
+plot.getVisibleRange();          // { min, max } in data x
 syncX(btcPlot, ethPlot);         // sync is a 30-line helper
 ```
 

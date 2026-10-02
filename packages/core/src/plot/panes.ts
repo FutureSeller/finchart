@@ -71,7 +71,6 @@ export class PaneStack {
       this.options.createDataManager,
       options,
       this.options.yAxisOptions,
-      (key) => this.assertStateKeyAvailable(key),
     );
     this.options.onCreate(pane);
     this.panes.push(pane);
@@ -93,13 +92,6 @@ export class PaneStack {
     if (order.every((pane, index) => pane === this.panes[index])) return false;
     this.panes.splice(0, this.panes.length, ...order);
     return true;
-  }
-
-  /** State keys are semantic identities, so duplicates would make restoration ambiguous. */
-  private assertStateKeyAvailable(key: string): void {
-    if (this.panes.some((pane) => pane.stateKey === key)) {
-      throw new ContractError(`Duplicate pane stateKey: "${key}"`);
-    }
   }
 
   /**

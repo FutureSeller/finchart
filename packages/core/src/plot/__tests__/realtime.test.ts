@@ -41,7 +41,7 @@ describe("updateLast", () => {
   it("should swap the closing bar without touching the domain", () => {
     const { model, handle } = mounted();
     model.plot.pan(0.5); // A window the user has already moved.
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
     const pointsBefore = dataLine(model).points.length;
 
     handle.updateLast({ x: 2, y: 140 });
@@ -49,12 +49,12 @@ describe("updateLast", () => {
     expect(dataLine(model).points).toHaveLength(pointsBefore);
     expect(handle.read().at(-1)).toEqual({ x: 2, y: 140 });
     // Domain unchanged — a tick must not drag the visible window along with it.
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 
   it("should open a new bar when x advances", () => {
     const { model, handle } = mounted();
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
 
     handle.updateLast({ x: 3, y: 120 });
 
@@ -63,7 +63,7 @@ describe("updateLast", () => {
     // The new bar is still off-screen — leaving the domain unchanged is the
     // default, and following it is an opt-in choice made by
     // shiftVisibleRangeOnNewBar (commit 3).
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 
   it("should refuse to rewrite the past", () => {
@@ -106,14 +106,14 @@ describe("updateLast", () => {
 describe("incremental append/prepend", () => {
   it("should keep the viewing window when history is prepended", () => {
     const { model, handle } = mounted();
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
 
     handle.prepend([
       { x: -2, y: 90 },
       { x: -1, y: 95 },
     ]);
 
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
     expect(handle.xRange).toEqual({ min: -2, max: 2 });
   });
 
@@ -146,11 +146,11 @@ describe("shiftVisibleRangeOnNewBar", () => {
 
   it("should follow a new bar while the last bar is on screen", () => {
     const { model, handle } = streaming(true);
-    const before = model.plot.getState().xDomain!;
+    const before = model.plot.getVisibleRange()!;
 
     handle.updateLast({ x: 3, y: 120 });
 
-    const after = model.plot.getState().xDomain!;
+    const after = model.plot.getVisibleRange()!;
     // The window shifted right by one bar — the width is unchanged.
     expect(after.max - after.min).toBeCloseTo(before.max - before.min, 8);
     expect(after.max).toBeCloseTo(before.max + 1, 8);
@@ -160,28 +160,28 @@ describe("shiftVisibleRangeOnNewBar", () => {
     const { model, handle } = streaming(true);
     // Moved into the past — the last bar is off-screen.
     model.plot.pan(-1.5);
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
 
     handle.append([{ x: 3, y: 120 }]);
 
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 
   it("should never move when the option is off", () => {
     const { model, handle } = streaming(false);
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
 
     handle.append([{ x: 3, y: 120 }]);
 
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 
   it("should not move on a same-bar tick", () => {
     const { model, handle } = streaming(true);
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
 
     handle.updateLast({ x: 2, y: 300 });
 
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 });

@@ -81,7 +81,7 @@ keeps the pairing honest.
 | `legend` | `OverlayHost & PaneHost & PlotEventSource` |
 | `tooltip` | `OverlayHost & PlotEventSource & FormatSource` |
 | `syncX` (both) | `PlotEventSource & ViewportControl` |
-| `infiniteHistory` | `PlotEventSource & XCoordinates & Pick<Plot, "getState">` |
+| `infiniteHistory` | `PlotEventSource & XCoordinates & Pick<Plot, "getVisibleRange" \| "leadingMargin">` |
 | `conflated` | `Pick<SeriesHandle, "updateLast" \| "attached">` — a handle wrapper, not a plugin |
 | `@finchart/indicators` | `PaneHost` (most take the narrower `SeriesHost`) |
 | `@finchart/tools` | on the pane side `PaneDecorationHost & ValueCoordinates & DataProbe`, the chart optionally — `RenderRequester & InputHost & XCoordinates & CursorHost & FocusAreaHost` |
@@ -115,9 +115,9 @@ lower.addSeries({ series: lineSeries(), input: macd.out.histogram });
 
 What value references buy you: a typo (`macd.out.signl`) becomes a compile
 error, and since you cannot reference what does not exist, a cycle is
-structurally impossible. The price is that it does not serialize — but the
-state worth saving is the view state (pan and zoom position), not "what is
-being drawn", so that price never comes due in the first place.
+structurally impossible. The price is that it does not serialize — an app
+that wants its indicator set back after a reload saves its own settings
+(which indicators, which periods) and builds the nodes again.
 
 The names without `attach` — `rsi()` and `macd()` in `@finchart/indicators` —
 return exactly this computed node. The full naming rules are in
@@ -161,8 +161,7 @@ other way: what `attachRsi` returns is nothing but `{ node, pane }` plus
 value, rebuilding it is cheap, and because there is no state, there is nothing
 to lose — with one exception. An indicator that made its own pane takes that
 pane with it on `dispose()`, together with anything else you mounted there,
-and the reinstalled one lands at the bottom of the stack. Give it
-`ownPane: { stateKey }` so a saved layout follows it, and mount your own
+and the reinstalled one lands at the bottom of the stack. Mount your own
 series on a pane you own.
 
 ## Styling

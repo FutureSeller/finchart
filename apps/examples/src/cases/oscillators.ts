@@ -14,7 +14,7 @@ import { chartHost } from "./stage";
 
 export const title = "Oscillators — RSI · MFI · Stochastic RSI · CCI · %R";
 export const description =
-  "Wiring oscillators into panes — the definition decides the axis: RSI, MFI and Stochastic RSI share one 0–100 pane (the first makes it, the others borrow it, so one axis and one set of reference lines serve all three), Williams %R is pinned to −100–0 in its own pane, and only the unbounded CCI is on autoScale with ±100 reference lines. Each own pane carries its own legend and a stateKey, so a saved layout follows it.";
+  "Wiring oscillators into panes — the definition decides the axis: RSI, MFI and Stochastic RSI share one 0–100 pane (the first makes it, the others borrow it, so one axis and one set of reference lines serve all three), Williams %R is pinned to −100–0 in its own pane, and only the unbounded CCI is on autoScale with ±100 reference lines. Each own pane carries its own legend.";
 
 export function mount(container: HTMLElement): () => void {
   const host = chartHost(container, 720);
@@ -33,15 +33,15 @@ export function mount(container: HTMLElement): () => void {
   });
 
   // Three 0–100 oscillators, one pane: the first owns it, the rest borrow it.
-  const rsi = plot.use(attachRsi({ source: price, ownPane: { stateKey: "oscillators" } }));
+  const rsi = plot.use(attachRsi({ source: price }));
   if (rsi.pane) {
     plot.use(attachMfi({ source: price, pane: rsi.pane }));
     plot.use(attachStochasticRsi({ source: price, pane: rsi.pane }));
     plot.use(legend({ pane: rsi.pane }));
   }
-  const cci = plot.use(attachCci({ source: price, ownPane: { stateKey: "cci" } }));
+  const cci = plot.use(attachCci({ source: price }));
   if (cci.pane) plot.use(legend({ pane: cci.pane }));
-  const williams = plot.use(attachWilliamsR({ source: price, ownPane: { stateKey: "williams-r" } }));
+  const williams = plot.use(attachWilliamsR({ source: price }));
   if (williams.pane) plot.use(legend({ pane: williams.pane }));
   plot.use(legend({}));
 

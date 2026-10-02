@@ -554,6 +554,8 @@ const LEGITIMATE: Record<string, readonly string[]> = {
   // `priceFormat()` gives the default format, and `priceFormat({})` gives
   // the same thing — all four options are optional.
   priceFormat: ["undefined", "empty object"],
+  // `paneMaximize()` and `paneMaximize({})` both mean "no gestures" — the option is optional.
+  paneMaximize: ["undefined", "empty object"],
 };
 
 
@@ -1118,7 +1120,16 @@ describe("Z1 — the shape axis", () => {
     /** Everything observable about the stage — if even one thing moves, the rejection leaked. */
     const snapshot = (stage: Stage) => ({
       read: JSON.stringify(stage.main.read()),
-      state: JSON.stringify(stage.model.plot.getState()),
+      view: JSON.stringify({
+        x: stage.model.plot.getVisibleRange(),
+        panes: stage.model.plot.panes.map((pane) => ({
+          flex: pane.flex,
+          autoScale: pane.autoScale,
+          invert: pane.invert,
+          // A manual range is the pane's own; an automatic one is derived on the next frame.
+          valueDomain: pane.autoScale ? null : pane.yScale.getDomain(),
+        })),
+      }),
       commands: stage.model.commands().length,
     });
 
@@ -1178,8 +1189,8 @@ describe("Z1 — the shape axis", () => {
         stage.model.plot.mainPane.setValueDomain(Number.NaN, 200),
       ).toThrow(publicApi.ContractError);
 
-      // `getState()` is the observation point this digs at — the exact value an app saves and restores.
-      expect(stage.model.plot.getState().panes[0].autoScale).toBe(true);
+      // The rejected range must not have flipped the pane to manual on its way out.
+      expect(stage.model.plot.mainPane.autoScale).toBe(true);
       stillDraws(stage);
     });
 

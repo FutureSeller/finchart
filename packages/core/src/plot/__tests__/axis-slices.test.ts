@@ -265,8 +265,8 @@ describe("value axis toggle (2.2)", () => {
     // Inverted means larger values go lower — the same value's screen y flips to the other side.
     const { area } = model.plot.mainPane;
     expect(normal - area.top).toBeCloseTo(area.bottom - inverted, 6);
-    // It rides along in the state slice.
-    expect(model.plot.getState().panes[0].invert).toBe(true);
+    // The pane reports it.
+    expect(model.plot.mainPane.invert).toBe(true);
   });
 
   it("should carry the viewing domain across a scale swap", async () => {
@@ -333,7 +333,7 @@ describe("axis drag scaling (2.2)", () => {
 
   it("should zoom x from the x slice and leave tools first", async () => {
     const { model, route } = await dragModel();
-    const xBefore = model.plot.getState().xDomain!;
+    const xBefore = model.plot.getVisibleRange()!;
     const { area } = model.plot.mainPane;
     const grab = { x: (area.left + area.right) / 2, y: 595 };
 
@@ -341,7 +341,7 @@ describe("axis drag scaling (2.2)", () => {
     route("pointermove", { x: grab.x + 80, y: 595 });
     route("pointerup", { x: grab.x + 80, y: 595 });
 
-    const xAfter = model.plot.getState().xDomain!;
+    const xAfter = model.plot.getVisibleRange()!;
     // Dragged to the right — the window narrows (zooms in).
     expect(xAfter.max - xAfter.min).toBeLessThan(xBefore.max - xBefore.min);
   });

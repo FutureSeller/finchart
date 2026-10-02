@@ -126,14 +126,14 @@ describe("drawingTools placement", () => {
 
   it("should eat the gesture so placement never pans the chart", () => {
     const { model, tools, route, at } = mounted();
-    const before = model.plot.getState().xDomain;
+    const before = model.plot.getVisibleRange();
 
     tools.begin("trend");
     route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
     route({ type: "pointermove", point: at(8, 115), pointerId: 1 });
     route({ type: "pointerup", point: at(8, 115), pointerId: 1 });
 
-    expect(model.plot.getState().xDomain).toEqual(before);
+    expect(model.plot.getVisibleRange()).toEqual(before);
   });
 
   it("should decline a press outside the pane while armed", () => {

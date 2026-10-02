@@ -277,7 +277,7 @@ describe("attachIchimoku — ahead", () => {
     model.plot.mainPane.use(attachIchimoku({ source: { read: () => data }, ahead: minute }));
     model.plot.fitDomains();
     model.plot.render();
-    const domain = model.plot.getState().xDomain;
+    const domain = model.plot.getVisibleRange();
     // The last projected slot, plus the fit's half bar.
     expect(domain?.max).toBe(minute(data[99].x, 26.5));
   });
@@ -293,7 +293,7 @@ describe("attachIchimoku — ahead", () => {
     model.plot.fitDomains();
     model.plot.render();
     // The last projected slot, plus the fit's half bar.
-    expect(model.plot.getState().xDomain?.max).toBe(minute(data[99].x, 26.5));
+    expect(model.plot.getVisibleRange()?.max).toBe(minute(data[99].x, 26.5));
   });
 });
 

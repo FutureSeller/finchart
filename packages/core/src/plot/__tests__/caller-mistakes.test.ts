@@ -20,7 +20,7 @@ function mount() {
 describe("refused where the mistake is made", () => {
   it("a listener that is not a function", () => {
     const { plot } = mount();
-    expect(() => plot.on("stateChange", junk("null"))).toThrow(ContractError);
+    expect(() => plot.on("panesChange", junk("null"))).toThrow(ContractError);
     expect(() => plot.mainPane.subscribe(junk("1"))).toThrow(ContractError);
     // …and nothing was registered: later changes still work.
     plot.mainPane.applyOptions({ flex: 2 });
@@ -28,7 +28,7 @@ describe("refused where the mistake is made", () => {
 
   it("an event name the chart does not emit", () => {
     const { plot } = mount();
-    expect(() => plot.on(junk<"render">('"stateChnage"'), () => {})).toThrow(/stateChnage/);
+    expect(() => plot.on(junk<"render">('"panesChnage"'), () => {})).toThrow(/panesChnage/);
   });
 
   it("a pane autoScale or invert that is not a boolean", () => {

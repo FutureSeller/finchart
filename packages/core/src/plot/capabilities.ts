@@ -103,6 +103,10 @@ export interface PaneHost {
   readonly panes: readonly PaneApi[];
   addPane(options?: PaneOptions & { yScale?: Scale }): PaneApi;
   removePane(pane: PaneApi): void;
+  /** The pane that fills the chart, or `null` → `Plot.maximizePane`. */
+  readonly maximizedPane: PaneApi | null;
+  /** Lets one pane fill the chart without touching any flex; `null` gives the split back. */
+  maximizePane(pane: PaneApi | null): void;
 }
 
 /**

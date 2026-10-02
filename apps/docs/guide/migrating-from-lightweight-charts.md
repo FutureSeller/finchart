@@ -86,9 +86,6 @@ ends are your application's to build on top of its API, or are out of reach.
 - **Test the chart.** `createPlotModel({ size, series })` → assert on
   `model.commands()` — "was this value drawn at this pixel", in CI, with no
   browser and no screenshot.
-- **The view state is a value.** `plot.getState()` goes into a URL or a store as
-  JSON and `applyState` brings it back — reload and the window you were looking
-  at returns. Key it by symbol and interval ([plot contract](/guide/plot-contract)).
 - **You own the render tick.** `createPlotDeps({ createScheduler: manualScheduler() })`
   — drive frames yourself from a game loop or when composing with another canvas.
 - **Indicators are computation nodes.** `movingAverage(price, { period: 20 })` is a

@@ -33,8 +33,8 @@ export interface Emitter<T> extends Observable<T> {
   emit(value: T): void;
   /**
    * Number of listeners. **Check this first when the payload is expensive
-   * to build** — the same judgment call the chart makes before assembling a
-   * `stateChange` snapshot.
+   * to build** — the same judgment call the chart makes before assembling an
+   * `xDomainChange` payload.
    */
   readonly size: number;
 }

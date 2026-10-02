@@ -87,7 +87,7 @@ describe("resolveStyle", () => {
   });
 
   it("should demote undefined and null overrides to absence", () => {
-    // It's common for state serialization or a React props round trip to
+    // It's common for JSON serialization or a React props round trip to
     // turn undefined into null. Neither one should win over a CSS variable (PRINCIPLE 16).
     const read = readerOf({ "--chart-fake-width": "7" });
 

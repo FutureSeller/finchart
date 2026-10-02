@@ -70,15 +70,15 @@ for the same things are in the [migration table](/guide/migrating-from-lightweig
 The domain is the mapping's own space, but **everything that goes out is x** —
 events, crosshair, viewport, tick labels.
 
-### View state (`ChartState`)
+### Visible range (`getVisibleRange`)
 
-Everything the user built with pan, zoom, and drag, as one value —
-`{ xDomain, panes: [{ flex, autoScale, valueDomain?, invert? }] }`
-
-Not data, not series composition, not style, not cursor position (input echo).
-Read it with `getState()`, listen with `stateChange`, feed it back with
-`applyState()` — the core is a mirror, and the controlled shape is assembled
-by the React wrapper.
+The x window on screen, **in data x** — `{ min, max }`, or `null` before the
+first fit. The reading side of `setVisibleRange`; changes are announced by
+`xDomainChange`. The pane layout (order, `flex`, `minHeight`) and each
+pane's value-axis mode (`autoScale`, `invert`, `yScale`, its range through
+`yScale.getDomain()`) are read from `plot.panes`, and their changes are
+announced by `panesChange`. The chart has no restore door for its view: a reload starts
+from the data.
 
 ### Viewport
 
@@ -484,9 +484,9 @@ why prepending history inside the handler does not recurse.
 same objects so handles and selection survive. It is session state, not
 part of `serialize()`, and `clear()` or a successful `load()` empties it.
 Three things in this glossary share the word "history" and are unrelated:
-this one (drawing edits), *view state* (`ChartState` — the viewport and
-pane layout an app may keep its own undo of), and *infinite history*
-below (loading older bars).
+this one (drawing edits), the *visible range* (the x window an app may
+move back to with `setVisibleRange`), and *infinite history* below (loading
+older bars).
 
 ### Infinite history (`infiniteHistory`)
 

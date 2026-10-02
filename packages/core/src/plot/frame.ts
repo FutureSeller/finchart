@@ -9,6 +9,7 @@ import {
   sliceAreas,
   sliceAxes,
   type AxisSlices,
+  type PaneBox,
 } from "./layout";
 import type { Pane } from "./pane";
 import type {
@@ -64,6 +65,12 @@ export interface FrameInput {
   /** The drawing area with margins subtracted. The axis claims its space here first, then panes split the rest. */
   area: PlotArea;
   panes: readonly Pane[];
+  /**
+   * What the height split reads, one per pane — `panes` itself when absent.
+   * A maximized pane is laid out through this: the chart hands over every
+   * other pane at flex 0 without touching the panes' own flex.
+   */
+  shares?: readonly PaneBox[];
   /** Gap between panes (px). */
   gap: number;
   axis: ResolvedPlotConfig["axis"];
@@ -147,7 +154,7 @@ function floorAtOnePixel(
 }
 
 /** What the vertical half of a frame needs to know. */
-export type PaneHeightInput = Pick<FrameInput, "area" | "panes" | "gap" | "axis" | "labels" | "measure">;
+export type PaneHeightInput = Pick<FrameInput, "area" | "panes" | "shares" | "gap" | "axis" | "labels" | "measure">;
 
 /**
  * The pane heights a frame of this input lays out — the vertical half of
@@ -165,6 +172,7 @@ export function layoutPaneHeights(input: PaneHeightInput): {
   xHeight: number;
 } | null {
   const { area, panes, gap } = input;
+  const shares = input.shares ?? panes;
 
   // **Check the incoming area first — ahead of any assignment.** If area
   // itself carries a NaN, the checks below would pass it through silently,
@@ -177,7 +185,7 @@ export function layoutPaneHeights(input: PaneHeightInput): {
   // 2) Vertical distribution — the y tick count comes from pixels, so range is set before anything else.
   //    Areas (setArea) still can't be set: the left edge is waiting on the y-axis width.
   const rawHeights = distributeHeights(
-    panes,
+    shares,
     area.bottom - area.top - xHeight,
     gap,
   );
@@ -190,7 +198,8 @@ export function layoutPaneHeights(input: PaneHeightInput): {
    * out the whole chart — what this guard blocks is "the transition where
    * the chart's entire vertical space disappears", not "a pane the
    * consumer deliberately collapsed". `minHeight: 0` is deliberately let
-   * through, since it's the idiom `paneMaximize` uses to collapse a pane.
+   * through: a pane at that floor collapses to nothing when another pane is
+   * maximized, and that is what the consumer asked for.
    */
   if (rawHeights.every((height) => height < 1)) return null;
 

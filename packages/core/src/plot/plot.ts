@@ -64,9 +64,9 @@ import { eventChannel } from "../primitives";
 import type { CrosshairPayload, PlotEvents } from "./events";
 import { DEFAULT_X_FORMAT } from "../axis";
 import { layoutFrame, layoutPaneHeights, type PaneHeightInput, type Frame } from "./frame";
-import type { AxisSlices } from "./layout";
+import type { AxisSlices, PaneBox } from "./layout";
 import type { SeriesId, SeriesRegistration } from "../registration";
-import type { PaneApi, PaneChange } from "./pane";
+import type { Pane, PaneApi, PaneChange } from "./pane";
 import type { PaneOptions } from "./pane-options";
 import type { SeriesHandle } from "./series-handle";
 import { PaneStack } from "./panes";
@@ -74,7 +74,6 @@ import { paintFrame, type PaintStage } from "./painter";
 import { install } from "../primitives";
 import type { Plugin, PluginApi } from "../primitives";
 import { immediateScheduler, type RenderScheduler } from "../render";
-import { applyPaneState, matchPaneState, paneStateOf, type ChartState } from "./state";
 import { XViewport } from "./x-viewport";
 import type {
   PlotConfig,
@@ -130,7 +129,7 @@ export interface PlotOptions {
 
 /** Every event name `on` accepts — a record, so the compiler flags one left out. */
 const PLOT_EVENT_NAMES: Readonly<Record<keyof PlotEvents, true>> = {
-  stateChange: true, render: true, crosshair: true, click: true, dblclick: true,
+  panesChange: true, render: true, crosshair: true, click: true, dblclick: true,
   contextmenu: true, xDomainChange: true,
 };
 
@@ -184,6 +183,8 @@ export class Plot
   private readonly dividers: DividerRenderer | null;
   /** The pane pair each divider handle the last frame put up sits between. */
   private shownDividers: readonly (readonly [PaneApi, PaneApi])[] = [];
+  /** The pane that fills the chart, or null → `maximizePane`. */
+  private maximized: Pane | null = null;
 
   /**
    * The default pane that holds series. Always exists.
@@ -242,12 +243,12 @@ export class Plot
   private xEpoch = 0;
 
   /**
-   * The visible x range. **The state trio (has it fitted, pending restore,
-   * previous end) lives there.**
+   * The visible x range. **The trio (has it fitted, a window chosen before
+   * the data, previous end) lives there.**
    *
    * Split out because it's the window's job, not the chart's — when it lived
    * here, that trio was scattered across two dozen-odd fields, and the two
-   * subtlest rules (a restore that arrives before data, deciding whether a
+   * subtlest rules (a window set before data arrives, deciding whether a
    * new bar counts as a shift) could only be tested by standing up the whole
    * chart → `x-viewport.ts`
    */
@@ -287,7 +288,7 @@ export class Plot
     /**
      * **Doesn't hold onto the caller's object as-is.** Keeping the
      * reference would let whoever still holds it mutate the chart around
-     * `applyOptions` — no render scheduled, no `stateChange`.
+     * `applyOptions` — no render scheduled, no `panesChange`.
      * `@finchart/dom`'s `PlotBuilder` is exactly that shape: `build()` hands
      * over its own fields as-is, and `setShowGrid`-style calls can still be
      * made afterward, so building twice from one builder splits the config
@@ -376,11 +377,7 @@ export class Plot
         xValues: (barBodied) => this.paneStack.xValuesPerSeries(barBodied),
         // A reader function, not a value — changed via applyOptions.
         options: () => this.config,
-        onChange: (visible) => {
-          // Both announcements ring even when the first one's listener throws.
-          const failures = runAll([() => this.emitStateChange(), () => this.emitXDomain(visible)], (announce) => announce());
-          if (failures) throw throwable(failures, "announcing the x window failed");
-        },
+        onChange: (visible) => this.emitXDomain(visible),
       });
 
       // The chart always starts empty — series only arrive through addSeries
@@ -554,7 +551,7 @@ export class Plot
       // A listener that throws reports its error, but must not leave the
       // change undrawn.
       try {
-        if (change.state) this.emitStateChange();
+        if (change.settings) this.emitPanesChange();
       } finally {
         this.scheduleRender();
       }
@@ -585,7 +582,7 @@ export class Plot
     // in one of them; the failures come out at the end.
     const failures = runAll([
       () => {
-        if (change.state) this.emitStateChange();
+        if (change.settings) this.emitPanesChange();
       },
       () => {
         if (change.refit || !this.xViewport.fitted) this.refit(!this.xViewport.fitted);
@@ -627,7 +624,7 @@ export class Plot
    * Its value axis is its own — linear by default, with log available if
    * you need it.
    *
-   * A `stateChange` listener that throws here is rethrown in a microtask,
+   * A `panesChange` listener that throws here is rethrown in a microtask,
    * where `removePane` and `setPaneOrder` rethrow it to the caller. The
    * pane is already on the chart when the announcement runs, and the
    * caller holds no other way to reach it — throwing would strand a live
@@ -656,12 +653,11 @@ export class Plot
     }
 
     const pane = this.paneStack.add(options.yScale ?? new LinearScale(), options);
-    // The state's panes array grew by one — keyed panes match semantically
-    // and legacy panes by index, so a shape change is state too. The pane is
-    // on the chart either way, so the caller must get it back: a listener
-    // that throws is reported out of band instead of taking the pane away.
+    // The pane list grew by one. The pane is on the chart either way, so the
+    // caller must get it back: a listener that throws is reported out of band
+    // instead of taking the pane away.
     try {
-      this.emitStateChange();
+      this.emitPanesChange();
     } catch (error) {
       queueMicrotask(() => {
         throw error;
@@ -673,16 +669,66 @@ export class Plot
   }
 
   /**
+   * The pane that fills the chart, or `null` when the panes share it by
+   * their own `flex` → `maximizePane`.
+   */
+  get maximizedPane(): PaneApi | null {
+    return this.maximized;
+  }
+
+  /**
+   * Lets one pane fill the chart — every other pane is laid out at its
+   * `minHeight`, as if its flex were 0 — or, with `null`, gives the panes
+   * back their own split.
+   *
+   * **A layout mode, not a rewrite.** No pane's `flex` changes: the split
+   * reads the panes through the maximize, so the layout the user arranged is
+   * still there when the maximize goes, a pane added meanwhile collapses
+   * with the rest and comes back at its own flex, and there is nothing to
+   * keep in step with the panes. It goes on its own when the pane is
+   * removed, and when a divider is dragged — the drag works on the heights
+   * on screen, and those become the panes' flex.
+   *
+   * Rings `panesChange` when it changes — once, even for a lone pane, whose
+   * height doesn't move. Naming the pane already maximized changes nothing.
+   */
+  maximizePane(pane: PaneApi | null): void {
+    if (pane !== null) {
+      requireObject(pane, "maximizePane(pane)");
+    }
+    const target = pane === null ? null : this.paneStack.list.find((held) => held === pane);
+    if (target === undefined) {
+      throw new ContractError("maximizePane(pane) needs a pane of this chart, or null");
+    }
+    if (target === this.maximized) return;
+    this.maximized = target;
+    try {
+      this.emitPanesChange();
+    } finally {
+      this.scheduleRender();
+    }
+  }
+
+  /** What the height split reads — each pane through the maximize, if one is on. */
+  private paneShares(): readonly PaneBox[] {
+    const { maximized } = this;
+    if (maximized === null) return this.paneStack.list;
+    return this.paneStack.list.map((pane) => ({
+      flex: pane === maximized ? 1 : 0,
+      minHeight: pane.minHeight,
+    }));
+  }
+
+  /**
    * Restacks the panes top to bottom in `panes` — every pane of this chart,
    * each once, the main pane anywhere. For a host that declares the layout
-   * (a JSX tree inserting a pane above others). Pane state keeps following
-   * each pane by its `stateKey`.
+   * (a JSX tree inserting a pane above others).
    */
   setPaneOrder(panes: readonly PaneApi[]): void {
     if (!Array.isArray(panes)) throw new ContractError("setPaneOrder(panes) must be an array");
     if (!this.paneStack.reorder(panes)) return;
     try {
-      this.emitStateChange();
+      this.emitPanesChange();
     } finally {
       this.scheduleRender();
     }
@@ -696,12 +742,14 @@ export class Plot
     // them throws — and survives one of them removing a neighbor → `PaneStack.remove`
     const failures = this.paneStack.remove(pane);
     if (failures === null) return;
+    // A maximized pane that is gone fills nothing — the others come back.
+    if (this.maximized === pane) this.maximized = null;
 
     // Unsubscribing happened first, so the pane side won't report in —
     // recount directly.
     this.rebuildX();
     try {
-      this.emitStateChange();
+      this.emitPanesChange();
     } finally {
       this.scheduleRender();
     }
@@ -814,9 +862,8 @@ export class Plot
    * Sets the visible x range **in data x** (the lightweight
    * `setVisibleRange`).
    *
-   * The same arithmetic as `applyState`'s xDomain piece — under bar-index
-   * coordinates, `toDomain` recovers the index. If data hasn't arrived yet,
-   * it reconciles from pending.
+   * Under bar-index coordinates, `toDomain` recovers the index. If data
+   * hasn't arrived yet, it reconciles from pending.
    */
   setVisibleRange(fromX: number, toX: number): void {
     /**
@@ -851,24 +898,24 @@ export class Plot
    * while keeping a manual value range, use `scrollToRealTime` or
    * `setVisibleRange` instead.
    *
-   * One operation, one `stateChange`: the notification rings once, after x
-   * and every pane have moved, never with a half-reset stack. A listener
-   * that throws part-way (`xDomainChange`, a pane subscriber, `stateChange`
+   * One operation, at most one `panesChange`: the notification rings once
+   * (or not at all, when no pane flipped), after every pane has moved, never with a half-reset stack. A listener
+   * that throws part-way (`xDomainChange`, a pane subscriber, `panesChange`
    * itself) does not stop the fit — it completes, and what was thrown comes
    * out of this call at the end: one error as itself, several as an
    * `AggregateError`.
    */
   fitDomains(): void {
-    // One `stateChange` for the whole operation — the x fit rings on its own
-    // otherwise, and a mirror must not see the new window with a
-    // half-flipped stack — and a snapshot of the list: a listener that
-    // removes a pane part-way must not make the loop skip a survivor.
+    // One `panesChange` for every pane flipped back to autoScale — a
+    // follower must not see a half-flipped stack — and a snapshot of the
+    // list: a listener that removes a pane part-way must not make the loop
+    // skip a survivor.
     //
     // Listeners ring synchronously in here too (`xDomainChange`, a pane's
     // subscribers), and one that throws must not stop the fit part-way — a
     // half-reset stack is worse than a late error. Each step keeps its
     // failure and the lot is thrown at the end, one alone as itself (the
-    // rule `applyState` follows).
+    // rule `destroy` follows).
     const failures: unknown[] = [];
     const step = (run: () => void): void => {
       try {
@@ -878,7 +925,7 @@ export class Plot
       }
     };
     step(() =>
-      this.coalesceState(() => {
+      this.coalescePanesChange(() => {
         // The same steps as `refit()`, each on its own: an x listener that
         // throws must not take the y fits down with it.
         step(() => this.xViewport.fit());
@@ -1267,31 +1314,24 @@ export class Plot
     return this.focus.claim(areaOf);
   }
 
-  // --- state ---
+  // --- view ---
 
   /**
-   * A snapshot of the view state. **A value you can hold onto from outside**
-
+   * The x range in view, **in data x** — the reading side of
+   * `setVisibleRange`. Indices never leave: under bar-index coordinates the
+   * window is translated back to the data's own x.
    *
-   * xDomain is **data x**, not the domain (mapping space) — indices never
-   * leave. Serialize it, restore it in a different session, and
-   * under bar-index coordinates the same spot comes back once the index is
-   * recounted against that session's data.
-   *
-   * xDomain is null if it has never fitted to data — the scale's default
-   * [0,1] isn't state the user created, so there's nothing worth persisting.
+   * `null` until the chart has fitted to data — the scale's default [0,1]
+   * isn't a window anyone chose.
    */
-  getState(): ChartState {
-    return {
-      xDomain: this.xViewport.visibleRange(),
-      panes: this.paneStack.list.map(paneStateOf),
-    };
+  getVisibleRange(): Range | null {
+    return this.xViewport.visibleRange();
   }
 
   private emitXDomain(visible: { startX: number; endX: number }): void {
     /**
      * **Don't build the payload if nobody's listening** — the same door
-     * its sibling `emitStateChange` puts up before building a snapshot.
+     * its sibling `emitPanesChange` puts up.
      *
      * `dataRange` is a walk over every series in every pane
      * (`Plot.dataRange`), and this spot runs on **every pointermove**
@@ -1309,168 +1349,72 @@ export class Plot
   }
 
   /**
-   * Called everywhere a piece of state changes — setXDomain, divider drag,
-   * pane options, adding or removing a pane. Assembling the snapshot has a
-   * cost too, so nothing is built when no one's listening.
+   * Called everywhere the panes change — adding, removing or reordering one,
+   * or a pane's layout (flex — a divider drag among them — or minHeight) or
+   * value-axis mode (autoScale, invert, scale, a range set by hand).
+   * Nothing is announced while a batch is running; the batch announces once.
    */
-  private emitStateChange(): void {
-    if (this.applyingState) {
-      this.stateChangedWhileApplying = true;
+  private emitPanesChange(): void {
+    if (this.batchingPanes) {
+      this.panesChangedInBatch = true;
       return;
     }
-    if (!this.events.has("stateChange")) return;
-    this.events.emit("stateChange", this.getState());
+    if (!this.events.has("panesChange")) return;
+    this.events.emit("panesChange", {});
   }
 
-  /** Coalesces notifications while changing several pieces at once → coalesceState */
-  private applyingState = false;
-  private stateChangedWhileApplying = false;
+  /** Coalesces notifications while changing several panes at once → coalescePanesChange */
+  private batchingPanes = false;
+  private panesChangedInBatch = false;
 
   /**
-   * **Coalesces notifications into one** while changing several state
-   * pieces at once.
+   * **Coalesces notifications into one** while changing several panes at
+   * once.
    *
-   * The goal is to keep whatever's mirroring state (URL persistence, React)
-   * from seeing an intermediate state. Three consumers: `applyState` from
-   * outside, divider drag, which rewrites flex per pane, and `fitDomains`,
-   * which moves x and every pane's mode in one go. The drag runs on every
-   * pointermove, so firing once per pane would have the listener redo that
-   * many times' worth of work per frame.
+   * Keeps a follower of the layout from seeing an intermediate stack. Two
+   * consumers: divider drag, which rewrites flex per pane, and
+   * `fitDomains`, which flips every pane back to autoScale. The drag runs
+   * on every pointermove, so firing once per pane would have the listener
+   * redo that many times' worth of work per frame.
    */
-  private coalesceState(run: () => void): void {
-    if (this.applyingState) {
+  private coalescePanesChange(run: () => void): void {
+    if (this.batchingPanes) {
       run();
       return;
     }
 
     /**
-     * **The notification is inside `finally` too.**
-     *
-     * The emit used to sit **outside** the try/finally, so if `run()` threw
-     * partway through, the exception skipped that line. The two original consumers are
-     * partial-write loops — `applyState`'s `panes.forEach` and divider
-     * drag's per-pane loop — so the panes already applied stay applied
-     * while the mirror hears nothing at all. Not late, **never**: the next
-     * `coalesceState` resets the flag to false.
-     *
-     * Measured: `applyState({panes:[{flex:7, autoScale:false,
-     * valueDomain:{5,5}}]})` throws inside `setValueDomain`, but flex 7 and
-     * autoScale false are already applied, and `stateChange` fired zero
-     * times — the React mirror draws flex 1 forever.
+     * **The notification is inside `finally` too.** If `run()` throws
+     * partway through a per-pane loop, the panes already changed stay
+     * changed — the follower has to hear about them.
      *
      * **Can't just call it plainly inside `finally`.** `emit` collects and
-     * rethrows if a subscriber throws (`"${event}" subscriber threw`), and
-     * an exception inside `finally` **replaces** the one already in flight
-     * — instead of the `ContractError` the consumer's own code caused,
-     * they'd get someone else's listener error. So both are collected and
+     * rethrows if a subscriber throws, and an exception inside `finally`
+     * **replaces** the one already in flight. So both are collected and
      * handed to `throwable`: one alone comes through as-is, two become an
      * `AggregateError` (the same rule as `Plot.destroy` and `emit`).
      */
     const failures: unknown[] = [];
 
-    this.applyingState = true;
-    this.stateChangedWhileApplying = false;
+    this.batchingPanes = true;
+    this.panesChangedInBatch = false;
     try {
       run();
     } catch (error) {
       failures.push(error);
     } finally {
-      this.applyingState = false;
+      this.batchingPanes = false;
     }
 
-    if (this.stateChangedWhileApplying) {
+    if (this.panesChangedInBatch) {
       try {
-        this.emitStateChange();
+        this.emitPanesChange();
       } catch (error) {
         failures.push(error);
       }
     }
 
-    if (failures.length > 0) throw throwable(failures, "applying state failed");
-  }
-
-  /**
-   * Applies a state piece from outside. **Only the piece given changes** —
-   * partial application is exactly the material a partially controlled
-   * shape needs, like "only zoom controlled from outside."
-   *
-   * Unlike TanStack, the source of truth for state isn't moved outside — on
-   * a canvas where pan runs at 60fps, that round trip becomes a drag that
-   * lags a frame behind. The core is mirror + feedback (getState /
-   * stateChange / applyState), and a React wrapper assembles a controlled
-   * shape from these three.
-   *
-   * `xDomain: null` is a "before fit" snapshot with nothing to apply — it's
-   * ignored. Keyed pane slices match `PaneOptions.stateKey`; snapshots and
-   * panes with no keys retain the legacy index pairing. A slice whose pane
-   * does not currently exist is dropped — whoever creates panes (the
-   * wrapper) reapplies it once the list changes.
-   *
-   * **Unkeyed slices pair by position only when the counts match.** With a
-   * pane added or removed since the save, which one moved is unknowable, so
-   * every unkeyed slice is dropped rather than put on the wrong pane. Give
-   * panes a `stateKey` to restore them across layout changes.
-   */
-  applyState(state: Partial<ChartState>): void {
-    /**
-     * **This door validates its own input.**
-     *
-     * There is no string parser in front of it any more — state comes from
-     * whatever the consumer built, so a null or a wrong shape has to be
-     * caught here. It once was caught upstream instead, and a null slipping
-     * through threw `TypeError: Cannot read properties of null (reading
-     * 'xDomain')` from inside this method.
-     */
-    requireObject(state, "applyState(state)");
-
-    /**
-     * **The x piece passes through the same door as `setVisibleRange`.**
-     *
-     * `setVisibleRange` catches this at the door because *"before data
-     * arrives, this value would just sit in `pending` and blow up inside
-     * the first `setData`"* — **but this spot, landing in that same
-     * `pending` through the same arithmetic, had no such door.** Measured:
-     * `applyState({ xDomain: { min: 5, max: 5 } })` passed silently, and the
-     * consumer's next `addSeries({ data })` died with `ContractError:
-     * domain min(5) must be less than max(5)` — a door you never called.
-     *
-     * Shape is checked too. `applyState` is a public door taking a
-     * hand-built object, so `{ min: 10 }` alone would have
-     * `toDomain(undefined)` plant `setDomain(NaN, NaN)` — silently.
-     */
-    if (state.xDomain != null) {
-      requireObject(state.xDomain, "applyState({ xDomain })");
-      requireInterval(
-        state.xDomain.min,
-        state.xDomain.max,
-        "applyState({ xDomain })",
-      );
-    }
-
-    const paneChanges = state.panes === undefined
-      ? []
-      : matchPaneState(this.paneStack.list, state.panes);
-    // A scale can refuse a well-formed range — a log axis given zero. Each
-    // one is asked before anything is applied, then put back, so a restore
-    // it refuses changes nothing.
-    for (const { pane, slice } of paneChanges) {
-      if (slice.autoScale || !slice.valueDomain) continue;
-      const [min, max] = pane.yScale.getDomain();
-      pane.yScale.setDomain(slice.valueDomain.min, slice.valueDomain.max);
-      pane.yScale.setDomain(min, max);
-    }
-
-    try {
-      this.coalesceState(() => {
-        // If there's no data yet, the window holds it as pending and consumes
-        // it at the first fit.
-        if (state.xDomain != null) this.xViewport.restore(state.xDomain);
-
-        for (const { pane, slice } of paneChanges) applyPaneState(pane, slice);
-      });
-    } finally {
-      this.scheduleRender();
-    }
+    if (failures.length > 0) throw throwable(failures, "changing the panes failed");
   }
 
   // --- domain ---
@@ -1513,6 +1457,7 @@ export class Plot
     return {
       area: this.area,
       panes: this.paneStack.list,
+      shares: this.paneShares(),
       gap: this.config.paneGap,
       axis: this.config.axis,
       labels: this.axisLabels !== null,
@@ -1760,11 +1705,11 @@ export class Plot
    * were still holding.
    *
    * **Writes through the proper door (`applyOptions`).** This used to
-   * assign `pane.flex` directly and fill in the state notification by hand
+   * assign `pane.flex` directly and fill in the panes notification by hand
    * — because going through the subscriber recounts the x index — but now
    * that `PaneChange.data` names that branch, there's no reason left to
    * dodge it. The notification firing once per pane is coalesced into one
-   * by `coalesceState`.
+   * by `coalescePanesChange`.
    */
   private resizeBetween(index: number, dy: number): void {
     // Only a handle the last frame put up can be moved. A frame with no
@@ -1824,7 +1769,13 @@ export class Plot
 
     heights[index] = upperHeight + delta;
     heights[index + 1] = lowerHeight - delta;
-    this.coalesceState(() => {
+    this.coalescePanesChange(() => {
+      // The drag worked on the heights on screen; those are the panes'
+      // split from here on, so a maximize that drew them is over.
+      if (this.maximized !== null) {
+        this.maximized = null;
+        this.emitPanesChange();
+      }
       panes.forEach((pane, slot) => {
         pane.applyOptions({ flex: heights[slot] });
       });
@@ -1851,6 +1802,7 @@ export class Plot
     for (const pane of this.paneStack.list) {
       inputs.push(pane, pane.flex, pane.minHeight);
     }
+    inputs.push(this.maximized);
     return inputs;
   }
 
@@ -1905,8 +1857,8 @@ export class Plot
 
     /**
      * **Notifications are cut off first.** If a plugin below removes a pane
-     * it created, `stateChange` would fire — but that isn't a state change
-     * the user made, it's the chart's last breath. It looks like a setState
+     * it created, `panesChange` would fire — but that isn't a change the
+     * user made, it's the chart's last breath. It looks like a setState
      * landing on a React tree mid-unmount, and the consumer has no way to
      * trace where it came from.
      */

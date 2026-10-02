@@ -17,12 +17,6 @@ import { createSeriesPlacement } from './series-collector';
  * this.
  */
 export interface ChartPaneProps {
-  /**
-   * Stable identity for restored pane state. The first ChartPane borrows the
-   * persistent mainPane: change the ChartContainer key to change that identity.
-   * Later panes are owned by their wrapper; change their ChartPane key instead.
-   */
-  stateKey?: string;
   /** The share of leftover vertical space this takes. Defaults to 1. */
   flex?: number;
   /** Won't shrink below this (px). Defaults to 40. */
@@ -45,10 +39,7 @@ export interface ChartPaneProps {
    * pane the scale it replaces is kept and put back when this pane goes —
    * the instance, carrying whatever range the pane shows at that moment —
    * and a `mainPane.setYScale` made while this pane holds it is overwritten
-   * by that restore. A restored `state` whose `valueDomain` the scale cannot hold is a
-   * `ContractError` at the boundary around the container — scale kind is not
-   * part of saved state, so persist it alongside and drop the domain when it
-   * differs.
+   * by that restore.
    */
   yScale?: () => Scale;
   children?: ReactNode;
@@ -72,7 +63,6 @@ export function ChartPane({
   autoScale = PANE_OPTION_DEFAULTS.autoScale,
   invert = PANE_OPTION_DEFAULTS.invert,
   yScale,
-  stateKey,
   children,
 }: ChartPaneProps) {
   const api = useChartApi('ChartPane');
@@ -85,20 +75,11 @@ export function ChartPane({
   const [pane, setPane] = useState<Pane | null>(null);
 
   /**
-   * The initial options are **carried in the acquire call.** Applying
-   * them separately would open a gap in that one commit where the
-   * container's pane restoration slice (applied after the
-   * structure-change commit) arrives first, only to get overwritten by
-   * the initial options landing late — sending the restored `flex` back
-   * to the mount default.
+   * The initial options are **carried in the acquire call** — the pane
+   * arrives already laid out, so the chart announces it once instead of
+   * once with the defaults and again with the props.
    */
-  const initialStateKey = useRef(stateKey);
-  if (initialStateKey.current !== stateKey) {
-    throw new Error(
-      '<ChartPane stateKey> cannot change after mount; change the ChartContainer key for the borrowed main pane, or the ChartPane key for a later pane.',
-    );
-  }
-  const initialOptions = useRef({ flex, minHeight, valuePadding, autoScale, invert, stateKey, yScale });
+  const initialOptions = useRef({ flex, minHeight, valuePadding, autoScale, invert, yScale });
 
   useEffect(() => {
     const acquired = api.acquirePane(initialOptions.current);

@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { ContractError } from "../../primitives";
 import { lineSeries } from "../../series";
-import type { ChartState } from "../state";
 import { mountPlot } from "./helpers";
 
 function mount() {
   const { plot } = mountPlot({ deps: testBrowserDeps(), series: lineSeries(), data: [{ x: 0, y: 1 }, { x: 1, y: 2 }] });
-  const rsi = plot.addPane({ stateKey: "rsi", flex: 2 });
-  const macd = plot.addPane({ stateKey: "macd", flex: 3 });
-  const states: ChartState[] = [];
-  plot.on("stateChange", (state) => states.push(state));
+  const rsi = plot.addPane({ flex: 2 });
+  const macd = plot.addPane({ flex: 3 });
+  // What a follower reads when `panesChange` rings — the event carries no payload.
+  const states: number[][] = [];
+  plot.on("panesChange", () => states.push(plot.panes.map((pane) => pane.flex)));
   return { plot, rsi, macd, states };
 }
 
@@ -23,7 +23,7 @@ describe("setPaneOrder", () => {
 
     expect(plot.panes).toEqual([macd, plot.mainPane, rsi]);
     expect(states).toHaveLength(1);
-    expect(states[0].panes.map((pane) => pane.flex)).toEqual([3, 1, 2]);
+    expect(states[0]).toEqual([3, 1, 2]);
   });
 
   it("does nothing when the order is unchanged", () => {

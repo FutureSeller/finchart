@@ -3,7 +3,6 @@
  * them, and the one way they change afterward.
  */
 import {
-  ContractError,
   requireFinite,
   requireNonNegative,
   requireObject,
@@ -13,12 +12,6 @@ import { requireFunction } from "../primitives/guards";
 import type { AxisOptions } from "./types";
 
 export interface PaneOptions {
-  /**
-   * Stable identity for persisted view state. Give dynamically assembled
-   * panes a semantic key (`"rsi"`, `"volume"`); it is written to
-   * `ChartState` and cannot be changed after the pane has claimed it.
-   */
-  stateKey?: string;
   /** Share of the leftover vertical space this pane takes. Default 1. */
   flex?: number;
   /** Never shrinks below this (px). Default 40. */
@@ -38,7 +31,7 @@ export interface PaneOptions {
   /**
    * Inverts the value axis — larger values go toward the bottom. The right
    * spot for values where "smaller is better," like the spread on a yield
-   * curve. This is state (`PaneState.invert`).
+   * curve.
    */
   invert?: boolean;
 }
@@ -63,16 +56,10 @@ export const PANE_OPTION_DEFAULTS = {
  * height becomes `NaN`, which then leaks into the canvas size.
  *
  * **Both** the constructor and `applyOptions` pass through here — if the two
- * spots diverge, only one of them gets fixed. Zero is not blocked: `flex: 0`
- * is the idiom `paneMaximize` uses to collapse a pane.
+ * spots diverge, only one of them gets fixed. Zero is not blocked: a pane at
+ * `flex: 0` takes only its `minHeight` — a consumer collapsing it by hand.
  */
 export function checkPaneNumbers(options: PaneOptions): void {
-  if (
-    options.stateKey !== undefined &&
-    (typeof options.stateKey !== "string" || options.stateKey.trim().length === 0)
-  ) {
-    throw new ContractError("pane stateKey must be a non-empty string");
-  }
   if (options.flex !== undefined) requireNonNegative(options.flex, "pane flex");
   if (options.minHeight !== undefined) {
     requireNonNegative(options.minHeight, "pane minHeight");
@@ -121,7 +108,6 @@ export interface PaneSettings {
   readonly minHeight: number;
   readonly axis: AxisOptions;
   readonly invert: boolean;
-  readonly stateKey: string | null;
 }
 
 /** The constructor's door — checks the numbers and fills the defaults. */
@@ -134,7 +120,6 @@ export function settleOptions(options: PaneOptions): PaneSettings {
     minHeight: options.minHeight ?? PANE_OPTION_DEFAULTS.minHeight,
     axis: { ...options.axis },
     invert: options.invert ?? PANE_OPTION_DEFAULTS.invert,
-    stateKey: options.stateKey ?? null,
   };
 }
 
@@ -142,40 +127,25 @@ export function settleOptions(options: PaneOptions): PaneSettings {
  * The next settings after a patch. Changes only what's given — same rule as
  * `Plot.applyOptions`, omitting means "leave as is."
  *
- * `state` says whether a **state field** (`PaneState`: flex, autoScale,
- * invert, stateKey) actually moved — checked against the current values,
- * not against what was given, so a patch that repeats the current flex
- * doesn't wake whatever mirrors the chart's state.
- *
- * A `stateKey` can be claimed once. Changing it afterward would make an
- * already-persisted snapshot point at a different pane, so that's refused —
- * a new identity is a new pane. `assertStateKeyAvailable` is the chart's
- * uniqueness check, asked before the claim lands.
+ * `settings` says whether a field the chart announces through
+ * `panesChange` actually moved — the layout (flex, minHeight) or the value
+ * axis's mode (autoScale, invert). Checked against the current values, not
+ * against what was given, so a patch that repeats the current flex doesn't
+ * wake whoever follows the panes. `valuePadding` and `axis` shape how a pane
+ * draws, not where it sits or how its axis follows — they stay quiet.
  */
 export function applyPaneOptions(
   current: PaneSettings,
   options: PaneOptions,
-  assertStateKeyAvailable?: (key: string) => void,
-): { next: PaneSettings; state: boolean } {
+): { next: PaneSettings; settings: boolean } {
   requireObject(options, "applyOptions(options)");
   checkPaneNumbers(options);
 
-  const state =
+  const settings =
     (options.flex !== undefined && options.flex !== current.flex) ||
+    (options.minHeight !== undefined && options.minHeight !== current.minHeight) ||
     (options.autoScale !== undefined && options.autoScale !== current.autoScale) ||
-    (options.invert !== undefined && options.invert !== current.invert) ||
-    (options.stateKey !== undefined && options.stateKey !== current.stateKey);
-
-  let stateKey = current.stateKey;
-  if (options.stateKey !== undefined && options.stateKey !== current.stateKey) {
-    if (current.stateKey !== null) {
-      throw new ContractError(
-        `pane stateKey is already "${current.stateKey}" and cannot be changed; create a new pane for a new identity`,
-      );
-    }
-    assertStateKeyAvailable?.(options.stateKey);
-    stateKey = options.stateKey;
-  }
+    (options.invert !== undefined && options.invert !== current.invert);
 
   return {
     next: {
@@ -185,8 +155,7 @@ export function applyPaneOptions(
       minHeight: options.minHeight ?? current.minHeight,
       axis: options.axis !== undefined ? { ...current.axis, ...options.axis } : current.axis,
       invert: options.invert ?? current.invert,
-      stateKey,
     },
-    state,
+    settings,
   };
 }

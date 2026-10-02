@@ -254,13 +254,6 @@ export interface OwnedPaneOptions {
   ownPane?: {
     flex?: number;
     minHeight?: number;
-    /**
-     * The pane's identity in persisted view state (`"rsi"`, `"mfi"`).
-     * Without one, a saved layout matches panes by position — add an
-     * indicator, or reinstall one, and every saved height lands one pane
-     * off.
-     */
-    stateKey?: string;
   };
 }
 
@@ -287,7 +280,6 @@ function ownedPane(
   const owned = plot.addPane({
     flex: options.ownPane?.flex ?? OWNED_PANE_LAYOUT.flex,
     minHeight: options.ownPane?.minHeight ?? OWNED_PANE_LAYOUT.minHeight,
-    ...(options.ownPane?.stateKey === undefined ? {} : { stateKey: options.ownPane.stateKey }),
   });
   keep({ dispose: () => plot.removePane(owned) });
   wire?.(owned);

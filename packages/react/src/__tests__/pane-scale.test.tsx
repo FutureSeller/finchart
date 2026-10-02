@@ -14,10 +14,10 @@
  * what was there — not to a fresh default.
  */
 import type { LineDataPoint, Plot, Scale } from '@finchart/core';
-import { ContractError, immediateScheduler, lineSeries, LinearScale, LogScale, PANE_OPTION_DEFAULTS } from '@finchart/core';
+import { immediateScheduler, lineSeries, LinearScale, LogScale, PANE_OPTION_DEFAULTS } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
-import { Component, createRef, StrictMode, type ReactNode } from 'react';
+import { createRef, StrictMode } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartPane, ChartSeries } from '../components';
 import { layersSpy } from './fake-layers';
@@ -58,19 +58,6 @@ function logFactory() {
     return scale;
   };
   return { made, factory };
-}
-
-class Boundary extends Component<{ children: ReactNode; caught: unknown[] }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  componentDidCatch(error: unknown) {
-    this.props.caught.push(error);
-  }
-  render() {
-    return this.state.failed ? null : this.props.children;
-  }
 }
 
 describe('<ChartPane autoScale invert>', () => {
@@ -287,49 +274,6 @@ describe('<ChartPane yScale>', () => {
     view.rerender(<ChartContainer deps={deps} data={[]} plotRef={ref} />);
     expect(plot().mainPane.yScale).toBe(log);
     expect(log.getDomain()).toEqual([100, 200]);
-  });
-
-  it('a saved value domain the scale can hold is restored under it', () => {
-    const { deps, ref, plot } = setup();
-    const ui = (state?: { panes: { flex: number; autoScale: boolean; valueDomain: { min: number; max: number } }[] }) => (
-      <ChartContainer deps={deps} data={data} plotRef={ref} state={state}>
-        <ChartPane yScale={() => new LogScale()}>
-          <ChartSeries series={lineSeries()} />
-        </ChartPane>
-      </ChartContainer>
-    );
-    const view = render(ui());
-    view.rerender(ui({ panes: [{ flex: 1, autoScale: false, valueDomain: { min: 10, max: 20 } }] }));
-    expect(plot().mainPane.yScale).toBeInstanceOf(LogScale);
-    expect(plot().mainPane.yScale.getDomain()).toEqual([10, 20]);
-    expect(plot().mainPane.autoScale).toBe(false);
-  });
-
-  it('a saved value domain the scale cannot hold is a ContractError at the boundary around the container', () => {
-    const { deps, ref } = setup();
-    const caught: unknown[] = [];
-    const quiet = console.error;
-    console.error = () => undefined;
-    try {
-      render(
-        <Boundary caught={caught}>
-          <ChartContainer
-            deps={deps}
-            data={data}
-            plotRef={ref}
-            state={{ panes: [{ flex: 1, autoScale: false, valueDomain: { min: -10, max: 20 } }] }}
-          >
-            <ChartPane yScale={() => new LogScale()}>
-              <ChartSeries series={lineSeries()} />
-            </ChartPane>
-          </ChartContainer>
-        </Boundary>,
-      );
-    } finally {
-      console.error = quiet;
-    }
-    expect(caught).toHaveLength(1);
-    expect(caught[0]).toBeInstanceOf(ContractError);
   });
 
   it('unmounting the whole container with a yScale pane does not throw', () => {

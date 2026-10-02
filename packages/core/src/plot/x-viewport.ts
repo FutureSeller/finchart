@@ -64,8 +64,8 @@ export class XViewport {
   private fittedOnce = false;
 
   /**
-   * A range awaiting restoration (in data x). **State arrived before data
-   * did.** URL restoration applies state at mount, and data arrives after
+   * A window chosen before the data (in data x). **The window arrived
+   * before the data did** — a `setVisibleRange` at mount, with data after
    * — so setting the domain right away would grab a wrong value, since
    * `toDomain` is still the identity in a bar-index coordinate system at
    * that point. This holds it as x and applies it **in place of `fit`,
@@ -105,8 +105,7 @@ export class XViewport {
 
   /**
    * The range currently in view, **in data x**. `null` if it's never been
-   * fit — the scale's default `[0,1]` isn't state the user made, so
-   * there's nothing to save either.
+   * fit — the scale's default `[0,1]` isn't a window anyone chose.
    */
   visibleRange(): Range | null {
     if (!this.fittedOnce) return null;
@@ -130,11 +129,6 @@ export class XViewport {
     this.setDomain(this.deps.x.toDomain(fromX), this.deps.x.toDomain(toX));
   }
 
-  /** A state slice from outside. Same arithmetic as `setVisibleRange`. */
-  restore(xDomain: Range): void {
-    this.setVisibleRange(xDomain.min, xDomain.max);
-  }
-
   /**
    * Fits so that all of the data in hand is visible. Does nothing if
    * there's no range to fit to.
@@ -143,7 +137,7 @@ export class XViewport {
    * no way to answer the latter once data has been handed off to a
    * registration.
    *
-   * A window restored before the data (`restore`, `setVisibleRange`) is
+   * A window set before the data (`setVisibleRange`) is
    * applied in place of the fit — if it touches the data's x range at all
    * (an endpoint in common counts). One that misses the data entirely is
    * dropped and the ordinary fit runs.
@@ -163,14 +157,14 @@ export class XViewport {
     const first = !this.fittedOnce;
     this.fittedOnce = true;
 
-    // If a restoration arrived before data did, apply it instead of
+    // If a window was chosen before data did, apply it instead of
     // fitting — the mapping has the index set up by now, so `toDomain`
     // gives the correct value → pending
     if (this.pending) {
       const { min, max } = this.pending;
       this.pending = null;
-      // A window that does not touch the data at all — a state saved on
-      // another symbol's history — would show an empty screen. Touching at
+      // A window that does not touch the data at all — one set for another
+      // symbol's history — would show an empty screen. Touching at
       // an endpoint counts; a window with no point inside it (sparse data)
       // is still the caller's window. Otherwise the ordinary fit below.
       if (max >= range.min && min <= range.max) {
@@ -349,10 +343,10 @@ export class XViewport {
    * **There's a boundary — data never fully disappears from the screen.**
    * It shifts only up to `domain.min ≤ last bar`, `domain.max ≥ first bar`.
    * Every gesture-driven pan (drag, kinetic, keyboard) funnels through
-   * here; programmatic paths (`fit`, `restore`, `setVisibleRange`,
+   * here; programmatic paths (`fit`, `setVisibleRange`,
    * `followNewBar`) don't.
    *
-   * A window already outside the boundary (e.g. a restoration pointing
+   * A window already outside the boundary (e.g. one chosen pointing
    * into empty space) only gets blocked from **getting worse** — a pan
    * that moves it back through passes freely, and it's never pulled back
    * in on its own.
@@ -438,10 +432,10 @@ export class XViewport {
 
   /**
    * Moves the domain and notifies **only if it actually changed.** The
-   * domain has several callers (pan, zoom, refit, shift, restore), so this
+   * domain has several callers (pan, zoom, refit, shift, setVisibleRange), so this
    * gathers them into one place. **Notifies now, without waiting for a
-   * render** — the visible range is state, and state changes
-   * synchronously.
+   * render** — the visible range changes synchronously, so its
+   * announcement does too.
    */
   private setDomain(min: number, max: number, announce = false): void {
     const [previousMin, previousMax] = this.deps.scale.getDomain();
@@ -483,7 +477,7 @@ export class XViewport {
    * the caller (`zoom`) via the cursor's fixed point.
    *
    * **Applied only in `zoom`, never in `setDomain`.** A refit or a
-   * restoration happens before the first render, when the scale's pixel
+   * window chosen before data lands before the first render, when the scale's pixel
    * range is still its default, so clamping against a pixel budget there
    * would produce garbage.
    */
@@ -505,7 +499,7 @@ export class XViewport {
 
     /**
      * A window already outside the limit (a fit wider than the limit, or
-     * a restoration narrower than it) only gets blocked from getting
+     * a chosen window narrower than it) only gets blocked from getting
      * worse — the first zoom mustn't make the screen jump straight to the
      * limit.
      */

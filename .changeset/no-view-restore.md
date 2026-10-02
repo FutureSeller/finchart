@@ -1,0 +1,6 @@
+---
+"@finchart/core": minor
+"@finchart/react": minor
+---
+
+The x window is read with `plot.getVisibleRange()` — `{ min, max }` in data x, `null` before the first fit — the reading side of `setVisibleRange()`. Pane changes ring `panesChange`, which carries no payload (read `plot.panes`): the layout (a pane added, removed or reordered, `flex` — a divider drag among them — or `minHeight`) or a pane's value-axis mode (`autoScale`, `invert`, a different scale through `setYScale`, a range set by hand). It doesn't ring for the x window (`xDomainChange` does), data, `valuePadding`/`axis`, or a fit to the data (a manual range that `setData`, `fitValueDomain()` or a scale swap refits — the swap itself rings once), and a value restated as it is stays quiet. A divider drag and `fitDomains()` ring at most once; other writers ring per pane they change. `pane.subscribe` listeners see the same thing as `PaneChange.settings`. `paneMaximize(options)` refuses a non-object options or a non-boolean `gestures` with a `ContractError` at the call. The chart does not save or restore its view: a reload starts from the data — read `getVisibleRange()` before and `setVisibleRange()` after if an app wants the window back. Drawings save through `tools.serialize()` / `load()`.

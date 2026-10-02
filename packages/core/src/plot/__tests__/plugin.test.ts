@@ -297,8 +297,8 @@ describe("failure during cleanup", () => {
   });
 
   it("should not notify while tearing down", () => {
-    // If a plugin removes the pane it created, stateChange fires — but
-    // that's not a state change the user made, it's the stage's dying breath.
+    // If a plugin removes the pane it created, panesChange fires — but
+    // that's not a change the user made, it's the stage's dying breath.
     const plot = mount();
     const seen: string[] = [];
 
@@ -306,7 +306,7 @@ describe("failure during cleanup", () => {
       const pane = host.addPane();
       return teardown(() => host.removePane(pane));
     });
-    plot.on("stateChange", () => seen.push("stateChange"));
+    plot.on("panesChange", () => seen.push("panesChange"));
 
     plot.destroy();
 

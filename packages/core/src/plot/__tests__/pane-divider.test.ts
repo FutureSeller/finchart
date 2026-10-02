@@ -429,10 +429,18 @@ describe("divider moves between frames", () => {
     drag(-Infinity);
     expect([upper.flex, lower.flex]).toEqual([3, 1]);
 
-    // The same, with a state listener that throws on the way — the change
+    // A maximize turned on from inside — the heights measured before it no
+    // longer stand, so the move is dropped and the maximize holds.
+    const maximizing = mountDragging();
+    maximizing.duringMeasure(() => maximizing.plot.maximizePane(maximizing.lower));
+    maximizing.drag(-Infinity);
+    expect(maximizing.plot.maximizedPane).toBe(maximizing.lower);
+    expect([maximizing.upper.flex, maximizing.lower.flex]).toEqual([1, 1]);
+
+    // The same, with a panes listener that throws on the way — the change
     // is committed all the same, so the move still must not overwrite it.
     const again = mountDragging();
-    const off = again.plot.on("stateChange", () => {
+    const off = again.plot.on("panesChange", () => {
       off();
       throw new Error("listener failed");
     });
@@ -527,7 +535,7 @@ describe("divider moves between frames", () => {
     const { plot, upper, lower, drag } = mountDragging();
     const before = [upper.flex, lower.flex];
     let changes = 0;
-    plot.on("stateChange", () => {
+    plot.on("panesChange", () => {
       changes += 1;
     });
     plot.destroy();

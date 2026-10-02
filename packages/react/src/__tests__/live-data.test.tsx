@@ -57,7 +57,7 @@ function LiveOptions() {
 }
 
 function domainOf(plot: Plot | null): { startX: number; endX: number } {
-  const domain = plot?.getState().xDomain;
+  const domain = plot?.getVisibleRange();
   if (!domain) throw new Error('xDomain does not exist yet — this is before the first fit');
   return { startX: domain.min, endX: domain.max };
 }

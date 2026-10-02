@@ -6,7 +6,6 @@
 import type { Point } from "../primitives";
 import type { Range } from "../data";
 import type { PaneApi } from "./pane";
-import type { ChartState } from "./state";
 
 /**
  * Where on the chart the cursor is pointing.
@@ -55,18 +54,26 @@ export interface XDomainChangePayload {
 
 export interface PlotEvents {
   /**
-   * A piece of view state (`ChartState`) changed. The payload is the whole
-   * new snapshot — rather than growing one event per piece, it's collected
-   * into one. Whatever's mirroring it (URL persistence, undo, chart sync)
-   * wants the whole thing anyway.
+   * The pane layout or a pane's value-axis mode changed. **No payload**:
+   * read `plot.panes` and the panes themselves.
    *
-   * **Synchronous** — state changes synchronously. During a drag
-   * it fires on every pointermove, so if persisting is expensive, the
-   * listener should debounce it.
+   * - Layout: a pane added, removed or reordered, maximized or given back
+   *   (`maximizePane`), a pane's `flex` (a divider drag rewrites every
+   *   pane's) or `minHeight`.
+   * - Mode: `autoScale`, `invert`, the scale (`setYScale` with a different
+   *   instance), or a value range set by hand (`setValueDomain`, an axis drag).
    *
-   * Doesn't fire on data changes (append/prepend) — data isn't state.
+   * Doesn't ring for the x window (that's `xDomainChange`), data,
+   * `valuePadding` or `axis` (how a pane draws, not where it sits or how its
+   * axis follows), a fit to the data (`fitValueDomain`, a manual range that
+   * `setData` or a scale swap refits — the swap itself rings once), an
+   * automatic value axis following the view, or a value restated as it is.
+   *
+   * **Synchronous.** A divider drag (once per pointermove), `fitDomains()`
+   * and a maximize ring at most once for the whole change; separate
+   * `pane.applyOptions` calls ring once each.
    */
-  stateChange: ChartState;
+  panesChange: Record<string, never>;
   /**
    * A frame finished drawing. **No payload.**
    *

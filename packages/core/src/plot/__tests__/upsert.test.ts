@@ -146,11 +146,11 @@ describe("SeriesHandle.upsert — merged by x", () => {
   it("leaves the window where the user put it, the way append does", () => {
     const { model, handle } = chart(bars(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
     model.plot.pan(0.5);
-    const viewing = model.plot.getState().xDomain;
+    const viewing = model.plot.getVisibleRange();
 
     handle.upsert([bar(9, 90), bar(10, 100), bar(11), bar(12)]);
 
-    expect(model.plot.getState().xDomain).toEqual(viewing);
+    expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 
   it("does nothing with an empty chunk", () => {

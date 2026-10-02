@@ -8,7 +8,6 @@ export type {
   PlotEvents,
   XDomainChangePayload,
 } from "./events";
-export type { ChartState, PaneState } from "./state";
 export { PANE_OPTION_DEFAULTS } from "./pane-options";
 export type { PaneOptions } from "./pane-options";
 export type { SeriesHandle } from "./series-handle";

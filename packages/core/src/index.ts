@@ -315,7 +315,6 @@ export { emitter, pluginApi, teardown } from "./primitives";
 export { frameScheduler, immediateScheduler, manualScheduler } from "./render";
 export type {
   AxisOptions,
-  ChartState,
   CrosshairPayload,
   DataProbe,
   CursorHost,
@@ -337,7 +336,6 @@ export type {
   PaneDrawContext,
   PaneHost,
   PaneOptions,
-  PaneState,
   PlotConfig,
   PlotDecoration,
   PlotDecorationContext,

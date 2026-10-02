@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type {
   BaseDataPoint,
-  ChartState,
   CrosshairPayload,
   LineStyle,
   Plot,
@@ -81,26 +80,6 @@ export interface UsePlotOptions<T extends BaseDataPoint> {
    * together with the plot-creation effect.
    */
   onXDomainChange?: (change: XDomainChangePayload) => void;
-  /**
-   * Supplies the view state (`ChartState`) from outside. **Applied every
-   * time the reference changes** (`applyState`) — left unset, it's owned
-   * internally.
-   *
-   * This is a directive, not a transfer of ownership: the core is a mirror
-   * plus feedback (moving the source of truth for state would put 60fps pan
-   * a frame behind). The controlled shape comes from pairing this prop with
-   * `onStateChange` — to reject an internal mutation, return the unchanged
-   * state as a **new reference** from `onStateChange`.
-   */
-  state?: Partial<ChartState>;
-  /**
-   * Fires when the view state changes (pan, zoom, divider drag, pane
-   * options). URL persistence, undo, and chart sync all start here.
-   *
-   * Fires on every pointermove while dragging, so if persisting is
-   * expensive, debounce on the receiving end.
-   */
-  onStateChange?: (state: ChartState) => void;
 }
 
 /** The initial size when neither a size prop nor `autoSize` is given. */
@@ -132,8 +111,6 @@ export function usePlot<T extends BaseDataPoint>({
   followTheme,
   onCrosshair,
   onXDomainChange,
-  state,
-  onStateChange,
 }: UsePlotOptions<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<Plot | null>(null);
@@ -218,29 +195,6 @@ export function usePlot<T extends BaseDataPoint>({
       xDomainRef.current?.(change),
     );
   }, []);
-
-  const stateChangeRef = useRef(onStateChange);
-  stateChangeRef.current = onStateChange;
-
-  useEffect(() => {
-    return plotRef.current?.on('stateChange', (next) =>
-      stateChangeRef.current?.(next),
-    );
-  }, []);
-
-  /**
-   * Applies the state prop. **Once on mount, and again every time the
-   * reference changes.**
-   *
-   * The point is living in the same component as the plot-creation effect
-   * — even across a remount or StrictMode's double mount, the new plot
-   * gets the same state back. Re-applying the same state is a no-op (the
-   * core doesn't notify when the value is unchanged), so the
-   * apply → notify → persist → apply loop stops after one lap.
-   */
-  useEffect(() => {
-    if (state) plotRef.current?.applyState(state);
-  }, [state]);
 
   /**
    * Pushes size in only when it's given as a prop.
