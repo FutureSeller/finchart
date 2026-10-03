@@ -310,11 +310,8 @@ export function ChartContainer<T extends BaseDataPoint>({
       swapPaneScale(pane: Pane, yScale: (() => Scale) | undefined): void {
         const main = pane === plot.mainPane;
         if (yScale) {
-          const next = yScale();
-          // A log toggle swaps the kind; a new closure for the same kind is not a change.
-          if (Object.getPrototypeOf(next) === Object.getPrototypeOf(pane.yScale)) return;
           if (main && !previousScale.current) previousScale.current = pane.yScale;
-          pane.setYScale(next);
+          pane.setYScale(yScale());
           return;
         }
         if (main) {
@@ -325,7 +322,8 @@ export function ChartContainer<T extends BaseDataPoint>({
           }
           return;
         }
-        if (!(pane.yScale instanceof LinearScale)) pane.setYScale(new LinearScale());
+        // The prop installed what's there; without it a pane is linear, as `addPane` builds it.
+        pane.setYScale(new LinearScale());
       },
 
       releasePane(pane: Pane): void {

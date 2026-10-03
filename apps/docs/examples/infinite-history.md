@@ -36,12 +36,19 @@ In React, `useInfiniteHistory` holds the data and the loader's place, and
 `<InfiniteHistory history>` inside the chart pages into it:
 
 ```tsx
-const history = useInfiniteHistory<OHLC, string>({
-  fetchPage: (cursor) => api.candles(symbol, cursor), // or fetch: (before) => … by time
-  coordinates: OHLC_COORDINATES,
-});
+const history = useInfiniteHistory<OHLC, string>({ coordinates: OHLC_COORDINATES });
 useEffect(() => {
-  api.candles(symbol).then((page) => history.reset(page.bars, page.next));
+  let current = true;
+  api.candles(symbol).then((page) => {
+    if (!current) return;
+    history.reset(page.bars, {
+      next: page.next,
+      fetchPage: (cursor) => api.candles(symbol, cursor), // or { fetch: (before) => … } by time
+    });
+  });
+  return () => {
+    current = false;
+  };
 }, [symbol]);
 
 <ChartContainer deps={deps}>
@@ -52,9 +59,20 @@ useEffect(() => {
 
 `history.data` is React state — pass it as the series' data and edit a live
 bar with `history.setData`; `history.status` is the loader's state as React
-state. The place outlives the chart: a chart remounted under a `key` resumes
+state. The fetch comes with the load — `reset` takes the bars and how to page
+back from them, from the scope that knows the symbol — so no later render can
+pair one load's token with another symbol's API. The place outlives the chart: a chart remounted under a `key` resumes
 from the first bar held and the token last taken, an end stays an end, and a
-page landing for a load `reset` replaced is dropped. The wrapper demo
+page landing for a load `reset` replaced is dropped. What `reset` is handed
+is the caller's to vouch for: a first page that answers for a symbol already
+left (the effect above, cleaned up) must not reach it. An edit through
+`setData` is for one load's bars and is dropped if React applies it once
+another load holds them: by default the load on screen when it's made, so a
+tick for a symbol being left never lands on the next one's bars; a feed that
+already knows its new load names it — `setData(update, load)` with the
+handle `reset` returned (`history.load` reads the one on screen). One `<InfiniteHistory>` pages a history at a time;
+a second one mounted alongside is refused, since two loaders on one token
+would fetch and prepend the same page twice. The wrapper demo
 (`apps/examples/src/App.tsx`) pages by time this way.
 
 **A page counts once it reaches the chart.** The loader asks for the next page

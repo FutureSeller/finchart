@@ -12,7 +12,7 @@ import type { LineDataPoint, Pane, Plot } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef, StrictMode } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartContainer, ChartPane, Plugin } from '../components';
 import { layersSpy } from './fake-layers';
 
@@ -138,4 +138,121 @@ describe('<Plugin>', () => {
     // The first <ChartPane> is the main pane; this one sits in the second.
     expect(pane).toBe(plotRef.current?.panes[1]);
   });
+
+  /**
+   * **The one told about the api is the one told it's gone.** `onApi` is
+   * read when the api is installed; a new callback on a later render takes
+   * effect at the next install, so the original recipient is never left
+   * holding a disposed api.
+   */
+  it('tells the recipient that got the api — not a newer callback — that it is gone', () => {
+    const { install, installed } = installer();
+    const first: (FakeApi | null)[] = [];
+    const second: (FakeApi | null)[] = [];
+    const deps = makeDeps();
+    const view = (onApi: (api: FakeApi | null) => void, shown = true) => (
+      <ChartContainer deps={deps} data={data}>
+        {shown && <Plugin install={install} onApi={onApi} />}
+      </ChartContainer>
+    );
+    const screen = render(view((api) => first.push(api)));
+    screen.rerender(view((api) => second.push(api)));
+    screen.rerender(view((api) => second.push(api), false));
+
+    expect(first).toEqual([installed[0], null]);
+    expect(second).toEqual([]);
+  });
+
+  /**
+   * **A throwing `onApi` never orphans the plugin.** Thrown on the way in,
+   * the api is disposed before the error leaves; thrown on the way out, it
+   * is disposed all the same.
+   */
+  it('disposes the api when onApi throws — announcing it or letting go', () => {
+    const { install, installed } = installer();
+    const deps = makeDeps();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const kept: (FakeApi | null)[] = [];
+      expect(() =>
+        render(
+          <ChartContainer deps={deps} data={data}>
+            <Plugin
+              install={install}
+              onApi={(api) => {
+                kept.push(api);
+                if (api) throw new Error('refused');
+              }}
+            />
+          </ChartContainer>,
+        ),
+      ).toThrow('refused');
+      expect(installed.every((api) => api.disposed)).toBe(true);
+      // It kept the api before throwing — it is told the api is gone.
+      expect(kept.at(-1)).toBeNull();
+      cleanup();
+
+      const before = installed.length;
+      const view = (shown: boolean) => (
+        <ChartContainer deps={deps} data={data}>
+          {shown && (
+            <Plugin
+              install={install}
+              onApi={(api) => {
+                if (api === null) throw new Error('on the way out');
+              }}
+            />
+          )}
+        </ChartContainer>
+      );
+      const screen = render(view(true));
+      expect(() => screen.rerender(view(false))).toThrow('on the way out');
+      expect(installed.slice(before).every((api) => api.disposed)).toBe(true);
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+
+  it('keeps the first error when disposing throws too — on the way in and on the way out', () => {
+    const deps = makeDeps();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const brittle = () => ({
+      dispose() {
+        throw new Error('dispose failed');
+      },
+    });
+    try {
+      expect(() =>
+        render(
+          <ChartContainer deps={deps} data={data}>
+            <Plugin
+              install={brittle}
+              onApi={(api) => {
+                if (api) throw new Error('refused');
+              }}
+            />
+          </ChartContainer>,
+        ),
+      ).toThrow('refused');
+      cleanup();
+
+      const view = (shown: boolean) => (
+        <ChartContainer deps={deps} data={data}>
+          {shown && (
+            <Plugin
+              install={brittle}
+              onApi={(api) => {
+                if (api === null) throw new Error('on the way out');
+              }}
+            />
+          )}
+        </ChartContainer>
+      );
+      const screen = render(view(true));
+      expect(() => screen.rerender(view(false))).toThrow('on the way out');
+    } finally {
+      quiet.mockRestore();
+    }
+  });
 });
+

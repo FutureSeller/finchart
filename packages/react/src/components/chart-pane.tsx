@@ -34,14 +34,14 @@ export interface ChartPaneProps {
   invert?: boolean;
   /**
    * The value scale, as a factory. A log toggle is a change of this prop —
-   * the pane, its series and its height stay: when the factory's identity
-   * changes it is called, and the scale is swapped only if it hands out
-   * another kind than the pane holds, so an inline `() => new LogScale()`
-   * costs one allocation a render and never a swap; the factory must be
-   * pure. Removing it puts back a linear scale — on the main pane, the
-   * instance this replaced, carrying whatever range the pane shows at that
-   * moment; that restore also runs when this pane goes, and overwrites a
-   * `mainPane.setYScale` made while this pane held it.
+   * the pane, its series and its height stay. **The factory's identity is
+   * the change**, like any function prop: a new one is called and its scale
+   * installed, so pin it (a module constant, `useCallback`) — an inline
+   * arrow installs a fresh scale every render. Removing it puts back a
+   * linear scale — on the main pane, the instance this replaced, carrying
+   * whatever range the pane shows at that moment; that restore also runs
+   * when this pane goes, and overwrites a `mainPane.setYScale` made while
+   * this pane held it.
    */
   yScale?: () => Scale;
   /**
@@ -129,14 +129,15 @@ export function ChartPane({
     if (patch) pane.applyOptions(patch);
   }, [pane, flex, minHeight, valuePadding, autoScale, invert]);
 
-  // The scale the acquisition built is the first pass; after that, a new factory is a swap.
-  const scaleApplied = useRef<Pane | null>(null);
+  // The factory each pane holds a scale from — the acquisition's first, then
+  // every new identity. Compared, not counted, so StrictMode's replay of this
+  // effect installs nothing twice.
+  const scaleFrom = useRef<{ pane: Pane; factory: (() => Scale) | undefined } | null>(null);
   useEffect(() => {
     if (!pane) return;
-    if (scaleApplied.current !== pane) {
-      scaleApplied.current = pane;
-      return;
-    }
+    if (scaleFrom.current?.pane !== pane) scaleFrom.current = { pane, factory: initialOptions.current.yScale };
+    if (scaleFrom.current.factory === yScale) return;
+    scaleFrom.current.factory = yScale;
     api.swapPaneScale(pane, yScale);
   }, [api, pane, yScale]);
 

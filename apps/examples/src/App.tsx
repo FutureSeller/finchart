@@ -256,9 +256,11 @@ export function App() {
    * `data` doesn't refit, by rule, so prepending history leaves the window
    * you were looking at exactly where it was.
    */
-  const history = useInfiniteHistory<OHLC>({ fetch: pastPage });
+  const history = useInfiniteHistory<OHLC>();
   const { reset } = history;
-  useEffect(() => reset(candlesIn(INITIAL_FROM, 0)), [reset]);
+  useEffect(() => {
+    reset(candlesIn(INITIAL_FROM, 0), { fetch: pastPage });
+  }, [reset]);
 
   const plotRef = useRef<Plot | null>(null);
 

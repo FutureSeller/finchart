@@ -23,9 +23,9 @@ export interface ChartApi<T extends BaseDataPoint = BaseDataPoint> {
   acquirePane(options: PaneAcquisition): Pane;
   releasePane(pane: Pane): void;
   /**
-   * A `yScale` prop that changed after acquisition. A factory handing out
-   * the same kind of scale as the pane holds changes nothing; `undefined`
-   * puts back the default — on the main pane, the instance it replaced.
+   * A `yScale` prop that changed after acquisition: a factory is called and
+   * its scale installed; `undefined` puts back the default — on the main
+   * pane, the instance the prop replaced.
    */
   swapPaneScale(pane: Pane, yScale: (() => Scale) | undefined): void;
   /**
