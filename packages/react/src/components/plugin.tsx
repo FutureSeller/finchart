@@ -20,7 +20,8 @@ export interface PluginProps<TApi extends { dispose(): void }> {
    * new callback takes effect at the next install, so an inline arrow is
    * fine.
    */
-  onApi?: (api: TApi | null) => void;
+  // `NoInfer`: the api's type comes from `install`, never from this callback.
+  onApi?: (api: NoInfer<TApi> | null) => void;
 }
 
 const ONCE: readonly unknown[] = [];
@@ -33,9 +34,15 @@ const ONCE: readonly unknown[] = [];
  * ```tsx
  * <Plugin install={(plot) => plot.use(paneMaximize({ gestures: true }))} />
  * <ChartPane>
- *   <Plugin install={(plot, pane) => pane.use(drawingTools({ plot }))} onApi={setTools} />
+ *   <Plugin<DrawingToolsApi> install={(plot, pane) => pane.use(drawingTools({ plot }))} onApi={setTools} />
  * </ChartPane>
  * ```
+ *
+ * With a `useState` setter as `onApi` and an inline `install`, name the api
+ * type (`<Plugin<DrawingToolsApi> …>`): TypeScript reads `install`'s inline
+ * parameters after it has checked the setter, so it can't infer the type
+ * from `install` there. An `install` declared with typed parameters, or an
+ * inline `onApi`, needs nothing.
  */
 export function Plugin<TApi extends { dispose(): void }>({
   install,

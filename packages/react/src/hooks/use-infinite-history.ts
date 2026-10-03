@@ -3,7 +3,7 @@ import type {
   CoordinateAccessor,
   HistoryCursorFetch,
   HistoryFetch,
-  HistoryLoader,
+  CursorHistoryLoader,
   HistoryStatus,
   Plot,
 } from '@finchart/core';
@@ -12,7 +12,7 @@ import type { SetStateAction } from 'react';
 import { useInsertionEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 export interface UseInfiniteHistoryOptions<T extends BaseDataPoint> {
-  /** The accessor the series reading `data` uses — `OHLC_COORDINATES` for candles. Judges pages by its rules and reads the first x through it. */
+  /** The accessor the series reading `data` uses — an `OHLCAccessor` for candles. Judges pages by its rules and reads the first x through it. */
   coordinates?: CoordinateAccessor<T>;
   /** Prefetch when less than this many screens of past is held. Default 1. */
   screensAhead?: number;
@@ -25,9 +25,9 @@ export interface UseInfiniteHistoryOptions<T extends BaseDataPoint> {
  * token: it is asked with `next`, then with each page's own `next`; a `next`
  * of `null` says there is nothing older.
  */
-export type HistoryPaging<T extends BaseDataPoint, C> =
-  | { readonly fetch: HistoryFetch<T> }
-  | { readonly next: C | null; readonly fetchPage: HistoryCursorFetch<T, C> };
+export type HistoryPaging<T extends BaseDataPoint, C = never> =
+  | { readonly fetch: HistoryFetch<T>; readonly next?: never; readonly fetchPage?: never }
+  | { readonly next: C | null; readonly fetchPage: HistoryCursorFetch<T, C>; readonly fetch?: never };
 
 /**
  * A load, as `reset` hands it back and `history.load` reads the one on
@@ -38,7 +38,12 @@ export class HistoryLoad {
   private declare readonly brand: never;
 }
 
-/** What `<InfiniteHistory>` reaches through — one per load, so a new one installs a new loader. */
+/**
+ * The contract between `useInfiniteHistory` and the component that pages
+ * it — `<InfiniteHistory>`, or one of your own. One per load, so a new one
+ * means a new loader; `install` starts paging on a chart where the load
+ * stands and returns the teardown, and a load takes one at a time.
+ */
 export interface HistoryLink {
   /** Starts a loader on this chart where the load stands; returns its teardown. */
   install(plot: Plot): () => void;
@@ -71,7 +76,7 @@ export interface InfiniteHistoryState<T extends BaseDataPoint, C = never> {
    * a first page that answers for a symbol already left must not reach it.
    */
   reset(bars: T[], paging: HistoryPaging<T, C> | null): HistoryLoad;
-  /** What `<InfiniteHistory>` pages through — wiring, not for calling. A copy of the value carries it along. */
+  /** What `<InfiniteHistory>` pages through (`HistoryLink`). A copy of the value carries it along. */
   readonly link: HistoryLink;
 }
 
@@ -102,19 +107,21 @@ const NO_LINK: HistoryLink = { install: () => nothing };
  * load `reset` replaced is dropped.
  *
  * ```tsx
- * const history = useInfiniteHistory<OHLC, string>({ coordinates: OHLC_COORDINATES });
+ * const CANDLES = new OHLCAccessor(); // module level
+ * const history = useInfiniteHistory<OHLC, string>({ coordinates: CANDLES });
+ * const { reset } = history; // stable — `history` itself changes with every page
  * useEffect(() => {
  *   let current = true;
  *   api.candles(symbol).then((page) => {
- *     if (current) history.reset(page.bars, { next: page.next, fetchPage: (cursor) => api.candles(symbol, cursor) });
+ *     if (current) reset(page.bars, { next: page.next, fetchPage: (cursor) => api.candles(symbol, cursor) });
  *   });
  *   return () => {
  *     current = false;
  *   };
- * }, [symbol]);
+ * }, [symbol, reset]);
  *
- * <ChartContainer>
- *   <ChartCandles data={history.data} />
+ * <ChartContainer deps={deps} data={history.data}>
+ *   <ChartCandles />
  *   <InfiniteHistory history={history} />
  * </ChartContainer>
  * ```
@@ -174,16 +181,14 @@ export function useInfiniteHistory<T extends BaseDataPoint, C extends NonNullabl
         const sink = (page: T[]) =>
           setHeld((previous) => (previous.load === load ? { data: [...page, ...previous.data], load } : previous));
 
-        let loader: HistoryLoader;
-        let place: (() => C | null) | null = null;
-        if ('fetchPage' in paging) {
+        let loader: CursorHistoryLoader<C>;
+        if (paging.fetchPage !== undefined) {
           if (load.cursor === null) return nothing;
-          const paged = infiniteHistory(plot, sink, paging.fetchPage, { from, cursor: load.cursor, coordinates, screensAhead });
-          place = () => paged.cursor();
-          loader = paged;
+          loader = infiniteHistory(plot, sink, paging.fetchPage, { from, cursor: load.cursor, coordinates, screensAhead });
         } else {
           loader = infiniteHistory(plot, sink, paging.fetch, { from, coordinates, screensAhead });
         }
+        const byToken = paging.fetchPage !== undefined;
 
         load.active = true;
         report(loader.status());
@@ -192,7 +197,7 @@ export function useInfiniteHistory<T extends BaseDataPoint, C extends NonNullabl
         return () => {
           load.active = false;
           off();
-          if (place) load.cursor = place();
+          if (byToken) load.cursor = loader.cursor();
           const last = loader.status();
           if (last === 'done' || last === 'terminated') load.ended = last;
           // An end stays readable; otherwise nothing pages until a remount.
@@ -206,8 +211,8 @@ export function useInfiniteHistory<T extends BaseDataPoint, C extends NonNullabl
   const reset = useMemo(
     () =>
       (bars: T[], paging: HistoryPaging<T, C> | null): HistoryLoad => {
-        const cursor = paging !== null && 'fetchPage' in paging ? paging.next : null;
-        const ended = paging !== null && 'fetchPage' in paging && paging.next === null ? 'done' : null;
+        const cursor = paging !== null && paging.fetchPage !== undefined ? paging.next : null;
+        const ended = paging !== null && paging.fetchPage !== undefined && paging.next === null ? 'done' : null;
         const handle = new HistoryLoad();
         setHeld({ data: bars, load: { handle, paging, cursor, ended, active: false } });
         return handle;

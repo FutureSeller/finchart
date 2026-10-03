@@ -18,8 +18,8 @@ and the directive marks the boundary, so importing it from a server file
 needs a Client Component of your own around it: `deps={browserDeps()}` is a
 function, and this function cannot cross the server–client boundary as a prop —
 create it in a small `"use client"` component and render that from the
-server. The hooks (`usePlot`, `useChartPlot`, `usePlugin`) are client-only,
-as hooks are. SSR is fine: nothing here touches the DOM at import time. The
+server. The hooks (`usePlot`, `useChartPlot`, `usePlugin`, `usePluginState`,
+`useDataSource`, `useInfiniteHistory`) are client-only, as hooks are. SSR is fine: nothing here touches the DOM at import time. The
 whole picture — the client file, `deps` read once, hydration, StrictMode — is
 in [Next.js and React apps](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md).
 
@@ -105,8 +105,8 @@ lives *inside* the package, so it imports from `'../components'`.
 | Series | The thing being drawn | `<ChartCandles>` · `<ChartLine>` · `<ChartSeries>` |
 | Attachment | Something mounted onto the chart — axes, tools, decorations, history | `<XAxis>` · `<Crosshair>` · `<Tooltip>` · `<PriceLine>` · `<Plugin>` · `<InfiniteHistory>` |
 
-**Two lanes** — things that *exist* on the chart are children; *commands* are
-hooks:
+**Two lanes** — things that *exist* on the chart are children; *commands* —
+and the state and adapters around the chart — are hooks:
 
 | Hook | When |
 |---|---|
@@ -115,7 +115,7 @@ hooks:
 | `useChartPlot` | Issue commands from **inside** the container (options, installs) |
 | `usePlot` | Build a chart on your own element, without `<ChartContainer>` |
 | `useDataSource` | Hand a React array to an indicator as a `Source` |
-| `useInfiniteHistory` | Hold paged history as React state — it outlives a chart remount |
+| `useInfiniteHistory` | Hold paged history as React state — it outlives a chart remount; a load is `reset(bars, { next, fetchPage })` and `<InfiniteHistory history>` pages it ([recipe](https://github.com/finchart/finchart/blob/main/apps/docs/examples/infinite-history.md)) |
 
 `plotRef` is for event handlers (a `fitDomains()` button); `onPlot` is for
 wiring **between** containers (`<SyncX>`) — see "Across containers" below.
@@ -144,10 +144,12 @@ for every line) goes through CSS variables, while a one-off like "this
 indicator is orange" is the `style` prop's `line.color`. A series' identity follows React's
 `key` semantics exactly — same slot, same series.
 
-One exception to "changing a prop updates": a series' registration metadata —
-`name`, `color` and `readout` — is fixed when it registers. Changing one of
+Two exceptions to "changing a prop updates". A series' registration metadata —
+`name`, `color` and `readout` — is fixed when it registers: changing one of
 those on the same component leaves the tooltip and legend as they were; give
-the component a new `key` to register it again.
+the component a new `key` to register it again. And `<Plugin>` reinstalls on
+its `deps`, not on a new `install` or `onApi` — both are read when the api is
+installed.
 
 A derived or input series' `coordinates` accessor defines its registration's
 reader. Changing that reference reinstalls the registration so drawing,
@@ -213,17 +215,21 @@ chart needs no component of its own just to call a hook inside it:
 ```tsx
 const [tools, setTools] = useState<DrawingToolsApi | null>(null);
 
-<ChartContainer deps={deps}>
+<ChartContainer deps={deps} data={bars}>
   <Plugin install={(plot) => plot.use(paneMaximize({ gestures: true }))} />
   <ChartPane>
-    <Plugin install={(plot, pane) => pane.use(drawingTools({ plot }))} onApi={setTools} />
+    <Plugin<DrawingToolsApi> install={(plot, pane) => pane.use(drawingTools({ plot }))} onApi={setTools} />
   </ChartPane>
 </ChartContainer>
 <button onClick={() => tools?.begin("trend")}>Trend</button>
 ```
 
-`deps` decides reinstallation, as with `usePlugin`; `install` and `onApi` are
-read when they run, so inline arrows are fine. Inside a component that is
+With a `useState` setter as `onApi`, name the api type as above —
+TypeScript can't infer it from an inline `install` there; an `install`
+declared with typed parameters needs nothing. `deps` decides reinstallation,
+as with `usePlugin`; `install` and `onApi` are
+read when the api is installed — the callback that heard it is the one told
+it's gone — so inline arrows are fine. Inside a component that is
 already in the container, `usePlugin` returns the api directly:
 
 ```tsx
@@ -376,5 +382,6 @@ you want to swap a single series through an imperative handle
 - **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
 - **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
 - **Next.js and React apps** — the client boundary, `deps` read once, SSR, StrictMode — [nextjs.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md)
+- **Infinite history** — paging older data, in React with `useInfiniteHistory` — [infinite-history.md](https://github.com/finchart/finchart/blob/main/apps/docs/examples/infinite-history.md)
 - **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)
 - **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)

@@ -77,6 +77,11 @@ export function ChartPane({
   children,
 }: ChartPaneProps) {
   const api = useChartApi('ChartPane');
+  // Compared as two numbers, so an inline `[0, 100]` is no change. While it's
+  // there it wins over `autoScale`.
+  const domainMin = valueDomain?.[0];
+  const domainMax = valueDomain?.[1];
+  const fixed = domainMin !== undefined && domainMax !== undefined;
   const placementId = useId();
   const parentPlacement = useSeriesPlacement();
   // Reserve the subtree's JSX position even before this pane is acquired.
@@ -125,9 +130,10 @@ export function ChartPane({
     const last = applied.current;
     applied.current = next;
     if (!last) return;
-    const patch = changedFields(last, next);
+    // A fixed range wins while it's there — the autoScale prop waits for it to go.
+    const patch = changedFields(last, next, fixed);
     if (patch) pane.applyOptions(patch);
-  }, [pane, flex, minHeight, valuePadding, autoScale, invert]);
+  }, [pane, flex, minHeight, valuePadding, autoScale, invert, fixed]);
 
   // The factory each pane holds a scale from — the acquisition's first, then
   // every new identity. Compared, not counted, so StrictMode's replay of this
@@ -141,10 +147,13 @@ export function ChartPane({
     api.swapPaneScale(pane, yScale);
   }, [api, pane, yScale]);
 
-  // Compared as two numbers, so an inline `[0, 100]` is no change.
-  const domainMin = valueDomain?.[0];
-  const domainMax = valueDomain?.[1];
+  // Once a fixed range goes, the pane does what `autoScale` says — read at
+  // that moment, never a reason to re-pin the range.
   const domainSet = useRef(false);
+  const autoScaleNow = useRef(autoScale);
+  useLayoutEffect(() => {
+    autoScaleNow.current = autoScale;
+  });
   useEffect(() => {
     if (!pane) return;
     if (domainMin !== undefined && domainMax !== undefined) {
@@ -152,7 +161,7 @@ export function ChartPane({
       domainSet.current = true;
     } else if (domainSet.current) {
       domainSet.current = false;
-      pane.resetValueAxis();
+      if (autoScaleNow.current) pane.resetValueAxis();
     }
   }, [pane, domainMin, domainMax]);
 
@@ -175,7 +184,7 @@ export function ChartPane({
 type PaneFields = Required<Pick<PaneOptions, 'flex' | 'minHeight' | 'valuePadding' | 'autoScale' | 'invert'>>;
 
 /** The fields whose prop value moved since the last pass — `null` when none did. */
-function changedFields(last: PaneFields, next: PaneFields): PaneOptions | null {
+function changedFields(last: PaneFields, next: PaneFields, fixed: boolean): PaneOptions | null {
   const patch: PaneOptions = {};
   let any = false;
   if (last.flex !== next.flex) {
@@ -190,7 +199,7 @@ function changedFields(last: PaneFields, next: PaneFields): PaneOptions | null {
     patch.valuePadding = next.valuePadding;
     any = true;
   }
-  if (last.autoScale !== next.autoScale) {
+  if (!fixed && last.autoScale !== next.autoScale) {
     patch.autoScale = next.autoScale;
     any = true;
   }

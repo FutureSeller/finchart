@@ -4,13 +4,13 @@
  * `components/index.ts` and `hooks/index.ts` are an internal convenience
  * layer (tests import through those paths), and this file explicitly
  * re-lists them. Adding or removing anything here is a deliberate diff.
- * `__tests__/public-api.test.ts` bans `export *` from creeping back into
+ * `scripts/public-barrel-check.mjs` bans `export *` from creeping back into
  * any of the five package barrels.
  *
  * There are four concepts — **container** (the chart) · **pane** (a
  * grouping sharing a value axis) · **series** (the drawing) ·
- * **attachment** (what mounts on top). The three hooks are only for the
- * places those four don't cover.
+ * **attachment** (what mounts on top). The hooks are only for the places
+ * those four don't cover.
  */
 
 // ---- container, data, pane ----

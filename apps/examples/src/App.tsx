@@ -258,8 +258,15 @@ export function App() {
    */
   const history = useInfiniteHistory<OHLC>();
   const { reset } = history;
+  /** The demo's own readout — how many pages the loader asked for. */
+  const [pages, setPages] = useState(0);
   useEffect(() => {
-    reset(candlesIn(INITIAL_FROM, 0), { fetch: pastPage });
+    reset(candlesIn(INITIAL_FROM, 0), {
+      fetch: (before) => {
+        setPages((n) => n + 1);
+        return pastPage(before);
+      },
+    });
   }, [reset]);
 
   const plotRef = useRef<Plot | null>(null);
@@ -430,7 +437,7 @@ export function App() {
         <b>bar-index x axis</b> off and the continuous coordinate system opens
         the weekends up as gaps; turn it on and the bars butt together.
         <br />
-        {history.data.length} bars loaded · history {history.status ?? "not started"}
+        {history.data.length} bars loaded · {pages} follow-up requests · history {history.status ?? "not started"}
         {cursor?.pane
           ? ` · ${cursor.pane === plotRef.current?.mainPane ? "price" : "momentum"} pane · ${dateLabel(cursor.x)} · ${cursor.value?.toFixed(1)}`
           : " · outside the panes"}

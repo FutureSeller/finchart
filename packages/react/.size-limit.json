@@ -1,9 +1,9 @@
 [
   {
-    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 5.7 KB gzip (5731B measured)",
+    "name": "the whole React wrapper — import * (core, dom and react are peers, so excluded) · 5.8 KB gzip (5753B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "5.9 KB",
+    "limit": "6.0 KB",
     "ignore": [
       "@finchart/core",
       "@finchart/dom",

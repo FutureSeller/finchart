@@ -504,7 +504,10 @@ means the end of history (`done`); `terminated` is a fetch that broke its
 contract; `stopped` is a loader that was disposed or lost its handle. For an
 API that pages by a token instead of a time, cursor mode takes `{ from,
 cursor }` and a fetch answering `{ bars, next }`: `next: null` is the end, and
-a page with no older bar but a `next` moves the token and keeps going.
+a page with no older bar but a `next` moves the token and keeps going. The
+loader's `cursor()` reads the token the next fetch would take — moved by an
+empty page too, `null` once done and always in x mode — so a consumer can
+start another loader later from the same place.
 
 The loader defends its cursor: points at or after `before` are trimmed off
 quietly (inclusive end bounds are the norm for exchange REST APIs — left
