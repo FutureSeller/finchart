@@ -555,4 +555,3 @@ describe('useInfiniteHistory', () => {
     expect(out.history?.data).toEqual([...points(100, 120), { x: 120, y: 2 }]);
   });
 });
-

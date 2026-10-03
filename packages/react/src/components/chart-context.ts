@@ -11,8 +11,9 @@ import type { SeriesCollector, SeriesPlacement } from './series-collector';
  * taking up space for nothing.
  */
 /**
- * What `<ChartPane>` hands over at mount. `yScale` is a factory, read once
- * per acquisition — the same vocabulary as `deps.mainPaneYScale`.
+ * What `<ChartPane>` hands over at mount. `yScale` is a factory — called at
+ * acquisition, like `deps.mainPaneYScale`; a later identity change goes
+ * through `swapPaneScale`.
  */
 export interface PaneAcquisition extends PaneOptions {
   yScale?: () => Scale;

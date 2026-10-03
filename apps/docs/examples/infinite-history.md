@@ -1,5 +1,5 @@
 ---
-description: "Infinite history: pan toward the left edge and older bars arrive page by page — infiniteHistory owns the cursor, the threshold, and the in-flight bookkeeping."
+description: "Infinite history: pan toward the left edge and older bars arrive page by page — infiniteHistory owns the cursor, the threshold, and the in-flight bookkeeping; in React, useInfiniteHistory holds the data and the loader's place."
 ---
 
 # Infinite history — infiniteHistory
@@ -12,7 +12,7 @@ import * as mod from "../../examples/src/cases/infinite-history";
 
 <CaseDemo :case="mod" />
 
-The consumer's whole share is two functions: a `fetch` that produces the page
+In this imperative demo, the consumer's whole share is two functions: a `fetch` that produces the page
 of bars strictly before a given x (empty array = the end of history), and a
 `sink` that says where a landed page goes — here one fetch fans out to the
 candle and volume handles. Everything the hand-rolled version had to carry —
@@ -36,23 +36,26 @@ In React, `useInfiniteHistory` holds the data and the loader's place, and
 `<InfiniteHistory history>` inside the chart pages into it:
 
 ```tsx
-const history = useInfiniteHistory<OHLC, string>({ coordinates: OHLC_COORDINATES });
+const CANDLES = new OHLCAccessor(); // module level
+const history = useInfiniteHistory<OHLC, string>({ coordinates: CANDLES });
+const { reset } = history; // stable — `history` itself changes with every page
 useEffect(() => {
   let current = true;
   api.candles(symbol).then((page) => {
     if (!current) return;
-    history.reset(page.bars, {
+    reset(page.bars, {
       next: page.next,
-      fetchPage: (cursor) => api.candles(symbol, cursor), // or { fetch: (before) => … } by time
+      fetchPage: (cursor) => api.candles(symbol, cursor),
     });
+    // Paged by time instead: reset(page.bars, { fetch: (before) => api.candlesBefore(symbol, before) })
   });
   return () => {
     current = false;
   };
-}, [symbol]);
+}, [symbol, reset]);
 
-<ChartContainer deps={deps}>
-  <ChartCandles data={history.data} />
+<ChartContainer deps={deps} data={history.data}>
+  <ChartCandles />
   <InfiniteHistory history={history} />
 </ChartContainer>
 ```
@@ -83,9 +86,10 @@ asking instead of piling up pages nobody draws. Outside React, a consumer that
 starts a new loader from the same place reads the token from the cursor-mode
 loader's `cursor()` — an empty page moves it without reaching the sink.
 
-For a live feed on the same chart, wrap the handle with
-[`conflated`](/examples/realtime) — the two doors compose on one handle and
-are torn down together when the symbol changes.
+For a live feed on the same chart, the imperative example above wraps its
+handle with [`conflated`](/examples/realtime) — the two doors compose on one
+handle and are torn down together when the symbol changes. In React, a live
+edit goes through `history.setData`.
 
 ## Source
 

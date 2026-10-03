@@ -10,7 +10,7 @@ import type { LineDataPoint } from "../../data";
 import { DataError, ContractError } from "../../primitives";
 import { lineSeries } from "../../series";
 import { createPlotModel } from "../../plot/model";
-import { infiniteHistory, type HistoryPage } from "../infinite-history";
+import { infiniteHistory, type HistoryLoader, type HistoryPage } from "../infinite-history";
 
 const points = (from: number, to: number): LineDataPoint[] => {
   const out: LineDataPoint[] = [];
@@ -634,5 +634,34 @@ describe("infiniteHistory — cursor mode", () => {
 
     infiniteHistory(plot, sink, byX, { from: 100 }).dispose();
     infiniteHistory(plot, sink, byToken, { from: 100, cursor: "c1" }).dispose();
+  });
+
+  /**
+   * **Where a loader stands is typed by its mode** — the token's own type in
+   * cursor mode, and nothing in x mode, where the first x held is the place.
+   * The overload order is the one consumers derive types from: the last one
+   * is cursor mode, so `Parameters<typeof infiniteHistory>` is its call and
+   * `ReturnType` a loader every mode's loader can stand in for.
+   */
+  it("reads the token in cursor mode and null in x mode, typed by mode", () => {
+    const { plot } = chart();
+    const { sink } = recordingSink();
+    const byX = infiniteHistory(plot, sink, (before: number) => points(before - 10, before), { from: 100 });
+    const byToken = infiniteHistory(plot, sink, served().fetch, { from: 100, cursor: "c1" });
+
+    const none: null = byX.cursor();
+    const token: string | null = byToken.cursor();
+    expect(none).toBeNull();
+    expect(token).toBe("c1");
+
+    // The base interface asks for no cursor — a consumer's own loader or mock still is one.
+    const mock: HistoryLoader = { status: () => "idle", statusChanges: { subscribe: () => () => undefined }, dispose: () => undefined };
+    const loaders: HistoryLoader[] = [mock, byX, byToken];
+    expect(loaders).toHaveLength(3);
+
+    const held: ReturnType<typeof infiniteHistory>[] = [byX, byToken];
+    const call: Parameters<typeof infiniteHistory>[3] = { from: 100, cursor: "c1" };
+    expect(held).toHaveLength(2);
+    expect(call.cursor).toBe("c1");
   });
 });

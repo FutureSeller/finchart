@@ -216,13 +216,16 @@ loader?.dispose();
 ```
 
 `from` is still the first x held: trimming and gap judgment stay in the
-chart's x. The token is opaque — the loader never compares two — and moves
-only after a page is delivered, so a sink that throws retries with the same
-one. `next: null` ends the history once that page's bars are in. A page
+chart's x. The token is opaque — the loader never compares two. A page that
+keeps older bars moves it only once they're delivered, so a sink that throws
+retries with the same one; a page that keeps none moves it with no delivery. `next: null` ends the history once that page's bars are in. A page
 that keeps no older bar is not the end while it has a `next` (a provider can
 skip a closed session): the loader moves the token and keeps filling. Nine
 such pages in a row terminate the loader with a `DataError` — a fetch that
-never goes back in time.
+never goes back in time. `loader.cursor()` reads the token the next fetch
+would take — moved by those empty pages too, `null` once the history is
+done — which is what a new loader started later from the same place (a
+remounted chart) is given as its `cursor`, with the first x held as `from`.
 
 ## In React
 

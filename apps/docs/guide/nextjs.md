@@ -65,7 +65,9 @@ Development StrictMode mounts, unmounts and mounts again, and replays effects.
 The library is written for that:
 
 - A pane is **acquired** once per mount — twice under the replay — so a
-  `yScale={() => new LogScale()}` factory is called twice and must be pure.
+  `yScale` factory is called twice at mount and must be pure. After that a
+  new factory identity installs a new scale, so pin it (a module constant or
+  `useCallback`) rather than writing it inline.
 - A plugin installed through `usePlugin` is installed, disposed and installed
   again. Its `install` may return `null` for "not yet".
 - A decoration (`<PriceLine>`, `<Markers>`) is added, removed and added

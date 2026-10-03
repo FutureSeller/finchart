@@ -178,15 +178,17 @@ export interface HistoryLoader {
 }
 
 /**
- * A cursor-mode loader — and where it stands, for a consumer that has to
- * start another one later from the same place (a chart remounted under a
- * React key): the first x is in the consumer's own data, the token is here.
+ * What `infiniteHistory` returns — a loader that also says where it stands,
+ * for a consumer that starts another one later from the same place (a chart
+ * remounted under a React key). `C` is the cursor mode's token type; an
+ * x-mode loader is a `CursorHistoryLoader<never>`.
  */
 export interface CursorHistoryLoader<C> extends HistoryLoader {
   /**
    * The token the next fetch would be asked with — moved by every page
    * taken, an empty one included, which never reaches the sink. `null` once
-   * a page said there is none (`done`).
+   * a page said there is none (`done`), and always in x mode, where the
+   * first x held is the place.
    */
   cursor(): C | null;
 }
@@ -240,23 +242,6 @@ const rethrow = (error: unknown): void => {
 function orderOnly<T extends BaseDataPoint>(): CoordinateAccessor<T> {
   return { getX: (point) => point.x, getY: () => null, gapless: true };
 }
-
-/**
- * Cursor mode: `fetch` is asked with `options.cursor`, then with each taken
- * page's `next`. The loader trims and judges by x as in x mode and moves
- * the token only once a page has been delivered — a sink that throws leaves
- * the same token for the retry. `next: null` ends the history after that
- * page is delivered; an empty page with a `next` moves the token and keeps
- * filling a gap. A page that isn't `{ bars, next }` terminates. The x-mode
- * overload below describes the loader itself; this one is declared first so
- * that `ReturnType<typeof infiniteHistory>` stays the x mode's `HistoryLoader`.
- */
-export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<unknown>>(
-  host: InfiniteHistoryHost,
-  sink: HistorySink<T> | HistoryHandle<T>,
-  fetch: HistoryCursorFetch<T, C>,
-  options: InfiniteHistoryCursorOptions<T, C>,
-): CursorHistoryLoader<C>;
 
 /**
  * Loads older data as the view approaches or passes the left edge of what
@@ -340,13 +325,28 @@ export function infiniteHistory<T extends BaseDataPoint>(
   sink: HistorySink<T> | HistoryHandle<T>,
   fetch: HistoryFetch<T>,
   options: InfiniteHistoryOptions<T>,
-): HistoryLoader;
+): CursorHistoryLoader<never>;
+/**
+ * Cursor mode: `fetch` is asked with `options.cursor`, then with each taken
+ * page's `next`. The loader trims and judges by x as in x mode. A page that
+ * keeps older bars moves the token only once they're delivered — a sink
+ * that throws leaves the same token for the retry; a page that keeps none
+ * moves it with no delivery. `next: null` ends the history after that
+ * page is delivered; an empty page with a `next` moves the token and keeps
+ * filling a gap. A page that isn't `{ bars, next }` terminates.
+ */
+export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<unknown>>(
+  host: InfiniteHistoryHost,
+  sink: HistorySink<T> | HistoryHandle<T>,
+  fetch: HistoryCursorFetch<T, C>,
+  options: InfiniteHistoryCursorOptions<T, C>,
+): CursorHistoryLoader<C>;
 export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<unknown>>(
   host: InfiniteHistoryHost,
   sink: HistorySink<T> | HistoryHandle<T>,
   fetch: HistoryFetch<T> | HistoryCursorFetch<T, C>,
   options: InfiniteHistoryOptions<T> | InfiniteHistoryCursorOptions<T, C>,
-): HistoryLoader & { cursor(): unknown } {
+): CursorHistoryLoader<unknown> {
   // The token is opaque — held as it came and handed back as it came.
   let cursor: unknown = options.cursor;
   const cursorMode = cursor !== undefined;
@@ -782,7 +782,6 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     status: () => status,
     statusChanges,
     dispose: stop,
-    // x mode has no token; this reads `undefined` there and is not typed on it.
-    cursor: () => (status === "done" ? null : cursor),
+    cursor: () => (cursorMode && status !== "done" ? cursor : null),
   };
 }

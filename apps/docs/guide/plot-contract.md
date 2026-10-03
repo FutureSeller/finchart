@@ -158,8 +158,9 @@ overlay that's already been torn down.
   - **The declarative lane (`syncSeries`'s `data`) doesn't refit.** Handing over
     an array again can't distinguish "replace" from "prepend", and a series
     mounted later must not jolt the window you're watching out to the union.
-    That's why infinite scroll in React is nothing more than
-    `setState(prev => [...older, ...prev])`.
+    That's why infinite scroll in React is, at bottom,
+    `setState(prev => [...older, ...prev])` — `useInfiniteHistory` does that
+    and also keeps the loader's place across a chart remount.
 - **`setSeries` refits y only.** Every series occupies a different value range
   (line = close, candle = low–high). x is the range you were looking at, so it's kept.
   Data belongs to the registration, so **it isn't inherited from the previous one** — you hand it to the new registration.
@@ -1075,9 +1076,9 @@ core series for you, and `<ChartSeries series={...}>` is the escape hatch for a
 | `<ChartLine style coordinates derive deriveKey input>` | points as a line, indicators included — `style` is `lineSeries(style)`'s `{ line: { color, width, dashArray }, point: { radius, color } }` |
 | `<ChartSeries series={...}>` | when you wrote the drawing yourself |
 
-Things that aren't series have components too. **They mount in two different
-ways** — a plugin gets only its options swapped, while a decoration is taken off
-and put back when its reference changes. `<PriceLine>` and `<Markers>` are the
+Things that aren't series have components too. **The built-in ones mount in two
+different ways** — a plugin gets only its options swapped, while a decoration is
+taken off and put back when its reference changes. `<PriceLine>` and `<Markers>` are the
 exception: each is built once per pane and handed its new props in place, so a
 value that ticks every frame moves the line, not the registration.
 
@@ -1087,6 +1088,8 @@ value that ticks every frame moves the line, not the registration.
 | `<Tooltip formatX formatValue formatRow offset>` · `<Legend formatValue formatRow>` | cursor value boxes (plugins) — a `<Legend>` inside a `<ChartPane>` reads that pane |
 | `<PriceLine>` · `<Markers items>` · `<Watermark>` · `<Span>` | the standard decorations |
 | `<ChartData value>` | the data the series below it will see |
+| `<Plugin install deps onApi>` | any plugin of your own choosing — installed on the pane it sits in, reinstalled when `deps` change, its api handed to `onApi` after commit and `null` before it's disposed |
+| `<InfiniteHistory history>` | pages older data into a `useInfiniteHistory` — see [Infinite history](/examples/infinite-history) |
 
 - **Color goes in as an argument, not as a CSS variable.** A variable like
   `--chart-line` is the default for the whole chart, so it can't paint two lines
@@ -1098,6 +1101,11 @@ value that ticks every frame moves the line, not the registration.
   crosshair off and still receive cursor values.**
 - **The first `<ChartPane>` reuses `mainPane`.** A `Plot` always has a mainPane,
   so making a new one would leave an empty pane taking up space at the top.
+- **A pane's value axis is props.** `valueDomain={[0, 100]}` pins a range (an
+  oscillator's) and wins over `autoScale` while it's set; once removed, the
+  pane does what `autoScale` says. `yScale` is a factory whose identity is the
+  change — a new one installs its scale in place, keeping the pane, its series
+  and its height — so pin it rather than writing it inline.
 - A series left outside any `<ChartPane>` goes to `mainPane`.
 - `<YAxis>` inside a pane configures that pane; outside, it's the default for
   every pane. `<XAxis>` is shared, so you place exactly one.
@@ -1119,8 +1127,9 @@ value that ticks every frame moves the line, not the registration.
 - **The `data` prop flows straight through to the series.** The container sends it
   down through context and `<ChartSeries>` puts it in its own spec — the chart has
   no slot to receive data. So gluing history on is
-  `setState(prev => [...older, ...prev])`, and since the declarative lane doesn't
-  refit, the range you were looking at stays put.
+  `setState(prev => [...older, ...prev])` — or `useInfiniteHistory` with
+  `<InfiniteHistory>`, which does that and keeps the loader's place — and since
+  the declarative lane doesn't refit, the range you were looking at stays put.
 - **With several sources, each series names its own.** The container's `data` is
   the default for the whole chart, and two things override it — the `data` prop
   for a single series, `<ChartData value>` when several look at the same thing.

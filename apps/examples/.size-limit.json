@@ -58,7 +58,7 @@
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 54.5 KB gzip (54510B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 54.5 KB gzip (54536B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

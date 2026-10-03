@@ -1,5 +1,5 @@
 /**
- * `<ChartPane autoScale invert yScale>`.
+ * `<ChartPane autoScale invert yScale valueDomain>`.
  *
  * The two booleans follow the prop-removal rule (back to the default from
  * `PANE_OPTION_DEFAULTS`) and are applied **per changed field** — a grouped
@@ -8,10 +8,11 @@
  * range. The same defect already existed for `flex` itself (a divider drag
  * undone by a `minHeight` change), so that is measured too.
  *
- * `yScale` is a factory read once per acquisition, like `deps.mainPaneYScale`.
- * On the main pane the wrapper keeps the instance it replaced and puts it
- * back on release, so a keyed swap to a pane without `yScale` returns to
- * what was there — not to a fresh default.
+ * `yScale` is a factory called at acquisition, like `deps.mainPaneYScale`,
+ * and again whenever its identity changes, installing the scale it hands
+ * out. On the main pane the wrapper keeps the instance it replaced and puts
+ * it back on release or when the prop goes, so a keyed swap to a pane
+ * without `yScale` returns to what was there — not to a fresh default.
  */
 import type { LineDataPoint, Plot, Scale } from '@finchart/core';
 import { immediateScheduler, lineSeries, LinearScale, LogScale, PANE_OPTION_DEFAULTS } from '@finchart/core';
@@ -183,8 +184,10 @@ describe('<ChartPane yScale>', () => {
     const view = render(ui(factory));
     const installed = plot().panes[1].yScale;
     expect(made).toContain(installed);
+    const calls = made.length;
 
     view.rerender(ui(factory));
+    expect(made).toHaveLength(calls);
     expect(plot().panes[1].yScale).toBe(installed);
 
     view.rerender(ui(other));
@@ -417,6 +420,34 @@ describe('<ChartPane valueDomain>', () => {
     expect(plot().mainPane.autoScale).toBe(false);
 
     view.rerender(ui(false));
+    expect(plot().mainPane.autoScale).toBe(true);
+  });
+
+  /**
+   * **A fixed range wins while it's there.** `autoScale` is the pane's
+   * default directive; `valueDomain` overrides it while present, and once
+   * removed the pane does what `autoScale` says.
+   */
+  it('keeps the range while valueDomain is set, whatever autoScale says, and follows autoScale once it goes', () => {
+    const { deps, ref, plot } = setup();
+    const ui = (fixed: boolean, autoScale: boolean) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane valueDomain={fixed ? [0, 100] : undefined} autoScale={autoScale}>
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>
+    );
+    const view = render(ui(true, false));
+    view.rerender(ui(true, true));
+    expect(plot().mainPane.autoScale).toBe(false);
+    expect(plot().mainPane.yScale.getDomain()).toEqual([0, 100]);
+
+    view.rerender(ui(true, false));
+    view.rerender(ui(false, false));
+    expect(plot().mainPane.autoScale).toBe(false);
+
+    view.rerender(ui(true, false));
+    view.rerender(ui(false, true));
     expect(plot().mainPane.autoScale).toBe(true);
   });
 });
