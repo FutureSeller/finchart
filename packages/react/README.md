@@ -103,16 +103,19 @@ lives *inside* the package, so it imports from `'../components'`.
 | Container | One chart. The door for data, size, and state | `<ChartContainer>` |
 | Pane | A region sharing a value axis. Height comes from `flex` | `<ChartPane>` |
 | Series | The thing being drawn | `<ChartCandles>` · `<ChartLine>` · `<ChartSeries>` |
-| Attachment | Something mounted onto the chart — axes, tools, decorations | `<XAxis>` · `<Crosshair>` · `<Tooltip>` · `<PriceLine>` |
+| Attachment | Something mounted onto the chart — axes, tools, decorations, history | `<XAxis>` · `<Crosshair>` · `<Tooltip>` · `<PriceLine>` · `<Plugin>` · `<InfiniteHistory>` |
 
 **Two lanes** — things that *exist* on the chart are children; *commands* are
 hooks:
 
 | Hook | When |
 |---|---|
-| `usePlugin` | Install and tear down a plugin (`drawingTools`, `paneMaximize`, `attach*`) |
+| `usePlugin` | Install and tear down a plugin (`drawingTools`, `paneMaximize`, `attach*`) from a component inside the container |
 | `usePluginState` | Subscribe to a plugin's state as React state (tool mode, selection) |
 | `useChartPlot` | Issue commands from **inside** the container (options, installs) |
+| `usePlot` | Build a chart on your own element, without `<ChartContainer>` |
+| `useDataSource` | Hand a React array to an indicator as a `Source` |
+| `useInfiniteHistory` | Hold paged history as React state — it outlives a chart remount |
 
 `plotRef` is for event handlers (a `fitDomains()` button); `onPlot` is for
 wiring **between** containers (`<SyncX>`) — see "Across containers" below.
@@ -203,6 +206,26 @@ Two exceptions:
   (install/teardown lifetime), `useChartPlot` (configuration from inside the
   container), `plotRef` (event handlers).
 
+A tool install is a `<Plugin>` child; `onApi` hands its api to the parent —
+after commit, and `null` before it's disposed — so a toolbar outside the
+chart needs no component of its own just to call a hook inside it:
+
+```tsx
+const [tools, setTools] = useState<DrawingToolsApi | null>(null);
+
+<ChartContainer deps={deps}>
+  <Plugin install={(plot) => plot.use(paneMaximize({ gestures: true }))} />
+  <ChartPane>
+    <Plugin install={(plot, pane) => pane.use(drawingTools({ plot }))} onApi={setTools} />
+  </ChartPane>
+</ChartContainer>
+<button onClick={() => tools?.begin("trend")}>Trend</button>
+```
+
+`deps` decides reinstallation, as with `usePlugin`; `install` and `onApi` are
+read when they run, so inline arrows are fine. Inside a component that is
+already in the container, `usePlugin` returns the api directly:
+
 ```tsx
 const tools = usePlugin((plot, pane) => pane.use(drawingTools({ plot })), []);
 // tools?.begin("trend") — the api arrives after commit
@@ -285,10 +308,16 @@ order — no `useChartPlot` + `useEffect` shim needed:
 <ChartContainer deps={deps} data={bars} options={{ shiftVisibleRangeOnNewBar: true, rightOffset: 5 }}>
 ```
 
-**A pane's value scale is a prop.** `<ChartPane yScale={() => new LogScale()}>`
-— a factory read once per acquisition (twice under StrictMode's replay), like
-`deps.mainPaneYScale`, so an inline arrow is fine and the factory must be pure. `autoScale` and `invert` are props too; both are
-directives applied when they change, and an axis drag turning a fixed range
+**A pane's value scale is a prop.** `<ChartPane yScale={log ? () => new LogScale() : undefined}>`
+is the log toggle — the pane, its series and its height stay. A new factory
+is called and the scale swapped only when it hands out another kind than the
+pane holds, so an inline arrow costs an allocation, never a swap, and the
+factory must be pure; removing it puts back a linear scale (on the main pane,
+the instance it replaced). A fixed range is `valueDomain={[0, 100]}` — an
+oscillator pane, declared like any other. `valueDomain`, `autoScale` and
+`invert` are directives applied when they change (`valueDomain` by its two
+numbers, so an inline array is fine; removing it hands the axis back to
+`autoScale`), and an axis drag turning a fixed range
 on flips `autoScale` off on the pane the way a divider drag moves `flex` — and
 a double-click on that axis, or `fitDomains()`, flips it back on. To follow
 those changes in React state (an "Auto" toggle that tracks an axis drag),

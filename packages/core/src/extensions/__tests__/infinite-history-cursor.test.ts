@@ -573,6 +573,37 @@ describe("infiniteHistory — cursor mode", () => {
     expect(loader.status()).toBe("stopped");
   });
 
+  /**
+   * **Where the loader stands, readable.** A consumer whose chart remounts
+   * (a React key) starts a new loader from what it holds — the first x is
+   * in its data, but the token is not: an empty page moves it without
+   * reaching the sink. `cursor()` is the token the next fetch would be
+   * asked with, `null` once there is none.
+   */
+  it("reads the token the next fetch would take — moved by an empty page too, null once done", async () => {
+    const { plot, handle } = chart();
+    const { fetch } = served(
+      { bars: [], next: "c2" },
+      { bars: points(90, 100), next: "c3" },
+      { bars: points(80, 90), next: null },
+    );
+    const loader = infiniteHistory(plot, recordingSink(handle).sink, fetch, { from: 100, cursor: "c1" });
+    expect(loader.cursor()).toBe("c1");
+
+    // Prefetch without a gap: the empty page moves the token and waits.
+    plot.setVisibleRange(103, 118);
+    plot.setVisibleRange(102, 117);
+    await settle();
+    expect(loader.cursor()).toBe("c2");
+
+    plot.setVisibleRange(85, 105);
+    await settle();
+    plot.render();
+    await settle();
+    expect(loader.status()).toBe("done");
+    expect(loader.cursor()).toBeNull();
+  });
+
   it("refuses a null starting cursor — null means there is no next page", () => {
     const { plot } = chart();
     expect(() =>

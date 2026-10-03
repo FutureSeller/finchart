@@ -33,15 +33,25 @@ export interface ChartPaneProps {
   /** Flip the value axis so larger values sit lower. Defaults to false. */
   invert?: boolean;
   /**
-   * The value scale, as a factory — read **once per acquisition**, like
-   * `deps.mainPaneYScale`; a later identity change is ignored, so an inline
-   * `() => new LogScale()` is fine and the factory must be pure. On the main
-   * pane the scale it replaces is kept and put back when this pane goes —
-   * the instance, carrying whatever range the pane shows at that moment —
-   * and a `mainPane.setYScale` made while this pane holds it is overwritten
-   * by that restore.
+   * The value scale, as a factory. A log toggle is a change of this prop —
+   * the pane, its series and its height stay: when the factory's identity
+   * changes it is called, and the scale is swapped only if it hands out
+   * another kind than the pane holds, so an inline `() => new LogScale()`
+   * costs one allocation a render and never a swap; the factory must be
+   * pure. Removing it puts back a linear scale — on the main pane, the
+   * instance this replaced, carrying whatever range the pane shows at that
+   * moment; that restore also runs when this pane goes, and overwrites a
+   * `mainPane.setYScale` made while this pane held it.
    */
   yScale?: () => Scale;
+  /**
+   * A fixed value range, `[min, max]` — an oscillator's 0..100. A directive
+   * like `autoScale`: applied on mount and when the two numbers change
+   * (a new array with the same values is no change), so the user's axis
+   * drag in between stays. Setting it turns `autoScale` off; removing it
+   * hands the axis back to `autoScale`.
+   */
+  valueDomain?: readonly [number, number];
   children?: ReactNode;
 }
 
@@ -63,6 +73,7 @@ export function ChartPane({
   autoScale = PANE_OPTION_DEFAULTS.autoScale,
   invert = PANE_OPTION_DEFAULTS.invert,
   yScale,
+  valueDomain,
   children,
 }: ChartPaneProps) {
   const api = useChartApi('ChartPane');
@@ -117,6 +128,32 @@ export function ChartPane({
     const patch = changedFields(last, next);
     if (patch) pane.applyOptions(patch);
   }, [pane, flex, minHeight, valuePadding, autoScale, invert]);
+
+  // The scale the acquisition built is the first pass; after that, a new factory is a swap.
+  const scaleApplied = useRef<Pane | null>(null);
+  useEffect(() => {
+    if (!pane) return;
+    if (scaleApplied.current !== pane) {
+      scaleApplied.current = pane;
+      return;
+    }
+    api.swapPaneScale(pane, yScale);
+  }, [api, pane, yScale]);
+
+  // Compared as two numbers, so an inline `[0, 100]` is no change.
+  const domainMin = valueDomain?.[0];
+  const domainMax = valueDomain?.[1];
+  const domainSet = useRef(false);
+  useEffect(() => {
+    if (!pane) return;
+    if (domainMin !== undefined && domainMax !== undefined) {
+      pane.setValueDomain(domainMin, domainMax);
+      domainSet.current = true;
+    } else if (domainSet.current) {
+      domainSet.current = false;
+      pane.resetValueAxis();
+    }
+  }, [pane, domainMin, domainMax]);
 
   // Children claim their slot here during the render phase, and it goes to the pane after commit.
   const collector = pane ? api.seriesCollector(pane) : null;

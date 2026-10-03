@@ -35,6 +35,7 @@ export type {
   HistoryCursorFetch,
   HistoryFetch,
   HistoryHandle,
+  CursorHistoryLoader,
   HistoryLoader,
   HistoryOptionsBase,
   HistoryPage,

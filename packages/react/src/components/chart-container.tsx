@@ -9,6 +9,7 @@ import type {
   Scale,
   XDomainChangePayload,
 } from '@finchart/core';
+import { LinearScale } from '@finchart/core';
 import type { BrowserDeps, ThemeObserverOptions } from '@finchart/dom';
 import type { AriaRole, CSSProperties, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -304,6 +305,27 @@ export function ChartContainer<T extends BaseDataPoint>({
           plot.mainPane.setYScale(yScale());
         }
         return plot.mainPane;
+      },
+
+      swapPaneScale(pane: Pane, yScale: (() => Scale) | undefined): void {
+        const main = pane === plot.mainPane;
+        if (yScale) {
+          const next = yScale();
+          // A log toggle swaps the kind; a new closure for the same kind is not a change.
+          if (Object.getPrototypeOf(next) === Object.getPrototypeOf(pane.yScale)) return;
+          if (main && !previousScale.current) previousScale.current = pane.yScale;
+          pane.setYScale(next);
+          return;
+        }
+        if (main) {
+          const previous = previousScale.current;
+          if (previous) {
+            previousScale.current = null;
+            pane.setYScale(previous);
+          }
+          return;
+        }
+        if (!(pane.yScale instanceof LinearScale)) pane.setYScale(new LinearScale());
       },
 
       releasePane(pane: Pane): void {

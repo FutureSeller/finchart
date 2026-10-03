@@ -19,7 +19,7 @@ import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef, StrictMode } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ChartContainer, ChartPane, ChartSeries } from '../components';
+import { ChartContainer, ChartPane, ChartSeries, Plugin } from '../components';
 import { layersSpy } from './fake-layers';
 
 afterEach(cleanup);
@@ -123,24 +123,73 @@ describe('<ChartPane autoScale invert>', () => {
 });
 
 describe('<ChartPane yScale>', () => {
-  it('calls the factory once per acquisition and ignores a later identity change', () => {
+  /**
+   * **A log toggle is a prop change, not a remount.** The factory used to be
+   * read once, so a toggle took a `key` — and the remount threw away every
+   * series in the pane, the indicators built on them and a dragged height.
+   */
+  it('swaps the scale when the factory hands out another kind, keeping the pane and what is in it', () => {
     const { deps, ref, plot } = setup();
     const { made, factory } = logFactory();
-    const view = render(
+    let installs = 0;
+    const install = () => {
+      installs += 1;
+      return { dispose: () => undefined };
+    };
+    const ui = (yScale: (() => Scale) | undefined) => (
       <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane yScale={factory} />
-      </ChartContainer>,
+        <ChartPane />
+        <ChartPane yScale={yScale}>
+          <ChartSeries series={lineSeries()} />
+          <Plugin install={install} />
+        </ChartPane>
+      </ChartContainer>
     );
-    expect(made).toHaveLength(1);
-    expect(plot().mainPane.yScale).toBe(made[0]);
+    const view = render(ui(undefined));
+    const pane = plot().panes[1];
+    act(() => pane.applyOptions({ flex: 2 }));
 
-    view.rerender(
+    view.rerender(ui(factory));
+    expect(plot().panes[1]).toBe(pane);
+    expect(pane.yScale).toBe(made[0]);
+    expect(pane.flex).toBe(2);
+    expect(installs).toBe(1);
+
+    view.rerender(ui(undefined));
+    expect(pane.yScale).toBeInstanceOf(LinearScale);
+    expect(pane.valueExtent()).not.toBeNull();
+    expect(installs).toBe(1);
+  });
+
+  it('leaves the scale alone when a new factory hands out the same kind — an inline arrow is fine', () => {
+    const { deps, ref, plot } = setup();
+    const ui = () => (
       <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane yScale={() => new LinearScale()} />
-      </ChartContainer>,
+        <ChartPane yScale={() => new LogScale()} />
+      </ChartContainer>
     );
-    expect(made).toHaveLength(1);
-    expect(plot().mainPane.yScale).toBe(made[0]);
+    const view = render(ui());
+    const installed = plot().mainPane.yScale;
+
+    view.rerender(ui());
+    expect(plot().mainPane.yScale).toBe(installed);
+  });
+
+  it('on the main pane, removing the prop puts back the instance it replaced', () => {
+    const { deps, ref, plot } = setup();
+    const view = render(<ChartContainer deps={deps} data={data} plotRef={ref} />);
+    const built = plot().mainPane.yScale;
+    const ui = (log: boolean) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane yScale={log ? () => new LogScale() : undefined} />
+      </ChartContainer>
+    );
+    view.rerender(ui(false));
+    view.rerender(ui(true));
+    expect(plot().mainPane.yScale).toBeInstanceOf(LogScale);
+
+    view.rerender(ui(false));
+    expect(plot().mainPane.yScale).toBe(built);
   });
 
   it('gives a pane below the main one its own scale from the factory', () => {
@@ -286,5 +335,53 @@ describe('<ChartPane yScale>', () => {
       </ChartContainer>,
     );
     expect(() => view.unmount()).not.toThrow();
+  });
+});
+
+/**
+ * `<ChartPane valueDomain>` — a fixed value axis declared, the way an
+ * oscillator pane pins 0..100. Without it the only way was the indicator's
+ * own pane, which a period change rebuilt — at the bottom of the stack,
+ * without its drawings or height.
+ */
+describe('<ChartPane valueDomain>', () => {
+  it('pins the range on mount and on a change of values, not of array identity', () => {
+    const { deps, ref, plot } = setup();
+    const ui = (min: number, max: number) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane />
+        <ChartPane valueDomain={[min, max]}>
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>
+    );
+    const view = render(ui(0, 100));
+    const pane = plot().panes[1];
+    expect(pane.yScale.getDomain()).toEqual([0, 100]);
+    expect(pane.autoScale).toBe(false);
+
+    // The user zooms the axis; a re-render with the same values leaves that alone.
+    act(() => pane.setValueDomain(20, 80));
+    view.rerender(ui(0, 100));
+    expect(pane.yScale.getDomain()).toEqual([20, 80]);
+
+    view.rerender(ui(-100, 0));
+    expect(pane.yScale.getDomain()).toEqual([-100, 0]);
+  });
+
+  it('hands the axis back to autoScale when removed', () => {
+    const { deps, ref, plot } = setup();
+    const ui = (fixed: boolean) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane valueDomain={fixed ? [0, 100] : undefined}>
+          <ChartSeries series={lineSeries()} />
+        </ChartPane>
+      </ChartContainer>
+    );
+    const view = render(ui(true));
+    expect(plot().mainPane.autoScale).toBe(false);
+
+    view.rerender(ui(false));
+    expect(plot().mainPane.autoScale).toBe(true);
   });
 });

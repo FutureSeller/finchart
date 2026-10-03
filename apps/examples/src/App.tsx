@@ -1,6 +1,6 @@
 import { browserDeps } from "@finchart/dom";
 import type { CrosshairPayload, DataView, HistogramPoint, LineDataPoint, OHLC, Plot } from "@finchart/core";
-import { OHLCAccessor, barIndexX, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
+import { OHLCAccessor, barIndexX, histogramSeries, timeTicks } from "@finchart/core";
 import {
   ChartCandles,
   ChartContainer,
@@ -8,6 +8,7 @@ import {
   ChartPane,
   ChartSeries,
   Crosshair,
+  InfiniteHistory,
   Legend,
   PriceLine,
   Tooltip,
@@ -15,9 +16,10 @@ import {
   XAxis,
   YAxis,
   useChartPlot,
+  useInfiniteHistory,
 } from "@finchart/react";
 import { drawingTools } from "@finchart/tools";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Bar number → trading day. **Weekends are skipped** — every five bars leave a
@@ -223,46 +225,10 @@ function ChartSetup({
   return null;
 }
 
-/**
- * The infinite scroll, as the React recipe: the sink is a setState prepend
- * (declarative `data` doesn't refit, so the window you're looking at stays
- * put), the fetch is above, and the loader owns the cursor, the pixel
- * threshold, in-flight dedup, and the refit/fit-all guard — everything the
- * 60-line hand-rolled listener that used to live here did by hand, plus the
- * chaining it documented but skipped ("hand over one page and the rest of
- * the gap stays empty until the next gesture").
- *
- * It lives inside the container for the same reason `ChartSetup` does: on
- * the coordinate-system toggle (a `key` remount), `useChartPlot` hands the
- * chart of the moment, and the effect re-winds the loader against it. The
- * seed is read through a ref at wind time — the loader owns the cursor from
- * there, so the effect must not re-run when a landing changes `firstX`.
- */
-function ChartHistory({
-  firstX,
-  onPage,
-}: {
-  firstX: number;
-  onPage: (older: OHLC[]) => void;
-}) {
-  const plot = useChartPlot();
-  const seed = useRef(firstX);
-  seed.current = firstX;
-
-  useEffect(() => {
-    const loader = infiniteHistory(plot, onPage, pastPage, { from: seed.current });
-    return () => loader.dispose();
-  }, [plot, onPage]);
-
-  return null;
-}
-
 export function App() {
   const [mode, setMode] = useState<Mode>("candle");
   const [showGrid, setShowGrid] = useState(true);
   const [cursor, setCursor] = useState<CrosshairPayload | null>(null);
-  const [loaded, setLoaded] = useState(-INITIAL_FROM);
-  const [pages, setPages] = useState(0);
   const [indicators, setIndicators] = useState(true);
   const [crosshair, setCrosshair] = useState(true);
   const [barIndex, setBarIndex] = useState(true);
@@ -284,20 +250,18 @@ export function App() {
   );
 
   /**
-   * The data is just state — infinite scroll needs no imperative API.
-   * Declarative `data` doesn't refit, by rule, so prepending history leaves the
-   * window you were looking at exactly where it was.
+   * The data is just state — infinite scroll needs no imperative API. The
+   * history holds it, with the loader's place: the coordinate-system toggle
+   * (a `key` remount) resumes paging from the first bar held. Declarative
+   * `data` doesn't refit, by rule, so prepending history leaves the window
+   * you were looking at exactly where it was.
    */
-  const [candles, setCandles] = useState(() => candlesIn(INITIAL_FROM, 0));
+  const history = useInfiniteHistory<OHLC>({ fetch: pastPage });
+  const { reset } = history;
+  useEffect(() => reset(candlesIn(INITIAL_FROM, 0)), [reset]);
 
   const plotRef = useRef<Plot | null>(null);
 
-  /** Where a landed page goes — the counters are the demo's own readouts. */
-  const onPage = useCallback((older: OHLC[]) => {
-    setCandles((prev) => [...older, ...prev]);
-    setLoaded((n) => n + older.length);
-    setPages((n) => n + 1);
-  }, []);
 
   return (
     <main style={{ fontFamily: "system-ui", padding: 24 }}>
@@ -376,7 +340,7 @@ export function App() {
       <ChartContainer
         key={barIndex ? "bar-index" : "continuous"}
         deps={deps}
-        data={candles}
+        data={history.data}
         showGrid={showGrid}
         paneGap={16}
         plotRef={plotRef}
@@ -400,7 +364,7 @@ export function App() {
         }
       >
         <ChartSetup barIndex={barIndex} drawings={drawings} />
-        <ChartHistory firstX={candles[0].x} onPage={onPage} />
+        <InfiniteHistory history={history} />
         <XAxis ticks={xTimeTicks} />
 
         {/* The crosshair is a decoration, so it sits outside the panes — it crosses both */}
@@ -464,7 +428,7 @@ export function App() {
         <b>bar-index x axis</b> off and the continuous coordinate system opens
         the weekends up as gaps; turn it on and the bars butt together.
         <br />
-        {loaded} bars loaded · {pages} follow-up requests
+        {history.data.length} bars loaded · history {history.status ?? "not started"}
         {cursor?.pane
           ? ` · ${cursor.pane === plotRef.current?.mainPane ? "price" : "momentum"} pane · ${dateLabel(cursor.x)} · ${cursor.value?.toFixed(1)}`
           : " · outside the panes"}

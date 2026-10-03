@@ -47,6 +47,11 @@ export type {
   WatermarkProps,
 } from "./components/decorations";
 
+export { InfiniteHistory } from "./components/infinite-history";
+export type { InfiniteHistoryProps } from "./components/infinite-history";
+export { Plugin } from "./components/plugin";
+export type { PluginProps } from "./components/plugin";
+
 // ---- axes ----
 export { XAxis, YAxis } from "./components/axes";
 export type { XAxisProps, YAxisProps } from "./components/axes";
@@ -60,9 +65,17 @@ export { useChartPlot } from "./components/chart-context";
 export type { ChartApi } from "./components/chart-context";
 export type { SeriesCollector } from "./components/series-collector";
 
-// ---- the three hooks ----
+// ---- the hooks ----
 export { usePlot } from "./hooks/use-chart";
 export type { UsePlotOptions } from "./hooks/use-chart";
 export { usePlugin } from "./hooks/use-plugin";
 export { usePluginState } from "./hooks/use-plugin-state";
 export { useDataSource } from "./hooks/use-data-source";
+export { useInfiniteHistory } from "./hooks/use-infinite-history";
+export type {
+  CursorHistory,
+  InfiniteHistoryState,
+  UseCursorHistoryOptions,
+  UseInfiniteHistoryOptions,
+  XHistory,
+} from "./hooks/use-infinite-history";
