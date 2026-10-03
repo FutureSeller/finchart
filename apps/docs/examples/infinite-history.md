@@ -32,17 +32,39 @@ transform never declares one).
 The status line reads the loader's `status()` / `statusChanges` pair — the
 same snapshot-plus-subscription shape `usePluginState` consumes in React.
 
-In React, the sink is a `setState` prepend — see the wrapper demo's
-`ChartHistory` component (`apps/examples/src/App.tsx`) for the recipe.
+In React, `useInfiniteHistory` holds the data and the loader's place, and
+`<InfiniteHistory history>` inside the chart pages into it:
+
+```tsx
+const history = useInfiniteHistory<OHLC, string>({
+  fetchPage: (cursor) => api.candles(symbol, cursor), // or fetch: (before) => … by time
+  coordinates: OHLC_COORDINATES,
+});
+useEffect(() => {
+  api.candles(symbol).then((page) => history.reset(page.bars, page.next));
+}, [symbol]);
+
+<ChartContainer deps={deps}>
+  <ChartCandles data={history.data} />
+  <InfiniteHistory history={history} />
+</ChartContainer>
+```
+
+`history.data` is React state — pass it as the series' data and edit a live
+bar with `history.setData`; `history.status` is the loader's state as React
+state. The place outlives the chart: a chart remounted under a `key` resumes
+from the first bar held and the token last taken, an end stays an end, and a
+page landing for a load `reset` replaced is dropped. The wrapper demo
+(`apps/examples/src/App.tsx`) pages by time this way.
 
 **A page counts once it reaches the chart.** The loader asks for the next page
 only when the chart holds the one before it (`plot.getDataRange()` reaches the
 page's first x) — a `setState` prepend lands a frame later, and the loader looks
 again on that frame. A page the chart refuses never lands, so the loader stops
-asking instead of piling up pages nobody draws. If the chart can remount while
-the data lives above it (state that outlives the container), keep the loader's
-place with the data too — its first x and paging token — and install from there,
-or the new loader fetches the first page again on top of bars that hold it.
+asking instead of piling up pages nobody draws. Outside React, a consumer that
+starts a new loader from the same place reads the token from the cursor-mode
+loader's `cursor()` — an empty page moves it without reaching the sink.
+
 For a live feed on the same chart, wrap the handle with
 [`conflated`](/examples/realtime) — the two doors compose on one handle and
 are torn down together when the symbol changes.

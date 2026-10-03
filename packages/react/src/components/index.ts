@@ -23,6 +23,10 @@ export type {
 } from './decorations';
 export { SyncCrosshair, SyncX } from './sync-x';
 export type { SyncXProps } from './sync-x';
+export { InfiniteHistory } from './infinite-history';
+export type { InfiniteHistoryProps } from './infinite-history';
+export { Plugin } from './plugin';
+export type { PluginProps } from './plugin';
 export { XAxis, YAxis } from './axes';
 export type { XAxisProps, YAxisProps } from './axes';
 export { useChartPlot } from './chart-context';

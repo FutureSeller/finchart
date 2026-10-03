@@ -276,6 +276,7 @@ export type {
   ConflatedOptions,
   CrosshairLine,
   CrosshairLineOptions,
+  CursorHistoryLoader,
   HistoryCursorFetch,
   HistoryFetch,
   HistoryHandle,
