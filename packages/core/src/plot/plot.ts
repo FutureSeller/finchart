@@ -589,7 +589,13 @@ export class Plot
         // Only x: an autoScale value axis follows the new window on the render, and a
         // full value refit here would scan every point on each streamed tick.
         else if (this.xViewport.followsData) this.xViewport.fit(true);
-        else this.xViewport.followNewBar(previousMax, range);
+        else {
+          // A window at the end follows a new bar first (and stops being a
+          // guess); one asked for past the data then goes where it was asked,
+          // now that more of the data may be here → `XViewport.resolveWanted`.
+          this.xViewport.followNewBar(previousMax, range);
+          this.xViewport.resolveWanted();
+        }
       },
     ], (step) => step());
     // An autoScale pane is fitted to the settled visible range by the render.
@@ -1428,6 +1434,16 @@ export class Plot
    * answer "there's nothing to draw," so no separate empty-state guard is
    * needed.
    */
+  /**
+   * The x range of the data the chart holds, in data x — every series in
+   * every pane, as one union. `null` when nothing is held. The same value
+   * `xDomainChange` carries as `dataRange`, readable when no x event fires
+   * (a prepend or a declarative update never moves the domain).
+   */
+  getDataRange(): Range | null {
+    return this.dataRange;
+  }
+
   private get dataRange(): Range | null {
     return this.paneStack.xRange();
   }

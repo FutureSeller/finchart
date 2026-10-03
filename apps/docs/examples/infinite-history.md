@@ -34,6 +34,15 @@ same snapshot-plus-subscription shape `usePluginState` consumes in React.
 
 In React, the sink is a `setState` prepend — see the wrapper demo's
 `ChartHistory` component (`apps/examples/src/App.tsx`) for the recipe.
+
+**A page counts once it reaches the chart.** The loader asks for the next page
+only when the chart holds the one before it (`plot.getDataRange()` reaches the
+page's first x) — a `setState` prepend lands a frame later, and the loader looks
+again on that frame. A page the chart refuses never lands, so the loader stops
+asking instead of piling up pages nobody draws. If the chart can remount while
+the data lives above it (state that outlives the container), keep the loader's
+place with the data too — its first x and paging token — and install from there,
+or the new loader fetches the first page again on top of bars that hold it.
 For a live feed on the same chart, wrap the handle with
 [`conflated`](/examples/realtime) — the two doors compose on one handle and
 are torn down together when the symbol changes.

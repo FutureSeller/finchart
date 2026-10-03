@@ -73,6 +73,16 @@ export class XViewport {
    */
   private pending: Range | null = null;
 
+  /**
+   * A window asked for in data x that starts before the data held — a jump to
+   * a date not loaded yet. The bar index has no slot for an x it doesn't hold,
+   * so the domain was placed by extrapolating the held spacing, a guess that
+   * misses as soon as older bars with another spacing arrive. Kept as x and
+   * re-placed on every data change (`resolveWanted`) until the user moves the
+   * view, or the window sits inside the data and the placement is exact.
+   */
+  private wanted: Range | null = null;
+
   /** The right edge of data as last known (in data x). The basis for detecting a new bar. */
   private lastMax: number | null = null;
 
@@ -126,7 +136,30 @@ export class XViewport {
 
     this.fittedOnce = true;
     this.pending = null;
+    const range = this.deps.dataRange();
+    // Past the data means past the half bar a fit leaves before the first
+    // point — a window that merely shows the first bar whole is not a guess.
+    this.wanted = range !== null &&
+      this.deps.x.toDomain(fromX) < this.deps.x.toDomain(range.min) - this.halfBars()[0]
+      ? { min: fromX, max: toX }
+      : null;
     this.setDomain(this.deps.x.toDomain(fromX), this.deps.x.toDomain(toX));
+  }
+
+  /**
+   * Re-places a window asked for past the data (`wanted`) after the data
+   * changed — older bars may have arrived and the guess can be corrected.
+   * `false` when there is nothing to re-place.
+   */
+  resolveWanted(): boolean {
+    const wanted = this.wanted;
+    if (wanted === null) return false;
+    const range = this.deps.dataRange();
+    if (range === null) return false;
+    // Inside the data the placement is exact — nothing left to correct.
+    if (wanted.min >= range.min) this.wanted = null;
+    this.setDomain(this.deps.x.toDomain(wanted.min), this.deps.x.toDomain(wanted.max));
+    return true;
   }
 
   /**
@@ -156,6 +189,7 @@ export class XViewport {
     // starting domain — it is the first one fitted to data.
     const first = !this.fittedOnce;
     this.fittedOnce = true;
+    this.wanted = null;
 
     // If a window was chosen before data did, apply it instead of
     // fitting — the mapping has the index set up by now, so `toDomain`
@@ -293,6 +327,9 @@ export class XViewport {
     const [min, max] = this.deps.scale.getDomain();
     const previousDomainMax = this.deps.x.toDomain(previousMax);
     if (max < previousDomainMax) return;
+    // The window follows the newest bar from here — a window asked for
+    // earlier has been overtaken.
+    this.wanted = null;
 
     /**
      * Never overshoots the live target (`scrollToRealTime`'s
@@ -352,6 +389,8 @@ export class XViewport {
    * in on its own.
    */
   pan(offset: number): void {
+    // The user moved the view — a window asked for earlier is theirs now.
+    this.wanted = null;
     const [min, max] = this.deps.scale.getDomain();
     const bounded = this.clampPan(offset, min, max);
     this.setDomain(min + bounded, max + bounded);
@@ -363,6 +402,7 @@ export class XViewport {
     // (`requirePositive`, `requireFinite`). A hand-written guard tends to
     // get the error message wrong.
     requirePositive(factor, "zoom factor");
+    this.wanted = null;
     requireFinite(center, "zoom center");
 
     /**

@@ -801,6 +801,7 @@ reader:
 
 ```ts
 plot.getVisibleRange();   // { min, max } in data x, or null before the first fit
+plot.getDataRange();      // { min, max } of the data held, or null when empty
 plot.on("panesChange", () => renderPaneList(plot.panes));
 ```
 
@@ -839,6 +840,13 @@ The chart keeps no restore door for its view. A window chosen before the data
 arrives (`setVisibleRange` at mount, a date jump) lands in place of the first
 fit **if it touches the data's x range** (an endpoint in common counts); one
 that misses the data entirely is dropped and the first fit runs as usual.
+
+A window set **with** data that starts before the data held — a jump to a date
+not loaded yet — is placed by extrapolating the held spacing (the bar index has
+no slot for an x it doesn't hold). The chart keeps the x you asked for and
+re-places the window each time the data changes, so it lands on that date once
+the history arrives. It lets go when you pan or zoom, when the window follows
+a new bar, or once the window sits inside the data.
 
 ### crosshair
 

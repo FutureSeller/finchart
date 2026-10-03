@@ -62,9 +62,20 @@ function heldFetch() {
   };
 }
 
-function recordingSink() {
+/**
+ * Records every page. Given the chart's handle, it also lands each page
+ * there — a page counts once the chart holds it, so a test that expects the
+ * loader to keep going has to let its pages reach the chart.
+ */
+function recordingSink(handle?: { prepend(points: LineDataPoint[]): void }) {
   const pages: LineDataPoint[][] = [];
-  return { pages, sink: (page: LineDataPoint[]) => void pages.push(page) };
+  return {
+    pages,
+    sink: (page: LineDataPoint[]) => {
+      pages.push(page);
+      handle?.prepend(page);
+    },
+  };
 }
 
 /** Lets a whole landing chain (fetch → deliver → re-judge → fetch …) settle. */
@@ -163,7 +174,7 @@ describe("infiniteHistory", () => {
       { x: 5, t: 100, y: 1 },
       { x: 6, t: 110, y: 1 },
     ];
-    model.plot.mainPane.addSeries({ series: lineSeries(), data: held, coordinates: byT });
+    const timed = model.plot.mainPane.addSeries({ series: lineSeries(), data: held, coordinates: byT });
     const calls: number[] = [];
     const pages: Timed[][] = [];
     // Ascending in t, and t is what the cursor speaks — raw x is unrelated.
@@ -174,7 +185,10 @@ describe("infiniteHistory", () => {
     ];
     const loader = infiniteHistory<Timed>(
       model.plot,
-      (older) => void pages.push(older),
+      (older) => {
+        pages.push(older);
+        timed.prepend(older);
+      },
       (before) => {
         calls.push(before);
         return calls.length === 1 ? page : [];
@@ -276,9 +290,9 @@ describe("infiniteHistory", () => {
   });
 
   it("guard 5 + 14: a landing that still leaves a gap chains without events, cursor strictly receding", async () => {
-    const { plot } = chart();
-    const { calls, fetch } = servedFetch(points(80, 100), points(60, 80), points(40, 60));
-    const { pages, sink } = recordingSink();
+    const { plot, handle } = chart();
+    const { calls, fetch } = servedFetch(points(80, 99), points(60, 79), points(40, 59));
+    const { pages, sink } = recordingSink(handle);
     infiniteHistory(plot, sink, fetch, { from: 100 });
 
     // Deep past — the wall state where pan stops emitting events entirely.
@@ -425,9 +439,9 @@ describe("infiniteHistory", () => {
   });
 
   it("guard 15: status transitions arrive as a snapshot + subscription pair", async () => {
-    const { plot } = chart();
+    const { plot, handle } = chart();
     const { fetch } = servedFetch(points(80, 100), []);
-    const loader = infiniteHistory(plot, recordingSink().sink, fetch, { from: 100 });
+    const loader = infiniteHistory(plot, recordingSink(handle).sink, fetch, { from: 100 });
     const seen: HistoryStatus[] = [];
     loader.statusChanges.subscribe((status) => void seen.push(status));
 
@@ -512,6 +526,7 @@ function countingHost(plot: ReturnType<typeof chart>["plot"]) {
     pixelAtX: (x: number) => plot.pixelAtX(x),
     xAt: (px: number) => plot.xAt(px),
     getVisibleRange: () => plot.getVisibleRange(),
+    getDataRange: () => plot.getDataRange(),
     leadingMargin: () => plot.leadingMargin(),
   };
   return { host, live };
@@ -712,11 +727,11 @@ describe("infiniteHistory — a loader that stops", () => {
 
   it("every notification carries the state current at delivery — through a nested there-and-back transition", async () => {
     muteRethrow();
-    const { plot } = chart();
+    const { plot, handle } = chart();
     let call = 0;
     const loader = infiniteHistory(
       plot,
-      recordingSink().sink,
+      recordingSink(handle).sink,
       (before) => {
         call += 1;
         if (call === 1) return Promise.resolve(points(95, before));
@@ -751,12 +766,12 @@ describe("infiniteHistory — a loader that stops", () => {
   });
 
   it("a snapshot reader is never left behind — a listener that reads the snapshot and then restarts a fetch", async () => {
-    const { plot } = chart();
+    const { plot, handle } = chart();
     let call = 0;
     const pending: ((page: LineDataPoint[]) => void)[] = [];
     const loader = infiniteHistory(
       plot,
-      recordingSink().sink,
+      recordingSink(handle).sink,
       (before) => {
         call += 1;
         if (call === 1) return Promise.resolve(points(95, before));
@@ -991,9 +1006,9 @@ describe("infiniteHistory — a loader that stops", () => {
     const onUnhandled = (reason: unknown) => void unhandled.push(reason);
     process.on("unhandledRejection", onUnhandled);
     try {
-      const { plot } = chart();
+      const { plot, handle } = chart();
       const { calls, fetch } = servedFetch(points(90, 100), points(80, 90));
-      const loader = infiniteHistory(plot, recordingSink().sink, fetch, { from: 100 });
+      const loader = infiniteHistory(plot, recordingSink(handle).sink, fetch, { from: 100 });
       const boom = new Error("listener failed");
       loader.statusChanges.subscribe(() => {
         throw boom;
@@ -1074,6 +1089,7 @@ describe("infiniteHistory — a loader that stops", () => {
       pixelAtX: (x) => plot.pixelAtX(x),
       xAt: (px) => plot.xAt(px),
       getVisibleRange: () => plot.getVisibleRange(),
+      getDataRange: () => plot.getDataRange(),
       leadingMargin: () => plot.leadingMargin(),
     };
     const loader = infiniteHistory(host, recordingSink().sink, heldFetch().fetch, { from: 100 });
@@ -1436,5 +1452,44 @@ describe("infiniteHistory — a loader that stops", () => {
     loader.dispose(); // a change that would be heard, if the listener were still there
     expect(loader.status()).toBe("stopped");
     expect(heard).toEqual(["loading"]);
+  });
+});
+
+describe("infiniteHistory — a page counts once it reaches the chart", () => {
+  it("stops chasing when the pages it hands over never reach the chart", async () => {
+    const { plot } = chart();
+    const { fetch, calls } = servedFetch(points(80, 99), points(60, 79), points(40, 59), points(20, 39));
+    // A sink that takes the page and never lands it — a chart that refused it.
+    const loader = infiniteHistory(plot, () => undefined, fetch, { from: 100 });
+    plot.setVisibleRange(0, 120);
+    await settle();
+    plot.render();
+    await settle();
+
+    // One page went out; nothing landed, so the gap it saw is still the
+    // chart's — asking again would only pile up pages nobody draws.
+    expect(calls).toHaveLength(1);
+    expect(loader.status()).toBe("idle");
+    loader.dispose();
+  });
+
+  it("goes on once a page lands later — the declarative lane commits after the sink returns", async () => {
+    const { plot, handle } = chart();
+    const { fetch, calls } = servedFetch(points(80, 99), points(60, 79));
+    const held: LineDataPoint[][] = [];
+    const loader = infiniteHistory(plot, (page) => void held.push(page), fetch, { from: 100 });
+    plot.setVisibleRange(50, 120);
+    await settle();
+    expect(calls).toHaveLength(1);
+
+    // The page lands on the next commit, and the chart draws it.
+    const page = held.shift();
+    if (!page) throw new Error("no page was handed over");
+    handle.prepend(page);
+    plot.render();
+    await settle();
+
+    expect(calls).toHaveLength(2);
+    loader.dispose();
   });
 });
