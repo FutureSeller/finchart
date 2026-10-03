@@ -232,6 +232,25 @@ describe("createDomAxisLabels", () => {
     expect(badge.style.color).toBe("#f8fafc");
     // Same placement convention as the tick — an x badge sits centered below the axis.
     expect(badge.style.left).toBe("40px");
-    expect(badge.style.transform).toBe("translateX(-50%)");
+    expect(badge.style.transform).toBe("translateX(clamp(0px, -50%, calc(740px - 100%)))");
+  });
+
+  /**
+   * **An edge tick's label stays on the chart.** Centred on a tick at the
+   * data area's edge, half of it hung past the chart and was cut off. The
+   * centring is clamped in CSS — no layout read — between the data area's
+   * left edge and the y gutter's right edge.
+   */
+  it("clamps x labels inside the data area and the y gutter", () => {
+    const target = overlay();
+    const labels = createDomAxisLabels({ overlay: target, target: noopTarget });
+
+    labels.render({ x: xTicks, y: [], badges: [], area, axes: rightAxes, readStyle });
+
+    expect(axisLabels(target).map((label) => label.style.transform)).toEqual([
+      "translateX(clamp(0px, -50%, calc(776px - 100%)))",
+      "translateX(clamp(-370px, -50%, calc(406px - 100%)))",
+    ]);
   });
 });
+

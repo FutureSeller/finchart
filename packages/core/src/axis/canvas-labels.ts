@@ -25,6 +25,12 @@ export const createCanvasAxisLabels: AxisLabelsFactory = ({ target }) => ({
       ? area.right + AXIS_LABEL_OFFSET
       : area.left - AXIS_LABEL_OFFSET;
     const yAlign = yRight ? ("left" as const) : ("right" as const);
+    // An x label centred on an edge tick would hang half off the chart —
+    // it's kept inside the data area and the y gutter on its side.
+    const xWithin = {
+      left: yRight || axes.y === null ? area.left : axes.y.left,
+      right: yRight && axes.y !== null ? axes.y.right : area.right,
+    };
     const style: TextStyle = {
       font,
       color: resolveStyle(AXIS_LABEL_SPEC, readStyle).color,
@@ -37,6 +43,7 @@ export const createCanvasAxisLabels: AxisLabelsFactory = ({ target }) => ({
         align: "center",
         baseline: "top",
         style,
+        within: xWithin,
       });
     }
 
@@ -62,6 +69,7 @@ export const createCanvasAxisLabels: AxisLabelsFactory = ({ target }) => ({
         baseline: horizontal ? "top" : "middle",
         style: { font, color: badge.color },
         box: { fill: badge.back, padding: BADGE_PADDING },
+        ...(horizontal ? { within: xWithin } : {}),
       });
     }
   },

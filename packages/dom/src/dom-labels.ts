@@ -61,12 +61,19 @@ export const createDomAxisLabels: AxisLabelsFactory = (host) => {
       const yTransform = yRight
         ? "translateY(-50%)"
         : "translate(-100%, -50%)";
+      // An x label centred on an edge tick would hang half off the chart —
+      // the centring is clamped between the data area's edge and the y
+      // gutter on its side, in CSS so nothing is measured.
+      const xLeft = yRight || axes.y === null ? area.left : axes.y.left;
+      const xRight = yRight && axes.y !== null ? axes.y.right : area.right;
+      const xTransform = (position: number) =>
+        `translateX(clamp(${xLeft - position}px, -50%, calc(${xRight - position}px - 100%)))`;
 
       for (const tick of x) {
         const element = label(tick.label);
         element.style.left = `${tick.position}px`;
         element.style.top = `${area.bottom + OFFSET}px`;
-        element.style.transform = "translateX(-50%)";
+        element.style.transform = xTransform(tick.position);
         children.push(element);
       }
 
@@ -89,7 +96,7 @@ export const createDomAxisLabels: AxisLabelsFactory = (host) => {
         if (badge.axis === "x") {
           element.style.left = `${badge.position}px`;
           element.style.top = `${area.bottom + OFFSET}px`;
-          element.style.transform = "translateX(-50%)";
+          element.style.transform = xTransform(badge.position);
         } else {
           element.style.left = `${yEdge}px`;
           element.style.top = `${badge.position}px`;
