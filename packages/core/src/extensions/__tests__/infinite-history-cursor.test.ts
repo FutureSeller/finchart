@@ -42,9 +42,20 @@ function served(...pages: (Page | Error)[]) {
   };
 }
 
-function recordingSink() {
+/**
+ * Records every page. Given the chart's handle, it also lands each page
+ * there — a page counts once the chart holds it, so a test that expects the
+ * loader to keep going has to let its pages reach the chart.
+ */
+function recordingSink(handle?: { prepend(points: LineDataPoint[]): void }) {
   const pages: LineDataPoint[][] = [];
-  return { pages, sink: (page: LineDataPoint[]) => void pages.push(page) };
+  return {
+    pages,
+    sink: (page: LineDataPoint[]) => {
+      pages.push(page);
+      handle?.prepend(page);
+    },
+  };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -67,13 +78,13 @@ afterEach(() => {
 
 describe("infiniteHistory — cursor mode", () => {
   it("asks with the cursor it was given, then with each page's next, chaining a gap without events", async () => {
-    const { plot } = chart();
+    const { plot, handle } = chart();
     const { calls, fetch } = served(
       { bars: points(80, 100), next: "c2" },
       { bars: points(60, 80), next: "c3" },
       { bars: points(40, 60), next: "c4" },
     );
-    const { pages, sink } = recordingSink();
+    const { pages, sink } = recordingSink(handle);
     const loader = infiniteHistory(plot, sink, fetch, { from: 100, cursor: "c1" });
 
     plot.setVisibleRange(50, 70);
@@ -196,8 +207,8 @@ describe("infiniteHistory — cursor mode", () => {
   it("a page that keeps bars resets the run of empty pages — progress is never capped", async () => {
     const empties = (tag: string, count: number) =>
       Array.from({ length: count }, (_, i): Page => ({ bars: [], next: `${tag}${i}` }));
-    const { plot } = chart();
-    const { pages, sink } = recordingSink();
+    const { plot, handle } = chart();
+    const { pages, sink } = recordingSink(handle);
     const { fetch } = served(
       ...empties("a", 8),
       { bars: points(90, 100), next: "b" },
@@ -215,13 +226,13 @@ describe("infiniteHistory — cursor mode", () => {
   });
 
   it("the token is never compared — the same token with older bars is progress", async () => {
-    const { plot } = chart();
+    const { plot, handle } = chart();
     const { calls, fetch } = served(
       { bars: points(80, 100), next: "same" },
       { bars: points(60, 80), next: "same" },
       { bars: points(40, 60), next: null },
     );
-    const { pages, sink } = recordingSink();
+    const { pages, sink } = recordingSink(handle);
     infiniteHistory(plot, sink, fetch, { from: 100, cursor: "same" });
 
     plot.setVisibleRange(40, 60);

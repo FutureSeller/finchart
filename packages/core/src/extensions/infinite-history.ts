@@ -15,7 +15,7 @@ import type { SeriesHandle } from "../plot/series-handle";
  */
 export type InfiniteHistoryHost = PlotEventSource &
   XCoordinates &
-  Pick<Plot, "getVisibleRange" | "leadingMargin">;
+  Pick<Plot, "getVisibleRange" | "getDataRange" | "leadingMargin">;
 
 /**
  * Where a landed page goes, when it is a function — a chart with a price
@@ -389,6 +389,8 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
   const deliver: HistorySink<T> = typeof sink === "function" ? sink : boundPrepend(sink);
 
   let off: (() => void) | null = null;
+  /** A page was handed over and the chart doesn't hold it yet — the next frame re-judges. */
+  let awaitingLanding = false;
   /**
    * The end of the loader. The flag and the unsubscribe come first, before
    * any listener hears about it — a listener may call back into the loader.
@@ -443,6 +445,17 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     if (disposed || status !== "idle") return;
     const view = lastView;
     if (!view) return;
+
+    // **A page counts once it reaches the chart.** The sink may land it
+    // later (a React state update commits after the sink returns) or never
+    // (a chart that refused it). Until the chart holds the frontier, the
+    // gap on screen is the chart's, not the loader's — pulling again would
+    // pile up pages nobody draws. Wait, and look again on the next frame.
+    const held = host.getDataRange();
+    if (held === null || held.min > frontier) {
+      awaitingLanding = true;
+      return;
+    }
 
     const left = host.pixelAtX(view.startX);
     const width = host.pixelAtX(view.endX) - left;
@@ -690,7 +703,7 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     }
   };
 
-  const release = host.on("xDomainChange", ({ startX, endX }) => {
+  const releaseView = host.on("xDomainChange", ({ startX, endX }) => {
     const userWentLeft = lastStartX !== null && startX < lastStartX;
     lastStartX = startX;
     lastView = { startX, endX };
@@ -703,6 +716,24 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
       rethrow(error);
     }
   });
+  // A landing makes no x event (a prepend never moves the domain); the frame
+  // that draws it is where a loader waiting for its page looks again.
+  const releaseFrame = host.on("render", () => {
+    if (!awaitingLanding) return;
+    awaitingLanding = false;
+    try {
+      judge(false);
+    } catch (error) {
+      rethrow(error);
+    }
+  });
+  const release = (): void => {
+    try {
+      releaseView();
+    } finally {
+      releaseFrame();
+    }
+  };
   // A host that reported the view while subscribing may already have
   // stopped the loader — the subscription it handed back is still ours to end.
   if (disposed) {

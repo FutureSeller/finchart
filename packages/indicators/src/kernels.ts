@@ -313,7 +313,10 @@ export interface SumState {
 export function sumFold(period: number): SumFold {
   assertPeriod(period);
   const n = period;
-  let window: (number | null)[] = new Array(n).fill(null);
+  // Grows with the values that arrive, up to the period — a slot is written
+  // before it is ever read (the ring is read whole only once full), so a
+  // period far longer than the data costs what the data costs.
+  let window: (number | null)[] = [];
   let at = 0;
   let count = 0;
   let filled = 0;
@@ -375,7 +378,10 @@ function extremumFold(
   keep: (incumbent: number, entering: number) => boolean,
 ): ExtremumFold {
   assertPeriod(period);
-  let ring: (number | null)[] = new Array(period).fill(null);
+  // Grows with the values that arrive, up to the period — a slot is written
+  // before it is ever read (the ring is read whole only once full), so a
+  // period far longer than the data costs what the data costs.
+  let ring: (number | null)[] = [];
   let count = 0;
   let filled = 0;
   let deque: number[] = [];
@@ -460,7 +466,10 @@ export interface StddevState {
 export function stddevFold(period: number): StddevFold {
   assertPeriod(period);
   const n = period;
-  let window: (number | null)[] = new Array(n).fill(null);
+  // Grows with the values that arrive, up to the period — a slot is written
+  // before it is ever read (the ring is read whole only once full), so a
+  // period far longer than the data costs what the data costs.
+  let window: (number | null)[] = [];
   let at = 0;
   let count = 0;
   let filled = 0;
@@ -530,7 +539,10 @@ export function lagFold(lag: number): LagFold {
     throw new ContractError(`lag must be a positive integer, got ${lag}`);
   }
   const size = lag + 1;
-  let ring: (number | null)[] = new Array(size).fill(null);
+  // Grows with the values that arrive, up to the period — a slot is written
+  // before it is ever read (the ring is read whole only once full), so a
+  // period far longer than the data costs what the data costs.
+  let ring: (number | null)[] = [];
   let at = 0;
   let count = 0;
 
@@ -593,9 +605,13 @@ export function linregFold(period: number): LinregFold {
   assertPeriod(period);
   const n = period;
   const meanK = (n - 1) / 2;
-  let denominator = 0;
-  for (let k = 0; k < n; k++) denominator += (k - meanK) * (k - meanK);
-  let window: (number | null)[] = new Array(n).fill(null);
+  // Σ (k − k̄)² over k = 0…n−1, in closed form — a loop here would run the
+  // whole period before the first value arrives.
+  const denominator = (n * (n * n - 1)) / 12;
+  // Grows with the values that arrive, up to the period — a slot is written
+  // before it is ever read (the ring is read whole only once full), so a
+  // period far longer than the data costs what the data costs.
+  let window: (number | null)[] = [];
   let at = 0;
   let count = 0;
   let filled = 0;
