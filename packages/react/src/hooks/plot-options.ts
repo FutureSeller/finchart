@@ -20,6 +20,7 @@ export type PlotOptions = Pick<
   | 'padding'
   | 'resizablePanes'
   | 'shiftVisibleRangeOnNewBar'
+  | 'preserveLiveRightEdgeOnZoomOut'
   | 'axisDrag'
   | 'rightOffset'
   | 'minBarSpacing'
@@ -31,6 +32,7 @@ export interface PlotOptionsBaseline {
   padding: Padding;
   resizablePanes: boolean;
   shiftVisibleRangeOnNewBar: boolean;
+  preserveLiveRightEdgeOnZoomOut: boolean;
   axisDrag: boolean;
   rightOffset: number;
 }
@@ -40,6 +42,7 @@ export function baselineOf(config: ResolvedPlotConfig): PlotOptionsBaseline {
     padding: { ...config.padding },
     resizablePanes: config.resizablePanes,
     shiftVisibleRangeOnNewBar: config.shiftVisibleRangeOnNewBar,
+    preserveLiveRightEdgeOnZoomOut: config.preserveLiveRightEdgeOnZoomOut,
     axisDrag: config.axisDrag,
     rightOffset: config.rightOffset,
   };
@@ -68,6 +71,7 @@ export function pickPlotOptions(
     padding,
     resizablePanes: options?.resizablePanes ?? baseline.resizablePanes,
     shiftVisibleRangeOnNewBar: options?.shiftVisibleRangeOnNewBar ?? baseline.shiftVisibleRangeOnNewBar,
+    preserveLiveRightEdgeOnZoomOut: options?.preserveLiveRightEdgeOnZoomOut ?? baseline.preserveLiveRightEdgeOnZoomOut,
     axisDrag: options?.axisDrag ?? baseline.axisDrag,
     rightOffset: options?.rightOffset ?? baseline.rightOffset,
     minBarSpacing: options?.minBarSpacing ?? null,

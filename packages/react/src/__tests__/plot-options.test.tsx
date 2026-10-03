@@ -122,6 +122,7 @@ describe('<ChartContainer options>', () => {
           resizablePanes: false,
           axisDrag: false,
           shiftVisibleRangeOnNewBar: true,
+          preserveLiveRightEdgeOnZoomOut: true,
         }}
       />,
     );
@@ -130,6 +131,7 @@ describe('<ChartContainer options>', () => {
     expect(set.resizablePanes).toBe(false);
     expect(set.axisDrag).toBe(false);
     expect(set.shiftVisibleRangeOnNewBar).toBe(true);
+    expect(set.preserveLiveRightEdgeOnZoomOut).toBe(true);
 
     view.rerender(<ChartContainer deps={deps} data={data} plotRef={ref} options={{}} />);
     const reverted = plot().getOptions();
@@ -137,6 +139,7 @@ describe('<ChartContainer options>', () => {
     expect(reverted.resizablePanes).toBe(built.resizablePanes);
     expect(reverted.axisDrag).toBe(built.axisDrag);
     expect(reverted.shiftVisibleRangeOnNewBar).toBe(built.shiftVisibleRangeOnNewBar);
+    expect(reverted.preserveLiveRightEdgeOnZoomOut).toBe(built.preserveLiveRightEdgeOnZoomOut);
   });
 
   it('reverts a padding side that is no longer named, not just the ones named now', () => {

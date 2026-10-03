@@ -78,6 +78,12 @@ export interface PlotConfig {
    * silently moving the window is the worse mistake.
    */
   shiftVisibleRangeOnNewBar?: boolean;
+  /**
+   * While the latest bar is visible, keep a zoom-out from moving the right
+   * edge farther into empty space. A pan or a zoom while browsing history
+   * still follows the usual cursor-anchored behavior. Off by default.
+   */
+  preserveLiveRightEdgeOnZoomOut?: boolean;
   /** Whether dragging a divider can resize pane heights. Enabled if omitted. */
   resizablePanes?: boolean;
   /**
@@ -137,6 +143,7 @@ export interface ResolvedPlotConfig extends PlotConfig {
   showGrid: boolean;
   paneGap: number;
   shiftVisibleRangeOnNewBar: boolean;
+  preserveLiveRightEdgeOnZoomOut: boolean;
   resizablePanes: boolean;
   axisDrag: boolean;
   rightOffset: number;
@@ -174,6 +181,7 @@ export interface PlotOptionsPatch {
   paneGap?: number;
   resizablePanes?: boolean;
   shiftVisibleRangeOnNewBar?: boolean;
+  preserveLiveRightEdgeOnZoomOut?: boolean;
   axisDrag?: boolean;
   rightOffset?: number;
   /**

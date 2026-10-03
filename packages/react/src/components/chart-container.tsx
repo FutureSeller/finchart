@@ -73,7 +73,8 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
   paneGap?: number;
   /**
    * The plot options that have no prop of their own — `padding`,
-   * `resizablePanes`, `shiftVisibleRangeOnNewBar`, `axisDrag`,
+   * `resizablePanes`, `shiftVisibleRangeOnNewBar`,
+   * `preserveLiveRightEdgeOnZoomOut`, `axisDrag`,
    * `rightOffset`, `minBarSpacing`, `maxBarSpacing`. A key that is missing
    * reverts to what the plot was built with; `minBarSpacing`/`maxBarSpacing`
    * go back to the x mapping's own default. Applied before the first

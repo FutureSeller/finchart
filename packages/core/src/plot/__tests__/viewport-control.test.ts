@@ -52,6 +52,21 @@ describe("rightOffset (2.3)", () => {
     model.plot.pan(-5);
     expect(model.plot.getVisibleRange()!.max).toBe(105);
   });
+
+  it("can keep a live view's existing right edge on zoom-out without changing history zoom", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: lineSeries(), data },
+      config: { ...bare, rightOffset: 10, preserveLiveRightEdgeOnZoomOut: true },
+    });
+
+    model.plot.zoom(0.5, 50);
+    expect(model.plot.getVisibleRange()!.max).toBe(110);
+
+    model.plot.setVisibleRange(0, 50);
+    model.plot.zoom(0.5, 25);
+    expect(model.plot.getVisibleRange()).toEqual({ min: -25, max: 75 });
+  });
 });
 
 describe("barSpacing limits (2.3)", () => {

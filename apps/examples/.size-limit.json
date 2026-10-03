@@ -1,6 +1,6 @@
 [
   {
-    "name": "the quick start — one candlestick chart, core + dom · 31.9 KB gzip (31907B measured)",
+    "name": "the quick start — one candlestick chart, core + dom · 32.0 KB gzip (31989B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -13,7 +13,7 @@
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 37.5 KB gzip (37475B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 37.6 KB gzip (37557B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -26,7 +26,7 @@
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 44.1 KB gzip (44082B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 44.2 KB gzip (44165B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 54.1 KB gzip (54106B measured)",
+    "name": "+ every drawing tool · 54.2 KB gzip (54190B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -58,7 +58,7 @@
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 54.5 KB gzip (54536B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 54.7 KB gzip (54654B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

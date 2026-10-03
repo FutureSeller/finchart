@@ -25,6 +25,7 @@ export interface XViewportOptions {
   minBarSpacing?: number;
   maxBarSpacing?: number;
   shiftVisibleRangeOnNewBar: boolean;
+  preserveLiveRightEdgeOnZoomOut: boolean;
 }
 
 export interface XViewportDeps {
@@ -396,7 +397,7 @@ export class XViewport {
     this.setDomain(min + bounded, max + bounded);
   }
 
-  /** Zooms by `factor` with `center` held fixed (`factor` > 1 zooms in). */
+  /** Zooms by `factor` (`factor` > 1 zooms in). */
   zoom(factor: number, center: number): void {
     // **Don't invent a check here** — use the shared guards
     // (`requirePositive`, `requireFinite`). A hand-written guard tends to
@@ -407,9 +408,9 @@ export class XViewport {
 
     /**
      * The limit is applied **only to the width**; position is decided by
-     * the cursor's relative offset (`t`) — because zoom's invariant is
-     * that the point under the cursor doesn't move. Re-centering a clamped
-     * window on the target center instead would let a zoom-out that's hit
+     * the cursor's relative offset (`t`) unless the opt-in live-edge rule
+     * prevents a zoom-out from adding empty future space. Re-centering a
+     * clamped window on the target center would let a zoom-out that's hit
      * the limit push the window toward the cursor, and a large `factor`
      * would teleport the window past the limit.
      *
@@ -422,10 +423,12 @@ export class XViewport {
     const [min, max] = this.deps.scale.getDomain();
     const span = this.clampSpan((max - min) / factor);
     const range = this.deps.dataRange();
+    let latestVisible = false;
     if (range) {
       const dataMin = this.deps.x.toDomain(range.min);
       const dataMax = this.deps.x.toDomain(range.max);
       center = Math.min(Math.max(center, dataMin), dataMax);
+      latestVisible = min <= dataMax && dataMax <= max;
     }
 
     /**
@@ -444,7 +447,17 @@ export class XViewport {
     // The floating-point floor — if the width drops below the domain
     // value's ulp, `min` and `max` collapse to the same number. When it
     // can't go further, it just quietly stops.
-    const next: [number, number] = [center - t * span, center + (1 - t) * span];
+    let next: [number, number] = [center - t * span, center + (1 - t) * span];
+    // In a live view, a cursor-anchored zoom-out can spend most of the new
+    // width on empty future space. Keep the right edge where the user left it;
+    // a manually chosen margin stays chosen, and history views still zoom
+    // around the cursor. Only the part that would grow the gap is corrected.
+    if (
+      factor < 1 && span > max - min && latestVisible &&
+      this.deps.options().preserveLiveRightEdgeOnZoomOut && next[1] > max
+    ) {
+      next = [max - span, max];
+    }
     if (!(next[0] < next[1])) return;
 
     this.setDomain(next[0], next[1]);
@@ -465,7 +478,7 @@ export class XViewport {
     this.pan((-dx * (max - min)) / span);
   }
 
-  /** Zooms with the point under the wheel cursor held fixed. */
+  /** Zooms around the wheel cursor, subject to the opt-in live-edge rule. */
   zoomAtPixel(factor: number, screenX: number): void {
     this.zoom(factor, this.deps.scale.invert(screenX));
   }
@@ -514,7 +527,7 @@ export class XViewport {
   /**
    * The bar-spacing limit — clamps the domain width against a pixel
    * budget to stop zoom. Decides only the width — position is decided by
-   * the caller (`zoom`) via the cursor's fixed point.
+   * the caller (`zoom`) via the cursor or the opt-in live right edge.
    *
    * **Applied only in `zoom`, never in `setDomain`.** A refit or a
    * window chosen before data lands before the first render, when the scale's pixel
