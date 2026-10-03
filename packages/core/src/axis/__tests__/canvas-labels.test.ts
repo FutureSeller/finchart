@@ -181,4 +181,29 @@ describe("createCanvasAxisLabels", () => {
       color: DEFAULT_LABEL_COLOR,
     });
   });
+
+  /**
+   * **An edge tick's label stays on the chart.** Centred on a tick at the
+   * data area's edge, half of it hung past the chart and was cut off
+   * ("0. 2. 07:52" for "10. 2. 07:52"). It may use the y-axis gutter on
+   * its side, never past it.
+   */
+  it("keeps x labels and badges inside the data area and the y gutter", () => {
+    const { labels, texts } = mounted();
+
+    labels.render({
+      x: [{ value: 0, position: 780, label: "edge" }],
+      y: [],
+      badges: [{ axis: "x", position: 40, label: "10. 2. 07:52", back: "#000", color: "#fff" }],
+      area,
+      axes: rightAxes,
+      readStyle: () => "",
+    });
+
+    expect(texts.map((text) => text.within)).toEqual([
+      { left: 40, right: 816 },
+      { left: 40, right: 816 },
+    ]);
+  });
 });
+
