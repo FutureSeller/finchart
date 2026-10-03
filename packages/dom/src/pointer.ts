@@ -61,8 +61,8 @@ export interface PointerInteractionsOptions {
    * over the chart — a trackpad's two-finger scroll zooms, and the page
    * behind does not scroll. `"modifier"` zooms only with Ctrl or ⌘ held —
    * which is also what a trackpad pinch sends — and lets a plain wheel or
-   * two-finger scroll reach the page. A chart that is one block of a
-   * scrolling page wants the second.
+   * two-finger vertical scroll reach the page; a sideways swipe still
+   * pans. A chart that is one block of a scrolling page wants the second.
    */
   wheel?: "always" | "modifier";
 }
@@ -694,9 +694,11 @@ export class PointerInteractions implements InteractionHandler {
     const { deltaX, deltaY, deltaMode } = event;
     const horizontal = Math.abs(deltaX) > Math.abs(deltaY);
     if (!(horizontal ? this.options.pan : this.options.zoom && deltaY !== 0)) return;
-    // Asked to zoom only with a modifier, a plain wheel is the page's —
-    // and a trackpad pinch arrives as a wheel with Ctrl, so it still zooms.
-    if (this.options.wheel === "modifier" && !event.ctrlKey && !event.metaKey) return;
+    // Asked to zoom only with a modifier, a plain vertical wheel is the
+    // page's — and a trackpad pinch arrives as a wheel with Ctrl, so it
+    // still zooms. A sideways swipe is still a pan: the page has no use for
+    // it, and left alone it becomes the browser's back gesture.
+    if (!horizontal && this.options.wheel === "modifier" && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
 
     // Deltas in pixels: a line is about 33 px (a Firefox notch is 3 lines),

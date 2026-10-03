@@ -1,6 +1,6 @@
 [
   {
-    "name": "every indicator — import * (@finchart/core is a peer, so excluded) · 21.5 KB gzip (21472B measured)",
+    "name": "every indicator — import * (@finchart/core is a peer, so excluded) · 21.5 KB gzip (21506B measured)",
     "path": "dist/index.mjs",
     "import": "*",
     "limit": "21.7 KB",

@@ -1,6 +1,6 @@
 [
   {
-    "name": "everything — import * (a preset consumer) · 43.7 KB gzip (43692B measured)",
+    "name": "everything — import * (a preset consumer) · 43.7 KB gzip (43703B measured)",
     "path": "dist/index.mjs",
     "import": "*",
     "limit": "43.9 KB",

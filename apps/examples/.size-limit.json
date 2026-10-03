@@ -1,6 +1,6 @@
 [
   {
-    "name": "the quick start — one candlestick chart, core + dom · 31.8 KB gzip (31828B measured)",
+    "name": "the quick start — one candlestick chart, core + dom · 31.8 KB gzip (31831B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -13,7 +13,7 @@
     "gzip": true
   },
   {
-    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 37.4 KB gzip (37402B measured)",
+    "name": "+ a volume pane, axes, crosshair, legend and tooltip · 37.4 KB gzip (37405B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs"
@@ -26,7 +26,7 @@
     "gzip": true
   },
   {
-    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 44.0 KB gzip (43980B measured)",
+    "name": "+ four indicators — MA, MACD, RSI, Bollinger · 44.0 KB gzip (44013B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 54.0 KB gzip (54000B measured)",
+    "name": "+ every drawing tool · 54.0 KB gzip (54041B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -58,7 +58,7 @@
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 54.2 KB gzip (54220B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 54.3 KB gzip (54256B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -71,7 +71,7 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "54.4 KB",
+    "limit": "54.5 KB",
     "ignore": [
       "react",
       "react-dom"
