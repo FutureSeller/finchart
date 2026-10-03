@@ -308,12 +308,12 @@ order — no `useChartPlot` + `useEffect` shim needed:
 <ChartContainer deps={deps} data={bars} options={{ shiftVisibleRangeOnNewBar: true, rightOffset: 5 }}>
 ```
 
-**A pane's value scale is a prop.** `<ChartPane yScale={log ? () => new LogScale() : undefined}>`
-is the log toggle — the pane, its series and its height stay. A new factory
-is called and the scale swapped only when it hands out another kind than the
-pane holds, so an inline arrow costs an allocation, never a swap, and the
-factory must be pure; removing it puts back a linear scale (on the main pane,
-the instance it replaced). A fixed range is `valueDomain={[0, 100]}` — an
+**A pane's value scale is a prop.** `<ChartPane yScale={log ? LOG : undefined}>` (with `const LOG = () => new LogScale()` at module level)
+is the log toggle — the pane, its series and its height stay. The factory's
+identity is the change, like any function prop: a new one is called and its
+scale installed, so pin it (a module constant, `useCallback`) — an inline
+arrow installs a fresh scale every render. Removing it puts back a linear
+scale (on the main pane, the instance it replaced). A fixed range is `valueDomain={[0, 100]}` — an
 oscillator pane, declared like any other. `valueDomain`, `autoScale` and
 `invert` are directives applied when they change (`valueDomain` by its two
 numbers, so an inline array is fine; removing it hands the axis back to

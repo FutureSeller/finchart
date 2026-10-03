@@ -161,18 +161,53 @@ describe('<ChartPane yScale>', () => {
     expect(installs).toBe(1);
   });
 
-  it('leaves the scale alone when a new factory hands out the same kind — an inline arrow is fine', () => {
+  /**
+   * **The factory's identity is the change** — like any function prop.
+   * Judging by the scale it hands out misreads a structural `Scale` (two
+   * object literals share a prototype) and a subclass, so the rule is the
+   * prop itself: pin it and it's applied once, hand a new one and it's
+   * called and installed.
+   */
+  it('applies a pinned factory once, StrictMode included, and installs whatever a new factory hands out', () => {
     const { deps, ref, plot } = setup();
-    const ui = () => (
+    const { made, factory } = logFactory();
+    const other = () => new LogScale();
+    const ui = (yScale: () => Scale) => (
+      <StrictMode>
+        <ChartContainer deps={deps} data={data} plotRef={ref}>
+          <ChartPane />
+          <ChartPane yScale={yScale} />
+        </ChartContainer>
+      </StrictMode>
+    );
+    const view = render(ui(factory));
+    const installed = plot().panes[1].yScale;
+    expect(made).toContain(installed);
+
+    view.rerender(ui(factory));
+    expect(plot().panes[1].yScale).toBe(installed);
+
+    view.rerender(ui(other));
+    expect(plot().panes[1].yScale).not.toBe(installed);
+    expect(plot().panes[1].yScale).toBeInstanceOf(LogScale);
+  });
+
+  it('removing the prop below the main pane installs a plain linear scale, whatever it had handed out', () => {
+    class TunedLinear extends LinearScale {}
+    const tuned = () => new TunedLinear();
+    const { deps, ref, plot } = setup();
+    const ui = (yScale: (() => Scale) | undefined) => (
       <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane yScale={() => new LogScale()} />
+        <ChartPane />
+        <ChartPane yScale={yScale} />
       </ChartContainer>
     );
-    const view = render(ui());
-    const installed = plot().mainPane.yScale;
+    const view = render(ui(tuned));
+    expect(plot().panes[1].yScale).toBeInstanceOf(TunedLinear);
 
-    view.rerender(ui());
-    expect(plot().mainPane.yScale).toBe(installed);
+    view.rerender(ui(undefined));
+    expect(plot().panes[1].yScale).toBeInstanceOf(LinearScale);
+    expect(plot().panes[1].yScale).not.toBeInstanceOf(TunedLinear);
   });
 
   it('on the main pane, removing the prop puts back the instance it replaced', () => {

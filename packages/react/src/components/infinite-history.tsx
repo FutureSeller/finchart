@@ -1,11 +1,10 @@
-import type { BaseDataPoint } from '@finchart/core';
 import { useEffect } from 'react';
-import { historyLink } from '../hooks/use-infinite-history';
+import type { HistoryLink } from '../hooks/use-infinite-history';
 import { useChartApi } from './chart-context';
 
 export interface InfiniteHistoryProps {
   /** The value `useInfiniteHistory` returned. */
-  history: { readonly data: readonly BaseDataPoint[] };
+  history: { readonly link: HistoryLink };
 }
 
 /**
@@ -15,10 +14,9 @@ export interface InfiniteHistoryProps {
  */
 export function InfiniteHistory({ history }: InfiniteHistoryProps): null {
   const { plot } = useChartApi('InfiniteHistory');
-  const link = historyLink(history);
-  const epoch = link.epoch;
+  const { link } = history;
 
-  useEffect(() => link.install(plot), [link, plot, epoch]);
+  useEffect(() => link.install(plot), [link, plot]);
 
   return null;
 }

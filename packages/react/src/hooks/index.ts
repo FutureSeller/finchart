@@ -5,9 +5,9 @@ export { usePluginState } from './use-plugin-state';
 export { useDataSource } from './use-data-source';
 export { useInfiniteHistory } from './use-infinite-history';
 export type {
-  CursorHistory,
+  HistoryLink,
+  HistoryLoad,
+  HistoryPaging,
   InfiniteHistoryState,
-  UseCursorHistoryOptions,
   UseInfiniteHistoryOptions,
-  XHistory,
 } from './use-infinite-history';

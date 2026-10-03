@@ -73,9 +73,9 @@ export { usePluginState } from "./hooks/use-plugin-state";
 export { useDataSource } from "./hooks/use-data-source";
 export { useInfiniteHistory } from "./hooks/use-infinite-history";
 export type {
-  CursorHistory,
+  HistoryLink,
+  HistoryLoad,
+  HistoryPaging,
   InfiniteHistoryState,
-  UseCursorHistoryOptions,
   UseInfiniteHistoryOptions,
-  XHistory,
 } from "./hooks/use-infinite-history";
