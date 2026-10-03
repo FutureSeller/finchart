@@ -1198,7 +1198,7 @@ export class Plot
     this.scheduleRender();
   }
 
-  /** Zooms the x domain by factor while holding center fixed (factor > 1 zooms in). */
+  /** Zooms the x domain by factor (factor > 1 zooms in); the opt-in live-edge rule can move the anchor on zoom-out. */
   zoom(factor: number, center: number): void {
     this.xViewport.zoom(factor, center);
     this.scheduleRender();
@@ -1215,7 +1215,7 @@ export class Plot
     this.scheduleRender();
   }
 
-  /** Zooms while holding the point under the wheel cursor fixed. */
+  /** Zooms around the wheel cursor, except when the opt-in live-edge rule limits future space. */
   zoomAtPixel(factor: number, screenX: number): void {
     this.xViewport.zoomAtPixel(factor, screenX);
     this.scheduleRender();

@@ -42,7 +42,8 @@ export interface UsePlotOptions<T extends BaseDataPoint> {
   paneGap?: number;
   /**
    * The plot options that have no prop of their own (`padding`,
-   * `resizablePanes`, `shiftVisibleRangeOnNewBar`, `axisDrag`, `rightOffset`,
+   * `resizablePanes`, `shiftVisibleRangeOnNewBar`,
+   * `preserveLiveRightEdgeOnZoomOut`, `axisDrag`, `rightOffset`,
    * `minBarSpacing`, `maxBarSpacing`). A key that is missing reverts to what
    * the plot was built with. Applied before the first series registers, so
    * `rightOffset` is in place for the first fit whatever the JSX order.
@@ -292,4 +293,3 @@ export function usePlot<T extends BaseDataPoint>({
 
   return { containerRef, plotRef };
 }
-

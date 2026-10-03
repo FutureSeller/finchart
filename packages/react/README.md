@@ -303,8 +303,8 @@ setter is enough.
 
 **Every plot option has one door.** `showGrid`, `gridStyle` and `paneGap`
 are props; `axis` is `<XAxis>`/`<YAxis>`; the rest — `padding`,
-`resizablePanes`, `shiftVisibleRangeOnNewBar`, `axisDrag`, `rightOffset`,
-`minBarSpacing`, `maxBarSpacing` — go through `options`, and a key you drop
+`resizablePanes`, `shiftVisibleRangeOnNewBar`, `preserveLiveRightEdgeOnZoomOut`,
+`axisDrag`, `rightOffset`, `minBarSpacing`, `maxBarSpacing` — go through `options`, and a key you drop
 reverts to what the plot was built with (`minBarSpacing`/`maxBarSpacing` go
 back to the x mapping's own default). `options` is applied before the first
 series registers, so `rightOffset` shapes the first fit whatever the JSX
@@ -313,6 +313,12 @@ order — no `useChartPlot` + `useEffect` shim needed:
 ```tsx
 <ChartContainer deps={deps} data={bars} options={{ shiftVisibleRangeOnNewBar: true, rightOffset: 5 }}>
 ```
+
+For a live view, `preserveLiveRightEdgeOnZoomOut: true` keeps zooming out from
+growing the empty space to the right of the latest bar. It preserves the
+current right edge, including a margin the user panned to; it does not snap
+the chart to `rightOffset`. Historical windows and zooming in remain anchored
+under the cursor. The option is off by default.
 
 **A pane's value scale is a prop.** `<ChartPane yScale={log ? LOG : undefined}>` (with `const LOG = () => new LogScale()` at module level)
 is the log toggle — the pane, its series and its height stay. The factory's

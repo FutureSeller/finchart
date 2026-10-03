@@ -25,6 +25,7 @@ function setup(
     options: () => ({
       rightOffset: 0,
       shiftVisibleRangeOnNewBar: false,
+      preserveLiveRightEdgeOnZoomOut: false,
       ...options,
     }),
     onChange: (visible) => changes.push(visible),
@@ -388,6 +389,63 @@ describe("pan and zoom", () => {
   });
 });
 
+describe("optional live right edge on zoom-out", () => {
+  const bars = Array.from({ length: 120 }, (_, index) => index);
+
+  it("keeps the existing right margin while zooming out with the latest bar in view", () => {
+    const s = setup({ rightOffset: 5, preserveLiveRightEdgeOnZoomOut: true }, "barIndex");
+    s.load(bars);
+    s.viewport.fit();
+    const [, right] = s.domain();
+
+    s.viewport.zoom(0.5, 60);
+    expect(s.domain()[1]).toBe(right);
+    s.viewport.zoom(0.5, 60);
+    expect(s.domain()[1]).toBe(right);
+
+    s.viewport.pan(3);
+    const [, chosenRight] = s.domain();
+    s.viewport.zoom(0.5, 60);
+    expect(s.domain()[1]).toBe(chosenRight);
+  });
+
+  it("keeps cursor-anchored zoom for a historical window and for zoom-in", () => {
+    const s = setup({ preserveLiveRightEdgeOnZoomOut: true }, "barIndex");
+    s.load(bars);
+    s.viewport.setVisibleRange(20, 40);
+
+    s.viewport.zoom(0.5, 30);
+    expect(s.domain()).toEqual([10, 50]);
+
+    s.viewport.scrollToRealTime();
+    const anchor = s.scale.invert(200);
+    s.viewport.zoomAtPixel(2, 200);
+    expect(s.scale.invert(200)).toBeCloseTo(anchor);
+  });
+
+  it("does not change the default cursor-anchored zoom-out", () => {
+    const s = setup({ rightOffset: 5 }, "barIndex");
+    s.load(bars);
+    s.viewport.fit();
+    const [, right] = s.domain();
+
+    s.viewport.zoom(0.5, 60);
+    expect(s.domain()[1]).toBeGreaterThan(right);
+  });
+
+  it("does not move at the bar-spacing zoom-out limit", () => {
+    const s = setup({ minBarSpacing: 20, preserveLiveRightEdgeOnZoomOut: true });
+    s.load([40, 60]);
+    s.viewport.fit();
+    const before = s.changes.length;
+
+    s.viewport.zoom(0.5, 65);
+
+    expect(s.domain()).toEqual([30, 70]);
+    expect(s.changes).toHaveLength(before);
+  });
+});
+
 describe("notifications", () => {
   it("should announce only when the domain actually moves", () => {
     const s = setup();
@@ -421,7 +479,7 @@ describe("notifications", () => {
       x: continuousX(new LinearScale()),
       dataRange: () => null,
       xValues: () => [],
-      options: () => ({ rightOffset: 0, shiftVisibleRangeOnNewBar: false }),
+      options: () => ({ rightOffset: 0, shiftVisibleRangeOnNewBar: false, preserveLiveRightEdgeOnZoomOut: false }),
       onChange,
     });
 
