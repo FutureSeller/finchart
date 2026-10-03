@@ -1242,6 +1242,15 @@ describe("wheel", () => {
     expect(target.pixelZooms).toHaveLength(1);
     expect(event.defaultPrevented).toBe(true);
   });
+
+  it("still pans on a sideways swipe under wheel: modifier — the setting is about zoom", () => {
+    new PointerInteractions(element, { wheel: "modifier" }).connect(target.target);
+    const event = wheel({ deltaX: 60, deltaY: 4 });
+
+    expect(target.pixelPans).toEqual([-60]);
+    expect(target.pixelZooms).toEqual([]);
+    expect(event.defaultPrevented).toBe(true);
+  });
 });
 
 describe('editable key origins', () => {

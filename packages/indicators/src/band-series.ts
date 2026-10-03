@@ -1,4 +1,4 @@
-import type { CoordinateAccessor, Point, Range, Series, SeriesContext, StyleSpec } from "@finchart/core";
+import type { CoordinateAccessor, Point, Range, Series, SeriesContext, SeriesRow, StyleSpec } from "@finchart/core";
 import { isGap, resolveStyle, styleSpec } from "@finchart/core";
 import type { BandPoint } from "./factories";
 
@@ -41,6 +41,14 @@ export function bandSeries(options: BandSeriesOptions = {}): Series<BandPoint> {
       }
 
       return extent;
+    },
+
+    /** Both edges, upper first — a band read as one of them would show a range as a single price. */
+    describe(point): readonly SeriesRow[] {
+      return [
+        { label: "U", value: point.upper },
+        { label: "L", value: point.lower },
+      ];
     },
 
     draw(target, context: SeriesContext<BandPoint>) {

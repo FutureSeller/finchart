@@ -60,18 +60,14 @@ pane's flex — the split the user arranged is still there when it ends — and
 every change rings `panesChange` once, even for a lone pane whose height
 doesn't move, so a pressed-state toolbar follows that one event.
 
-::: warning Using it alongside the drawing tools — **install order** decides who owns the double-click
+::: tip Alongside the drawing tools, the drawing answers first
 `paneMaximize` with `gestures: true` and the drawing tools **both watch
-dblclick.** Whether a double-click on a shape picks the shape or maximizes the
-pane comes down to this: at equal priority, **whoever registered last wins**
-(on a tie the input stack asks the later registration first).
-
-So mount the drawing tools **later** and the shape wins; mount them first and
-maximize wins. `Esc` (clear the selection vs. restore from maximize) splits on
-the same order. `paneMaximize` takes no priority option today, but **the
-toolbox does** — pass `drawingTools({ plot, priority: 1 })` and the tools get
-it first regardless of install order (measured). So there are two levers — the
-toolbox has a `priority` option, `paneMaximize` still has only install order.
+dblclick and Esc.** The maximize gestures sit below the default input
+priority, so they only get what nothing on the chart claimed: a double-click
+on a shape selects the shape, and `Esc` cancels the line being drawn (or
+clears the selection) before it restores from maximize — whatever order the
+two were installed in. A toolbox given a negative `priority` drops below
+them on purpose.
 :::
 
 ## The keyboard contract

@@ -4,6 +4,9 @@ import type { InputHost, PaneHost } from "../plot/capabilities";
 import type { Plugin, PluginApi } from "../primitives";
 import { pluginApi } from "../primitives";
 
+/** Under the default 0, over axis drag's -100. */
+const LAYOUT_GESTURE_PRIORITY = -50;
+
 /**
  * The toggle and the gestures for a maximized pane. The state itself is the
  * chart's (`plot.maximizePane` / `plot.maximizedPane`): a layout mode the
@@ -57,6 +60,10 @@ export interface PaneMaximizeOptions {
  *
  * `dispose()` takes the toggle and the gestures away and leaves the layout
  * as it is — `plot.maximizePane(null)` gives the split back.
+ *
+ * Esc and double-click reach it only after every consumer at the default
+ * priority passed on them, so a drawing in progress or under the cursor
+ * answers first wherever the tools were installed.
  */
 export function paneMaximize(
   options: PaneMaximizeOptions = {},
@@ -88,6 +95,13 @@ export function paneMaximize(
     // Restoring via Esc is always on — when there's nothing to restore, it
     // returns false and the chain continues (the same spot a drawing
     // tool's cancel/deselect occupies).
+    //
+    // Below the default priority: Esc and double-click mean "the thing under
+    // my hand" first — a line being drawn, a drawing to select — and the
+    // layout only when nothing on the chart claimed them. At the same
+    // priority the plugin installed later went first, so the answer
+    // depended on install order. Still above axis drag, which only claims
+    // its own axis strip.
     const removeInputConsumer = plot.addInputConsumer({
       handle(event) {
         if (event.type === "keydown" && event.key === "Escape") {
@@ -109,7 +123,7 @@ export function paneMaximize(
         }
         return false;
       },
-    });
+    }, { priority: LAYOUT_GESTURE_PRIORITY });
 
     const api = pluginApi(
       {

@@ -80,4 +80,21 @@ describe("bandSeries", () => {
 
     expect(extent).toEqual({ min: 3, max: 14 });
   });
+
+  /**
+   * **A band reads as both edges.** Registered with a name, it used to read
+   * as its upper edge alone — one unlabelled number standing for a range.
+   */
+  it("describes its upper and lower edge, a gap as a dash", () => {
+    const band = bandSeries();
+
+    expect(band.describe?.({ x: 0, upper: 12, lower: 8 })).toEqual([
+      { label: "U", value: 12 },
+      { label: "L", value: 8 },
+    ]);
+    expect(band.describe?.({ x: 1, upper: null, lower: null })).toEqual([
+      { label: "U", value: null },
+      { label: "L", value: null },
+    ]);
+  });
 });
