@@ -141,17 +141,22 @@ describe("every indicator landing agrees with a cold computation", () => {
   const recursive = new Set(["movingAverage ema", "macd", "rsi", "atr", "adx", "keltnerChannels", "stochasticRsi", "elderRay", "trix"]);
 
   it.each(factories)("%s", (name, make) => {
-    const f = feed(bars(2000, 6000));
+    // CI keeps every factory and every landing shape, with a shorter history.
+    // The full history remains in the local gate.
+    const [start, end, firstPage, oldest] = process.env.FINCHART_SKIP_STRESS === "1"
+      ? [500, 900, 400, 300]
+      : [2000, 6000, 1500, 600];
+    const f = feed(bars(start, end));
     const landed = make(f.source);
     const branches = Object.keys(landed.out);
     const before = new Map(branches.map((key) => [key, landed.out[key].read()]));
 
-    for (const page of [bars(1500, 2000), bars(1499, 1500), bars(600, 1499)]) {
+    for (const page of [bars(firstPage, start), bars(firstPage - 1, firstPage), bars(oldest, firstPage - 1)]) {
       f.prepend(page);
       for (const key of branches) landed.out[key].read();
     }
 
-    const cold = make({ read: () => bars(600, 6000) });
+    const cold = make({ read: () => bars(oldest, end) });
     for (const key of branches) {
       const after = landed.out[key].read();
       const want = cold.out[key].read();
