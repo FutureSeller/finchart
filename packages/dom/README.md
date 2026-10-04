@@ -86,7 +86,7 @@ shows the complete wiring.
   to support something older.
   CI runs current Playwright Chromium, Firefox, and WebKit. The historical
   floor versions and branded Edge/Safari are not separately exercised.
-- The repository's own toolchain (Node 24 · pnpm 11) is higher than this. That
+- The repository's own toolchain (Node 24.21+ · pnpm 12) is higher than this. That
   is **the contributor's floor**, not the consumer's.
 
 ## Docs

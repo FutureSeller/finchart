@@ -78,7 +78,7 @@ CI runs the browser E2E suite in current Playwright Chromium, Firefox, and
 WebKit. The listed 2022 browser versions are API floors, not versions exercised
 by that suite; branded Edge and Safari are not run separately.
 And this table is **the consumer's floor**: what's needed to develop the
-repository itself (Node 24 · pnpm 11) lives separately in the root
+repository itself (Node 24.21+ · pnpm 12) lives separately in the root
 `package.json`'s `engines`.
 
 ## Getting started

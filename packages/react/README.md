@@ -381,7 +381,7 @@ you want to swap a single series through an imperative handle
   Browser E2E runs current Playwright Chromium, Firefox, and WebKit. The
   historical floor versions and branded Edge/Safari are not separately run.
 - **React 18+** — the peer range. CI runs both the floor (18) and the ceiling (19).
-- The repository's own toolchain (Node 24 · pnpm 11) is higher than this. That
+- The repository's own toolchain (Node 24.21+ · pnpm 12) is higher than this. That
   is **the contributor's floor**, not the consumer's.
 
 ## Docs
