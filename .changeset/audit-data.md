@@ -1,5 +1,0 @@
----
-"@finchart/core": patch
----
-
-Lines, areas, baselines and step lines now reach both plot edges when zoomed in: drawing gets the one point just outside the view on each side, so a single visible point still draws its segments and a candle or bar cut by the edge no longer vanishes. The y range is still built from the points inside the view. A custom `DataManager.getVisiblePlaced` is now expected to hand drawing those two neighbours as well. M4 decimation keeps each value run's first, lowest, highest and last point even when gaps leave that run less than one column of budget, so a spike between gaps stays in the drawing and in the autoscaled y range — a heavily gapped line can draw more points than before. Zoomed-out candles and OHLC bars are merged into whole-candle buckets on a grid anchored at index 0, so a one-bar pan changes only the two edge candles instead of re-bucketing the whole chart; because buckets are whole, a window can show as few as about half the candles its budget allows (just over the budget merges in pairs), or one bucket more when it starts off the grid.

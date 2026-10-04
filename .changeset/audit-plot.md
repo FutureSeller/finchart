@@ -1,5 +1,0 @@
----
-"@finchart/core": patch
----
-
-A chart mounted empty and fed bar by bar no longer stays zoomed onto its first bar: while the first fit covered a single x, each data change fits x again until the window is moved (pan, zoom, `setVisibleRange`). Data that arrives after every series went empty — a loading state between two symbols — is fitted like a first arrival. A flat visible window pads its value axis by 5% of the price instead of ±1, so a quiet stretch of EUR/USD or a flat sub-cent price keeps its scale and never shows negative ticks. A y-axis drag on a log axis zooms out when dragged down and zooms in around the middle of the pane. `paneMaximize` keeps the maximize when a pane is added meanwhile — the new pane collapses with the rest and gets its own flex back on restore. With no axis `format`, the price-line, crosshair, tooltip and legend values keep two decimals but take the tick step's digits when it is finer than a cent (`DEFAULT_Y_FORMAT` takes the step as an optional second argument), so a sub-cent price no longer reads `0.00`. A synced crosshair's time badge is hidden when the synced x is outside this chart's window, like its line.

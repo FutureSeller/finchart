@@ -1,7 +1,0 @@
----
-"@finchart/core": minor
-"@finchart/dom": minor
-"@finchart/react": minor
----
-
-A pane divider handle is a keyboard control: a focusable `role="separator"` named "Resize panes" whose `aria-valuenow`/`aria-valuemin`/`aria-valuemax` give the upper pane's height and how far it can go, in whole pixels. `↑`/`↓` move it 8px (40px with Shift) and `Home`/`End` move it to its limit — a `DividerDragHandler` given `-Infinity`/`Infinity` moves the boundary as far as it goes; those keys stop at the handle, so neither drawing tools nor the container's pan and zoom keys see them, and a frame drawn while it has focus keeps the focus. Divider moves that arrive before the next frame now add up — keys or pointer moves used to start again from the last frame's heights, so the second of two quick moves replaced the first; a move now measures from the chart as it stands, without drawing a frame, and does nothing when no handle could be up (no data, resizing off, no room). No focus style is drawn — style `[data-chart-divider]:focus-visible`. `DividerBoundary` carries that `value: { now, min, max }`, from the same limits a drag is clamped to; a custom `DividerRenderer` receives it, and code that builds boundaries by hand must supply it. `<Legend>` inside a `<ChartPane>` shows that pane's series instead of always `mainPane`, and `<Tooltip>` takes `offset`, with a removed prop going back to 12. `cssReader` reads through the container's own window, so a chart in an iframe or popup takes that window's styles; a document with no window gives the empty reader.
