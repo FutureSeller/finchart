@@ -639,7 +639,7 @@ Try `plot.use(watermark())` and you're stopped. Here's the line:
   and `markers`, are decorations; things that **act**, like `crosshair`,
   `tooltip`, `legend` and `drawingTools`, are plugins. Put a decoration into
   `use` and the types stop you — the vocabularies aren't merged because
-  [PRINCIPLES.md](https://github.com/finchart/finchart/blob/main/PRINCIPLES.md)
+  [PRINCIPLES.md](https://github.com/FutureSeller/finchart/blob/main/PRINCIPLES.md)
   principle 12, "extensions come wrapped", starts by separating the wrapper
   (plugin) from the ingredient (decoration).
 
@@ -1185,5 +1185,5 @@ value that ticks every frame moves the line, not the registration.
 
 - Principles: state is synchronous and drawing is per-frame, interactions are
   automatic, split by surface —
-  [PRINCIPLES.md](https://github.com/finchart/finchart/blob/main/PRINCIPLES.md)
+  [PRINCIPLES.md](https://github.com/FutureSeller/finchart/blob/main/PRINCIPLES.md)
 - [glossary.md](glossary.md) — what the terms mean

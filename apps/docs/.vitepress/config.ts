@@ -190,7 +190,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/finchart/finchart" },
+      { icon: "github", link: "https://github.com/FutureSeller/finchart" },
     ],
 
     search: { provider: "local" },

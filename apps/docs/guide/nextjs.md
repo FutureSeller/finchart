@@ -84,6 +84,6 @@ There is no way to place a chart from a Server Component alone, with
 serializable props only — the wiring is a function, and a client file of yours
 has to make it. One file, like the one above, is the whole cost.
 
-See also: the [`@finchart/react` README](https://github.com/finchart/finchart/tree/main/packages/react),
+See also: the [`@finchart/react` README](https://github.com/FutureSeller/finchart/tree/main/packages/react),
 [Time zones and sessions](/guide/time-zones) for why the axis should be told
 its zone rather than left to the runtime.

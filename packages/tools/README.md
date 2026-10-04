@@ -112,7 +112,7 @@ underneath.
 > });
 > ```
 >
-> The full story is under "Keyboard" in [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md).
+> The full story is under "Keyboard" in [plot-contract.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/plot-contract.md).
 
 Ctrl/⌘+Z is deliberately not built into the chart input stack yet: modifier
 keys are kept by the DOM host. In a **single-toolbox** chart, bind the DOM key
@@ -279,7 +279,7 @@ What the key needs to carry:
 - **A price-axis transform's parameters and source**, when one is on. Renko
   and its kind produce an ordinal x that is only meaningful for one
   (transform, options, source) triple — the
-  [plot contract](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
+  [plot contract](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/plot-contract.md)
   says how to restore across that boundary, and it is best effort.
 
 ## Pointing at what you restored
@@ -337,9 +337,9 @@ your own UI around them.**
 
 ## Docs
 
-- **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md)
-- **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
-- **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
+- **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/theme.md)
+- **The Plot contract** — [plot-contract.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/plot-contract.md)
+- **Glossary** — [glossary.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/glossary.md)
 - **Saving per symbol and interval** — [above](#saving-per-symbol-and-interval)
-- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
-- **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)
+- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
+- **Time zones and sessions** — [time-zones.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/time-zones.md)
