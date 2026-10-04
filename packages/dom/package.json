@@ -1,6 +1,6 @@
 {
   "name": "@finchart/dom",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Browser shell for @finchart/core — DOM layers, axis labels, dividers, pointer input, legend and tooltip, wired by browserDeps. The react-dom to core's react.",
   "license": "MIT",
   "engines": {

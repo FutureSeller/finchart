@@ -1,6 +1,6 @@
 {
   "name": "@finchart/indicators",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Financial indicators for @finchart/core — MA, MACD, Bollinger, RSI, Ichimoku and more as computation nodes: compute once, feed many drawings.",
   "license": "MIT",
   "engines": {
