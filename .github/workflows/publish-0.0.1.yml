@@ -1,0 +1,82 @@
+name: Publish 0.0.1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-0.0.1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_SHA: 3004db58107216cbe2892ea9cf61c479711fbbb4
+    steps:
+      - name: Check out reviewed release
+        uses: actions/checkout@v7
+        with:
+          ref: 3004db58107216cbe2892ea9cf61c479711fbbb4
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.21.0
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: Confirm npm secret
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo '::error::Add the NPM_TOKEN repository secret before publishing.'
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check first-release baseline
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, readdirSync } from 'node:fs';
+
+          const packages = ['core', 'dom', 'indicators', 'react', 'tools'];
+          for (const name of packages) {
+            const manifest = JSON.parse(readFileSync(`packages/${name}/package.json`, 'utf8'));
+            if (manifest.version !== '0.0.1' || manifest.publishConfig?.access !== 'public') {
+              throw new Error(`${manifest.name} is not ready for public 0.0.1 publication`);
+            }
+          }
+
+          const pending = readdirSync('.changeset').filter(
+            (name) => name.endsWith('.md') && name !== 'README.md',
+          );
+          if (pending.length) throw new Error(`Pending changesets: ${pending.join(', ')}`);
+          NODE
+
+      - run: pnpm build
+      - run: pnpm check:publish
+
+      - name: Publish five packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm exec changeset publish
+
+      - name: Push release tags
+        run: |
+          for package in core dom indicators react tools; do
+            tag="@finchart/$package@0.0.1"
+            if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+              test "$(git rev-list -n 1 "refs/tags/$tag")" = "$RELEASE_SHA"
+            else
+              git tag "$tag" "$RELEASE_SHA"
+            fi
+            git push origin "refs/tags/$tag"
+          done
