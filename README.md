@@ -1,8 +1,9 @@
 # @finchart
 
-**A financial chart library with candles, indicators, drawing tools, and real-time
-updates.** The core knows nothing about frameworks; the React wrapper sits on
-top of it. You can test it headless.
+**A composable financial chart engine for TypeScript apps.** Build candles,
+indicators, drawings, and live charts on a DOM-free core. Add the browser shell
+and React wrapper when you need them, and inspect draw commands to test chart
+output without a browser.
 
 ```
 packages/core        @finchart/core        Chart engine (zero dependencies, no DOM)
@@ -13,9 +14,10 @@ packages/tools       @finchart/tools       Drawing tools (horizontal·trend line
 apps/examples        Where you see it for yourself
 ```
 
-## 30-second proof
+## Why @finchart
 
-**Test a chart — no browser, five lines.** Everyone else relies on screenshot diffing.
+**Test chart output directly.** `createPlotModel` emits draw commands, so a test
+can inspect chart geometry without a DOM or a screenshot:
 
 ```ts
 // Turn off showGrid — otherwise the grid is drawLine too, and find() picks up grid lines.
@@ -28,7 +30,18 @@ const lines = model.commands().filter((c) => c.type === "drawLine");
 expect(lines[0].points).toHaveLength(data.length);
 ```
 
-**Linking two charts is a helper, not a feature.** The x window is moved with
+**Build features on public contracts.** Indicators use computed nodes and
+`Source` outputs; drawing tools use plugins and the input stack. Both ship as
+separate packages without adding feature-specific methods to the core. See
+[Architecture](apps/docs/guide/architecture.md) and
+[Building your own indicator](apps/docs/guide/extensions.md).
+
+**Choose what enters the bundle.** `browserDeps()` provides the full browser
+setup; `createPlotDeps` lets you supply only the collaborators you need. The
+[bundle guide](apps/docs/guide/explicit-wiring.md) records gzipped budgets for
+specific @finchart examples, not cross-library benchmarks.
+
+**Connect charts through the same public API.** The x window is moved with
 `setVisibleRange()` and announced by `xDomainChange` — that is all `syncX`
 needs; `getVisibleRange()` reads it when you want it once.
 
@@ -36,10 +49,6 @@ needs; `getVisibleRange()` reads it when you want it once.
 plot.getVisibleRange();          // { min, max } in data x
 syncX(btcPlot, ethPlot);         // sync is a 30-line helper
 ```
-
-**Extensions are built as packages.** The indicators and drawing-tools packages
-were built **without the core API growing for them** — the only irrefutable proof that the
-computed-node, input-stack, and plugin contracts are real.
 
 ## What's there
 

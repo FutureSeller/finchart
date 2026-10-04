@@ -94,7 +94,7 @@ function llmsSidebar(configured: DefaultTheme.Sidebar | undefined): DefaultTheme
 
 export default defineConfig({
   title: "@finchart",
-  description: "Zero-dependency, customizable financial charts",
+  description: "Composable financial charts with a DOM-free core, testable draw commands, and optional browser, React, indicator, and drawing-tool packages",
   lang: "en-US",
   cleanUrls: true,
   outDir: "dist",
