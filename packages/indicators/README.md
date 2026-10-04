@@ -306,7 +306,7 @@ Other exports with a row of their own, not computed nodes:
   The floor is set by `structuredClone`, `Object.hasOwn`, and
   `Array.prototype.at`, and **no polyfills ship** — bring your own if you need
   to support something older.
-- The repository's own toolchain (Node 24 · pnpm 11) is higher than this. That
+- The repository's own toolchain (Node 24.21+ · pnpm 12) is higher than this. That
   is **the contributor's floor**, not the consumer's.
 
 ## Docs

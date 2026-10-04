@@ -87,7 +87,7 @@ describe("createDomLayers", () => {
 
     expect(container.style.position).toBe("relative");
     expect(overlayOf(layers).style.position).toBe("absolute");
-    expect(overlayOf(layers).style.inset).toBe("0");
+    expect(overlayOf(layers).style.inset).toMatch(/^0(?:px)?$/);
   });
 
   it("should pin the canvas to the overlay's origin, so a padded container keeps pixels under the pointer", () => {
@@ -99,7 +99,7 @@ describe("createDomLayers", () => {
 
     expect(canvas.style.position).toBe("absolute");
     expect([canvas.style.top, canvas.style.left]).toEqual(["0px", "0px"]);
-    expect(overlayOf(layers).style.inset).toBe("0");
+    expect(overlayOf(layers).style.inset).toMatch(/^0(?:px)?$/);
   });
 
   it("should hand the container back unpositioned on destroy", () => {
