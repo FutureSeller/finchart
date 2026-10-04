@@ -3,10 +3,10 @@
 Write one change down with `pnpm changeset`; the release itself is
 `pnpm changeset version` → `pnpm release`.
 
-The first public release is `0.0.1`. Changes made before that release are
-recorded in each package's `CHANGELOG.md`; they are not pending changesets.
-Publish `0.0.1` from the baseline commit without running `changeset version`.
-New changesets start with changes made after that baseline.
+The first public release, `0.0.1`, was published from commit `3004db5`.
+Changes made before that release are recorded in each package's `CHANGELOG.md`;
+they are not pending changesets. New changesets start with changes made after
+that baseline.
 
 ## The five packages **go up as one version** (`fixed`)
 
