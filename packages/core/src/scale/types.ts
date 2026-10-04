@@ -4,6 +4,8 @@
  * by throwing, not by returning a Result.
  */
 export interface Scale {
+  /** Stable scale kind. Custom scales declare their own kind for declarative pane updates. */
+  readonly kind: string;
   /** The data domain [min, max]. */
   getDomain(): [number, number];
   /**

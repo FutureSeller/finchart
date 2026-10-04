@@ -73,6 +73,7 @@ describe("badges on a log scale", () => {
       stepAt: () => 0.001,
     };
     const scale: Scale = {
+      kind: "geometry-test",
       getDomain: () => [1, 100],
       getRange: () => [572, 8],
       setDomain: () => undefined,

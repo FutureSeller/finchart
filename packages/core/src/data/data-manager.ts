@@ -646,7 +646,7 @@ export class SimpleDataManager<
       const previous = this.tiers[i - 1];
       const halved = this.decimation.decimate(
         previous,
-        this.decimationRange(previous, 0, previous.length),
+        { ...this.decimationRange(previous, 0, previous.length), preserveBuckets: true },
         Math.ceil(previous.length / 2),
         screenXScan,
         // A tier is a reduction that preserves gaps, so if the original has none, neither does the tier.

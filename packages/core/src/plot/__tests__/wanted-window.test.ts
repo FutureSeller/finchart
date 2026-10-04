@@ -88,6 +88,22 @@ describe("a window that only shows the first bar whole", () => {
 });
 
 describe("a window asked for past the data, while bars keep arriving", () => {
+  it("keeps the requested past x when a live append cannot move an already-wide window", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      deps: { createXMapping: barIndexX },
+      config: { shiftVisibleRangeOnNewBar: true },
+    });
+    const handle = model.plot.mainPane.addSeries({ series: lineSeries(), data: points(100, 119) });
+    model.plot.setVisibleRange(50, 130);
+
+    handle.append([{ x: 120, y: 1 }]);
+    expect(model.plot.getVisibleRange()).toEqual({ min: 50, max: 130 });
+    handle.prepend(points(20, 98, 2));
+
+    expect(model.plot.getVisibleRange()).toEqual({ min: 50, max: 130 });
+  });
+
   it("is still corrected when history lands after a live bar — the new bar doesn't overtake a window in the past", () => {
     const model = createPlotModel({
       size: { width: 800, height: 600 },

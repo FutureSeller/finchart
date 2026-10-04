@@ -39,6 +39,16 @@ describe("OhlcAggregation", () => {
     }
   });
 
+  it("keeps an off-grid visible window within the threshold", () => {
+    const data = candles(12);
+    for (const threshold of [1, 5]) {
+      const out = aggregation().decimate(data, { start: 1, end: 11 }, threshold);
+      expect(out.length).toBeLessThanOrEqual(threshold);
+      expect(out[0].open).toBe(data[1].open);
+      expect(out.at(-1)?.close).toBe(data[10].close);
+    }
+  });
+
   /**
    * This is where aggregation diverges from decimation. Picking a single
    * candle from the bucket would lose the high/low of the rest of the
@@ -99,6 +109,7 @@ describe("OhlcAggregation", () => {
     const bounds = [range.start];
     for (let b = size; b < range.end; b += size) if (b > range.start) bounds.push(b);
     bounds.push(range.end);
+    if (bounds.length - 1 > threshold) bounds.splice(1, 1);
     expect(merged).toHaveLength(bounds.length - 1);
 
     let covered = 0;

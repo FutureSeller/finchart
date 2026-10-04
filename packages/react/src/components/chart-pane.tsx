@@ -34,10 +34,9 @@ export interface ChartPaneProps {
   invert?: boolean;
   /**
    * The value scale, as a factory. A log toggle is a change of this prop —
-   * the pane, its series and its height stay. **The factory's identity is
-   * the change**, like any function prop: a new one is called and its scale
-   * installed, so pin it (a module constant, `useCallback`) — an inline
-   * arrow installs a fresh scale every render. Removing it puts back a
+   * the pane, its series and its height stay. The factory is called on each
+   * committed update, but its scale is installed only when `kind` changes.
+   * An inline arrow is fine. Removing it puts back a
    * linear scale — on the main pane, the instance this replaced, carrying
    * whatever range the pane shows at that moment; that restore also runs
    * when this pane goes, and overwrites a `mainPane.setYScale` made while
@@ -135,17 +134,24 @@ export function ChartPane({
     if (patch) pane.applyOptions(patch);
   }, [pane, flex, minHeight, valuePadding, autoScale, invert, fixed]);
 
-  // The factory each pane holds a scale from — the acquisition's first, then
-  // every new identity. Compared, not counted, so StrictMode's replay of this
-  // effect installs nothing twice.
-  const scaleFrom = useRef<{ pane: Pane; factory: (() => Scale) | undefined } | null>(null);
+  // Acquisition already used the initial factory. After that, evaluate the
+  // current factory each commit and compare the scale's declared kind.
+  const scaleFrom = useRef<{ pane: Pane; present: boolean } | null>(null);
   useEffect(() => {
     if (!pane) return;
-    if (scaleFrom.current?.pane !== pane) scaleFrom.current = { pane, factory: initialOptions.current.yScale };
-    if (scaleFrom.current.factory === yScale) return;
-    scaleFrom.current.factory = yScale;
-    api.swapPaneScale(pane, yScale);
-  }, [api, pane, yScale]);
+    if (scaleFrom.current?.pane !== pane) {
+      scaleFrom.current = { pane, present: initialOptions.current.yScale !== undefined };
+      return;
+    }
+    if (yScale) {
+      const next = yScale();
+      if (next.kind !== pane.yScale.kind) api.swapPaneScale(pane, next);
+      scaleFrom.current.present = true;
+    } else if (scaleFrom.current.present) {
+      api.swapPaneScale(pane, undefined);
+      scaleFrom.current.present = false;
+    }
+  });
 
   // Once a fixed range goes, the pane does what `autoScale` says — read at
   // that moment, never a reason to re-pin the range.

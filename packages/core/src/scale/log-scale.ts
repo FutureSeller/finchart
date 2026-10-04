@@ -139,6 +139,7 @@ const LOG_FLOOR_DECADES = 1000;
  * `0.00003` near the floor of a wide domain instead of `0.00`.
  */
 export class LogScale implements Scale {
+  readonly kind: string = "log";
   private domain: [number, number] = [1, 10];
   private range: [number, number] = [0, 1];
 

@@ -12,7 +12,7 @@ import type { SeriesCollector, SeriesPlacement } from './series-collector';
  */
 /**
  * What `<ChartPane>` hands over at mount. `yScale` is a factory — called at
- * acquisition, like `deps.mainPaneYScale`; a later identity change goes
+ * acquisition, like `deps.mainPaneYScale`; a later kind change goes
  * through `swapPaneScale`.
  */
 export interface PaneAcquisition extends PaneOptions {
@@ -24,11 +24,11 @@ export interface ChartApi<T extends BaseDataPoint = BaseDataPoint> {
   acquirePane(options: PaneAcquisition): Pane;
   releasePane(pane: Pane): void;
   /**
-   * A `yScale` prop that changed after acquisition: a factory is called and
-   * its scale installed; `undefined` puts back the default — on the main
+   * A `yScale` kind that changed after acquisition: its scale is installed;
+   * `undefined` puts back the default — on the main
    * pane, the instance the prop replaced.
    */
-  swapPaneScale(pane: Pane, yScale: (() => Scale) | undefined): void;
+  swapPaneScale(pane: Pane, yScale: Scale | undefined): void;
   /**
    * The owner of that pane's series list. One per pane, so the container
    * holds it.

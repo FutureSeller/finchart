@@ -248,6 +248,8 @@ export interface IndexRange {
   end: number;
   /** Stable bucket boundary for strategies that group by index. Defaults to 0. */
   originIndex?: number;
+  /** Internal tier construction keeps all grid buckets; only the visible result is capped. */
+  preserveBuckets?: true;
 }
 
 export interface DecimationStrategy<T extends BaseDataPoint = BaseDataPoint> {

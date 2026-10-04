@@ -1,9 +1,9 @@
 [
   {
-    "name": "everything — import * (a preset consumer) · 44.1 KB gzip (44117B measured)",
+    "name": "everything — import * (a preset consumer) · 44.2 KB gzip (44238B measured)",
     "path": "dist/index.mjs",
     "import": "*",
-    "limit": "44.2 KB",
+    "limit": "44.3 KB",
     "gzip": true
   },
   {
@@ -14,7 +14,7 @@
     "gzip": true
   },
   {
-    "name": "headless — createPlotModel (server, worker) · 24.3 KB gzip (24294B measured)",
+    "name": "headless — createPlotModel (server, worker) · 24.4 KB gzip (24370B measured)",
     "path": "dist/headless.mjs",
     "import": "{ createPlotModel }",
     "limit": "24.4 KB",

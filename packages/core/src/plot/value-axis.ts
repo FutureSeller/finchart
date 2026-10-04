@@ -55,6 +55,9 @@ export function replantScale(
   hints: ExpandHints,
 ): void {
   requireObject(next, "setYScale(next)");
+  if (typeof next.kind !== "string" || next.kind.length === 0) {
+    throw new ContractError("setYScale(next) must declare a nonempty kind");
+  }
   if (typeof next.scale !== "function" || typeof next.invert !== "function") {
     throw new ContractError("setYScale(next) must be a Scale (scale, invert)");
   }

@@ -74,7 +74,7 @@ export function paintFrame(
   const onChart = (pane: Pane): boolean => panes.includes(pane);
   const scene = frame.panes;
 
-  drawDividers(stage, config);
+  drawDividers(stage, config, scene);
 
   /**
    * Plot decorations wrap the pane loop.
@@ -301,13 +301,17 @@ function drawPaneBoundaries(
 }
 
 /** A divider sits in the middle of the gap between panes. */
-function drawDividers(stage: PaintStage, config: ResolvedPlotConfig): void {
+function drawDividers(stage: PaintStage, config: ResolvedPlotConfig, scene: readonly Pane[]): void {
   const { dividers, panes } = stage;
   if (!dividers) return;
 
   const gap = config.paneGap;
 
-  if (!config.resizablePanes || panes.length < 2) {
+  // Layout callbacks may have changed the live pane list after the frame
+  // captured its scene. No divider belongs to that mixed geometry: wait for
+  // the next layout instead of pairing an unlaid pane with an old height.
+  if (!config.resizablePanes || scene.length < 2 ||
+      scene.length !== panes.length || scene.some((pane, index) => pane !== panes[index])) {
     dividers.clear();
     return;
   }
@@ -318,13 +322,13 @@ function drawDividers(stage: PaintStage, config: ResolvedPlotConfig): void {
   });
 
   dividers.render(
-    panes.slice(0, -1).map((pane, index) => ({
+    scene.slice(0, -1).map((pane, index) => ({
       index,
       y: pane.area.bottom + gap / 2,
       left: pane.area.left,
       right: pane.area.right,
-      value: dividerRange(side(pane), side(panes[index + 1])),
-      panes: [pane, panes[index + 1]],
+      value: dividerRange(side(pane), side(scene[index + 1])),
+      panes: [pane, scene[index + 1]],
     })),
   );
 }
