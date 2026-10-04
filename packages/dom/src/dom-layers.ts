@@ -114,8 +114,39 @@ export const createDomLayers = (
     },
     overlay,
     screenshot() {
-      // The backing store is at physical resolution, so the dataURL is too — the sharper result is the right one.
-      return canvas.toDataURL("image/png");
+      // Axis labels live in the DOM so they remain selectable and readable.
+      // Composite those labels onto a copy; the live canvas and overlay stay
+      // untouched. Legend, tooltip, and custom overlay elements are omitted.
+      const shot = document.createElement("canvas");
+      shot.width = canvas.width;
+      shot.height = canvas.height;
+      const target = shot.getContext("2d");
+      if (!target) throw new RenderError("could not get a screenshot 2D context");
+      target.drawImage(canvas, 0, 0);
+      const view = document.defaultView;
+      if (!view || logical.width <= 0 || logical.height <= 0) return shot.toDataURL("image/png");
+      target.scale(canvas.width / logical.width, canvas.height / logical.height);
+      const origin = canvas.getBoundingClientRect();
+      overlay.querySelectorAll<HTMLElement>("[data-chart-axis] span").forEach((label) => {
+        const style = view.getComputedStyle(label);
+        if (style.display === "none" || style.visibility === "hidden") return;
+        const rect = label.getBoundingClientRect();
+        const x = rect.left - origin.left;
+        const y = rect.top - origin.top;
+        if (style.backgroundColor !== "rgba(0, 0, 0, 0)" && style.backgroundColor !== "transparent") {
+          target.fillStyle = style.backgroundColor;
+          target.fillRect(x, y, rect.width, rect.height);
+        }
+        target.fillStyle = style.color;
+        target.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        target.textBaseline = "middle";
+        target.fillText(
+          label.textContent ?? "",
+          x + Number.parseFloat(style.paddingLeft || "0"),
+          y + rect.height / 2,
+        );
+      });
+      return shot.toDataURL("image/png");
     },
     setCursor(cursor) {
       // Set on canvas, not container — it's the surface the pointer

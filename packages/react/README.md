@@ -378,6 +378,8 @@ you want to swap a single series through an imperative handle
   The floor is set by `structuredClone`, `Object.hasOwn`, and
   `Array.prototype.at`, and **no polyfills ship** — bring your own if you need
   to support something older.
+  Browser E2E runs current Playwright Chromium, Firefox, and WebKit. The
+  historical floor versions and branded Edge/Safari are not separately run.
 - **React 18+** — the peer range. CI runs both the floor (18) and the ceiling (19).
 - The repository's own toolchain (Node 24 · pnpm 11) is higher than this. That
   is **the contributor's floor**, not the consumer's.

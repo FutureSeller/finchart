@@ -1262,8 +1262,8 @@ export class Plot
    * the old picture. Throws if the layers don't offer the capability
    * (headless).
    *
-   * With DOM label wiring, the shot is missing labels — a complete
-   * screenshot requires `createCanvasAxisLabels` wiring.
+   * Browser DOM layers composite their axis labels into the PNG. Legend,
+   * tooltip, and custom overlay elements are outside the screenshot contract.
    */
   takeScreenshot(): string {
     // The layers still hold the last picture, which is not this chart any more.

@@ -104,6 +104,62 @@ test("the trading screen has real pixels too", async ({ page }) => {
   expect(stats.painted).toBeGreaterThan(5_000);
 });
 
+test("the downloaded PNG includes DOM axis labels", async ({ page }) => {
+  await page.goto("/trading.html");
+  await expect(page.locator("[data-chart-axis] span").first()).toBeVisible();
+  await page.evaluate(() => {
+    HTMLAnchorElement.prototype.click = function () {
+      (window as unknown as { chartShot?: string }).chartShot = this.href;
+    };
+  });
+  await page.getByRole("button", { name: "PNG" }).click();
+
+  const changedPixels = await page.evaluate(async () => {
+    const url = (window as unknown as { chartShot?: string }).chartShot;
+    const canvas = document.querySelector("#chart canvas") ?? document.querySelector("canvas");
+    const label = document.querySelector<HTMLElement>("[data-chart-axis] span");
+    if (!url || !(canvas instanceof HTMLCanvasElement) || !label) throw new Error("screenshot fixture missing");
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const output = document.createElement("canvas");
+    output.width = canvas.width;
+    output.height = canvas.height;
+    const context = output.getContext("2d");
+    const source = canvas.getContext("2d");
+    if (!context || !source) throw new Error("screenshot context missing");
+    context.drawImage(image, 0, 0);
+    const axis = label.getBoundingClientRect();
+    const origin = canvas.getBoundingClientRect();
+    const scale = canvas.width / origin.width;
+    const x = Math.max(0, Math.floor((axis.left - origin.left) * scale));
+    const y = Math.max(0, Math.floor((axis.top - origin.top) * scale));
+    const width = Math.min(canvas.width - x, Math.ceil(axis.width * scale));
+    const height = Math.min(canvas.height - y, Math.ceil(axis.height * scale));
+    const before = source.getImageData(x, y, width, height).data;
+    const after = context.getImageData(x, y, width, height).data;
+    let changed = 0;
+    for (let i = 0; i < before.length; i += 4) {
+      if (before[i] !== after[i] || before[i + 1] !== after[i + 1] || before[i + 2] !== after[i + 2]) changed++;
+    }
+    return changed;
+  });
+  expect(changedPixels).toBeGreaterThan(10);
+});
+
+test("the trading screen exposes exact candle data in a navigable table", async ({ page }) => {
+  await page.goto("/trading.html");
+  const disclosure = page.locator("[data-chart-data]");
+  await expect(disclosure.locator("summary")).toContainText("BTC/KRW 5-minute candles");
+  await disclosure.locator("summary").click();
+  await expect(disclosure.getByRole("table", { name: "BTC/KRW 5-minute candles" })).toBeVisible();
+  await expect(disclosure.getByRole("columnheader")).toHaveCount(6);
+  await expect(disclosure.locator("tbody tr")).toHaveCount(100);
+  await page.locator("#toolbar select").first().selectOption("ETH/KRW");
+  await expect(page.locator("#chart")).toHaveAttribute("aria-label", /ETH\/KRW/);
+  await expect(disclosure.getByRole("table", { name: "ETH/KRW 5-minute candles" })).toBeVisible();
+});
+
 /**
  * **Does a hostile style value get painted in a neighbor's color?**
  *
@@ -163,12 +219,11 @@ test.describe("hostile style values (zero trust)", () => {
   test("control: a valid value really does change the pixels", async ({ page }) => {
     const MAGENTA = "255,0,255";
     const before = await pixelStats(page, [MAGENTA]);
-    expect(before.matches[MAGENTA]).toBe(0);
 
     await restyle(page, { "--chart-grid": "#ff00ff" });
     const after = await pixelStats(page, [MAGENTA]);
 
-    expect(after.matches[MAGENTA]).toBeGreaterThan(1_000);
+    expect(after.matches[MAGENTA] - before.matches[MAGENTA]).toBeGreaterThan(1_000);
   });
 
   /**
@@ -189,23 +244,30 @@ test.describe("hostile style values (zero trust)", () => {
     await restyle(page, { "--chart-candle-up": "nope" });
     const after = await pixelStats(page, [UP]);
 
-    expect(after.matches[UP]).toBe(0);
+    // Antialiasing and unrelated strokes can leave a few exact green pixels
+    // in WebKit; the candle bodies themselves must disappear.
+    expect(after.matches[UP]).toBeLessThan(before.matches[UP] / 5);
     // Ink drops by what wasn't drawn. Painted in somebody else's color, the total would hold.
     expect(after.painted).toBeLessThan(before.painted - before.matches[UP] / 2);
   });
 
   /**
-   * `light-dark()` and `currentColor` are **valid CSS, not typos**, and the
-   * canvas rejects them anyway. Our own showcase uses `currentColor`. The same
-   * rule has to catch them.
+   * `light-dark()` is valid CSS. Chromium and WebKit reject it on canvas and
+   * demote it to transparent; Firefox accepts it as a real color. Either way,
+   * the old green must not be inherited from the preceding command.
    */
   test("valid CSS the canvas can't read does not inherit a neighbor either", async ({ page }) => {
-    const before = await pixelStats(page, [UP]);
+    const DARK = "17,17,17";
+    const LIGHT = "238,238,238";
+    const before = await pixelStats(page, [UP, DARK, LIGHT]);
     await restyle(page, { "--chart-candle-up": "light-dark(#111111, #eeeeee)" });
-    const after = await pixelStats(page, [UP]);
+    const after = await pixelStats(page, [UP, DARK, LIGHT]);
 
-    expect(after.matches[UP]).toBe(0);
-    expect(after.painted).toBeLessThan(before.painted - before.matches[UP] / 2);
+    expect(after.matches[UP]).toBeLessThan(before.matches[UP] / 5);
+    const acceptedColor =
+      after.matches[DARK] + after.matches[LIGHT] - before.matches[DARK] - before.matches[LIGHT];
+    const demoted = after.painted < before.painted - before.matches[UP] / 2;
+    expect(demoted || acceptedColor > 100).toBe(true);
   });
 
   /**

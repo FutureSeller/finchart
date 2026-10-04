@@ -132,6 +132,15 @@ export interface HistoryOptionsBase<T extends BaseDataPoint = BaseDataPoint> {
    * for fewer requests.
    */
   screensAhead?: number;
+  /**
+   * Bridge a source whose x differs from the x drawn on the chart (for
+   * example, time-stamped candles rendered as ordinal Renko bricks).
+   * `sourceX` is the first source point the sink has committed; `plottedX`
+   * is the first drawn point. Both must be read from the same committed
+   * state. Return null while the derivation has no drawn points yet.
+   * The fetch cursor still uses `from` and the page's source x.
+   */
+  viewFrontier?: () => { sourceX: number; plottedX: number } | null;
 }
 
 /** The x mode's options — a page is asked for by the x it must end before. */
@@ -362,6 +371,7 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
   }
   const coordinates = options.coordinates ?? orderOnly<T>();
   const screensAhead = options.screensAhead ?? 1;
+  const viewFrontier = options.viewFrontier;
   if (!(Number.isFinite(screensAhead) && screensAhead > 0)) {
     throw new ContractError(
       `infiniteHistory: options.screensAhead must be a positive number, got ${screensAhead}`,
@@ -468,11 +478,17 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     // (a chart that refused it). Until the chart holds the frontier, the
     // gap on screen is the chart's, not the loader's — pulling again would
     // pile up pages nobody draws. Wait, and look again on the next frame.
-    const held = host.getDataRange();
-    if (held === null || held.min > frontier) {
+    const edge = viewFrontier?.();
+    if (viewFrontier && edge !== null &&
+      (typeof edge !== "object" || !Number.isFinite(edge.sourceX) || !Number.isFinite(edge.plottedX))) {
+      throw new ContractError("infiniteHistory: viewFrontier must return finite x values or null");
+    }
+    const held = viewFrontier ? edge?.sourceX : host.getDataRange()?.min;
+    if (held == null || held > frontier) {
       awaitingLanding = true;
       return;
     }
+    const plottedFrontier = edge ? edge.plottedX : frontier;
 
     const left = host.pixelAtX(view.startX);
     const width = host.pixelAtX(view.endX) - left;
@@ -481,11 +497,11 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
 
     // A gap is blank beyond the half bar a fit leaves before the first
     // point; under half a pixel of it is not blank anyone can see.
-    if (host.pixelAtX(frontier - host.leadingMargin()) - left > 0.5) {
+    if (host.pixelAtX(plottedFrontier - host.leadingMargin()) - left > 0.5) {
       pull();
       return;
     }
-    const slack = left - host.pixelAtX(frontier);
+    const slack = left - host.pixelAtX(plottedFrontier);
     if (userWentLeft && slack < screensAhead * width) pull();
   };
 

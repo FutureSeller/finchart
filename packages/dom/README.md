@@ -73,11 +73,19 @@ A series that describes itself gets its own rows — a candle reads `SOXL: O 105
 
 ## Support matrix
 
+For screen-reader access to exact values, `dataTable` mounts an expandable
+native table beside the chart. Pass it a target outside the chart's
+`role="img"`, a series `read()` getter, a caption, and value columns. The
+[trading example](https://github.com/finchart/finchart/blob/main/apps/examples/src/trading.ts)
+shows the complete wiring.
+
 - **Node 20.19+** — where the headless path (SSR, workers, tests) runs; CI runs that floor.
 - **Browsers — Chrome 98+ · Edge 98+ · Firefox 94+ · Safari 15.4+** (2022-03).
   The floor is set by `structuredClone`, `Object.hasOwn`, and
   `Array.prototype.at`, and **no polyfills ship** — bring your own if you need
   to support something older.
+  CI runs current Playwright Chromium, Firefox, and WebKit. The historical
+  floor versions and branded Edge/Safari are not separately exercised.
 - The repository's own toolchain (Node 24 · pnpm 11) is higher than this. That
   is **the contributor's floor**, not the consumer's.
 

@@ -29,5 +29,7 @@ export { requireOverlayElement } from "./overlay-element";
 export { legend } from "./legend";
 export type { LegendOptions, LegendPane } from "./legend";
 export { tooltip } from "./tooltip";
+export { dataTable } from "./data-table";
+export type { DataTableColumn, DataTableOptions } from "./data-table";
 export type { TooltipOptions } from "./tooltip";
 export type { RowFormat } from "./sample-text";

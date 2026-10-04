@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 /**
  * The real-canvas smoke test — it sees the one thing jsdom plus a fake renderer
@@ -14,6 +14,11 @@ export default defineConfig({
   testDir: "./specs",
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+  ],
   use: {
     // A dev server that reads `dist` — `turbo build` has to run first.
     baseURL: "http://localhost:5177",

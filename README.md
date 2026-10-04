@@ -74,6 +74,9 @@ computed-node, input-stack, and plugin contracts are real.
 | React (`@finchart/react`) | **18+** | Peer range. CI runs both the floor (18) and the ceiling (19) |
 
 **No polyfills ship** — bring your own if you need to support something older.
+CI runs the browser E2E suite in current Playwright Chromium, Firefox, and
+WebKit. The listed 2022 browser versions are API floors, not versions exercised
+by that suite; branded Edge and Safari are not run separately.
 And this table is **the consumer's floor**: what's needed to develop the
 repository itself (Node 24 · pnpm 11) lives separately in the root
 `package.json`'s `engines`.

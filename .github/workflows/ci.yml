@@ -66,7 +66,26 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
         working-directory: e2e
       - run: pnpm e2e
         working-directory: e2e
+
+  react-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      # The repository catalog uses React 19. Exercise the declared peer floor
+      # in this disposable CI checkout without changing the committed catalog.
+      - run: pnpm --filter @finchart/react add -D react@18.0.0 react-dom@18.0.0 @types/react@^18.3.0 @types/react-dom@^18.3.0
+      - run: pnpm --filter @finchart/react exec node -e 'if (require("react/package.json").version !== "18.0.0") process.exit(1)'
+      - run: pnpm --filter @finchart/react... build
+      - run: pnpm --filter @finchart/react type-check
+      - run: pnpm --filter @finchart/react test
