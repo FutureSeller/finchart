@@ -18,6 +18,7 @@
       ]
     },
     "test": {
+      "env": ["FINCHART_SKIP_STRESS"],
       "outputs": [
         "coverage/**"
       ],

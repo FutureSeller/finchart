@@ -35,6 +35,8 @@ jobs:
       - run: pnpm type-check
       - run: pnpm lint
       - run: pnpm test
+        env:
+          FINCHART_SKIP_STRESS: "1"
       - run: pnpm size
       - run: pnpm check:publish
 

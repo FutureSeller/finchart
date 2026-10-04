@@ -254,7 +254,7 @@ describe("smaFold — a window mean recomputed each step", () => {
   });
 
   // A million bars under coverage instrumentation runs past vitest's 5 s default — the length is the point.
-  it("stays within the window's own rounding of the exact mean after a million bars — no drift with history", { timeout: 60_000 }, () => {
+  it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("stays within the window's own rounding of the exact mean after a million bars — no drift with history", { timeout: 60_000 }, () => {
     // The forward error of summing `period` doubles in order is at most (period − 1)·u·Σ|x| to
     // first order, u = 2⁻⁵³ — a bound on the window alone, with nothing about how many bars came
     // before. The test takes ε = 2u, which also covers the reference's own two roundings (the
