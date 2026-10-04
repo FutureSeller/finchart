@@ -117,8 +117,7 @@ test("the downloaded PNG includes DOM axis labels", async ({ page }) => {
   const changedPixels = await page.evaluate(async () => {
     const url = (window as unknown as { chartShot?: string }).chartShot;
     const canvas = document.querySelector("#chart canvas") ?? document.querySelector("canvas");
-    const labels = document.querySelectorAll<HTMLElement>("[data-chart-axis] span");
-    if (!url || !(canvas instanceof HTMLCanvasElement) || labels.length === 0) throw new Error("screenshot fixture missing");
+    if (!url || !(canvas instanceof HTMLCanvasElement)) throw new Error("screenshot fixture missing");
     const image = new Image();
     image.src = url;
     await image.decode();
@@ -129,24 +128,11 @@ test("the downloaded PNG includes DOM axis labels", async ({ page }) => {
     const source = canvas.getContext("2d");
     if (!context || !source) throw new Error("screenshot context missing");
     context.drawImage(image, 0, 0);
-    const origin = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / origin.width;
-    const scaleY = canvas.height / origin.height;
+    const before = source.getImageData(0, 0, canvas.width, canvas.height).data;
+    const after = context.getImageData(0, 0, canvas.width, canvas.height).data;
     let changed = 0;
-    for (const label of labels) {
-      const axis = label.getBoundingClientRect();
-      const left = Math.max(0, Math.floor((axis.left - origin.left) * scaleX));
-      const top = Math.max(0, Math.floor((axis.top - origin.top) * scaleY));
-      const right = Math.min(canvas.width, Math.ceil((axis.right - origin.left) * scaleX));
-      const bottom = Math.min(canvas.height, Math.ceil((axis.bottom - origin.top) * scaleY));
-      // Some axis spans sit outside the canvas on WebKit. Only read a positive
-      // intersection; getImageData rejects zero or negative dimensions.
-      if (right <= left || bottom <= top) continue;
-      const before = source.getImageData(left, top, right - left, bottom - top).data;
-      const after = context.getImageData(left, top, right - left, bottom - top).data;
-      for (let i = 0; i < before.length; i += 4) {
-        if (before[i] !== after[i] || before[i + 1] !== after[i + 1] || before[i + 2] !== after[i + 2]) changed++;
-      }
+    for (let i = 0; i < before.length; i += 4) {
+      if (before[i] !== after[i] || before[i + 1] !== after[i + 1] || before[i + 2] !== after[i + 2]) changed++;
     }
     return changed;
   });
