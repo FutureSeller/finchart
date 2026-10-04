@@ -17,24 +17,25 @@ import type { DecimationStrategy, IndexRange, OHLC } from "./types";
  * different span of time.
  */
 export class OhlcAggregation implements DecimationStrategy<OHLC> {
+  readonly indexAnchored = true;
+
   decimate(data: OHLC[], range: IndexRange, threshold: number): OHLC[] {
     const count = range.end - range.start;
     // If there's nothing to reduce, use the same gate as the sibling strategies — one copy of it instead of two.
     if (count <= threshold) return passthrough(data, range.start, range.end);
 
     /**
-     * Boundaries sit on a whole-candle grid anchored at index 0, not at the
-     * window's first candle — counted from the window, a one-bar pan moved
-     * every boundary and the whole chart shimmered. Only the edge buckets
-     * are clipped to the window, so a pan changes those two alone. The
-     * cost of whole buckets: the budget can go partly unused (3125 candles
-     * in 1000 make 782), and a window off the grid can take one more.
+     * Boundaries sit on a whole-candle grid anchored to a stable bar. A
+     * manager supplies its index in this array, which moves with prepends;
+     * direct callers use index 0. Window-relative buckets shimmer on a pan,
+     * while array-zero buckets shimmer when history is prepended.
      */
     const size = Math.ceil(count / Math.max(1, Math.floor(threshold)));
+    const origin = range.originIndex ?? 0;
     const merged: OHLC[] = [];
 
     for (let start = range.start; start < range.end; ) {
-      const end = Math.min(range.end, (Math.floor(start / size) + 1) * size);
+      const end = Math.min(range.end, origin + (Math.floor((start - origin) / size) + 1) * size);
       merged.push(merge(data, start, end));
       start = end;
     }

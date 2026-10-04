@@ -14,6 +14,7 @@ import type {
   DataManager,
   DataView,
   DecimationStrategy,
+  IndexRange,
   Range,
   Viewport,
   VisiblePlaced,
@@ -70,6 +71,8 @@ export class SimpleDataManager<
 > implements DataManager<T> {
   private data: T[] = [];
   private readonly decimation: DecimationStrategy<T>;
+  /** An x retained across prepends so index-bucket boundaries do not move. */
+  private bucketAnchorX: number | null = null;
   private readonly coordinates: CoordinateAccessor<T>;
   private readonly maxPoints: number;
   private readonly pointsPerPixel: number;
@@ -174,6 +177,7 @@ export class SimpleDataManager<
     const next = [...data];
     this.gapFree = !this.assertSorted(next);
     this.data = next;
+    this.reconcileBucketAnchor();
     this.cached = null;
     // Tiers come from the original. If the original changes, all of them are discarded.
     this.tiers = [this.data];
@@ -321,10 +325,35 @@ export class SimpleDataManager<
   }
 
   private afterIncrement(): void {
+    this.reconcileBucketAnchor();
     this.cached = null;
     // Tiers are derived from the original — discarded entirely, same reasoning as `setData`. The option docs already say `tiered` is a loss for real time.
     this.tiers = [this.data];
     this.tierCeiling = Number.POSITIVE_INFINITY;
+  }
+
+  private reconcileBucketAnchor(): void {
+    if (!this.decimation.indexAnchored) return;
+    if (this.data.length === 0) {
+      this.bucketAnchorX = null;
+      return;
+    }
+    const anchor = this.bucketAnchorX;
+    if (anchor !== null) {
+      const at = this.lowerBound(this.data, anchor);
+      if (at < this.data.length && this.coordinates.getX(this.data[at]) === anchor) return;
+    }
+    this.bucketAnchorX = this.coordinates.getX(this.data[0]);
+  }
+
+  private bucketOrigin(source: T[]): number | undefined {
+    if (!this.decimation.indexAnchored || this.bucketAnchorX === null) return undefined;
+    return this.lowerBound(source, this.bucketAnchorX);
+  }
+
+  private decimationRange(source: T[], start: number, end: number): IndexRange {
+    const originIndex = this.bucketOrigin(source);
+    return originIndex === undefined ? { start, end } : { start, end, originIndex };
   }
 
   /**
@@ -438,7 +467,7 @@ export class SimpleDataManager<
     const end = this.upperBound(tier, viewport.endX);
     const result = this.decimation.decimate(
       tier,
-      { start, end },
+      this.decimationRange(tier, start, end),
       threshold,
       viewport.screenXScan,
       this.gapFree,
@@ -617,7 +646,7 @@ export class SimpleDataManager<
       const previous = this.tiers[i - 1];
       const halved = this.decimation.decimate(
         previous,
-        { start: 0, end: previous.length },
+        this.decimationRange(previous, 0, previous.length),
         Math.ceil(previous.length / 2),
         screenXScan,
         // A tier is a reduction that preserves gaps, so if the original has none, neither does the tier.

@@ -246,9 +246,17 @@ export interface VisiblePlaced<T extends BaseDataPoint = BaseDataPoint> {
 export interface IndexRange {
   start: number;
   end: number;
+  /** Stable bucket boundary for strategies that group by index. Defaults to 0. */
+  originIndex?: number;
 }
 
 export interface DecimationStrategy<T extends BaseDataPoint = BaseDataPoint> {
+  /**
+   * Ask a data manager to retain an x anchor when indices shift after a
+   * prepend. An implementation using tiers must keep the anchor bar in each
+   * reduced array so its index remains a bucket boundary.
+   */
+  readonly indexAnchored?: true;
   /**
    * Decimates only the `[range.start, range.end)` window, not all of `data`.
    *

@@ -147,6 +147,28 @@ describe("splits relative to the series' own z", () => {
 });
 
 describe("a decoration that adds another while it draws", () => {
+  it("defers a replacement for a removed last entry until the next walk", () => {
+    for (const [each, z] of [[forEachBelowSeries, BELOW_SERIES], [forEachAboveSeries, ABOVE_SERIES]] as const) {
+      const list = emptyDecorations<Named>();
+      const visits: string[] = [];
+      addDecoration(list, named("first"), { zIndex: z });
+      const removeLast = addDecoration(list, named("last"), { zIndex: z + 2 });
+
+      each(list, (decoration) => {
+        visits.push(decoration.name);
+        if (decoration.name === "first") {
+          removeLast();
+          addDecoration(list, named("new"), { zIndex: z + 1 });
+        }
+      });
+
+      expect(visits).toEqual(["first"]);
+      visits.length = 0;
+      each(list, (decoration) => visits.push(decoration.name));
+      expect(visits).toEqual(["first", "new"]);
+    }
+  });
+
   it("is visited once even when the new one lands before it", () => {
     for (const [each, z] of [[forEachBelowSeries, BELOW_SERIES], [forEachAboveSeries, ABOVE_SERIES]] as const) {
       const list = emptyDecorations<Named>();

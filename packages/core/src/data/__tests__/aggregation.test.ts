@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OhlcAggregation } from "../aggregation";
+import { OHLCAccessor } from "../accessors";
+import { SimpleDataManager } from "../data-manager";
 import type { OHLC } from "../types";
 import { DataError } from "../../primitives";
 
@@ -199,5 +201,33 @@ describe("OhlcAggregation buckets stay put while panning", () => {
     for (const candle of before.slice(1, -1)) {
       expect(byX.get(candle.x)).toEqual(candle);
     }
+  });
+});
+
+describe("OhlcAggregation buckets stay put as history changes", () => {
+  it.each([false, true])("retains the visible groups after prepend, setData and append (tiered=%s)", (tiered) => {
+    const manager = new SimpleDataManager<OHLC>({
+      decimation: new OhlcAggregation(),
+      coordinates: new OHLCAccessor(),
+      pointsPerPixel: 1,
+      tiered,
+    });
+    const original = candles(tiered ? 6000 : 60);
+    const view = tiered
+      ? { startX: 1000, endX: 4000, width: 10, height: 100 }
+      : { startX: 10, endX: 39, width: 10, height: 100 };
+    manager.setData(original);
+    const before = manager.getVisibleData(view);
+
+    const older = { ...original[0], x: -1 };
+    manager.prepend([older]);
+    expect(manager.getVisibleData(view)).toEqual(before);
+
+    const oldest = { ...older, x: -2 };
+    manager.setData([oldest, older, ...original]);
+    expect(manager.getVisibleData(view)).toEqual(before);
+
+    manager.append([{ ...original.at(-1)!, x: original.length }]);
+    expect(manager.getVisibleData(view)).toEqual(before);
   });
 });
