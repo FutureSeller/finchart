@@ -27,6 +27,18 @@ function stage() {
 }
 
 describe("a window asked for past the data", () => {
+  it("keeps correcting a window chosen before the first data arrived", () => {
+    const model = createPlotModel({ size: { width: 800, height: 600 }, deps: { createXMapping: barIndexX } });
+    const { plot } = model;
+    plot.setVisibleRange(50, 110);
+
+    const handle = plot.mainPane.addSeries({ series: lineSeries(), data: points(100, 119) });
+    expect(plot.getVisibleRange()).toEqual({ min: 50, max: 110 });
+
+    handle.prepend(points(20, 98, 2));
+    expect(plot.getVisibleRange()).toEqual({ min: 50, max: 110 });
+  });
+
   it("goes to the x asked for once the history arrives", () => {
     const { plot, handle } = stage();
 

@@ -127,15 +127,18 @@ export interface DecorationEntry<D> {
   readonly decoration: D;
   readonly zIndex: number;
   /**
-   * When it was added, relative to the list — one past the largest `seq` it
-   * held. Within one z the list keeps insertion order, so `(zIndex, seq)` is
+   * A list-wide registration number that is never reused after removal.
+   * Within one z the list keeps insertion order, so `(zIndex, seq)` is
    * exactly the list's order — a walk can always tell where it is, whatever
    * was removed around it, and what arrived after it began.
    */
   readonly seq: number;
 }
 
-/** One past the largest `seq` in the list — what the next entry gets. */
+/** A list's next registration number lives on that list, not in a global registry. */
+const NEXT_SEQUENCE = Symbol("decoration next sequence");
+
+/** One past the largest `seq` in an externally supplied list. */
 function nextSeqOf<D>(list: DecorationList<D>): number {
   let next = 0;
   for (const entry of list) if (entry.seq >= next) next = entry.seq + 1;
@@ -143,10 +146,24 @@ function nextSeqOf<D>(list: DecorationList<D>): number {
 }
 
 /** **Kept in ascending z order.** The drawing side never has to sort. */
-export type DecorationList<D> = DecorationEntry<D>[];
+export type DecorationList<D> = DecorationEntry<D>[] & { [NEXT_SEQUENCE]?: number };
+
+function sequenceOf<D>(list: DecorationList<D>): number {
+  return list[NEXT_SEQUENCE] ?? nextSeqOf(list);
+}
+
+function setSequence<D>(list: DecorationList<D>, next: number): void {
+  if (list[NEXT_SEQUENCE] === undefined) {
+    Object.defineProperty(list, NEXT_SEQUENCE, { value: next, writable: true });
+  } else {
+    list[NEXT_SEQUENCE] = next;
+  }
+}
 
 export function emptyDecorations<D>(): DecorationList<D> {
-  return [];
+  const list: DecorationList<D> = [];
+  setSequence(list, 0);
+  return list;
 }
 
 /**
@@ -192,10 +209,12 @@ export function addDecoration<D>(
     requireFinite(options.zIndex, "addDecoration({ zIndex })");
   }
 
+  const seq = sequenceOf(list);
+  setSequence(list, seq + 1);
   const entry: DecorationEntry<D> = {
     decoration,
     zIndex: options.zIndex ?? ABOVE_SERIES,
-    seq: nextSeqOf(list),
+    seq,
   };
 
   let at = list.length;
@@ -229,7 +248,7 @@ function after<D>(entry: DecorationEntry<D>, zIndex: number, seq: number): boole
  * `visit` returns `true` to stop.
  */
 function walk<D>(list: DecorationList<D>, visit: (entry: DecorationEntry<D>) => boolean | void): void {
-  const limit = nextSeqOf(list);
+  const limit = sequenceOf(list);
   let zIndex = -Infinity;
   let seq = -1;
   let at = 0;

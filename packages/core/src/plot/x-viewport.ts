@@ -130,21 +130,25 @@ export class XViewport {
    * lightweight-charts). Reconciled via `pending` if there's no data yet.
    */
   setVisibleRange(fromX: number, toX: number): void {
-    if (!this.deps.dataRange()) {
+    const range = this.deps.dataRange();
+    if (!range) {
       this.pending = { min: fromX, max: toX };
       return;
     }
 
     this.fittedOnce = true;
     this.pending = null;
-    const range = this.deps.dataRange();
+    this.rememberWanted(fromX, toX, range);
+    this.setDomain(this.deps.x.toDomain(fromX), this.deps.x.toDomain(toX));
+  }
+
+  private rememberWanted(fromX: number, toX: number, range: Range): void {
     // Past the data means past the half bar a fit leaves before the first
     // point — a window that merely shows the first bar whole is not a guess.
-    this.wanted = range !== null &&
-      this.deps.x.toDomain(fromX) < this.deps.x.toDomain(range.min) - this.halfBars()[0]
+    this.wanted = this.deps.x.toDomain(fromX) <
+      this.deps.x.toDomain(range.min) - this.halfBars()[0]
       ? { min: fromX, max: toX }
       : null;
-    this.setDomain(this.deps.x.toDomain(fromX), this.deps.x.toDomain(toX));
   }
 
   /**
@@ -203,6 +207,7 @@ export class XViewport {
       // an endpoint counts; a window with no point inside it (sparse data)
       // is still the caller's window. Otherwise the ordinary fit below.
       if (max >= range.min && min <= range.max) {
+        this.rememberWanted(min, max, range);
         this.setDomain(this.deps.x.toDomain(min), this.deps.x.toDomain(max), first);
         return;
       }
