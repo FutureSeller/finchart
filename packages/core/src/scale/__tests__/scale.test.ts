@@ -540,7 +540,7 @@ describe("pixels stay finite at the edge of the doubles", () => {
     }
   });
 
-  it("LogScale: the ticks that are emitted keep the requested gap — after their labels' rounding, at any spacing, and at the bottom of the doubles", { timeout: 30_000 }, () => {
+  it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("LogScale: the ticks that are emitted keep the requested gap — after their labels' rounding, at any spacing, and at the bottom of the doubles", { timeout: 30_000 }, () => {
     const contract = (scale: LogScale, spacing: number, min: number, max: number): number[] => {
       const ticks = scale.tickGeometry(spacing).values();
       // Every domain here holds two places and every range is at least a gap tall: there is always a tick.

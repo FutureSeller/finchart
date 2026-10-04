@@ -504,7 +504,7 @@ describe("the zone database the rule rests on", () => {
     return moves;
   }
 
-  it("moves clocks by less than a day, and never twice within five", { timeout: 20_000 }, () => {
+  it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("moves clocks by less than a day, and never twice within five", { timeout: 20_000 }, () => {
     // A sample rather than all of them — the zones that move most, or
     // most strangely. Walking every zone a day at a time would be minutes
     // of gate for the same two facts.

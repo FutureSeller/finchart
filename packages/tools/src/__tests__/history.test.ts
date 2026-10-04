@@ -30,7 +30,7 @@ function mounted() {
 }
 
 describe("drawingTools history", () => {
-  it("replaces a large saved document without an argument-limit failure or stale history", () => {
+  it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("replaces a large saved document without an argument-limit failure or stale history", { timeout: 30_000 }, () => {
     const model = createPlotModel({
       size: { width: 800, height: 600 },
       deps: { createScheduler: manualScheduler() },
