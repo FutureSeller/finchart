@@ -99,6 +99,50 @@ afterEach(() => {
 });
 
 describe("infiniteHistory", () => {
+  it("judges a transformed chart in plotted x while fetching in source x", async () => {
+    const model = createPlotModel({ size: { width: 800, height: 600 }, series: null });
+    const source = points(1_000, 1_020);
+    const handle = model.plot.mainPane.addSeries({
+      series: lineSeries(),
+      data: source,
+      derive: (input) => input.map((point, index) => ({ x: index, y: point.y })),
+    });
+    let sourceX = source[0].x;
+    const calls: number[] = [];
+    const loader = infiniteHistory(
+      model.plot,
+      (page: LineDataPoint[]) => {
+        handle.prepend(page);
+        sourceX = page[0].x;
+        model.plot.setVisibleRange(0, 20);
+      },
+      (before) => {
+        calls.push(before);
+        return points(980, 1_000);
+      },
+      {
+        from: sourceX,
+        viewFrontier: () => ({ sourceX, plottedX: handle.read()[0].x }),
+      },
+    );
+
+    model.plot.setVisibleRange(-10, 10);
+    await settle();
+
+    expect(calls).toEqual([1_000]);
+    expect(handle.read()).toHaveLength(40);
+    expect(loader.status()).toBe("idle");
+    loader.dispose();
+  });
+
+  it("rejects a non-finite transformed frontier before it can poison edge judgments", () => {
+    const { plot } = chart();
+    expect(() => infiniteHistory(plot, recordingSink().sink, servedFetch().fetch, {
+      from: 100,
+      viewFrontier: () => ({ sourceX: Number.POSITIVE_INFINITY, plottedX: 0 }),
+    })).toThrow(ContractError);
+  });
+
   it("without coordinates the loader judges x order only — a bar page has no y and still lands", async () => {
     const { plot } = chart();
     const bar = (x: number): OHLC => ({ x, open: 1, high: 2, low: 0.5, close: 1.5 });

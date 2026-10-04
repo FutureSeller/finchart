@@ -10,7 +10,7 @@
 import { browserDeps, PlotBuilder } from "@finchart/dom";
 import "./theme.css";
 import { BELOW_SERIES, barIndexX, candleSeries, crosshair, priceFormat, priceLine, sessionStart, timeTicks, type OHLC, type Plot, type PluginApi, type SeriesHandle, watermark } from "@finchart/core";
-import { legend, tooltip } from "@finchart/dom";
+import { dataTable, legend, tooltip } from "@finchart/dom";
 import {
   attachBollingerBands,
   attachIchimoku,
@@ -146,6 +146,19 @@ const price: SeriesHandle<OHLC> = plot.mainPane.addSeries({
   data: aggregate(minutes, timeframe),
   name: "Price",
 });
+plot.use(dataTable({
+  target: document.getElementById("chart-data")!,
+  caption: () => `${symbol} ${timeframe}-minute candles`,
+  rows: () => price.read(),
+  columns: [
+    { heading: "Time (UTC)", text: (bar) => timeLabel(bar.x) },
+    { heading: "Open", text: (bar) => won(bar.open) },
+    { heading: "High", text: (bar) => won(bar.high) },
+    { heading: "Low", text: (bar) => won(bar.low) },
+    { heading: "Close", text: (bar) => won(bar.close) },
+    { heading: "Volume", text: (bar) => volume.format(bar.volume ?? 0) },
+  ],
+}));
 
 // Friction note: a watermark is a decoration, so it goes through
 // addDecoration, not use — and it comes off through the returned function, not
@@ -174,6 +187,7 @@ movePriceLine(price.read()[price.read().length - 1].close);
 function switchSymbol(next: Symbol): void {
   saveDrawings();
   symbol = next;
+  chartHost.setAttribute("aria-label", `${symbol} ${timeframe}-minute candlestick chart`);
   minutes = minutesOf(symbol, clock);
   const bars = aggregate(minutes, timeframe);
   price.setData(bars);
@@ -188,6 +202,7 @@ function switchSymbol(next: Symbol): void {
 
 function switchTimeframe(next: number): void {
   timeframe = next;
+  chartHost.setAttribute("aria-label", `${symbol} ${timeframe}-minute candlestick chart`);
   const bars = aggregate(minutes, timeframe);
   price.setData(bars);
   movePriceLine(bars[bars.length - 1].close);

@@ -509,10 +509,17 @@ wrong looks like:
 |---|---|
 | Time-x candles on the same pane | under `continuousX` the second series sits off-screen until a fit, and after `fitDomains()` the union of a timestamp range and an ordinal one squeezes the ordinal one into the left edge; under `barIndexX` the two become adjacent blocks of slots — the bricks first, then the candles, as if they followed each other in time. Either way snapping and the bar measure attach to whichever series was registered first |
 | A volume pane fed by the time source | panes share one x mapping, so the pane's bars cannot align under the bricks — they land wherever their timestamps map (bricks carrying their own volume is not implemented yet) |
-| `infiniteHistory` on the transform's handle (time-x candles as the source) | it installs, its cursor and its pages are in source space and correct — but it judges *when* to fetch in ordinal pixels, so with timestamps as the source x the first judgement already sees an infinite gap and it pulls pages without a cap until an empty one arrives |
+| `infiniteHistory` on the transform's handle (time-x candles as the source) | pass `viewFrontier` so the fetch cursor stays in source time while gap and prefetch judgments use the first drawn brick's ordinal x; re-anchor the view after each prepend because earlier bricks can renumber the entire output |
 | `handle.updateLast(brick)` — a tick on the transform's own points | wrong door: the handle's points are candles, so the brick is taken for one. Its ordinal x decides what happens next — below the last candle's x it is refused (`DataError: must keep x >= …`) and nothing changes; equal, it replaces the last candle; above, it is appended as a candle — and in the two accepted cases the bricks are re-derived from a tape that now holds a brick. Ticks go in as candles (rule 2) |
 | Drawings and annotations | an anchor's x is an ordinal — valid only for one (transform, options, source) triple; the anchor's numbers stay put, but on the open candle's tail bricks the brick it points at can be replaced or vanish with a tick. An anchor's x is a number on that axis: a brick's ordinal when snapped, any value — between bricks, or in the empty space before the first or after the last — when placed free. To reload a drawing onto the **same** transform, options and source next session, take the nearest brick inside the span (`clamp(round(x), 0, bricks.length − 1)`), save that brick's `closedAt` **and its rank among the bricks that share it** (one candle can close several) plus the signed remainder `x − index`, and restore by finding that pair and adding the remainder back. Across a parameter change there is no faithful mapping — a rank can vanish, or survive pointing at another price — so treat a restore as best effort and handle a miss |
 | The bar measure | counts bricks, and calls them bars |
+
+The history bridge is explicit because the source and plotted x values are
+different coordinates. Return `null` from `viewFrontier` while the transform
+has no drawn point; no screen-edge judgment is possible then. This example
+chooses `fitDomains()` as its re-anchor policy after a page lands:
+
+<<< ../snippets/renko-history.ts{ts}
 
 **Reading a brick back from a probe.** `probe(x)` returns the value the
 series' accessor reads (a brick's close, low and high), and `sample.index` is
@@ -966,6 +973,16 @@ flag it as "focusable element without accessible name".
 ```html
 <div id="chart" role="img" aria-label="AAPL daily, January–June 2024"></div>
 ```
+
+For exact values, mount `dataTable` from `@finchart/dom` in a sibling element
+outside the chart's `role="img"`. It creates a native expandable table with
+column headers; screen readers can navigate rows and cells. Pass a `rows`
+getter backed by the series' `read()` view, a caption, and columns that format
+each value. It shows the latest 100 rows by default (`limit` changes that
+bound) and refreshes when the series view changes. While expanded, it keeps
+rows stable for navigation; close and reopen it to read later ticks. A caption
+change such as a symbol switch refreshes it immediately. The trading example
+uses this alongside a symbol-specific chart name.
 
 Whether to hide the legend and tooltip with `aria-hidden` is the app's call —
 those numbers may be the only text alternative there is.
