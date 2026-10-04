@@ -322,9 +322,9 @@ under the cursor. The option is off by default.
 
 **A pane's value scale is a prop.** `<ChartPane yScale={log ? LOG : undefined}>` (with `const LOG = () => new LogScale()` at module level)
 is the log toggle — the pane, its series and its height stay. The factory's
-identity is the change, like any function prop: a new one is called and its
-scale installed, so pin it (a module constant, `useCallback`) — an inline
-arrow installs a fresh scale every render. Removing it puts back a linear
+scale's declared `kind` is the change: the factory is called on updates, but
+only a different kind is installed. Inline arrows are fine. Custom scales
+must declare a stable `kind`. Removing the prop puts back a linear
 scale (on the main pane, the instance it replaced). A fixed range is `valueDomain={[0, 100]}` — an
 oscillator pane, declared like any other. `valueDomain`, `autoScale` and
 `invert` are directives applied when they change (`valueDomain` by its two

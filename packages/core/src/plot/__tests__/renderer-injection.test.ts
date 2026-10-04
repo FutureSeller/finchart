@@ -96,6 +96,7 @@ describe("renderer injection", () => {
 /** Coordinate transformation is not this test's concern. */
 function stubScale() {
   return {
+    kind: "stub",
     getDomain: () => [0, 100] as [number, number],
     getRange: () => [0, 100] as [number, number],
     setDomain: () => undefined,

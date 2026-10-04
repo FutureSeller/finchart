@@ -308,11 +308,11 @@ export function ChartContainer<T extends BaseDataPoint>({
         return plot.mainPane;
       },
 
-      swapPaneScale(pane: Pane, yScale: (() => Scale) | undefined): void {
+      swapPaneScale(pane: Pane, yScale: Scale | undefined): void {
         const main = pane === plot.mainPane;
         if (yScale) {
           if (main && !previousScale.current) previousScale.current = pane.yScale;
-          pane.setYScale(yScale());
+          pane.setYScale(yScale);
           return;
         }
         if (main) {

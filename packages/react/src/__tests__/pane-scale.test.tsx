@@ -9,8 +9,8 @@
  * undone by a `minHeight` change), so that is measured too.
  *
  * `yScale` is a factory called at acquisition, like `deps.mainPaneYScale`,
- * and again whenever its identity changes, installing the scale it hands
- * out. On the main pane the wrapper keeps the instance it replaced and puts
+ * and on later commits, installing a scale only when its kind changes. On
+ * the main pane the wrapper keeps the instance it replaced and puts
  * it back on release or when the prop goes, so a keyed swap to a pane
  * without `yScale` returns to what was there — not to a fresh default.
  */
@@ -162,14 +162,7 @@ describe('<ChartPane yScale>', () => {
     expect(installs).toBe(1);
   });
 
-  /**
-   * **The factory's identity is the change** — like any function prop.
-   * Judging by the scale it hands out misreads a structural `Scale` (two
-   * object literals share a prototype) and a subclass, so the rule is the
-   * prop itself: pin it and it's applied once, hand a new one and it's
-   * called and installed.
-   */
-  it('applies a pinned factory once, StrictMode included, and installs whatever a new factory hands out', () => {
+  it('calls a factory on later commits but keeps the scale when its kind is unchanged', () => {
     const { deps, ref, plot } = setup();
     const { made, factory } = logFactory();
     const other = () => new LogScale();
@@ -187,12 +180,29 @@ describe('<ChartPane yScale>', () => {
     const calls = made.length;
 
     view.rerender(ui(factory));
-    expect(made).toHaveLength(calls);
+    expect(made).toHaveLength(calls + 1);
     expect(plot().panes[1].yScale).toBe(installed);
 
     view.rerender(ui(other));
-    expect(plot().panes[1].yScale).not.toBe(installed);
-    expect(plot().panes[1].yScale).toBeInstanceOf(LogScale);
+    expect(plot().panes[1].yScale).toBe(installed);
+  });
+
+  it('accepts inline factories without announcing a pane change on same-kind rerenders', () => {
+    const { deps, ref, plot } = setup();
+    const ui = () => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane yScale={() => new LogScale()} />
+      </ChartContainer>
+    );
+    const view = render(ui());
+    const pane = plot().mainPane;
+    const scale = pane.yScale;
+    let changes = 0;
+    const off = plot().on('panesChange', () => { changes += 1; });
+    view.rerender(ui());
+    expect(pane.yScale).toBe(scale);
+    expect(changes).toBe(0);
+    off();
   });
 
   it('removing the prop below the main pane installs a plain linear scale, whatever it had handed out', () => {

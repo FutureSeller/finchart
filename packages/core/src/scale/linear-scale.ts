@@ -3,6 +3,7 @@ import { lerp, unlerp } from "./finite-lerp";
 import type { Scale } from "./types";
 
 export class LinearScale implements Scale {
+  readonly kind: string = "linear";
   private domain: [number, number] = [0, 1];
   private range: [number, number] = [0, 1];
 

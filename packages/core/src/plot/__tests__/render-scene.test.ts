@@ -83,6 +83,35 @@ describe("a frame keeps the scene it started with", () => {
     expect(plot.panes).toEqual([plot.mainPane, a]);
   });
 
+  it("does not draw a divider for a pane added after layout captured the scene", () => {
+    const shown: number[] = [];
+    const deps = testBrowserDeps({ createDividers: () => ({
+      render: (boundaries) => void shown.push(boundaries.length),
+      clear: () => void shown.push(0),
+      destroy: () => undefined,
+    }) });
+    const { plot } = mountPlot({ deps, series: fixedSeries(0, 100), data, config: defaultConfig });
+    const second = plot.addPane();
+    second.addSeries({ series: fixedSeries(0, 100), data });
+    let armed = false;
+    second.applyOptions({ axis: { format: (value) => {
+      if (armed) {
+        armed = false;
+        plot.addPane();
+      }
+      return String(value);
+    } } });
+
+    armed = true;
+    plot.render();
+
+    expect(plot.panes).toHaveLength(3);
+    expect(shown.at(-1)).toBe(0);
+    // The next layout can safely install dividers for all three panes.
+    plot.render();
+    expect(shown.at(-1)).toBe(2);
+  });
+
   it("still draws the next decoration when one unmounts itself and the one before it", () => {
     const { plot } = mount();
     const drawn: string[] = [];

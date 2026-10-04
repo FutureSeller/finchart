@@ -99,7 +99,7 @@ export function tooltip(
      * forced layout, and a live feed re-renders under a still pointer with
      * the same rows every tick.
      */
-    let measured = { text: "", width: 0, height: 0 };
+    let measured = { text: "", font: "", width: 0, height: 0 };
 
     const refresh = (): void => {
       // Outside a pane (margin, gap) there's nothing to show.
@@ -136,7 +136,13 @@ export function tooltip(
 
       box.style.display = "block";
       const text = box.textContent;
-      if (text !== measured.text) measured = { text, width: box.offsetWidth, height: box.offsetHeight };
+      const style = document.defaultView?.getComputedStyle(box);
+      const font = style
+        ? [style.fontFamily, style.fontSize, style.fontWeight, style.fontStyle, style.letterSpacing, style.lineHeight].join("|")
+        : "";
+      if (text !== measured.text || font !== measured.font) {
+        measured = { text, font, width: box.offsetWidth, height: box.offsetHeight };
+      }
       // Flips to the other side of the cursor where the box, measured once
       // it holds its rows, would cross the pane's right or bottom edge — the
       // drawn chart's, not the container's, which can be larger.

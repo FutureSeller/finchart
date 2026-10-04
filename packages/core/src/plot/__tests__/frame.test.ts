@@ -392,6 +392,7 @@ describe("y-axis scale tick geometry", () => {
     let domain: [number, number] = [1, 100];
     let range: [number, number] = [0, 1];
     const counting: Scale = {
+      kind: "counting",
       getDomain: () => domain,
       getRange: () => range,
       setDomain: (min, max) => {

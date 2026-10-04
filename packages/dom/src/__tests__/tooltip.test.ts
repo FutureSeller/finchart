@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LineDataPoint } from "@finchart/core";
 import { recordingRenderer } from "@finchart/core";
 import { candleSeries, lineSeries } from "@finchart/core";
@@ -450,6 +450,30 @@ describe("tooltip placement", () => {
 
     expect(measured).toBe(before);
     expect(rect().right).toBeLessThanOrEqual(area.right);
+  });
+
+  it("remeasures and repositions unchanged rows after a font change", () => {
+    const { plot, tooltipBox } = laidOut();
+    let width = 100;
+    let fontSize = "11px";
+    const computed = window.getComputedStyle.bind(window);
+    const styleSpy = vi.spyOn(window, "getComputedStyle").mockImplementation((element) => {
+      const style = computed(element);
+      return element === tooltipBox()
+        ? { ...style, fontSize } as CSSStyleDeclaration
+        : style;
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => width });
+    const { area } = plot.mainPane;
+    const cursorX = area.right - 150;
+    plot.crosshair({ x: cursorX, y: area.top + 20 });
+    expect(Number.parseFloat(tooltipBox().style.left)).toBe(cursorX + 12);
+
+    width = 270;
+    fontSize = "24px";
+    plot.render();
+    expect(Number.parseFloat(tooltipBox().style.left)).toBe(cursorX - 12 - 270);
+    styleSpy.mockRestore();
   });
 
   it("should sit below and to the right of the cursor where there is room", () => {

@@ -1103,9 +1103,9 @@ value that ticks every frame moves the line, not the registration.
   so making a new one would leave an empty pane taking up space at the top.
 - **A pane's value axis is props.** `valueDomain={[0, 100]}` pins a range (an
   oscillator's) and wins over `autoScale` while it's set; once removed, the
-  pane does what `autoScale` says. `yScale` is a factory whose identity is the
-  change — a new one installs its scale in place, keeping the pane, its series
-  and its height — so pin it rather than writing it inline.
+  pane does what `autoScale` says. `yScale` is a factory called on updates;
+  only a change in its scale's declared `kind` installs it in place, keeping
+  the pane, its series and its height. Inline factories are fine.
 - A series left outside any `<ChartPane>` goes to `mainPane`.
 - `<YAxis>` inside a pane configures that pane; outside, it's the default for
   every pane. `<XAxis>` is shared, so you place exactly one.

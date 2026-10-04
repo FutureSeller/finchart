@@ -30,7 +30,8 @@ export class OhlcAggregation implements DecimationStrategy<OHLC> {
      * direct callers use index 0. Window-relative buckets shimmer on a pan,
      * while array-zero buckets shimmer when history is prepended.
      */
-    const size = Math.ceil(count / Math.max(1, Math.floor(threshold)));
+    const budget = Math.max(1, Math.floor(threshold));
+    const size = Math.ceil(count / budget);
     const origin = range.originIndex ?? 0;
     const merged: OHLC[] = [];
 
@@ -39,6 +40,11 @@ export class OhlcAggregation implements DecimationStrategy<OHLC> {
       merged.push(merge(data, start, end));
       start = end;
     }
+
+    // Two clipped edge buckets can put a fixed grid one over the budget.
+    // Fold the first edge into its neighbour; every interior boundary then
+    // stays anchored while a one-bar pan still respects maxPoints.
+    if (!range.preserveBuckets && merged.length > budget) merged.splice(0, 2, merge(merged, 0, 2));
 
     return merged;
   }

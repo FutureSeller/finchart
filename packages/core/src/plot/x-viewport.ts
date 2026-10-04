@@ -333,10 +333,6 @@ export class XViewport {
     const [min, max] = this.deps.scale.getDomain();
     const previousDomainMax = this.deps.x.toDomain(previousMax);
     if (max < previousDomainMax) return;
-    // The window follows the newest bar from here — a window asked for
-    // earlier has been overtaken.
-    this.wanted = null;
-
     /**
      * Never overshoots the live target (`scrollToRealTime`'s
      * destination). In a `syncX` group, someone else's shift via sync may
@@ -353,6 +349,11 @@ export class XViewport {
       this.deps.x.toDomain(range.max) - previousDomainMax,
       target - max,
     );
+    if (!(delta > 0)) return;
+    // Only a shift takes ownership of the window. A wide historical window
+    // may include the live bar yet already extend past the live target;
+    // clearing its wanted x without moving would lose its place on prepend.
+    this.wanted = null;
     this.setDomain(min + delta, max + delta);
   }
 
