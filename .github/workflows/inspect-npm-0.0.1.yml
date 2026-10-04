@@ -1,0 +1,29 @@
+name: Inspect npm 0.0.1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.21.0
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: Read package metadata and access status
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for package in core dom indicators react tools; do
+            name="@finchart/$package"
+            echo "::group::$name"
+            npm view "$name@0.0.1" version || true
+            npm access get status "$name" || true
+            echo '::endgroup::'
+          done
