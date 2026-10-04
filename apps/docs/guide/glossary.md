@@ -694,7 +694,7 @@ returns and where it plugs in. The full rules and their exceptions are in
 
 ## Related
 
-- [PRINCIPLES.md](https://github.com/finchart/finchart/blob/main/PRINCIPLES.md) — the principles (referenced by name)
+- [PRINCIPLES.md](https://github.com/FutureSeller/finchart/blob/main/PRINCIPLES.md) — the principles (referenced by name)
 - [plot-contract.md](plot-contract.md) — which method touches what
 - [Migrating from lightweight-charts](migrating-from-lightweight-charts.md) — the two vocabularies side by side
 - [Next.js and React apps](nextjs.md) — the client boundary, `deps` read once, StrictMode

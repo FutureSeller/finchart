@@ -76,7 +76,7 @@ A series that describes itself gets its own rows — a candle reads `SOXL: O 105
 For screen-reader access to exact values, `dataTable` mounts an expandable
 native table beside the chart. Pass it a target outside the chart's
 `role="img"`, a series `read()` getter, a caption, and value columns. The
-[trading example](https://github.com/finchart/finchart/blob/main/apps/examples/src/trading.ts)
+[trading example](https://github.com/FutureSeller/finchart/blob/main/apps/examples/src/trading.ts)
 shows the complete wiring.
 
 - **Node 20.19+** — where the headless path (SSR, workers, tests) runs; CI runs that floor.
@@ -91,8 +91,8 @@ shows the complete wiring.
 
 ## Docs
 
-- **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md)
-- **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
-- **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
-- **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)
-- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
+- **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/theme.md)
+- **The Plot contract** — [plot-contract.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/plot-contract.md)
+- **Glossary** — [glossary.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/glossary.md)
+- **Time zones and sessions** — [time-zones.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/time-zones.md)
+- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)

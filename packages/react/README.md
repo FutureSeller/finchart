@@ -21,7 +21,7 @@ create it in a small `"use client"` component and render that from the
 server. The hooks (`usePlot`, `useChartPlot`, `usePlugin`, `usePluginState`,
 `useDataSource`, `useInfiniteHistory`) are client-only, as hooks are. SSR is fine: nothing here touches the DOM at import time. The
 whole picture — the client file, `deps` read once, hydration, StrictMode — is
-in [Next.js and React apps](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md).
+in [Next.js and React apps](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/nextjs.md).
 
 ## 60 seconds — one production-shaped chart
 
@@ -115,7 +115,7 @@ and the state and adapters around the chart — are hooks:
 | `useChartPlot` | Issue commands from **inside** the container (options, installs) |
 | `usePlot` | Build a chart on your own element, without `<ChartContainer>` |
 | `useDataSource` | Hand a React array to an indicator as a `Source` |
-| `useInfiniteHistory` | Hold paged history as React state — it outlives a chart remount; a load is `reset(bars, { next, fetchPage })` and `<InfiniteHistory history>` pages it ([recipe](https://github.com/finchart/finchart/blob/main/apps/docs/examples/infinite-history.md)) |
+| `useInfiniteHistory` | Hold paged history as React state — it outlives a chart remount; a load is `reset(bars, { next, fetchPage })` and `<InfiniteHistory history>` pages it ([recipe](https://github.com/FutureSeller/finchart/blob/main/apps/docs/examples/infinite-history.md)) |
 
 `plotRef` is for event handlers (a `fitDomains()` button); `onPlot` is for
 wiring **between** containers (`<SyncX>`) — see "Across containers" below.
@@ -386,10 +386,10 @@ you want to swap a single series through an imperative handle
 
 ## Docs
 
-- **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md)
-- **The Plot contract** — [plot-contract.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/plot-contract.md)
-- **Glossary** — [glossary.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/glossary.md)
-- **Next.js and React apps** — the client boundary, `deps` read once, SSR, StrictMode — [nextjs.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md)
-- **Infinite history** — paging older data, in React with `useInfiniteHistory` — [infinite-history.md](https://github.com/finchart/finchart/blob/main/apps/docs/examples/infinite-history.md)
-- **Time zones and sessions** — [time-zones.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/time-zones.md)
-- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
+- **Style tokens** — the full CSS variable table — [`theme.md`](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/theme.md)
+- **The Plot contract** — [plot-contract.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/plot-contract.md)
+- **Glossary** — [glossary.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/glossary.md)
+- **Next.js and React apps** — the client boundary, `deps` read once, SSR, StrictMode — [nextjs.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/nextjs.md)
+- **Infinite history** — paging older data, in React with `useInfiniteHistory` — [infinite-history.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/examples/infinite-history.md)
+- **Time zones and sessions** — [time-zones.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/time-zones.md)
+- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)

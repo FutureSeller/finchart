@@ -93,7 +93,7 @@ mixing versions gets rejected at install. The code below runs as-is.
 
 To work on the repo itself, use the clone steps in [Development](#development)
 below. Coming from lightweight-charts? There is a
-[side-by-side table](https://github.com/finchart/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md).
+[side-by-side table](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md).
 
 ## 60 seconds
 
@@ -149,14 +149,14 @@ That's it. Drag to pan, scroll to zoom.
 > the repeated updates to the same bar until the next frame — a tick that
 > opens a new bar delivers the previous bar at once; the price is that the
 > screen follows the socket by two scheduling steps (the feed's frame, then
-> the render's), and without `requestAnimationFrame` delivery is immediate. The [live feed guide](https://github.com/finchart/finchart/blob/main/apps/docs/guide/live-feed.md)
+> the render's), and without `requestAnimationFrame` delivery is immediate. The [live feed guide](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/live-feed.md)
 > has the whole wiring, including what to flush before a gap-fill.
 
 ## React
 
 Children declare what to draw. Components don't render DOM — they just
 register in an effect. (In a Next.js app the chart lives in one client file —
-[Next.js and React apps](https://github.com/finchart/finchart/blob/main/apps/docs/guide/nextjs.md).)
+[Next.js and React apps](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/nextjs.md).)
 
 ```tsx
 import { candleSeries, lineSeries } from "@finchart/core";
@@ -242,7 +242,7 @@ whatever the sink.
 `upsert`, merged by x: the bars it names are corrected or added, the ones it
 does not name stay. Hand over closed bars only — the bar in progress is the
 tick's — and only from the first bar you hold: older ones are history, and
-history comes in through `prepend`. The [live feed guide](https://github.com/finchart/finchart/blob/main/apps/docs/guide/live-feed.md) has the
+history comes in through `prepend`. The [live feed guide](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/live-feed.md) has the
 whole wiring — trades → `barAggregator` → `conflated` → `updateLast`, and what
 to do on reconnect.
 
@@ -263,7 +263,7 @@ btc.upsert(snapshot.filter((bar) => bar.x >= first && bar.x + INTERVAL <= Date.n
 ```
 
 The full variable table and dark-mode wiring are in
-[theme.md](https://github.com/finchart/finchart/blob/main/apps/docs/guide/theme.md).
+[theme.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/theme.md).
 
 **Drawing your own series** — a `Series` is two methods. It doesn't know what
 the renderer is, or whether there's even a canvas.
@@ -282,7 +282,7 @@ value axis.
 ## Development
 
 ```bash
-git clone https://github.com/finchart/finchart.git charts && cd charts
+git clone https://github.com/FutureSeller/finchart.git charts && cd charts
 pnpm install
 pnpm test          # all five packages
 pnpm build

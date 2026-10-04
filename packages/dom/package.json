@@ -58,10 +58,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/finchart/finchart.git",
+    "url": "git+https://github.com/FutureSeller/finchart.git",
     "directory": "packages/dom"
   },
-  "homepage": "https://github.com/finchart/finchart/tree/main/packages/dom",
-  "bugs": "https://github.com/finchart/finchart/issues",
+  "homepage": "https://github.com/FutureSeller/finchart/tree/main/packages/dom",
+  "bugs": "https://github.com/FutureSeller/finchart/issues",
   "type": "module"
 }

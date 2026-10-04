@@ -96,9 +96,9 @@ until the next frame instead (a tick that opens a new bar delivers the previous
 one at once). The [live feed guide](/guide/live-feed) has the full wiring —
 aggregation, snapshots, reconnects and history.
 
-See [`@finchart/indicators`](https://github.com/finchart/finchart/tree/main/packages/indicators)
+See [`@finchart/indicators`](https://github.com/FutureSeller/finchart/tree/main/packages/indicators)
 for the full indicator list, and the
-[`@finchart/dom`](https://github.com/finchart/finchart/tree/main/packages/dom)
+[`@finchart/dom`](https://github.com/FutureSeller/finchart/tree/main/packages/dom)
 README for what `browserDeps` wires up under the hood.
 
 Curious how the pieces fit together? See [Architecture](/guide/architecture).
