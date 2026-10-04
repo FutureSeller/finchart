@@ -14,12 +14,13 @@ export const wonExact = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-export const timeLabel = (x: number) =>
-  new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(x);
+const timeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+export const timeLabel = (x: number) => timeFormatter.format(x);

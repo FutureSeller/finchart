@@ -35,12 +35,17 @@ export function DrawingToolsHost({
     if (!tools) return;
 
     const saved = localStorage.getItem(storageKey);
-    if (saved) tools.load(saved);
+    if (saved && !tools.load(saved)) {
+      // Keep unreadable bytes for a later version to recover, as the vanilla showcase does.
+      localStorage.setItem(`${storageKey}:broken`, saved);
+      localStorage.removeItem(storageKey);
+    }
 
     const save = () => localStorage.setItem(storageKey, tools.serialize());
     // A move (reason: "move") arrives every frame, so only the save is debounced by 200ms.
     let timer: number | undefined;
     const off = tools.changes.subscribe(({ reason }) => {
+      if (reason === "load" || reason === "clear") return;
       if (reason !== "move") {
         save();
         return;

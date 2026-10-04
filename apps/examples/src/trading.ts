@@ -95,15 +95,15 @@ const won = priceFormat({ compact: true, locale: "en-US" });
  * reason a price line shows a value.
  */
 const wonDetail = (value: number) => won(value, 10_000);
-const timeLabel = (x: number) =>
-  new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(x);
+const timeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const timeLabel = (x: number) => timeFormatter.format(x);
 
 const plot: Plot = PlotBuilder.create<OHLC>(
   browserDeps({
@@ -214,16 +214,12 @@ function switchTimeframe(next: number): void {
 setInterval(() => {
   const tick = candleAt(symbol, clock);
   const bucketStart = Math.floor(clock / timeframe) * timeframe;
-  const bars = aggregate(minutes.slice(bucketStart), timeframe);
 
   minutes = [...minutes, tick];
   const merged = aggregate(minutes.slice(bucketStart), timeframe);
   const last = merged[merged.length - 1];
   price.updateLast(last);
   movePriceLine(last.close);
-  if (merged.length > bars.length) {
-    // A new bucket opened — settle the previous one once more at its final value.
-  }
   clock += 1;
   refreshStatus();
 }, 400);

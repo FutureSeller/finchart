@@ -67,7 +67,7 @@ function llmsSidebar(configured: DefaultTheme.Sidebar | undefined): DefaultTheme
    * **The gallery index has no sidebar entry**, because in the browser the
    * sidebar itself is the gallery — a link to the list you are looking at is
    * noise. An agent has no sidebar, so the page landed under the plugin's
-   * catch-all "Other" heading, detached from the seventeen examples it
+   * catch-all "Other" heading, detached from the examples it
    * introduces. Putting it at the head of that section restores the order a
    * reader would expect.
    *

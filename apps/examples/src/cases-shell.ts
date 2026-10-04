@@ -73,8 +73,10 @@ function show(): void {
   const id = currentId();
   const [, module] = CASES.find(([caseId]) => caseId === id)!;
 
-  dispose?.();
-  stage.innerHTML = ""; // last safety net for DOM a dispose missed
+  const release = dispose;
+  dispose = null;
+  release?.();
+  stage.replaceChildren(); // last safety net for DOM a dispose missed
 
   heading.textContent = module.title;
   blurb.textContent = module.description;
