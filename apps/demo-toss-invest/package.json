@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
     "type-check": "tsc --noEmit",
-    "lint": "oxlint app hooks lib next.config.ts vitest.config.ts",
+    "lint": "oxlint app components hooks lib next.config.ts vitest.config.ts",
     "test": "vitest run",
     "clean": "rm -rf .next .turbo"
   },
@@ -33,6 +33,7 @@
     "@types/react-dom": "catalog:",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

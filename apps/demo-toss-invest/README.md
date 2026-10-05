@@ -41,7 +41,7 @@ instance accessible to other people.
   fields. Unknown upstream fields are discarded. Raw upstream errors and
   exception messages are replaced with fixed messages.
 - API responses use `Cache-Control: no-store`. Drawings stay in page memory.
-- `.env.local`, `.next`, coverage, and compiler caches are ignored by Git.
+- `.env.local`, `.next`, generated `next-env.d.ts`, coverage, and compiler caches are ignored by Git.
   Commit only the blank `.env.example` template.
 
 ## Data flow
@@ -53,9 +53,28 @@ uses the upstream `nextBefore` cursor and removes overlap when merging history.
 
 In live mode, `/api/realtime` translates server-side WebSocket trades into SSE.
 The client aggregates individual trades and reconciles a REST snapshot every
-15 seconds. Demo mode disables the live stream. See
-[market-dashboard.tsx](app/market-dashboard.tsx) and
-[candles.ts](lib/candles.ts) for the consumer flow.
+15 seconds. Demo mode disables the live stream.
+
+## Code organization
+
+| Location | Responsibility |
+| --- | --- |
+| [MarketDashboard](app/market-dashboard.tsx) | Selected market, display preferences, and page composition |
+| [DashboardToolbar](components/dashboard-toolbar.tsx) | Symbol input, intervals, display settings, and drawing controls |
+| [QuoteRow](components/quote-row.tsx) | Price, connection/history status, and jump-to-date form |
+| [MarketChart](components/market-chart.tsx) | Loading/error state and the time/Renko view switch |
+| [TimeChart](components/time-chart.tsx) | Time-chart assembly, price/volume series, and plugins |
+| [Indicator panes](components/indicator-panes.tsx) | MA/Bollinger overlays and RSI/MACD panels |
+| [RenkoChart](components/renko-chart.tsx) | Brick calculation and ordinal chart rendering |
+| [PeriodInput](components/period-input.tsx) | Editable period text and valid period commits |
+| [useMarketData](hooks/use-market-data.ts) | Load cancellation, cursor paging, trades, and REST reconciliation |
+| [useChartSession](hooks/use-chart-session.ts) | Retained drawings, viewport restoration, and chart focus |
+| [Candle client](lib/candle-client.ts) | Shared browser-side candle request transport |
+| [Candles](lib/candles.ts) | Timestamp conversion, trade aggregation, and snapshot merging |
+
+The dashboard defines the client entrypoint. Components imported below it stay
+in that client tree. Credentials and upstream response projection remain in
+server-only modules behind the API routes.
 
 ## Verification
 

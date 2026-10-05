@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 dist/
 .next/
+apps/demo-toss-invest/next-env.d.ts
 .turbo/
 coverage/
 .DS_Store
