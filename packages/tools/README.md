@@ -341,5 +341,4 @@ your own UI around them.**
 - **The Plot contract** — [plot-contract.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/plot-contract.md)
 - **Glossary** — [glossary.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/glossary.md)
 - **Saving per symbol and interval** — [above](#saving-per-symbol-and-interval)
-- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)
 - **Time zones and sessions** — [time-zones.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/time-zones.md)

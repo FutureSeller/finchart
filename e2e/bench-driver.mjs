@@ -10,9 +10,8 @@
  *   npm i -D playwright && npx playwright install chromium
  *
  * **`time` doesn't need any of this.** The page runs everything itself and puts
- * the result on `window.__bench`, so reading that value is enough — which is
- * what `.claude/skills/run-examples/bench.sh` does through agent-browser. Only
- * `alloc` and `heap`, which need CDP, are left here.
+ * the result on `window.__bench`, so reading that value is enough.
+ * Only `alloc` and `heap`, which need CDP, are left here.
  *
  * **It uses real Chrome (`channel: "chrome"`).** The bundled headless shell
  * rasterizes in software, which makes frame measurements diverge from reality.

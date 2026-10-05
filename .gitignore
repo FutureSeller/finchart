@@ -8,16 +8,8 @@ coverage/
 *.tsbuildinfo
 .tmp
 
-# Symlinks into .tmp (the local-only dev repository), for local convenience.
-# The leading `/` anchors to the root — without it, a subdirectory of the same
-# name is hidden anywhere in the tree (`docs` once hid all of `apps/docs`).
+# Local-only agent configuration.
 /.claude
-/.githooks
-/docs
-/scripts
-
-# Share the skills, leave personal settings out
-.claude/settings.local.json
 
 # Environment files — turbo.json expects .env* as a globalDependency
 .env

@@ -90,7 +90,7 @@ export interface HorizontalLine extends DrawingIdentity {
   price: number;
 }
 
-/** horizontal의 쌍대 — one x, spanning the pane's full height. */
+/** Vertical counterpart of a horizontal line: one x spanning the pane's full height. */
 export interface VerticalLine extends DrawingIdentity {
   type: "vertical";
   /** The data's x. Serialized like `Anchor.x` — same landing rules. */
@@ -170,7 +170,10 @@ export interface Rectangle extends DrawingIdentity {
   b: Anchor;
 }
 
-/** An ellipse inscribed in the box whose opposite corners are `a` and `b`. Boundary-only, like the rectangle. */
+/**
+ * An ellipse inscribed in the box whose opposite corners are `a` and `b`. Boundary-
+ * only, like the rectangle.
+ */
 export interface Ellipse extends DrawingIdentity {
   type: "ellipse";
   a: Anchor;
@@ -451,7 +454,10 @@ export function scaledByRatio(price: number, over: number, under: number): numbe
   return scaled(scaled(price, -power) * Math.exp(top[0] - bottom[0]), power + top[1] - bottom[1]);
 }
 
-/** `value` as `[ln(factor), power]` with `value = factor · 2^power` exactly and the factor next to 1. */
+/**
+ * `value` as `[ln(factor), power]` with `value = factor · 2^power` exactly and the
+ * factor next to 1.
+ */
 function halved(value: number): [number, number] {
   const power = Math.round(Math.log2(value));
   return [Math.log(scaled(value, -power)), power];
@@ -623,7 +629,10 @@ export function serializeDrawings(drawings: readonly Drawing[]): string {
   return JSON.stringify({ version: FORMAT_VERSION, drawings: owned });
 }
 
-/** Keeps a consumer's throwing getter from leaking into our stack (the same discipline as `tools.add`). */
+/**
+ * Keeps a consumer's throwing getter from leaking into our stack (the same discipline
+ * as `tools.add`).
+ */
 function safeOwn(drawing: Drawing): Drawing | null {
   try {
     return toOwnedDrawing(drawing);
@@ -1036,7 +1045,10 @@ function hasValidStyle(style: unknown): boolean {
   return true;
 }
 
-/** Present means drawable: a non-empty, all-finite list (order and duplicates are the normalizer's job). */
+/**
+ * Present means drawable: a non-empty, all-finite list (order and duplicates are the
+ * normalizer's job).
+ */
 function hasValidLevels(levels: unknown): boolean {
   if (levels === undefined) return true;
   if (!Array.isArray(levels) || levels.length === 0 || levels.length > 100) {

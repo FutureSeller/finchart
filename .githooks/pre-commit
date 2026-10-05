@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Reuse a successful gate stamp when it matches the staged tree.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+staged="$(git write-tree 2>/dev/null || true)"
+stamped="$(cat .git/gate-ok 2>/dev/null || true)"
+
+if [ -n "$staged" ] && [ "$staged" = "$stamped" ]; then
+  echo "✔ Gate stamp verified (${staged})"
+  exit 0
+fi
+
+echo "… No matching gate stamp — validating the repository"
+exec scripts/gate.sh

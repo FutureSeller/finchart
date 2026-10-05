@@ -107,6 +107,8 @@ function cssBearingFiles(root: string): string[] {
     "node_modules",
     "dist",
     ".git",
+    ".tmp",
+    ".claude",
     ".turbo",
     "coverage",
     "test-results",
@@ -115,9 +117,6 @@ function cssBearingFiles(root: string): string[] {
     // local machine were running on different stages while both stayed
     // green).
     "api",
-    // A symlink to a local-only dev repo (.tmp) — not a deployment surface,
-    // and a path that does not even exist in a public clone.
-    "docs",
   ]);
   const KEEP = /\.(md|css|html|vue)$/;
   const found: string[] = [];
@@ -126,6 +125,8 @@ function cssBearingFiles(root: string): string[] {
     for (const name of readdirSync(dir)) {
       if (SKIP.has(name)) continue;
       const full = resolve(dir, name);
+      // Developer docs are not a consumer CSS surface; apps/docs is.
+      if (full === resolve(root, "docs")) continue;
       if (statSync(full).isDirectory()) {
         walk(full);
         continue;
@@ -433,19 +434,10 @@ describe("the set of style variables", () => {
      * consumer copies and pastes.
      */
     const sources = cssBearingFiles(ROOT);
-    /**
-     * **The floor is calibrated to what this repository contains, not to a
-     * working copy.**
-     *
-     * It was 30, set against a tree where `docs/`, `scripts/` and `.claude/`
-     * are symlinks into the private development repository — so the scan saw
-     * files the published repo does not have. On a clean checkout it finds 19
-     * and the test failed, which is how this was found: green here, red
-     * everywhere else.
-     *
-     * 15 sits below today's 19 with room to delete a file or two, and far
-     * enough above 4 that a collapsed glob still cries.
-     */
+    // Include user guides; developer docs must not affect this check.
+    expect(sources).toContain("apps/docs/guide/theme.md");
+    expect(sources.some((file) => /^(?:\.tmp|\.claude|docs)\//.test(file))).toBe(false);
+    // Detect an empty scan or accidental inclusion of generated API output.
     expect(sources.length).toBeGreaterThan(15);
     expect(sources.length).toBeLessThan(200);
 

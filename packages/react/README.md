@@ -392,4 +392,3 @@ you want to swap a single series through an imperative handle
 - **Next.js and React apps** — the client boundary, `deps` read once, SSR, StrictMode — [nextjs.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/nextjs.md)
 - **Infinite history** — paging older data, in React with `useInfiniteHistory` — [infinite-history.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/examples/infinite-history.md)
 - **Time zones and sessions** — [time-zones.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/time-zones.md)
-- **Migrating from lightweight-charts** — [migrating-from-lightweight-charts.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md)

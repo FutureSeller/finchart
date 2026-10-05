@@ -132,8 +132,8 @@
 ---
 
 Keep the principles short. Consumer guides and the API reference live in
-`apps/docs/` (the public docs site). The detailed reasoning behind design
-decisions (ADRs and architecture notes) lives in internal documents outside
-this repository — those aren't public, so this file and the guides have to
-carry enough explanation to stand on their own.
+`apps/docs/` (the public docs site). Current implementation and contributor
+guidance live in [docs/](docs/README.md). Historical design decisions and ADRs
+remain in internal documents outside this repository; the public documentation
+must carry enough explanation to stand on its own.
 **When this conflicts with the plan, the plan wins.**

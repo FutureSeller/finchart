@@ -101,8 +101,7 @@ The five packages **ship as one fixed version** (`.changeset/config.json`'s
 mixing versions gets rejected at install. The code below runs as-is.
 
 To work on the repo itself, use the clone steps in [Development](#development)
-below. Coming from lightweight-charts? There is a
-[side-by-side table](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/migrating-from-lightweight-charts.md).
+below.
 
 ## 60 seconds
 
@@ -289,6 +288,9 @@ Anything that isn't data (a crosshair, a range highlight, a watermark) is a
 value axis.
 
 ## Development
+
+Start with the [developer documentation](docs/README.md) for architecture,
+data and rendering flows, extension contracts, and verification workflows.
 
 ```bash
 git clone https://github.com/FutureSeller/finchart.git charts && cd charts

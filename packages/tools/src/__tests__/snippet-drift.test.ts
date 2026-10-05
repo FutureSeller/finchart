@@ -104,8 +104,7 @@ export const CODE_LOCKS: readonly {
    * left the site and now lives in the private development repository, so this
    * test — which ships in the published repo — cannot read it. Leaving the
    * entry in made `pnpm test` fail on any clean checkout with an ENOENT, which
-   * is how it was found: the working copy resolves `docs/` through a symlink,
-   * so it was green here and red everywhere else.
+   * is how the private-document dependency was found.
    *
    * The recipe itself is still compiled by
    * `packages/dom/src/__tests__/sparkline.types.ts`. What is no longer held is

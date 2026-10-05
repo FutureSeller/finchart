@@ -102,7 +102,5 @@ for the full indicator list, and the
 README for what `browserDeps` wires up under the hood.
 
 Curious how the pieces fit together? See [Architecture](/guide/architecture).
-Coming from lightweight-charts? The
-[migration table](/guide/migrating-from-lightweight-charts) puts the two side by
-side. In a Next.js app, start with [Next.js and React apps](/guide/nextjs); for
+In a Next.js app, start with [Next.js and React apps](/guide/nextjs); for
 the axis's zone and market sessions, [Time zones and sessions](/guide/time-zones).

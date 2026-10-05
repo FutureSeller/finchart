@@ -9,10 +9,8 @@ import llmstxt from "vitepress-plugin-llms";
  * link failing the build is the point.
  *
  * Links to PRINCIPLES.md are written as absolute GitHub URLs: that document
- * isn't part of the site. `docs/` holds the development documents the site
- * never cites — architecture.md, rendering.md, the ADRs, and the two that
- * moved out of the sidebar: performance.md (a measurement ledger we keep for
- * ourselves, not a consumer's reading) and sparkline.md.
+ * isn't part of the site. Development records live outside this repository's
+ * public docs tree and are not included in the site.
  */
 
 // `pnpm typedoc` writes typedoc-sidebar.json (package.json's build and dev
@@ -134,7 +132,6 @@ export default defineConfig({
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Custom Indicators", link: "/guide/extensions" },
-            { text: "Migrating from lightweight-charts", link: "/guide/migrating-from-lightweight-charts" },
           ],
         },
         {

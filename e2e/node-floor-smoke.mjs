@@ -29,9 +29,9 @@ assert.ok(line, "a headless frame draws the line");
 assert.equal(line.points.length, 3);
 
 const packages = ["core", "dom", "react", "tools", "indicators"];
-// **센 것은 리스트 길이가 아니라 루프가 실제로 확인한 수다.** 목록을 비우면
-// `0 manifests resolve`를 찍고 초록으로 끝나던 자리다 — 세는 집합과 검증하는
-// 집합이 다르면 그 수는 보호가 아니라 장식이다.
+// Count manifest resolutions performed by the validation loop.
+// A discovered list length does not prove that its entries were checked.
+// An empty list must fail rather than report successful coverage.
 let resolvedCount = 0;
 for (const dir of packages) {
   const manifest = new URL(`packages/${dir}/package.json`, root);
@@ -42,7 +42,7 @@ for (const dir of packages) {
 }
 assert.ok(
   resolvedCount >= 5,
-  `발행 패키지 다섯의 매니페스트를 확인해야 한다 — ${resolvedCount}개만 봤다`,
+  `All five published package manifests must resolve; only ${resolvedCount} were checked`,
 );
 
 console.log(`node floor smoke (${process.version}): headless frame drawn, ${resolvedCount} manifests resolve`);
