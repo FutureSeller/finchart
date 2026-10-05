@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -13,13 +16,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -34,7 +37,16 @@ jobs:
       - run: pnpm build
       - run: pnpm size
       - run: pnpm check:publish
-      - run: pnpm exec changeset status
+      # Version PRs consume changesets rather than add them. Match the bot,
+      # branch, and repository together so a fork cannot claim this exception.
+      - run: pnpm exec changeset status --since "$CHANGESET_BASE"
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.user.login != 'github-actions[bot]' ||
+          github.event.pull_request.head.repo.full_name != github.repository ||
+          github.head_ref != 'changeset-release/main'
+        env:
+          CHANGESET_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'main' }}
 
   # The packages declare `engines.node >=20.19` — the shipped dist must run
   # there, not only on the Node the repository builds with. Build on the
@@ -42,16 +54,18 @@ jobs:
   node-floor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.21.0
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 20.19
       - run: node --version
@@ -60,9 +74,11 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -77,9 +93,11 @@ jobs:
   react-floor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.21.0
           cache: pnpm

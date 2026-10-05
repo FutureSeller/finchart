@@ -1,9 +1,16 @@
 # Changesets
 
-Write one change down with `pnpm changeset`; the release itself is
-`pnpm changeset version` → `pnpm release`.
+Contributors add changesets with `pnpm changeset`. Maintainers review release
+scope and bump types, then merge the bot-generated version PR after required CI.
+Changeset authors do not receive merge or publication access.
 
-The first public release, `0.0.1`, was published from commit `3004db5`.
+The Release workflow prepares version PRs only; it does not publish to npm.
+Publishing is a separate maintainer operation described [below](#releasing).
+See [Contributing](../CONTRIBUTING.md#changesets)
+for changes that need a release and the empty-changeset convention.
+
+The first public release was `0.0.1`; its baseline is recorded by the
+`@finchart/*@0.0.1` Git tags.
 Changes made before that release are recorded in each package's `CHANGELOG.md`;
 they are not pending changesets. New changesets start with changes made after
 that baseline.
@@ -61,3 +68,27 @@ on `next`.
 
 **Put it in the `fixed` array too.** Leave it out and that package alone gets an
 independent version, and the unmet peer above recurs there.
+
+## Releasing
+
+The Release workflow accepts successful CI for pushes to this repository's
+`main` only. Its context and checkout must match the CI-verified SHA. It checks
+that main is current before validation and again before updating the version PR.
+Confirm the version PR is still current before merging, since main can advance
+after the final check. Changesets Action 2 is paired with CLI 3.
+
+1. Review the bot's `changeset-release/main` PR: all five versions, changelogs,
+   dependency ranges, and lockfile changes. The version PR consumes existing
+   changesets and is exempt from adding a new changeset.
+2. Approve the bot's workflow run when GitHub requests approval, then approve and
+   squash merge the PR after all required CI checks pass.
+3. From a clean, current checkout, run `pnpm install --frozen-lockfile`, then
+   `pnpm gate`. Inspect release artifacts and publish with `pnpm release` using
+   maintainer credentials. Keep credential values out of tracked files and logs.
+4. Verify all five versions and public access on npm, then check installation
+   and imports in a clean consumer project. If publishing is interrupted, inspect
+   registry state before retrying; published versions cannot be replaced.
+
+The workflow does not publish or auto-merge. If automated publication is added,
+review it separately and prefer npm trusted publishing with minimal permissions
+and a protected release environment. Use an explicit non-`latest` tag for canaries.

@@ -21,8 +21,8 @@ const EXEMPT = new Map([
     "Dependencies must already be installed before running the local gate.",
   ],
   [
-    "pnpm exec changeset status",
-    "Pending changesets describe release readiness rather than a check required for every commit.",
+    'pnpm exec changeset status --since "$CHANGESET_BASE"',
+    "CI compares a PR against its target branch; local commits do not always have a PR base. Maintainer review validates release scope.",
   ],
 ]);
 

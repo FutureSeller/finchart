@@ -295,6 +295,8 @@ value axis.
 
 Start with the [developer documentation](docs/README.md) for architecture,
 data and rendering flows, extension contracts, and verification workflows.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for PR and changeset requirements, and
+[SECURITY.md](SECURITY.md) for private vulnerability reports.
 
 ```bash
 git clone https://github.com/FutureSeller/finchart.git charts && cd charts

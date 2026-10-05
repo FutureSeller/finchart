@@ -11,21 +11,54 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  release:
-    if: github.event.workflow_run.conclusion == 'success'
+  eligibility:
+    # Privileged release work accepts only successful CI for this repository's
+    # main push. Fork pull requests may also name their branch main.
+    # Changesets resets to context.sha internally; it must equal the verified SHA.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.sha == github.event.workflow_run.head_sha &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.tip.outputs.current }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Check that CI verified the current main commit
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          current_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$current_sha" = "$VERIFIED_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: eligibility
+    if: needs.eligibility.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.21.0
           cache: pnpm
@@ -40,8 +73,26 @@ jobs:
       - run: pnpm size
       - run: pnpm check:publish
 
-      - uses: changesets/action@v1
-        with:
-          version: pnpm run version
+      # main can advance while validation runs. Avoid knowingly updating a
+      # version PR from an obsolete commit; the next successful CI will retry.
+      - name: Recheck main before updating the version PR
+        id: tip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          current_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$current_sha" = "$VERIFIED_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # CLI 3 requires Action 2. Without publish-script this only prepares a PR.
+      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        if: steps.tip.outputs.current == 'true'
+        with:
+          version-script: pnpm run version
+          pr-base-branch: main
+          github-token: ${{ github.token }}
