@@ -122,6 +122,7 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Examples", link: "/examples/" },
+      { text: "Showcase", link: "/showcase" },
       { text: "API", link: "/reference/naming" },
     ],
 
@@ -180,6 +181,13 @@ export default defineConfig({
             { text: "Session shading", link: "/examples/session-shading" },
             { text: "Worker rendering", link: "/examples/worker-render" },
           ],
+        },
+      ],
+      // The page hides its sidebar; this group keeps llms.txt organized.
+      "/showcase": [
+        {
+          text: "Showcase",
+          items: [{ text: "React trading showcase", link: "/showcase" }],
         },
       ],
       "/reference/": apiSidebar,

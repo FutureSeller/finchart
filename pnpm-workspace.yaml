@@ -4,6 +4,7 @@ packages:
   - 'e2e'
 allowBuilds:
   esbuild: true
+  workerd: true
 
 catalog:
   "@arethetypeswrong/cli": ^0.18.2

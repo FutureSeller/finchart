@@ -6,14 +6,17 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "typedoc && vitepress dev",
-    "build": "typedoc && vitepress build",
+    "dev": "pnpm run build:showcase && typedoc && vitepress dev",
+    "build": "pnpm run build:showcase && typedoc && vitepress build",
+    "build:showcase": "pnpm --filter charts-demo-react exec vite build --base ./ --outDir ../docs/public/demos/react-showcase --emptyOutDir",
+    "deploy": "pnpm --workspace-root exec turbo run build --filter=charts-docs && wrangler pages deploy dist --project-name=finchart-docs --branch=main",
+    "preview:pages": "wrangler pages dev dist --ip 127.0.0.1",
     "typedoc": "typedoc",
     "preview": "vitepress preview",
     "lint": "oxlint .vitepress/config.ts vitest.config.ts zero-coverage-reporter.ts snippets",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "clean": "rm -rf dist api .vitepress/cache .turbo"
+    "clean": "rm -rf dist api public/demos/react-showcase .vitepress/cache .turbo"
   },
   "devDependencies": {
     "@finchart/core": "workspace:*",
@@ -25,6 +28,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "charts-demo-react": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "typedoc": "^0.28.20",
@@ -34,6 +38,7 @@
     "vitepress": "2.0.0-alpha.19",
     "vitepress-plugin-llms": "^1.14.0",
     "vitest": "catalog:",
-    "vue": "^3.5.43"
+    "vue": "^3.5.43",
+    "wrangler": "4.147.0"
   }
 }
