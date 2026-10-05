@@ -41,3 +41,9 @@ e2e/playwright-report/
 
 # typedoc — apps/docs/typedoc.json regenerates this on every build and dev script
 apps/docs/api/
+
+# Generated standalone showcase embedded by the docs site.
+apps/docs/public/demos/react-showcase/
+
+# Wrangler local state.
+.wrangler/

@@ -31,6 +31,13 @@ The install's `prepare` step configures `.githooks` as the Git hook directory.
 Workspace consumers resolve built package exports, so build packages before
 running an app or a standalone distribution check.
 
+The docs' top-level `/showcase` page uses the standalone `apps/demo-react` app inside an
+iframe. Docs `dev` and `build` generate it in the ignored
+`apps/docs/public/demos/react-showcase` directory with relative asset URLs;
+VitePress includes that directory in the site output. After changing demo
+source during a docs session, rerun `pnpm --filter charts-docs run build:showcase`
+and reload the iframe. The standalone demo's own dev server retains hot reload.
+
 ## Useful commands
 
 | Command | Purpose |
@@ -151,3 +158,25 @@ separate operation from validating a change.
   `llms.txt` content should be rebuilt rather than edited by hand.
 - Preserve private design records outside this tree. Current explanations must
   stand on their own and agree with source and tests.
+
+## Deploying the documentation
+
+The docs use local Direct Upload to the existing `finchart-docs` Cloudflare Pages
+project, available at `https://finchart.fseller.dev`. GitHub is not connected to
+the Pages deployment, and no deployment token is stored in GitHub.
+
+```sh
+pnpm --filter charts-docs exec wrangler whoami
+pnpm --filter charts-docs exec wrangler login  # only if login is required
+pnpm --filter charts-docs run deploy
+```
+
+Verify the intended account before deploying. The command builds docs, their
+library dependencies, and the embedded React showcase, then uploads only
+`apps/docs/dist`. It targets production (`--branch=main`) even when invoked
+from a local feature branch. GitHub pushes and Pages uploads are separate
+operations; this command publishes the current local source.
+
+After building, `pnpm --filter charts-docs run preview:pages` previews Pages
+routing locally. After deployment, check `/showcase`, activate its chart,
+and verify a guide, `/llms.txt`, and a missing-page response over HTTPS.
