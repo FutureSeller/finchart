@@ -92,7 +92,7 @@ function llmsSidebar(configured: DefaultTheme.Sidebar | undefined): DefaultTheme
 
 export default defineConfig({
   title: "@finchart",
-  description: "Composable financial charts with a DOM-free core, testable draw commands, and optional browser, React, indicator, and drawing-tool packages",
+  description: "A composable financial chart engine for TypeScript apps. Build candles, indicators, drawings, and live charts on a DOM-free core.",
   lang: "en-US",
   cleanUrls: true,
   outDir: "dist",
