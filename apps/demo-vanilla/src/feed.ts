@@ -3,7 +3,7 @@
  *
  * Live ticks and timeframe switches touch the same state (clock, tickIndex,
  * minutes), so this closure is the single hand on it rather than a scattering
- * of `let`s. The surface is only as wide as the showcase uses — no
+ * of `let`s. The surface is only as wide as the demo uses — no
  * generalizing into a subscription system.
  */
 import type { OHLC } from "@finchart/core";

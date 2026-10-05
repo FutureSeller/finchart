@@ -163,8 +163,8 @@ export const CODE_LOCKS: readonly {
   { file: "packages/tools/README.md", contains: 'reason !== "move"', compiledIn: COPIES },
   { file: "apps/examples/src/trading.ts", contains: 'reason !== "move"', compiledIn: COPIES },
   { file: "apps/examples/src/cases/drawing.ts", contains: 'reason !== "move"', compiledIn: COPIES },
-  { file: "apps/showcase/src/chart-instance.ts", contains: 'reason !== "move"', compiledIn: COPIES },
-  { file: "apps/showcase-react/src/rail.tsx", contains: 'reason !== "move"', compiledIn: COPIES },
+  { file: "apps/demo-vanilla/src/chart-instance.ts", contains: 'reason !== "move"', compiledIn: COPIES },
+  { file: "apps/demo-react/src/rail.tsx", contains: 'reason !== "move"', compiledIn: COPIES },
   {
     file: "packages/tools/README.md",
     contains: "tools.historyChanges.subscribe(syncHistory)",

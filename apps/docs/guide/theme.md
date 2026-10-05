@@ -183,7 +183,7 @@ draws no focus style of its own** — the browser's default outline on a
 transparent 7px strip is easy to miss, so give `:focus-visible` a look, as the
 third selector above does.
 
-Proof: the showcase (`apps/showcase/src/style.css`) is exactly this recipe.
+Proof: the vanilla demo (`apps/demo-vanilla/src/style.css`) is exactly this recipe.
 
 ## Theming without CSS — headless
 

@@ -960,7 +960,7 @@ do**, so it's written down here instead of carved into the core surface.
 **With several charts side by side**, the element to give focus back to is *"the
 one the chart you just operated passed to `build()`"* — not an outer wrapper such
 as a cell or a card. Keys bubble upward only, so focusing the wrapper never
-reaches the listener inside. `apps/showcase` carries this distinction around as
+reaches the listener inside. `apps/demo-vanilla` carries this distinction around as
 `keyboardHost`.
 
 **And the name is the caller's job too.** The core makes that container a tab

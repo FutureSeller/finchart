@@ -1,5 +1,5 @@
 /**
- * The React edition of the showcase — a **focus model** over four chart slots.
+ * The React edition of the demo — a **focus model** over four chart slots.
  *
  * There is no primary/comparison split: every slot is a `<FullChart>` (its own
  * symbol, timeframe, type, indicators, drawings and feed), and the header

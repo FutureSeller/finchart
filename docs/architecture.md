@@ -16,6 +16,9 @@ contract or introducing a new dependency.
 | `packages/tools` | Drawing geometry, interaction, persistence, and plugins | Core |
 | `packages/tsconfig` | Shared build and test compiler configuration | Development only |
 | `apps/examples` | Runnable demonstrations and the browser benchmark harness | Workspace consumers |
+| `apps/demo-vanilla` | An integrated trading screen assembled with vanilla TypeScript | Workspace consumers |
+| `apps/demo-react` | A React version of the integrated trading screen | Workspace consumers |
+| `apps/demo-toss-invest` | Next.js chart with synthetic data and an optional server-side market-data connection | Workspace consumers |
 | `apps/docs` | User guides, checked snippets, and generated API reference | Workspace consumers |
 | `e2e` | Real-browser tests and built-package runtime smoke checks | Workspace consumers |
 

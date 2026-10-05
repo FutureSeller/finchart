@@ -12,6 +12,10 @@ packages/react       @finchart/react       React composable components
 packages/indicators  @finchart/indicators  Indicators (MA·MACD·Bollinger) — the core API never grew for them
 packages/tools       @finchart/tools       Drawing tools (horizontal·trend line·Fibonacci) — nor for these
 apps/examples        Where you see it for yourself
+apps/demo-vanilla    Integrated trading-screen demo in vanilla TypeScript
+apps/demo-react      Integrated trading-screen demo in React
+apps/demo-toss-invest Next.js market-data demo (synthetic data by default)
+apps/docs            User documentation site
 ```
 
 ## Why @finchart

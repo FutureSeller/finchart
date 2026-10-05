@@ -28,6 +28,7 @@ export function DrawingToolsHost({
   onReady: (tools: DrawingToolsApi | null) => void;
 }) {
   const tools = usePlugin((plot, pane) => pane.use(drawingTools({ plot })), []);
+  // Retain the shared persistence key so renaming the demo preserves saved drawings.
   const storageKey = `charts-showcase-drawings:${symbol}`;
 
   // Drawings belong to the symbol — a localStorage round trip (vanilla's rail.ts pattern).
@@ -36,7 +37,7 @@ export function DrawingToolsHost({
 
     const saved = localStorage.getItem(storageKey);
     if (saved && !tools.load(saved)) {
-      // Keep unreadable bytes for a later version to recover, as the vanilla showcase does.
+      // Keep unreadable bytes for a later version to recover, as the vanilla demo does.
       localStorage.setItem(`${storageKey}:broken`, saved);
       localStorage.removeItem(storageKey);
     }

@@ -1,8 +1,8 @@
 {
-  "name": "charts-showcase-react",
+  "name": "charts-demo-vanilla",
   "version": "0.0.1",
   "private": true,
-  "description": "The React edition of the showcase — the same screen assembled down both lanes, declarative and imperative",
+  "description": "A trading-screen demo assembled with vanilla TypeScript and the imperative chart API",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -16,16 +16,10 @@
     "@finchart/core": "workspace:*",
     "@finchart/dom": "workspace:*",
     "@finchart/indicators": "workspace:*",
-    "@finchart/react": "workspace:*",
-    "@finchart/tools": "workspace:*",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "@finchart/tools": "workspace:*"
   },
   "devDependencies": {
     "@finchart/tsconfig": "workspace:*",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "@vitejs/plugin-react": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
   }

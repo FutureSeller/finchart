@@ -36,6 +36,9 @@ running an app or a standalone distribution check.
 | Command | Purpose |
 | --- | --- |
 | `pnpm --filter @finchart/core test` | Run the core suite |
+| `pnpm --filter charts-demo-vanilla dev` | Start the integrated vanilla TypeScript demo |
+| `pnpm --filter charts-demo-react dev` | Start the integrated React demo |
+| `pnpm --filter charts-demo-toss-invest dev` | Start the local Next.js market-data demo with synthetic data by default |
 | `pnpm --filter @finchart/core exec vitest run src/plot/__tests__/upsert.test.ts` | Run one targeted regression file |
 | `pnpm type-check` | Check workspace types, including test contracts |
 | `pnpm lint` | Check workspace source and repository scripts |
@@ -45,6 +48,10 @@ running an app or a standalone distribution check.
 | `pnpm size` | Check measured bundle scenarios against budgets |
 | `pnpm check:publish` | Run workspace publication validators |
 | `pnpm --filter charts-e2e e2e` | Run Playwright against the examples app |
+
+See the [Toss demo README](../apps/demo-toss-invest/README.md) before enabling live data.
+Keep credentials in the ignored local environment file; account data and saved
+market snapshots are not part of this example.
 
 Install the required Playwright browsers before browser tests. The projects and
 server setup are in [playwright.config.ts](../e2e/playwright.config.ts). These

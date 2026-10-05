@@ -6,7 +6,7 @@ import { sessionStart } from "@finchart/core";
  * computation node is built with `useMemo` and its branches (`node.out.*`) ride
  * in as `input`. BOLL's bands and its center line share **one** computation, and
  * the indicator math belongs to `@finchart/indicators` (the app used to
- * reimplement sma, stddev and VWAP by hand — a showcase that didn't use the
+ * reimplement sma, stddev and VWAP by hand — a demo that didn't use the
  * library).
  *
  * **The own-pane indicators (RSI, MACD) stay on `attach*`.** They make their own

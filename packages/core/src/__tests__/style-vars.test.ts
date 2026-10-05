@@ -504,7 +504,7 @@ describe("the set of style variables", () => {
     // (senior-review-2026-08-13 D2, "apps/docs is outside machine
     // verification").
     // Derived from apps/* rather than a hand-written list — the two
-    // showcases, the repo's biggest consumers, were outside the list, so
+    // integrated demos, the repo's biggest consumers, were outside the list, so
     // 23 tokens each went unchecked.
     const APPS = resolve(SRC, "../../../apps");
     const SCAN_ROOTS = readdirSync(APPS)

@@ -47,7 +47,7 @@ function makeDeps() {
   });
 }
 
-/** Live options get applied from inside the container — same option showcase uses. */
+/** Live options get applied from inside the container — same option demo uses. */
 function LiveOptions() {
   const plot = useChartPlot();
   useEffect(() => {

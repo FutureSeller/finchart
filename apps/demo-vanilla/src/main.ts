@@ -1,5 +1,5 @@
 /**
- * The showcase — a **focus model** over four chart slots.
+ * The demo — a **focus model** over four chart slots.
  *
  * There is no primary/comparison split: every slot is a full chart instance
  * (`chart-instance.ts` — its own symbol, timeframe, type, indicators, drawings

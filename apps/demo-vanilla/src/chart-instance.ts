@@ -130,7 +130,7 @@ export interface ChartInstance {
    * Without this signal the vanilla status bar's bar count was **frozen at
    * load time** — the feed kept announcing `minuteClosed` (`feed.ts`) with
    * nobody listening, and `refreshStatus` was only called on a focus change or
-   * a timeframe button. The React showcase reads `snapshot.barCount` and
+   * a timeframe button. The React demo reads `snapshot.barCount` and
    * updates every tick, so **the same screen looked different in the two
    * apps.**
    */
@@ -223,6 +223,7 @@ export function makeChart(
   const tools: DrawingToolsApi = plot.mainPane.use(drawingTools({ plot }));
 
   // --- Drawings belong to the symbol — a localStorage round trip ---
+  // Retain the shared persistence key so renaming the demo preserves saved drawings.
   const drawingsKey = `charts-showcase-drawings:${spec.symbol}`;
   const savedDrawings = localStorage.getItem(drawingsKey);
   if (savedDrawings && !tools.load(savedDrawings)) {

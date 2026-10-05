@@ -1,0 +1,39 @@
+{
+  "name": "charts-demo-toss-invest",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "A Next.js market-data demo using synthetic candles or server-side Toss Invest integration",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "type-check": "tsc --noEmit",
+    "lint": "oxlint app hooks lib next.config.ts vitest.config.ts",
+    "test": "vitest run",
+    "clean": "rm -rf .next .turbo"
+  },
+  "dependencies": {
+    "@finchart/core": "workspace:*",
+    "@finchart/dom": "workspace:*",
+    "@finchart/indicators": "workspace:*",
+    "@finchart/react": "workspace:*",
+    "@finchart/tools": "workspace:*",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "server-only": "^0.0.1",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@finchart/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,8 +1,8 @@
 {
-  "name": "charts-showcase",
+  "name": "charts-demo-react",
   "version": "0.0.1",
   "private": true,
-  "description": "A trading screen for looking at one symbol closely — the library's features assembled for real",
+  "description": "A React trading-screen demo assembled through declarative components and imperative chart APIs",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -16,10 +16,16 @@
     "@finchart/core": "workspace:*",
     "@finchart/dom": "workspace:*",
     "@finchart/indicators": "workspace:*",
-    "@finchart/tools": "workspace:*"
+    "@finchart/react": "workspace:*",
+    "@finchart/tools": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@finchart/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
