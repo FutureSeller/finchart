@@ -10,6 +10,12 @@ An integrated trading screen built with `@finchart/react`. Run the showcase belo
 or open it in a new tab for more room. Prices and live updates are synthetic;
 no market-data credentials are required.
 
+On narrow screens, open **Settings** for chart controls and drawing tools.
+The chart fills the available screen height; multiple panels stack and scroll
+within the chart area. Open the demo in a new tab to use the full screen.
+The initial view and timeframe changes show recent candles at roughly 8px
+spacing. **Fit all** shows the full retained history.
+
 <script setup>
 import ShowcaseDemo from "./.vitepress/theme/ShowcaseDemo.vue";
 </script>

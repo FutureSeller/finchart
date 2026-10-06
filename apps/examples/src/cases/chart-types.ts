@@ -12,7 +12,7 @@ import {
 } from "@finchart/core";
 import { attachMovingAverage } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Switching chart types — swapSeries changes only the presentation";
 export const description =
@@ -97,6 +97,8 @@ export function mount(container: HTMLElement): () => void {
     buttons.set(type, el);
     toolbar.append(el);
   }
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

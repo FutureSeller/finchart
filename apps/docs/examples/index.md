@@ -7,6 +7,11 @@ description: "Nineteen runnable examples, each one page with the source it actua
 The cases from `apps/examples`, mounted as-is — pick one from the list
 on the left. Each page shows the live demo alongside the real source.
 
+Price examples start with recent bars at roughly 8px spacing, so candles remain
+readable on small screens. Earlier data stays loaded for indicators and panning.
+Examples demonstrating a specific range, such as session shading and log-scale
+growth, keep that range.
+
 - [Candles + volume](/examples/candles-volume) — the smallest trading screen
 - [Switching chart types — swapSeries changes only the presentation](/examples/chart-types) — candle · bar · line · area, only the presentation changes
 - [Heikin-Ashi — the proof of derived series](/examples/heikin-ashi)

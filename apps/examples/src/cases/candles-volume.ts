@@ -2,7 +2,7 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { HistogramPoint, OHLC } from "@finchart/core";
 import { candleSeries, crosshair, histogramSeries, priceFormat, timeTicks } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Candles + volume";
 export const description =
@@ -36,6 +36,8 @@ export function mount(container: HTMLElement): () => void {
   });
 
   plot.use(crosshair({ magnet: true }));
+
+  focusRecent(plot, candles);
 
   return Object.assign(
     () => {

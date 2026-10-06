@@ -2,7 +2,7 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { OHLC, Plot } from "@finchart/core";
 import { candleSeries, priceFormat, syncX, timeTicks } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Two synchronized charts — syncX";
 export const description =
@@ -31,11 +31,13 @@ function buildChart(
     })
     .build(host);
 
-  plot.mainPane.addSeries({
+  const price = plot.mainPane.addSeries({
     series: candleSeries(),
     data: fixtureCandles(300, seed),
     name,
   });
+
+  focusRecent(plot, price.read());
 
   return { plot, wrapper };
 }

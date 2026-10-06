@@ -10,7 +10,7 @@ import {
   attachWilliamsR,
 } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Oscillators — RSI · MFI · Stochastic RSI · CCI · %R";
 export const description =
@@ -44,6 +44,8 @@ export function mount(container: HTMLElement): () => void {
   const williams = plot.use(attachWilliamsR({ source: price }));
   if (williams.pane) plot.use(legend({ pane: williams.pane }));
   plot.use(legend({}));
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

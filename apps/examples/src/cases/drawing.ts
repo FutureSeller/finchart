@@ -3,7 +3,7 @@ import type { OHLC } from "@finchart/core";
 import { candleSeries, crosshair, LinearScale, LogScale, priceFormat, timeTicks } from "@finchart/core";
 import { drawingTools } from "@finchart/tools";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Drawing tools";
 export const description =
@@ -36,7 +36,7 @@ export function mount(container: HTMLElement): () => void {
     })
     .build(host);
 
-  plot.mainPane.addSeries({
+  const price = plot.mainPane.addSeries({
     series: candleSeries(),
     data: fixtureCandles(),
     name: "Price",
@@ -177,6 +177,8 @@ export function mount(container: HTMLElement): () => void {
   syncLogLevels();
 
   toolbar.append(deselect, remove, clearAll, magnet, axis, logLevels);
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

@@ -15,14 +15,14 @@
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { HistogramPoint, OHLC } from "@finchart/core";
 import { OHLCAccessor, candleSeries, crosshair, histogramSeries, infiniteHistory, timeTicks } from "@finchart/core";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Candles + volume (home)";
 export const description = "For the homepage hero — a candles-volume variant with infinite history loading and a zoom-out floor.";
 
 const MINUTE = 60_000;
 const BASE = Date.UTC(2026, 7, 10, 9, 0);
-const CHUNK = 70; // how many bars show at first, and how many older bars a fetch brings
+const CHUNK = 70; // initial history and the number of older bars each fetch brings
 const MAX_HISTORY = 4000; // the backstop on infinite loading — nothing older than this index gets made
 
 /** Deterministic pseudo-random in [0,1) — one index, always the same value. */
@@ -110,10 +110,9 @@ export function mount(container: HTMLElement): () => void {
   // to pixels per ms. Skip that and either neither limit really binds
   // (unlimited zoom in) or both land far above the current span and nail the
   // view in place (no zooming out).
-  const pxPerCandle = width / CHUNK;
   plot.applyOptions({
-    maxBarSpacing: pxPerCandle / MINUTE, // can't zoom in past the initial span
-    minBarSpacing: pxPerCandle / 2 / MINUTE, // zooming out is allowed only to half
+    maxBarSpacing: 32 / MINUTE,
+    minBarSpacing: 2 / MINUTE,
   });
 
   const initial = range(-CHUNK, 0);
@@ -155,6 +154,8 @@ export function mount(container: HTMLElement): () => void {
   );
 
   plot.use(crosshair({ magnet: true }));
+
+  focusRecent(plot, priceHandle.read());
 
   return Object.assign(
     () => {

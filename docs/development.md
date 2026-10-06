@@ -37,6 +37,17 @@ iframe. Docs `dev` and `build` generate it in the ignored
 VitePress includes that directory in the site output. After changing demo
 source during a docs session, rerun `pnpm --filter charts-docs run build:showcase`
 and reload the iframe. The standalone demo's own dev server retains hot reload.
+At widths up to 768px, the React demo moves chart controls and drawing tools
+into a Settings disclosure over the chart. The app fills its viewport height;
+multiple chart panels stack and scroll within the stage. Desktop controls
+remain inline. The docs iframe uses the mobile viewport height.
+The showcase and ordinary price examples open on recent bars at about 8px
+spacing, using app-owned `focusRecent` helpers. All source data remains loaded
+for indicators and history browsing; live ticks do not reset user zoom. Cases
+whose teaching point needs a specific range (such as session shading, the
+three-candle tutorial, and log-scale growth) retain that view.
+Run `pnpm --filter charts-e2e e2e:showcase` for the standalone and embedded mobile
+layout checks in Chromium and WebKit; this starts both local app servers.
 
 ## Useful commands
 

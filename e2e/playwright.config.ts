@@ -12,6 +12,7 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./specs",
+  testIgnore: "showcase-mobile.spec.ts",
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   projects: [

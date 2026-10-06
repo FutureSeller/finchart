@@ -11,8 +11,8 @@
  * type and indicator set are state here, while bars, feed and hover live inside
  * `FullChart`.
  *
- * The tape (`data`, `feed`), the formatting (`format`), the icons and the styles
- * are copies of vanilla's — only the assembly differs.
+ * The tape (`data`, `feed`), the formatting (`format`) and the icons are copies
+ * of vanilla's. This edition also adapts its layout to narrow screens.
  */
 import type { Plot, XDomainChangePayload } from "@finchart/core";
 import { SyncCrosshair, SyncX, usePluginState } from "@finchart/react";
@@ -80,6 +80,31 @@ const readSelection = (tools: DrawingToolsApi) => tools.selection() !== null;
 
 export function App() {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [mobile, setMobile] = useState(() => matchMedia("(max-width: 768px)").matches);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const query = matchMedia("(max-width: 768px)");
+    const update = () => {
+      setMobile(query.matches);
+      setSettingsOpen(false);
+    };
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!mobile || !settingsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setSettingsOpen(false);
+      settingsButtonRef.current?.focus();
+    };
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => window.removeEventListener("keydown", closeOnEscape, true);
+  }, [mobile, settingsOpen]);
 
   // --- Per-chart state — settings here, data inside FullChart ---
   const [layout, setLayout] = useState<1 | 2 | 4>(1);
@@ -209,6 +234,15 @@ export function App() {
     );
   };
 
+  const drawingRail = (
+    <Rail
+      tools={focusedTools}
+      plot={focusedPlot}
+      mode={toolMode}
+      hasSelection={hasSelection}
+    />
+  );
+
   return (
     <div id="app">
       <header id="header">
@@ -218,7 +252,21 @@ export function App() {
           shown={snapshot?.shown ?? null}
           refClose={snapshot?.refClose ?? 1}
         />
-        <div id="controls">
+        <button
+          id="settings-toggle"
+          ref={settingsButtonRef}
+          type="button"
+          hidden={!mobile}
+          aria-expanded={settingsOpen}
+          aria-controls="controls"
+          onClick={() => setSettingsOpen((open) => !open)}
+        >
+          Settings
+        </button>
+        <div
+          id="controls"
+          hidden={mobile && !settingsOpen}
+        >
           <div id="chart-types" role="group" aria-label="Chart type">
             {(
               [
@@ -273,15 +321,11 @@ export function App() {
             light={light}
             onLight={() => setLight((prev) => !prev)}
           />
+          {mobile && drawingRail}
         </div>
       </header>
 
-      <Rail
-        tools={focusedTools}
-        plot={focusedPlot}
-        mode={toolMode}
-        hasSelection={hasSelection}
-      />
+      {!mobile && drawingRail}
 
       <main
         id="stage"

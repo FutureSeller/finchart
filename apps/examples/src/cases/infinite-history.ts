@@ -16,7 +16,7 @@
 import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { HistogramPoint, HistoryStatus, OHLC } from "@finchart/core";
 import { OHLCAccessor, candleSeries, crosshair, histogramSeries, infiniteHistory, priceFormat, timeTicks } from "@finchart/core";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 const timeFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
@@ -149,6 +149,8 @@ export function mount(container: HTMLElement): () => void {
   );
   const offStatus = loader.statusChanges.subscribe(paint);
   paint();
+
+  focusRecent(plot, priceHandle.read());
 
   return Object.assign(
     () => {

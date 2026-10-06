@@ -2,7 +2,7 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { LineDataPoint } from "@finchart/core";
 import { areaSeries, markers, priceFormat, timeTicks } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Area — a fill that fades downward";
 export const description =
@@ -33,6 +33,8 @@ export function mount(container: HTMLElement): () => void {
   plot.mainPane.addDecoration(
     markers([{ x: last.x, price: last.y ?? 0, shape: "circle", color: "#ef4444" }]),
   );
+
+  focusRecent(plot, closes);
 
   return () => plot.destroy();
 }

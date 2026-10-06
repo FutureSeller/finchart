@@ -2,7 +2,7 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { DrawTarget, OHLC, Series } from "@finchart/core";
 import { OHLCAccessor, candleSeries, isGap, priceFormat, timeTicks } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Custom series — volume dots";
 export const description =
@@ -60,6 +60,8 @@ export function mount(container: HTMLElement): () => void {
   const data = fixtureCandles(80);
   plot.mainPane.addSeries({ series: candleSeries(), data, name: "Price" });
   plot.mainPane.addSeries({ series: volumeDots, data, name: "Volume (dots)" });
+
+  focusRecent(plot, data);
 
   return Object.assign(
     () => {

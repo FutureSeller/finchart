@@ -3,7 +3,7 @@ import type { OHLC } from "@finchart/core";
 import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { volumeProfile } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Volume Profile — the distribution of what you can see";
 export const description =
@@ -30,6 +30,8 @@ export function mount(container: HTMLElement): () => void {
   const remove = plot.mainPane.addDecoration(
     volumeProfile({ source: price }),
   );
+
+  focusRecent(plot, data);
 
   return Object.assign(
     () => {

@@ -2,7 +2,7 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import type { OHLC } from "@finchart/core";
 import { barIndexX, candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Bar-index coordinates";
 export const description =
@@ -45,6 +45,9 @@ export function mount(container: HTMLElement): () => void {
     .setAxis(axis)
     .build(hosts[1]);
   indexed.mainPane.addSeries({ series: candleSeries(), data, name: "Bar index axis" });
+
+  focusRecent(continuous, data);
+  focusRecent(indexed, data);
 
   return Object.assign(
     () => {

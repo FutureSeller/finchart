@@ -4,7 +4,7 @@ import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { legend } from "@finchart/dom";
 import { attachIchimoku } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Ichimoku";
 export const description =
@@ -28,6 +28,8 @@ export function mount(container: HTMLElement): () => void {
 
   plot.mainPane.use(attachIchimoku({ source: price }));
   plot.use(legend({}));
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

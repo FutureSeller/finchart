@@ -4,7 +4,7 @@ import { candleSeries, paneMaximize, priceFormat, timeTicks } from "@finchart/co
 import { legend } from "@finchart/dom";
 import { attachAdx, attachCr, attachMacd, attachObv } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Own-pane indicators — MACD · ADX · OBV · CR";
 export const description =
@@ -79,6 +79,8 @@ export function mount(container: HTMLElement): () => void {
   // changes so the display follows even when it changes
   // outside a button click.
   const unsubscribe = plot.on("panesChange", refresh);
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

@@ -124,7 +124,7 @@ export function Rail({
   }, [tools]);
 
   return (
-    <aside id="rail" role="toolbar" aria-label="Drawing tools" aria-orientation="vertical">
+    <aside id="rail" aria-label="Drawing tools">
       <RailButton
         icon="cursor"
         label="Cursor (cancel drawing)"
