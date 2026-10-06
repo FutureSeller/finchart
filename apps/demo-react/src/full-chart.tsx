@@ -51,6 +51,7 @@ import { DrawingToolsHost } from "./rail";
 import {
   CROSSHAIR_FORMAT,
   DEPS,
+  focusRecent,
   STAGE_OPTIONS,
   StillWatermark,
   TickPriceLine,
@@ -177,6 +178,12 @@ export function FullChart({
   });
   const [hover, setHover] = useState<OHLC | null>(null);
   const plotRef = useRef<Plot | null>(null);
+  const [viewPlot, setViewPlot] = useState<Plot | null>(null);
+  const initializedView = useRef<Plot | null>(null);
+  const handlePlot = useCallback((plot: Plot | null) => {
+    setViewPlot(plot);
+    onPlot(plot);
+  }, [onPlot]);
 
   const source = useDataSource(bars);
   const volume = useMemo(() => bars.map(volumeOf), [bars]);
@@ -202,8 +209,8 @@ export function FullChart({
    *
    * Refit over the old bars and the bar-index window (an index range) stays
    * pinned while only the data changes, so an 865-bar window becomes a nine-day
-   * window at 15m — which is why the refit is deferred to the next effect. It
-   * holds the value currently mounted by name, so no separate flag is needed to
+   * window at 15m — which is why the recent-bars view waits for the next effect.
+   * It holds the value currently mounted by name, so no separate flag is needed to
    * recognize the first run.
    */
   const shownTimeframe = useRef(settings.timeframe);
@@ -217,10 +224,12 @@ export function FullChart({
   }, [feed, settings.timeframe]);
 
   useEffect(() => {
-    if (!pendingFit.current) return;
-    pendingFit.current = false;
-    plotRef.current?.fitDomains();
-  }, [bars]);
+    if (!viewPlot || (initializedView.current === viewPlot && !pendingFit.current)) return;
+    return focusRecent(viewPlot, bars, () => {
+      initializedView.current = viewPlot;
+      pendingFit.current = false;
+    });
+  }, [bars, viewPlot]);
 
   // --- The hovered bar — the header reads it while focused ---
   //
@@ -277,7 +286,7 @@ export function FullChart({
         // The palette is CSS variables toggled on <body>; the canvas redraws when they move.
         followTheme
         plotRef={plotRef}
-        onPlot={onPlot}
+        onPlot={handlePlot}
         onCrosshair={onCrosshair}
         onXDomainChange={onXDomainChange}
         style={{ width: "100%", height: "100%" }}

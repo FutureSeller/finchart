@@ -22,7 +22,7 @@ import {
   timeTicks,
 } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Real-time ticks";
 export const description =
@@ -172,6 +172,8 @@ export function mount(container: HTMLElement): () => void {
   linkButton.textContent = "Disconnect";
   toolbar.append(playButton, linkButton);
   play();
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

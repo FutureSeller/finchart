@@ -1,3 +1,25 @@
+import type { Plot } from "@finchart/core";
+
+/** Start with readable candles while retaining the full indicator/history data. */
+export function focusRecent(plot: Plot, data: readonly { x: number }[]): () => void {
+  if (data.length < 2) return () => {};
+  let off = () => {};
+  const apply = (): boolean => {
+    const area = plot.mainPane.area;
+    const width = area.right - area.left;
+    if (width <= 0) return false;
+    off();
+    const count = Math.min(data.length, Math.max(2, Math.floor(width / 8)));
+    plot.setVisibleRange(data[data.length - count].x, data[data.length - 1].x);
+    plot.scrollToRealTime();
+    return true;
+  };
+  // Browser layout is committed on render, not when the plot is constructed.
+  off = plot.on("render", apply);
+  if (!apply()) plot.requestRender();
+  return off;
+}
+
 /**
  * A chart host with a height.
  *

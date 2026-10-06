@@ -7,7 +7,7 @@ import {
   attachKeltnerChannels,
 } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Channels — Keltner · Donchian";
 export const description =
@@ -37,6 +37,8 @@ export function mount(container: HTMLElement): () => void {
     attachDonchianChannels({ source: price, colors: { middle: "#f59e0b", edges: "#f59e0b" } }),
   );
   plot.use(legend({}));
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

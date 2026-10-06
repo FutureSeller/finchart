@@ -3,7 +3,7 @@ import type { OHLC, Plot } from "@finchart/core";
 import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { atrPriceStep, attachMovingAverage, kagi, kagiSeries, lineBreak, pointAndFigure, pointAndFigureSeries, renko } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Price-axis transforms — Renko, Line Break, Kagi, Point & Figure";
 export const description =
@@ -136,6 +136,12 @@ export function mount(container: HTMLElement): () => void {
   button.addEventListener("click", () => (timer === undefined ? play() : pause()));
   toolbar.appendChild(button);
   play();
+
+  focusRecent(candles, price.read());
+  focusRecent(renkoPlot, bricks.read());
+  focusRecent(lbPlot, lines.read());
+  focusRecent(kagiPlot, points.read());
+  focusRecent(pnfPlot, columns.read());
 
   return Object.assign(
     () => {

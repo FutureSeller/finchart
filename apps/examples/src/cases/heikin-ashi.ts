@@ -3,7 +3,7 @@ import type { OHLC } from "@finchart/core";
 import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { heikinAshi } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Heikin-Ashi — the proof of derived series";
 export const description =
@@ -32,6 +32,8 @@ export function mount(container: HTMLElement): () => void {
     derive: heikinAshi,
     name: "Heikin-Ashi",
   });
+
+  focusRecent(plot, candles);
 
   return Object.assign(
     () => {

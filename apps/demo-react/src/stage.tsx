@@ -1,5 +1,5 @@
 /** What every chart shares — the same wiring and formatting across all of them. */
-import { barIndexX, timeTicks } from "@finchart/core";
+import { barIndexX, timeTicks, type Plot } from "@finchart/core";
 import { browserDeps } from "@finchart/dom";
 import type { PlotOptions } from "@finchart/react";
 import { PriceLine, Watermark } from "@finchart/react";
@@ -25,6 +25,27 @@ export const CROSSHAIR_FORMAT = { x: timeLabel, y: wonDetail };
  * stops a sync group from advancing twice.
  */
 export const STAGE_OPTIONS: PlotOptions = { shiftVisibleRangeOnNewBar: true, rightOffset: 5 };
+
+/** Opening/timeframe view only; live ticks and user pan/zoom retain their window. */
+export function focusRecent(plot: Plot, data: readonly { x: number }[], onApplied?: () => void): () => void {
+  if (data.length < 2) return () => {};
+  let off = () => {};
+  const apply = (): boolean => {
+    const area = plot.mainPane.area;
+    const width = area.right - area.left;
+    if (width <= 0) return false;
+    off();
+    const count = Math.min(data.length, Math.max(2, Math.floor(width / 8)));
+    plot.setVisibleRange(data[data.length - count].x, data[data.length - 1].x);
+    plot.scrollToRealTime();
+    onApplied?.();
+    return true;
+  };
+  // Browser layout is committed on render, not when the plot is constructed.
+  off = plot.on("render", apply);
+  if (!apply()) plot.requestRender();
+  return off;
+}
 
 // A decoration is rebuilt when its props reference changes (see the wrapper's
 // README), so these are wrapped to render only when a value really changes —

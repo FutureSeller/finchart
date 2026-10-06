@@ -105,6 +105,10 @@ body {
   flex-wrap: wrap;
 }
 
+#controls[hidden] {
+  display: none;
+}
+
 .divider {
   width: 1px;
   height: 20px;
@@ -362,4 +366,163 @@ body.light #charts {
 
 @media (prefers-reduced-motion: reduce) {
   #live .dot { animation: none; }
+}
+
+/* Settings overlays the chart on narrow screens. Multiple panels scroll
+   inside the stage while the app keeps the viewport's full height. */
+@media (max-width: 768px) {
+  #app {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    grid-template:
+      "header" auto
+      "stage" minmax(0, 1fr)
+      "statusbar" auto / minmax(0, 1fr);
+  }
+
+  #header {
+    position: relative;
+    z-index: 3;
+    gap: 8px;
+    padding: 10px 12px;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+
+  #symbol-block {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    flex: 1;
+  }
+
+  #ohlc {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+
+  #ohlc b {
+    white-space: nowrap;
+  }
+
+  #controls {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 3;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--divider);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    min-width: 0;
+    gap: 16px;
+  }
+
+  #controls > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+
+  #controls > [role="group"]::before {
+    content: attr(aria-label);
+    flex-basis: 100%;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  #settings-toggle {
+    flex-shrink: 0;
+    color: var(--ink);
+    border: 1px solid var(--divider);
+  }
+
+  #stage {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  #controls > .divider {
+    display: none;
+  }
+
+  button,
+  .chart-symbol {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  #rail {
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 4px 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  #rail::before {
+    content: "Draw";
+    flex-shrink: 0;
+    color: var(--ink);
+  }
+
+  #rail button {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  #rail .rail-gap {
+    flex: 0 0 8px;
+  }
+
+  .chart-cell {
+    padding-top: 56px;
+  }
+
+  .chart-symbol {
+    top: 4px;
+    height: 44px;
+  }
+
+  /* The full OHLC readout remains in the header. Constrain duplicate legend
+     rows to the plot width so long prices cannot widen the whole page. */
+  #charts [data-chart-legend] {
+    max-width: calc(100% - 96px);
+  }
+
+  #charts [data-chart-legend] > div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #charts[data-layout="2"],
+  #charts[data-layout="4"] {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 100%;
+  }
+
+  #charts[data-layout="2"] {
+    grid-template-rows: repeat(2, minmax(376px, 1fr));
+  }
+
+  #charts[data-layout="4"] {
+    grid-template-rows: repeat(4, minmax(376px, 1fr));
+  }
+
+  #statusbar {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 8px 12px;
+  }
 }

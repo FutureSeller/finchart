@@ -27,7 +27,7 @@ export function Actions({
   };
 
   return (
-    <div id="actions">
+    <div id="actions" role="group" aria-label="Actions">
       <button type="button" onClick={png}>
         PNG
       </button>

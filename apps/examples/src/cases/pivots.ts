@@ -4,7 +4,7 @@ import { candleSeries, priceFormat, timeTicks } from "@finchart/core";
 import { legend } from "@finchart/dom";
 import { attachPivotPoints } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Pivot Points — the period is the consumer's knowledge";
 export const description =
@@ -39,6 +39,8 @@ export function mount(container: HTMLElement): () => void {
     }),
   );
   plot.use(legend({}));
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

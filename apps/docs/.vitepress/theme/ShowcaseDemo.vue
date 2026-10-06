@@ -29,6 +29,7 @@ const activated = ref(false);
 }
 .showcase-frame,
 .showcase-start {
+  box-sizing: border-box;
   width: 100%;
   height: 640px;
   border: 1px solid var(--vp-c-divider);
@@ -42,5 +43,18 @@ const activated = ref(false);
   color: var(--vp-c-text-2);
   background: var(--vp-c-bg-soft);
   cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .showcase-actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .showcase-frame,
+  .showcase-start {
+    height: 100svh;
+  }
 }
 </style>

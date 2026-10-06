@@ -25,6 +25,7 @@ import {
   timeTicks,
 } from "@finchart/core";
 import { fixtureCandles } from "./fixture";
+import { focusRecent } from "./stage";
 import type { WorkerReport } from "./worker-fallback";
 
 /** Main → worker. The case (worker-render.ts) imports it type-only. */
@@ -148,6 +149,8 @@ function init(message: MainToWorker & { type: "init" }): void {
     data: all.slice(0, revealed),
     name: "Price",
   });
+
+  focusRecent(plot, price.read());
 
   // The tick timer belongs to the worker too — the bars keep arriving even
   // while the main thread is jammed.

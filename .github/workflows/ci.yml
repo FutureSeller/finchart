@@ -89,6 +89,8 @@ jobs:
         working-directory: e2e
       - run: pnpm e2e
         working-directory: e2e
+      - run: pnpm e2e:showcase
+        working-directory: e2e
 
   react-floor:
     runs-on: ubuntu-latest

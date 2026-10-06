@@ -11,7 +11,7 @@ import {
   attachVwap,
 } from "@finchart/indicators";
 import { fixtureCandles } from "./fixture";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Overlay indicators";
 export const description =
@@ -44,6 +44,8 @@ export function mount(container: HTMLElement): () => void {
   plot.mainPane.use(attachSuperTrend({ source: price }));
 
   plot.use(legend({}));
+
+  focusRecent(plot, price.read());
 
   return Object.assign(
     () => {

@@ -20,7 +20,7 @@ import { PlotBuilder, browserDeps } from "@finchart/dom";
 import { fixtureCandles } from "./fixture";
 import { startWorkerRender } from "./worker-fallback";
 import type { MainToWorker } from "./worker-render.worker";
-import { chartHost } from "./stage";
+import { chartHost, focusRecent } from "./stage";
 
 export const title = "Worker rendering";
 export const description =
@@ -43,6 +43,7 @@ function mainThreadChart(host: HTMLElement, width: number): () => void {
   const all = fixtureCandles(900);
   let revealed = 300;
   const price = plot.mainPane.addSeries({ series: candleSeries(), data: all.slice(0, revealed), name: "Price" });
+  focusRecent(plot, price.read());
   const timer = window.setInterval(() => {
     const next = all[revealed];
     if (!next) return;
