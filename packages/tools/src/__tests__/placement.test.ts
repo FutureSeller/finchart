@@ -75,6 +75,85 @@ describe("drawingTools placement", () => {
     expect(tools.mode()).toBeNull();
   });
 
+  /**
+   * The 5px boundary is shared with the chart's pan: exactly 5px of travel
+   * is a click, and only more is a drag. Pan counts the farthest horizontal
+   * travel during the press; placement counts the straight-line distance
+   * from press to release.
+   * Integer pixels keep the travel exact (snapping is off by default).
+   */
+  describe("click or drag at the pan's click boundary", () => {
+    const press = { x: 200, y: 300 };
+    const offsetFrom = (point: { x: number; y: number }, dx: number, dy: number) => ({
+      x: point.x + dx,
+      y: point.y + dy,
+    });
+
+    it.each([
+      ["horizontally", 5, 0],
+      ["diagonally", 3, 4],
+    ])(
+      "should treat 5px of travel %s as a click, so the next click finishes the line",
+      (_, dx, dy) => {
+        const { model, tools, pane, route } = mounted();
+        tools.begin("trend");
+
+        const release = offsetFrom(press, dx, dy);
+        expect(Math.hypot(release.x - press.x, release.y - press.y)).toBe(5);
+        route({ type: "pointerdown", point: press, pointerId: 1 });
+        route({ type: "pointermove", point: release, pointerId: 1 });
+        route({ type: "pointerup", point: release, pointerId: 1 });
+
+        expect(tools.list()).toHaveLength(0);
+        expect(tools.mode()).toBe("trend");
+
+        const second = { x: 300, y: 200 };
+        route({ type: "pointermove", point: second, pointerId: 1 });
+        route({ type: "pointerdown", point: second, pointerId: 1 });
+        route({ type: "pointerup", point: second, pointerId: 1 });
+
+        const [placed] = tools.list();
+        expect(placed.type).toBe("trend");
+        if (placed.type !== "trend") return;
+        expect(model.plot.pixelAtX(placed.a.x)).toBeCloseTo(press.x, 6);
+        expect(pane.yScale.scale(placed.a.price)).toBeCloseTo(press.y, 6);
+        expect(model.plot.pixelAtX(placed.b.x)).toBeCloseTo(second.x, 6);
+        expect(pane.yScale.scale(placed.b.price)).toBeCloseTo(second.y, 6);
+        model.plot.destroy();
+      },
+    );
+
+    // (4, 4) is about 5.66px straight-line but only 4px along either axis;
+    // (5, 1) is about 5.10px, just past the boundary.
+    it.each([
+      ["6px horizontally", 6, 0],
+      ["6px vertically", 0, 6],
+      ["about 5.66px diagonally", 4, 4],
+      ["about 5.10px diagonally", 5, 1],
+    ])(
+      "should treat travel of %s as a drag and draw the whole line",
+      (_, dx, dy) => {
+        const { model, tools, pane, route } = mounted();
+        tools.begin("trend");
+
+        const release = offsetFrom(press, dx, dy);
+        route({ type: "pointerdown", point: press, pointerId: 1 });
+        route({ type: "pointermove", point: release, pointerId: 1 });
+        route({ type: "pointerup", point: release, pointerId: 1 });
+
+        const [placed] = tools.list();
+        expect(placed.type).toBe("trend");
+        if (placed.type !== "trend") return;
+        expect(model.plot.pixelAtX(placed.a.x)).toBeCloseTo(press.x, 6);
+        expect(pane.yScale.scale(placed.a.price)).toBeCloseTo(press.y, 6);
+        expect(model.plot.pixelAtX(placed.b.x)).toBeCloseTo(release.x, 6);
+        expect(pane.yScale.scale(placed.b.price)).toBeCloseTo(release.y, 6);
+        expect(tools.mode()).toBeNull();
+        model.plot.destroy();
+      },
+    );
+  });
+
   it("should draw a fib with click, move, click", () => {
     const { tools, route, at } = mounted();
     tools.begin("fib");
@@ -112,27 +191,6 @@ describe("drawingTools placement", () => {
     expect(drawn).toHaveLength(before + 1);
     expect(drawn.at(-1)?.points).toEqual([at(2, 105), at(8, 115)]);
     model.plot.destroy();
-  });
-
-  /** Under five pixels of travel the press placed one anchor; five or more drew the whole line in one gesture. */
-  it("should tell a click from a drag at five pixels of travel", () => {
-    const click = mounted();
-    click.tools.begin("trend");
-    const start = click.at(2, 105);
-    click.route({ type: "pointerdown", point: start, pointerId: 1 });
-    click.route({ type: "pointerup", point: { x: start.x + 4, y: start.y }, pointerId: 1 });
-    expect(click.tools.list()).toHaveLength(0);
-    expect(click.tools.mode()).toBe("trend");
-    click.model.plot.destroy();
-
-    const drag = mounted();
-    drag.tools.begin("trend");
-    const dragStart = drag.at(2, 105);
-    drag.route({ type: "pointerdown", point: dragStart, pointerId: 1 });
-    drag.route({ type: "pointerup", point: { x: dragStart.x + 5, y: dragStart.y }, pointerId: 1 });
-    expect(drag.tools.list()).toHaveLength(1);
-    expect(drag.tools.mode()).toBeNull();
-    drag.model.plot.destroy();
   });
 
   it("should keep the draft out of the list and serialization", () => {

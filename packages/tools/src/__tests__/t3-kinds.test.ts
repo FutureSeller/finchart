@@ -11,9 +11,9 @@ import { drawingTools } from "../tools";
 /**
  * T3 wave — three-anchor kinds (parallelChannel · pitchfork) and the
  * drafting generalization that carries them: a draft confirms one anchor
- * per click, the following anchors trail the cursor, and the "was that a
- * drag" threshold measures from the **last confirmed** anchor, not from
- * `a`.
+ * per click, the following anchors trail the cursor, and the click
+ * boundary ("was that a drag") measures from the **latest press** — the one
+ * that confirmed the last anchor — not from `a`.
  */
 
 const space: DrawingSpace = {
@@ -182,11 +182,11 @@ describe("three-anchor drafting through the real state machine", () => {
     expect(drawn.c.x).toBeCloseTo(8, 5);
   });
 
-  it("the drag threshold measures from the last confirmed anchor — a click on b does not finish the draft", () => {
+  it("the click boundary measures from the latest press — a click on b does not finish the draft", () => {
     const { tools, at, click } = mounted();
     tools.begin("parallelChannel");
     click(at(2, 105));
-    // Second click far from a: a threshold anchored on `a` would read
+    // Second click far from a: a click boundary anchored on `a` would read
     // the release as "dragged" and stamp c on top of b.
     click(at(8, 115));
     expect(tools.mode()).toBe("parallelChannel");
