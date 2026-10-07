@@ -157,6 +157,19 @@ describe("superTrend", () => {
     }
   });
 
+  it("should ratchet a downtrend too — the resistance line follows the band down and never steps up", () => {
+    // period 1, multiplier 1: the band is mid ± true range.
+    const tape = [
+      bar(0, 12, 8, 9), // close below mid 10 — starts down; upper 10 + 4 = 14
+      bar(1, 10, 6, 7), // mid 8, TR 4: basic upper 12 < 14 — the line steps down to 12
+      bar(2, 10, 2, 3), // mid 6, TR 8: basic upper 14 > 12 — the line holds at 12
+    ];
+    const node = superTrend(sourceOf(tape), { period: 1, multiplier: 1 });
+
+    expect(node.out.down.read().map((point) => point.y)).toEqual([14, 12, 12]);
+    expect(node.out.up.read().every((point) => point.y === null)).toBe(true);
+  });
+
   it("should flip to the down branch when the close breaks the support", () => {
     const tape = [
       bar(0, 11, 9, 10),

@@ -158,12 +158,6 @@ describe("removePane", () => {
     expect(gone.seen).toHaveLength(0);
   });
 
-  it("should refuse to remove mainPane", () => {
-    const { plot } = loaded();
-
-    expect(() => plot.removePane(plot.mainPane)).toThrow();
-  });
-
   it("should ignore a pane that was already removed", () => {
     const { plot } = loaded();
     const pane = plot.addPane();

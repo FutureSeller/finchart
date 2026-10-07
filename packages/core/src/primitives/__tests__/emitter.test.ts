@@ -3,6 +3,41 @@ import { describe, expect, it, vi } from "vitest";
 import { emitter } from "../emitter";
 
 describe("emitter", () => {
+  it("should stop calling a listener that unsubscribed, and tolerate a second off", () => {
+    const stream = emitter<number>();
+    const seen: number[] = [];
+    const off = stream.subscribe((n) => seen.push(n));
+
+    stream.emit(1);
+    off();
+    off(); // Safe to call twice
+    stream.emit(2);
+
+    expect(seen).toEqual([1]);
+  });
+
+  it("should report how many are listening", () => {
+    const stream = emitter<void>();
+    expect(stream.size).toBe(0);
+
+    const off = stream.subscribe(() => {});
+    expect(stream.size).toBe(1);
+
+    off();
+    expect(stream.size).toBe(0);
+  });
+
+  it("should not call listeners subscribed during the same emit", () => {
+    const stream = emitter<void>();
+    const late = vi.fn();
+
+    stream.subscribe(() => stream.subscribe(late));
+    stream.emit();
+
+    // Otherwise a handler could keep growing itself forever.
+    expect(late).not.toHaveBeenCalled();
+  });
+
   it("should still reach later listeners when one unsubscribes itself", () => {
     const stream = emitter<number>();
     const later = vi.fn();
@@ -27,15 +62,39 @@ describe("emitter", () => {
     expect(stream.size).toBe(1);
   });
 
-  it("should call everyone and then report the failures", () => {
+  it("should call everyone and then rethrow a lone failure as itself", () => {
     const stream = emitter<number>("a tool");
     const after = vi.fn();
+    const boom = new Error("boom");
     stream.subscribe(() => {
-      throw new Error("boom");
+      throw boom;
     });
     stream.subscribe(after);
 
-    expect(() => stream.emit(1)).toThrow(/a tool threw|boom/);
+    expect(() => stream.emit(1)).toThrow(boom);
     expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("should aggregate several failures under the owner's name", () => {
+    const stream = emitter<number>("a tool");
+    const first = new Error("first");
+    const second = new Error("second");
+    stream.subscribe(() => {
+      throw first;
+    });
+    stream.subscribe(() => {
+      throw second;
+    });
+
+    let caught: unknown;
+    try {
+      stream.emit(1);
+    } catch (error) {
+      caught = error;
+    }
+
+    if (!(caught instanceof AggregateError)) throw new Error("expected an AggregateError");
+    expect(caught.message).toBe("a tool threw");
+    expect(caught.errors).toEqual([first, second]);
   });
 });

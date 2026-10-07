@@ -13,6 +13,7 @@ import { seriesSpec } from "../../registration";
 import { priceFormat } from "../../axis/price-format";
 import { Plot } from "../plot";
 import { createPlotDeps } from "../presets";
+import { DEFAULT_PADDING } from "../style";
 
 const DATA = [
   { x: 0, y: 10 },
@@ -151,13 +152,17 @@ describe("lifecycle primitives", () => {
 
 describe("createPlotModel reads an explicit undefined as 'not given'", () => {
   it("should keep DEFAULT_PADDING when padding is explicitly undefined", () => {
-    expect(() =>
-      createPlotModel({
-        size: { width: 400, height: 300 },
-        series: { series: lineSeries(), data: DATA },
-        config: { padding: undefined },
-      }),
-    ).not.toThrow();
+    const model = stage({ padding: undefined });
+    model.commands();
+    const reference = stage();
+    reference.commands();
+
+    expect(model.plot.getOptions().padding).toEqual(DEFAULT_PADDING);
+    // The drawn slot sits where the defaults put it, not flush against the edge.
+    expect(model.plot.mainPane.area).toEqual(reference.plot.mainPane.area);
+    expect(model.plot.mainPane.area.top).toBe(DEFAULT_PADDING.top);
+    model.plot.destroy();
+    reference.plot.destroy();
   });
 
   it("should keep showGrid on when it is explicitly undefined", () => {

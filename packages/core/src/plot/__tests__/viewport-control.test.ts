@@ -70,7 +70,7 @@ describe("rightOffset (2.3)", () => {
 });
 
 describe("barSpacing limits (2.3)", () => {
-  it("should stop zooming in at minBarSpacing... no, at maxBarSpacing", () => {
+  it("should stop zooming in at maxBarSpacing", () => {
     const model = createPlotModel({
       size: { width: 800, height: 600 },
       series: { series: lineSeries(), data },
@@ -83,6 +83,7 @@ describe("barSpacing limits (2.3)", () => {
 
     const { min, max } = model.plot.getVisibleRange()!;
     expect(width / (max - min)).toBeLessThanOrEqual(40 + 1e-9);
+    model.plot.destroy();
   });
 
   it("should stop zooming out at minBarSpacing", () => {

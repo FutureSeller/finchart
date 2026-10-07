@@ -1,5 +1,5 @@
 /** pointAndFigureSeries — X's and O's per box, the pixel floor, the visible window, the doors, the probe round trip, the aggregation. */
-import type { DrawCommand, DrawTarget, OHLC, Scale, Series } from "@finchart/core";
+import type { DrawCommand, DrawTarget, OHLC, Scale, Series, StyleReader } from "@finchart/core";
 import { ContractError, continuousX, createPlotModel, DataError, LinearScale, LogScale, noStyle, OHLCAccessor } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { pointAndFigure } from "../point-and-figure";
@@ -27,6 +27,7 @@ function drawDirect(
   domain: [number, number],
   columnsAcross = 1,
   yScale: Scale = new LinearScale(domain[0], domain[1], 600, 0),
+  readStyle: StyleReader = noStyle,
 ): DrawCommand[] {
   const commands: DrawCommand[] = [];
   const target: DrawTarget = {
@@ -39,7 +40,7 @@ function drawDirect(
     x: continuousX(new LinearScale(0, columnsAcross, 0, 800)),
     yScale,
     area: { left: 0, right: 800, top: 0, bottom: 600 },
-    readStyle: noStyle,
+    readStyle,
   });
   return commands;
 }
@@ -493,5 +494,12 @@ describe("pointAndFigureSeries", () => {
       down: { css: "--chart-candle-down", fallback: "#dc2626" },
       width: { css: "--chart-pnf-width", fallback: 1 },
     });
+    // Drawn without overrides, the strokes take those variables from the theme — and their fallbacks without one.
+    const data = [column(0, "up", 101, 103), column(1, "down", 100, 102)];
+    const strokeStyles = (readStyle: StyleReader) =>
+      [...new Set(lines(drawDirect(pointAndFigureSeries({ boxSize: 1 }), data, [99, 104], 2, undefined, readStyle)).map((s) => `${s.style.color} ${s.style.width}`))];
+    const theme: Record<string, string> = { "--chart-candle-up": "#0a0", "--chart-candle-down": "#a00", "--chart-pnf-width": "3" };
+    expect(strokeStyles((name) => theme[name] ?? "")).toEqual(["#0a0 3", "#a00 3"]);
+    expect(strokeStyles(noStyle)).toEqual(["#16a34a 1", "#dc2626 1"]);
   });
 });

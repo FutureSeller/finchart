@@ -1,10 +1,12 @@
 /**
- * **An inline decoration must not reinstall on every render.**
+ * **An inline decoration must not ask for a frame on every render.**
  *
  * If a props object that JSX freshly allocates on every render is used as a
- * dep, then no matter what the consumer does, every render runs
- * `remove()` + `addDecoration()` + `requestRender()` twice — for a single
- * `<PriceLine price={last} />` that means once per tick, 60 times a second.
+ * dep, then no matter what the consumer does, every render hands the
+ * decoration its options again and asks for a frame — for a single
+ * `<PriceLine value={last} />` that means once per tick, 60 times a second.
+ * The frame request is what these tests count: it is the cost a consumer
+ * pays, and it follows every options handoff.
  *
  * The consumer side has no handle to hold stable (what needs stabilizing is
  * the props object JSX creates, not a consumer-owned object), so this test
@@ -61,9 +63,26 @@ function counting() {
   return { box, onPlot };
 }
 
-describe('decorations — do not reinstall when the value is unchanged', () => {
-  it('should not reinstall a price line across re-renders', async () => {
-    const { box, onPlot } = counting();
+/**
+ * Counts the stage's frame requests. A decoration handed new options asks
+ * for a frame, so an equal-value re-render must add none.
+ */
+function frameRequests() {
+  const box = { requests: 0 };
+  const onPlot = (plot: Plot | null) => {
+    if (!plot) return;
+    const original = plot.requestRender.bind(plot);
+    vi.spyOn(plot, 'requestRender').mockImplementation(() => {
+      box.requests += 1;
+      original();
+    });
+  };
+  return { box, onPlot };
+}
+
+describe('decorations — equal values leave the decoration untouched', () => {
+  it('should not ask for a frame when an inline price line re-renders with equal values', async () => {
+    const { box, onPlot } = frameRequests();
 
     function Harness() {
       const [tick, setTick] = useState(0);
@@ -81,7 +100,7 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
     }
 
     const screen = render(<Harness />);
-    const afterMount = box.installs;
+    const afterMount = box.requests;
     expect(afterMount).toBeGreaterThan(0);
 
     for (let i = 0; i < 5; i += 1) {
@@ -90,8 +109,8 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
       });
     }
 
-    // The value didn't change, so it must not install even once more.
-    expect(box.installs).toBe(afterMount);
+    // The value didn't change, so nothing is handed on and no frame is asked for.
+    expect(box.requests).toBe(afterMount);
   });
 
   it('should apply a changed value in place — no reinstall, and the drawn line moves', async () => {
@@ -139,8 +158,8 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
     expect(lineYs()).toContain(yOf(115));
   });
 
-  it('should not reinstall markers whose items are element-stable', async () => {
-    const { box, onPlot } = counting();
+  it('should not ask for a frame when markers re-render with element-stable items', async () => {
+    const { box, onPlot } = frameRequests();
     const item = { x: 10, price: 110, text: 'buy' } as const;
 
     function Harness() {
@@ -159,13 +178,14 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
     }
 
     const screen = render(<Harness />);
-    const afterMount = box.installs;
+    const afterMount = box.requests;
+    expect(afterMount).toBeGreaterThan(0);
 
     await act(async () => {
       screen.getByText('tick').click();
     });
 
-    expect(box.installs).toBe(afterMount);
+    expect(box.requests).toBe(afterMount);
   });
 
   /**
@@ -176,11 +196,11 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
    * (*"decoration options are all primitive fields"*) stay **false without
    * anyone noticing** — `PriceLineOptions.style` is `Partial<LineStyle>`.
    * With that premise still false, the symptom this component claimed to
-   * have fixed was still there in the single most common usage: measured
-   * installs went 1 → 6 (5 re-renders).
+   * have fixed was still there in the single most common usage: every
+   * re-render handed the line its options again and asked for a frame.
    */
-  it('should not reinstall a price line whose style is inline', async () => {
-    const { box, onPlot } = counting();
+  it('should not ask for a frame when a price line with an inline style re-renders with equal values', async () => {
+    const { box, onPlot } = frameRequests();
 
     function Harness() {
       const [tick, setTick] = useState(0);
@@ -198,7 +218,7 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
     }
 
     const screen = render(<Harness />);
-    const afterMount = box.installs;
+    const afterMount = box.requests;
     expect(afterMount).toBeGreaterThan(0);
 
     for (let i = 0; i < 5; i += 1) {
@@ -207,7 +227,7 @@ describe('decorations — do not reinstall when the value is unchanged', () => {
       });
     }
 
-    expect(box.installs).toBe(afterMount);
+    expect(box.requests).toBe(afterMount);
   });
 
   /** A value inside actually changes and the drawn line shows it — the assertion above isn't a freebie. */

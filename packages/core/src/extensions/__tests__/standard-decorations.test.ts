@@ -51,49 +51,112 @@ describe("standard decoration set (2.1)", () => {
 
   it("markers should draw shapes and captions at data spots", () => {
     const model = mounted();
+    // A probe registered beside the markers sees the same x mapping and
+    // y scale, so the expected pixels come from the frame's own coordinates.
+    let toPixel = (x: number): number => x;
+    let toY = (price: number): number => price;
+    model.plot.mainPane.addDecoration({
+      draw(_target, { x, yScale }) {
+        toPixel = (value) => x.toPixel(value);
+        toY = (value) => yScale.scale(value);
+      },
+    });
     model.plot.mainPane.addDecoration(
       markers([
-        { x: 50, price: 120, shape: "arrowUp", text: "Buy" },
-        { x: 100, price: 110 },
+        { x: 50, price: 120, shape: "arrowUp", text: "Buy", color: "#0a0a0a" },
+        { x: 100, price: 110, color: "#0b0b0b" },
       ]),
     );
     model.plot.render();
+    const commands = model.commands();
 
-    const texts = model
-      .commands()
-      .filter((c) => c.type === "drawText")
-      .map((c) => (c.type === "drawText" ? c.params.text : ""));
-    expect(texts).toContain("Buy");
-    const polygons = model
-      .commands()
-      .filter((c) => c.type === "drawShape" && c.shape.shape === "polygon");
-    expect(polygons.length).toBeGreaterThan(0);
+    const arrow = commands.find(
+      (c) => c.type === "drawShape" && c.shape.shape === "polygon" && c.shape.fill === "#0a0a0a",
+    );
+    if (arrow?.type !== "drawShape" || arrow.shape.shape !== "polygon") {
+      throw new Error("expected the arrow marker polygon");
+    }
+    // An up arrow's tip is the data spot itself.
+    expect(arrow.shape.points[0].x).toBeCloseTo(toPixel(50), 6);
+    expect(arrow.shape.points[0].y).toBeCloseTo(toY(120), 6);
+
+    const dot = commands.find(
+      (c) => c.type === "drawShape" && c.shape.shape === "circle" && c.shape.fill === "#0b0b0b",
+    );
+    if (dot?.type !== "drawShape" || dot.shape.shape !== "circle") {
+      throw new Error("expected the circle marker");
+    }
+    expect(dot.shape.cx).toBeCloseTo(toPixel(100), 6);
+    expect(dot.shape.cy).toBeCloseTo(toY(110), 6);
+
+    const caption = commands.find((c) => c.type === "drawText" && c.params.text === "Buy");
+    if (caption?.type !== "drawText") throw new Error("expected the Buy caption");
+    // Centred over the arrow, above it.
+    expect(caption.params.at.x).toBeCloseTo(toPixel(50), 6);
+    expect(caption.params.at.y).toBeLessThan(toY(120));
+    model.plot.destroy();
   });
 
   it("watermark should sit in the middle of the stage", () => {
     const model = mounted();
+    let stage = { left: 0, right: 0, top: 0, bottom: 0 };
+    model.plot.addDecoration({
+      draw(_target, { area }) {
+        stage = area;
+      },
+    });
     model.plot.addDecoration(watermark({ text: "BTC/KRW" }));
     model.plot.render();
 
     const mark = model
       .commands()
-      .filter((c) => c.type === "drawText")
       .find((c) => c.type === "drawText" && c.params.text === "BTC/KRW");
-    expect(mark).toBeDefined();
+    if (mark?.type !== "drawText") throw new Error("expected the watermark text");
+    expect(mark.params.at).toEqual({
+      x: (stage.left + stage.right) / 2,
+      y: (stage.top + stage.bottom) / 2,
+    });
+    expect(mark.params.align).toBe("center");
+    expect(mark.params.baseline).toBe("middle");
+    model.plot.destroy();
   });
 
-  it("span should clip to the data area", () => {
+  it("span should clip to the data area on both sides", () => {
     const model = mounted();
-    model.plot.addDecoration(span({ from: -1000, to: 50 }));
+    let stage = { left: 0, right: 0, top: 0, bottom: 0 };
+    let toPixel = (x: number): number => x;
+    model.plot.addDecoration({
+      draw(_target, { area, x }) {
+        stage = area;
+        toPixel = (value) => x.toPixel(value);
+      },
+    });
+    model.plot.addDecoration(span({ from: -1000, to: 50, fill: "#0c0c0c" }));
+    model.plot.addDecoration(span({ from: 50, to: 1000, fill: "#0d0d0d" }));
     model.plot.render();
 
-    const rect = model
-      .commands()
-      .filter((c) => c.type === "drawShape" && c.shape.shape === "rect")
-      .at(-1)!;
-    if (rect.type !== "drawShape" || rect.shape.shape !== "rect") return;
-    const { area } = model.plot.mainPane;
-    expect(rect.shape.x).toBeGreaterThanOrEqual(area.left);
+    const rectFilled = (fill: string) => {
+      const rect = model
+        .commands()
+        .find((c) => c.type === "drawShape" && c.shape.shape === "rect" && c.shape.fill === fill);
+      if (rect?.type !== "drawShape" || rect.shape.shape !== "rect") {
+        throw new Error(`expected a span rect filled ${fill}`);
+      }
+      return rect.shape;
+    };
+
+    const leftSpan = rectFilled("#0c0c0c");
+    expect(leftSpan.x).toBeCloseTo(stage.left, 6);
+    expect(leftSpan.x + leftSpan.width).toBeCloseTo(toPixel(50), 6);
+
+    const rightSpan = rectFilled("#0d0d0d");
+    expect(rightSpan.x).toBeCloseTo(toPixel(50), 6);
+    expect(rightSpan.x + rightSpan.width).toBeCloseTo(stage.right, 6);
+
+    // Both run the full height of the data area.
+    expect(leftSpan.y).toBe(stage.top);
+    expect(leftSpan.height).toBe(stage.bottom - stage.top);
+    model.plot.destroy();
   });
 });
 

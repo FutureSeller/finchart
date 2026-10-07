@@ -121,6 +121,22 @@ describe("render draws what hit-testing checks", () => {
     // Both barbs start at the tip.
     expect(lines[1][0]).toEqual({ x: 40, y: 40 });
     expect(lines[2][0]).toEqual({ x: 40, y: 40 });
+
+    // Each barb is 9px long and swept π/7 back from the tip along the
+    // shaft — so it points back toward a, not ahead of the tip.
+    const back = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 }; // unit vector tip → a
+    const ends = [lines[1][1], lines[2][1]];
+    for (const end of ends) {
+      const dx = end.x - 40;
+      const dy = end.y - 40;
+      expect(Math.hypot(dx, dy)).toBeCloseTo(9, 9);
+      expect(dx * back.x + dy * back.y).toBeCloseTo(9 * Math.cos(Math.PI / 7), 9);
+    }
+    // And the two are mirror images across the shaft: their offsets
+    // from the shaft's line cancel, and they don't coincide.
+    const side = (end: Point) => (end.x - 40) * back.y - (end.y - 40) * back.x;
+    expect(side(ends[0]) + side(ends[1])).toBeCloseTo(0, 9);
+    expect(Math.abs(side(ends[0]))).toBeCloseTo(9 * Math.sin(Math.PI / 7), 9);
   });
 });
 

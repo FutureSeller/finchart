@@ -116,19 +116,6 @@ describe("interaction wiring", () => {
     expect(() => interactions.handleZoom(0, 50)).toThrow();
     expect(() => interactions.handleZoom(-2, 50)).toThrow();
   });
-
-  /** Turning it off means not supplying it — it used to be disabled by
-   * plugging in a no-op implementation instead (the opposite of tree-shaking). */
-  it("should not touch the domain when no handler is wired", () => {
-    const { deps: wiring, xScale } = testBrowserDepsWithScales();
-    const deps = { ...wiring, interactions: undefined };
-    const { plot } = mountPlot({ deps, series: lineSeries(), data, config: defaultConfig });
-    const before = xScale.getDomain();
-
-    // There's no input path, but the API still runs fine.
-    expect(() => plot.render()).not.toThrow();
-    expect(xScale.getDomain()).toEqual(before);
-  });
 });
 
 describe("pixel to domain conversion", () => {

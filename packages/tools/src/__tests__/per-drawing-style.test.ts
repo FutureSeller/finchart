@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ContractError } from "@finchart/core";
+import type { DrawTarget } from "@finchart/core";
+import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
 import {
   FIB_LEVELS,
   fibLevels,
@@ -11,6 +12,7 @@ import {
 import { gripAt } from "../hit";
 import { drawOne } from "../render";
 import type { DrawingSpace } from "../space";
+import { drawingTools } from "../tools";
 
 /**
  * Commit 2 of the schema-v2 day: per-drawing `style` (the same
@@ -107,6 +109,47 @@ describe("fib levels", () => {
 });
 
 /**
+ * The drawing's own style is the last layer: on top of the toolbox's
+ * style, leaf by leaf. Drawn through a real pane, since the layering
+ * happens where the toolbox draws, not in `drawOne`.
+ */
+describe("a drawing's own style over the toolbox's", () => {
+  it("wins on the leaves it sets and inherits the rest", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: {
+        series: lineSeries(),
+        data: [
+          { x: 0, y: 10 },
+          { x: 10, y: 20 },
+        ],
+      },
+      config: {
+        showGrid: false,
+        axis: { x: { showLabels: false }, y: { showLabels: false } },
+      },
+    });
+    const tools = model.plot.mainPane.use(
+      drawingTools({ plot: model.plot, style: { color: "#00ff00", width: 3 } }),
+    );
+    tools.add({ type: "horizontal", price: 12 });
+    tools.add({ type: "horizontal", price: 18, style: { color: "#ff0000" } });
+
+    const styles = model
+      .commands()
+      .flatMap((command) =>
+        command.type === "drawLine" && command.points[0].y === command.points[1].y
+          ? [{ y: command.points[0].y, color: command.style.color, width: command.style.width }]
+          : [],
+      );
+    const at = (price: number) => model.plot.mainPane.yScale.scale(price);
+    expect(styles).toContainEqual({ y: at(12), color: "#00ff00", width: 3 });
+    expect(styles).toContainEqual({ y: at(18), color: "#ff0000", width: 3 });
+    model.plot.destroy();
+  });
+});
+
+/**
  * Hit and render read the same interpreter — the property `fibLevelPrice`
  * already pins for the price formula, extended to the level list. A
  * custom-level retracement must be grabbable exactly on its own lines.
@@ -122,8 +165,8 @@ describe("one interpreter for hit and render", () => {
 
   it("renders exactly the drawing's own levels", () => {
     const lines: number[] = [];
-    const target = {
-      drawLine: (points: { y: number }[]) => {
+    const target: DrawTarget = {
+      drawLine: (points) => {
         lines.push(points[0].y);
       },
       drawShape: () => undefined,
@@ -131,15 +174,17 @@ describe("one interpreter for hit and render", () => {
       drawCustom: () => undefined,
     };
     drawOne(
-      target as never,
+      target,
       space,
       { readStyle: () => "", formatValue: String, barIndexAt: (x) => x },
-      fib([0, 1]),
+      fib([0.25, 1]),
       { width: 1, color: "#000" },
       false,
     );
-    // Two levels → two level lines (plus nothing else for a fib).
-    expect(lines).toHaveLength(2);
+    // Lopsided levels so a mirrored or reversed formula shows: in this
+    // identity space a level sits at b + (a − b)·level, so 0.25 → 75 and
+    // 1 → 0 (and nothing else for a fib).
+    expect(lines).toEqual([75, 0]);
   });
 
   it("grabs on a custom level line and not on a dropped default", () => {

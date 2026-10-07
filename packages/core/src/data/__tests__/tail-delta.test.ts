@@ -47,6 +47,14 @@ describe("tailDelta", () => {
     expect(tailDelta(prev, [...next, { x: 5 }])).toBeNull();
   });
 
+  it("returns null when the last is replaced and a point appended in one change", () => {
+    const prev = points(5);
+    const next = [...prev.slice(0, 4), { x: 4 }, { x: 5 }];
+
+    // Neither a pure append (the old last changed) nor a replace (it grew).
+    expect(tailDelta(prev, next)).toBeNull();
+  });
+
   it("returns null when it shrank or is empty", () => {
     const prev = points(5);
 

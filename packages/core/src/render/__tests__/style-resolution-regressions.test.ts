@@ -293,16 +293,31 @@ describe("applyFont — returns the string that actually landed and remembers th
 
   it("should remember a demotion, not just an acceptance", () => {
     const verdicts = new FontVerdicts();
-    const context = rejectingFont();
+    const inner = rejectingFont();
+    let reads = 0;
+    const context = {
+      get font(): string {
+        reads++;
+        return inner.font;
+      },
+      set font(next: string) {
+        inner.font = next;
+      },
+    };
 
     expect(applyFont(context, "600 12 Inter", FALLBACK_FONT, verdicts)).toBe(
       "600 11px Inter",
     );
+    const warm = reads;
     context.font = "20px Other";
     expect(applyFont(context, "600 12 Inter", FALLBACK_FONT, verdicts)).toBe(
       "600 11px Inter",
     );
-    expect(context.font).toBe("600 11px Inter");
+
+    // The second call answers from the remembered demotion — no probing.
+    expect(warm).toBeGreaterThan(0);
+    expect(reads).toBe(warm);
+    expect(inner.font).toBe("600 11px Inter");
   });
 });
 

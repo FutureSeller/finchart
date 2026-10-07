@@ -163,7 +163,20 @@ describe("a per-registration decimation policy also passes through the door", ()
   });
 
   it("passes a positive value through unchanged", () => {
-    expect(() => withPolicy(2)).not.toThrow();
+    const manager = withPolicy(2);
+    manager.setData(
+      Array.from({ length: 10_000 }, (_, i) => ({ x: i, y: i % 17 })),
+    );
+
+    // 100px at 2 points per pixel — a budget of 200, not the wiring's default.
+    const visible = manager.getVisibleData({
+      startX: 0,
+      endX: 10_000,
+      width: 100,
+      height: 100,
+    });
+    expect(visible.length).toBeLessThanOrEqual(200);
+    expect(visible.length).toBeGreaterThan(100);
   });
 });
 
@@ -173,7 +186,9 @@ describe("step decimation also preserves holes", () => {
    * index, so a hole can simply be dropped — then the hole-splitting logic
    * never fires and the line connects straight across a value that isn't
    * there. This is the picture once described as "worse than losing an
-   * extreme value."
+   * extreme value." The default accessor doesn't declare `gapless`, so this
+   * is also the counterpart of the gapless fast path below: without the
+   * declaration the window is still scanned for holes.
    */
   it("whitespace survives decimation", () => {
     const data: LineDataPoint[] = Array.from({ length: 100 }, (_, i) => ({
@@ -221,20 +236,6 @@ describe("an accessor that can't produce holes doesn't scan the window", () => {
     new SimpleDecimation<OHLC>(counting).decimate(...whole(data), 500);
 
     expect(reads).toBeLessThan(data.length); // it would be 5,000 if it had scanned the window looking for holes
-  });
-
-  /** An accessor that doesn't declare `gapless` still scans as before — it must not swallow holes. */
-  it("an accessor without the declaration still scans", () => {
-    const data: LineDataPoint[] = Array.from({ length: 500 }, (_, i) => ({
-      x: i,
-      y: i === 400 ? null : i,
-    }));
-
-    const out = new SimpleDecimation<LineDataPoint>(
-      defaultCoordinates<LineDataPoint>(),
-    ).decimate(...whole(data), 50);
-
-    expect(out.some((point) => point.y === null)).toBe(true);
   });
 });
 

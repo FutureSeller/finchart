@@ -142,14 +142,18 @@ describe("headLookback — the declared door", () => {
     // axis (both shift together), so that alone is fine — the door only
     // has no footing when an input can't even fill the prefix, making
     // the sliced lengths disagree. Declined before the probe runs.
-    const calls = { full: 0 };
+    // Recording the length calc sees tells a prefix probe (sliced) from
+    // the full path (whole history) — a call count alone cannot.
+    const seen: number[] = [];
+    const sum = (left: readonly Pt[], right: readonly Pt[]) =>
+      left.map((p, i) => ({ x: p.x, y: p.x + (right[i]?.x ?? 0) }));
     const a = feed(pts(10, 30));
     const b = feed(pts(28, 30)); // two points of history — shorter than count + lookback
     const node = computation({
       inputs: [a.source, b.source],
       calc: (left, right) => {
-        calls.full++;
-        return { sum: left.map((p, i) => ({ x: p.x, y: p.x + (right[i]?.x ?? 0) })) };
+        seen.push(left.length);
+        return { sum: sum(left, right) };
       },
       headLookback: 3,
     });
@@ -157,19 +161,22 @@ describe("headLookback — the declared door", () => {
 
     a.prepend(pts(5, 10));
     b.prepend(pts(23, 28));
-    node.out.sum.read();
-    expect(calls.full).toBe(2); // initial + the full path — no probe, no stitch
+    const after = node.out.sum.read();
+    expect(seen).toEqual([20, 25]); // initial + the full path — no probe, no stitch
+    expect(after).toEqual(sum(a.source.read(), b.source.read()));
   });
 
   it("falls back when inputs landed different counts — slicing would misalign them", () => {
-    const calls = { full: 0 };
+    const seen: number[] = [];
+    const sum = (left: readonly Pt[], right: readonly Pt[]) =>
+      left.map((p, i) => ({ x: p.x, y: p.x + (right[i]?.x ?? 0) }));
     const a = feed(pts(10, 30));
     const b = feed(pts(10, 30));
     const node = computation({
       inputs: [a.source, b.source],
       calc: (left, right) => {
-        calls.full++;
-        return { sum: left.map((p, i) => ({ x: p.x, y: p.x + (right[i]?.x ?? 0) })) };
+        seen.push(left.length);
+        return { sum: sum(left, right) };
       },
       headLookback: 0,
     });
@@ -177,8 +184,9 @@ describe("headLookback — the declared door", () => {
 
     a.prepend(pts(5, 10));
     b.prepend(pts(7, 10));
-    node.out.sum.read();
-    expect(calls.full).toBe(2);
+    const after = node.out.sum.read();
+    expect(seen).toEqual([20, 25]); // initial + the full path — no prefix probe
+    expect(after).toEqual(sum(a.source.read(), b.source.read()));
   });
 
   it("refuses a spec carrying both doors — one way per direction", () => {

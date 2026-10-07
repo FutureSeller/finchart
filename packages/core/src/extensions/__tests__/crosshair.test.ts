@@ -1,9 +1,20 @@
+/**
+ * The cursor, end to end.
+ *
+ * - `plot.crosshair()` — the event payload a cursor position produces
+ *   (screen position, pane hit-testing, per-pane value, shared domain x).
+ *   This lives in the plot; it is tested here beside its main consumer.
+ * - `crosshair()` / `crosshairLine` — what the plugin draws from that
+ *   payload: the guide lines, the y badge, and magnet snapping.
+ */
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import type { CrosshairPayload } from "../../plot";
+import { createPlotModel } from "../../plot/model";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "../../plot/__tests__/helpers";
+import { crosshair as attach } from "../crosshair";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 10 },
@@ -36,7 +47,7 @@ function twoPanes() {
 const middleY = (area: { top: number; bottom: number }) =>
   (area.top + area.bottom) / 2;
 
-describe("crosshair", () => {
+describe("plot.crosshair — the event payload", () => {
   it("should still report the screen position", () => {
     const { plot, seen } = twoPanes();
 
@@ -131,12 +142,49 @@ describe("crosshair", () => {
   });
 });
 
-describe("crosshair magnet (2.5)", () => {
-  it("should snap the vertical line to the bar under the cursor", async () => {
-    const { createPlotModel } = await import("../../plot/model");
-    const { lineSeries } = await import("../../series");
-    const { crosshair: attach } = await import("../crosshair");
+describe("crosshairLine — what the plugin draws", () => {
+  it("should draw the horizontal line at the cursor and badge the y axis with that pane's value", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: lineSeries(), data },
+      config: { showGrid: false, axis: { x: { showLabels: false } } },
+    });
+    const format = (value: number) => `Y=${value.toFixed(3)}`;
+    model.plot.use(attach({ vertical: false, format: { y: format } }));
 
+    const { area, yScale } = model.plot.mainPane;
+    // Off-centre on both axes, so a value read from the wrong coordinate shows.
+    const cursor = {
+      x: area.left + (area.right - area.left) * 0.7,
+      y: area.top + (area.bottom - area.top) * 0.25,
+    };
+    model.plot.crosshair(cursor);
+    model.plot.render();
+    const commands = model.commands();
+
+    const horizontal = commands.find(
+      (c) =>
+        c.type === "drawLine" &&
+        c.points.length === 2 &&
+        c.points[0].y === c.points[1].y &&
+        c.style.dashArray,
+    );
+    if (horizontal?.type !== "drawLine") throw new Error("no horizontal line found");
+    expect(horizontal.points).toEqual([
+      { x: area.left, y: cursor.y },
+      { x: area.right, y: cursor.y },
+    ]);
+
+    const label = format(yScale.invert(cursor.y));
+    const badge = commands.find((c) => c.type === "drawText" && c.params.text === label);
+    if (badge?.type !== "drawText") throw new Error(`no y badge reading ${label}`);
+    expect(badge.params.at.y).toBeCloseTo(cursor.y, 6);
+    model.plot.destroy();
+  });
+});
+
+describe("crosshair plugin — magnet", () => {
+  it("should snap the vertical line to the bar under the cursor", () => {
     const model = createPlotModel({
       size: { width: 800, height: 600 },
       series: {
@@ -174,5 +222,6 @@ describe("crosshair magnet (2.5)", () => {
     // It lands on the pixel of the nearest bar (x=0), not the cursor position.
     expect(vertical.points[0].x).toBeCloseTo(area.left, 6);
     expect(vertical.points[0].x).not.toBeCloseTo(hover, 6);
+    model.plot.destroy();
   });
 });

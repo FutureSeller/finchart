@@ -91,20 +91,17 @@ describe("y axis per pane", () => {
 });
 
 describe("x axis is shared", () => {
-  it("should render one set of x labels", () => {
-    const { axisSpy } = twoPanes();
+  it("should render one set of x labels under the bottom-most pane", () => {
+    const { plot, lower, axisSpy } = twoPanes();
 
     // Even with two panes, there's only one set of x ticks — the input has a single x array, and it's not empty.
     expect(axisSpy.input().x.length).toBeGreaterThan(0);
-  });
-
-  it("should put them under the bottom-most pane", () => {
-    const { lower, axisSpy } = twoPanes();
 
     // The x label's position is the x-axis slice carved out by the layout — under the last pane.
     const xAxisArea = axisSpy.input().axes.x;
     if (!xAxisArea) throw new Error("no x-axis slice");
     expect(xAxisArea.top).toBeGreaterThanOrEqual(lower.area.bottom);
+    plot.destroy();
   });
 
   it("should drop x labels when they are turned off", () => {

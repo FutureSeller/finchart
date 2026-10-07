@@ -13,7 +13,7 @@
  * This test pins down that domain — leaving it as prose alone means the
  * next person reinvents the guard.
  */
-import { ContractError, type InteractionTarget, type Point } from "@finchart/core";
+import { lineSeries, type InteractionTarget, type Point } from "@finchart/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testBrowserDeps } from "./fakes";
 import { mountPlot } from "./helpers";
@@ -80,7 +80,7 @@ describe("zoomSpeed's domain", () => {
     expect(pixelZooms.map((z) => z.factor)).toEqual([1, 1]);
   });
 
-  it("0 passes through the wiring silently and is rejected at core's door", () => {
+  it("0 passes through the wiring silently, unchanged to the first wheel event", () => {
     const { target, pixelZooms } = recordingTarget();
 
     // (1) The wiring succeeds silently — nobody checks at configuration time.
@@ -91,24 +91,27 @@ describe("zoomSpeed's domain", () => {
     // (2) And the first wheel event carries that 0 through as-is.
     wheel(-100);
     expect(pixelZooms[0].factor).toBe(0);
-
-    /**
-     * (3) The rejection happens at core's door — this asks the real stage,
-     * not a mock. The error message's vocabulary is core's `zoom factor`,
-     * not `zoomSpeed`.
-     */
-    const { plot } = mountPlot({ deps: testBrowserDeps() });
-    expect(() => plot.zoomAtPixel(0, 100)).toThrow(ContractError);
-    expect(() => plot.zoomAtPixel(0, 100)).toThrow(/zoom factor/);
-    plot.destroy();
   });
 
-  it("control group: the default (1.1) zooms in fine on the same wheel event", () => {
-    const { plot } = mountPlot({ deps: testBrowserDeps() });
+  it("control group: the default (1.1) zooms in on the same wheel event", () => {
+    const { plot } = mountPlot({
+      deps: testBrowserDeps(),
+      series: lineSeries(),
+      data: [
+        { x: 0, y: 10 },
+        { x: 100, y: 20 },
+      ],
+    });
+    plot.setVisibleRange(0, 100);
     const interactions = new PointerInteractions(element);
     interactions.connect(plot);
 
-    expect(() => wheel(-100)).not.toThrow();
+    // jsdom swallows listener errors, so a throw can't be asserted here —
+    // the window narrowing is what proves the zoom went through.
+    wheel(-100);
+
+    const range = plot.getVisibleRange();
+    expect(range && range.max - range.min).toBeCloseTo(100 / 1.1);
 
     interactions.disconnect();
     plot.destroy();

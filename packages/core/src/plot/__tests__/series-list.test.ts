@@ -140,7 +140,11 @@ describe("SeriesList.sync", () => {
     const a = fakeEntry();
     const b = fakeEntry();
     list.sync([spec("a", a), spec("b", b)], managers);
-    list.sync([spec("b", b), spec("a", a)], managers);
+    // The same order again is no change — the control for the reorder below.
+    expect(list.sync([spec("a", a), spec("b", b)], managers)).toBe(false);
+
+    // Nothing about either entry changed, only their order — still a change to draw.
+    expect(list.sync([spec("b", b), spec("a", a)], managers)).toBe(true);
     expect(list.entries).toEqual([b, a]);
   });
 });

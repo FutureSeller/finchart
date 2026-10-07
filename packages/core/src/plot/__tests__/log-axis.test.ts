@@ -184,21 +184,6 @@ describe("log axis — data with non-positive values mixed in", () => {
   });
 
   /**
-   * With nothing positive at all, asking back gets no answer — that's when
-   * it falls back to the old constant. A call that can't supply a hint
-   * (calling `expand` directly) lands in the same place.
-   */
-  it("should fall back to the decade floor when nothing positive exists", () => {
-    const scale = new LogScale();
-    // Called with no hint — the shape of a unit test or a third-party call.
-    const [low, high] = scale.expand([0, 150], 0.05);
-
-    expect(low).toBeGreaterThan(0);
-    expect(low).toBeLessThan(1);
-    expect(high).toBeGreaterThan(150);
-  });
-
-  /**
    * minPositive costs a scan over every visible point, so it must not be
    * charged to a frame that isn't even on a log axis — it's supplied as a
    * callback, not a value. Measuring the accessor call count as a

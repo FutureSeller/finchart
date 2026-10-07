@@ -32,8 +32,20 @@ describe("cssReader", () => {
 
   it("reads a variable set on the container", () => {
     const container = document.createElement("div");
-    container.style.setProperty("--chart-line", " #123456 ");
+    container.style.setProperty("--chart-line", "#123456");
     document.body.appendChild(container);
+    expect(cssReader(container)("--chart-line")).toBe("#123456");
+  });
+
+  // Browsers keep the whitespace after a custom property's colon; jsdom
+  // trims it on its own, so the padded value is stubbed in.
+  it("trims the whitespace a browser keeps around a custom property's value", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const computed = window.getComputedStyle(container);
+    vi.spyOn(computed, "getPropertyValue").mockReturnValue(" #123456 ");
+    vi.spyOn(window, "getComputedStyle").mockReturnValue(computed);
+
     expect(cssReader(container)("--chart-line")).toBe("#123456");
   });
 

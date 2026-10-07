@@ -124,39 +124,16 @@ describe("the secondary button does not grab a drawing", () => {
 });
 
 describe("a right click selects but doesn't consume", () => {
-  it("should select the drawing under a right click", () => {
-    const { model, tools, at } = mounted();
-    tools.add({ type: "horizontal", price: 105 });
-
-    expect(tools.selection()).toBeNull();
-    model.plot.routeInput({ type: "contextmenu", point: at(5, 105) });
-
-    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
-  });
-
-  /**
-   * A right click on empty space clears the selection -- selecting only
-   * on a hit and leaving it untouched on a miss would let the app's
-   * delete menu end up pointing at a drawing that isn't under the
-   * cursor.
-   */
-  it("should clear the selection when the right click misses", () => {
-    const { model, tools, at } = mounted();
-    tools.add({ type: "horizontal", price: 105 });
-    model.plot.routeInput({ type: "contextmenu", point: at(5, 105) });
-    expect(tools.selection()).not.toBeNull();
-
-    model.plot.routeInput({ type: "contextmenu", point: at(5, 118) });
-
-    expect(tools.selection()).toBeNull();
-  });
-
   /**
    * All three buttons (left click, right click, double click) must give
    * the same answer at the same point -- wiring the axis/margin gate
    * into only one of them would create a spot where the published
    * `.d.ts`'s recipe ("the drawing under the cursor, or null") turns
    * out to be a lie.
+   *
+   * Each case starts with the line selected, so a miss must clear it --
+   * selecting only on a hit and leaving the selection on a miss would let
+   * the app's delete menu point at a drawing that isn't under the cursor.
    */
   it.each([
     ["empty space in the same pane", (p: Area) => ({ x: (p.left + p.right) / 2, y: p.top + 10 })],
@@ -213,18 +190,6 @@ describe("a right click selects but doesn't consume", () => {
       { type: "horizontal", price: 105 },
       { type: "horizontal", price: 105 },
     ]);
-  });
-
-  /** The double click follows the same rule -- headless synthesis can only send a dblclick. */
-  it("should clear the selection when a double click misses", () => {
-    const { model, tools, at } = mounted();
-    tools.add({ type: "horizontal", price: 105 });
-    model.plot.routeInput({ type: "dblclick", point: at(5, 105) });
-    expect(tools.selection()).not.toBeNull();
-
-    model.plot.routeInput({ type: "dblclick", point: at(5, 118) });
-
-    expect(tools.selection()).toBeNull();
   });
 
   /** If this consumed the event, `plot.contextMenu(point)` wouldn't fire, and the app couldn't open its own menu. */

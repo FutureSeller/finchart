@@ -28,7 +28,15 @@ describe("focusClaims", () => {
     claims.claim(() => box);
     const mine = claims.claim(() => null);
     expect(mine.contestedAt({ x: 10, y: 10 })).toBe(true);
+    // Just past each of the four edges is free.
+    expect(mine.contestedAt({ x: -1, y: 10 })).toBe(false);
+    expect(mine.contestedAt({ x: 101, y: 10 })).toBe(false);
+    expect(mine.contestedAt({ x: 10, y: -1 })).toBe(false);
     expect(mine.contestedAt({ x: 10, y: 60 })).toBe(false);
+    // The left, right and top edges themselves still belong to the claimant.
+    expect(mine.contestedAt({ x: 0, y: 10 })).toBe(true);
+    expect(mine.contestedAt({ x: 100, y: 10 })).toBe(true);
+    expect(mine.contestedAt({ x: 10, y: 0 })).toBe(true);
   });
 
   it("should treat a bottom edge as the neighbor below's", () => {

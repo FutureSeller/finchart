@@ -99,7 +99,7 @@ describe("drawing snap", () => {
   });
 
   it("should toggle at runtime via setSnap", () => {
-    const { tools, pixelOf, route } = mounted();
+    const { model, tools, pixelOf, route } = mounted();
     tools.setSnap(true);
     expect(tools.snapping()).toBe(true);
     tools.begin("horizontal");
@@ -111,6 +111,18 @@ describe("drawing snap", () => {
     const [line] = tools.list();
     if (line.type !== "horizontal") throw new Error("unexpected");
     expect(line.price).toBe(118);
+
+    // And back off — the same 3px aim now stays where the pointer is.
+    tools.setSnap(false);
+    expect(tools.snapping()).toBe(false);
+    tools.begin("horizontal");
+    route("pointerdown", { x: at.x, y: at.y - 3 });
+    route("pointerup", { x: at.x, y: at.y - 3 });
+
+    const [, free] = tools.list();
+    if (free.type !== "horizontal") throw new Error("unexpected");
+    expect(free.price).not.toBe(118);
+    model.plot.destroy();
   });
 });
 
@@ -192,6 +204,29 @@ describe("the bar at an x — one rule for snapping and the bar measure", () => 
   it("answers null when every registration is on a gap", () => {
     expect(barSampleAt([sample({}), sample({ index: 2 })])).toBeNull();
     expect(barSampleAt([])).toBeNull();
+  });
+
+  it("counts a bar measure drawn on a real pane by bar index, not by x", () => {
+    // Bars every 10 x, so x and bar index part ways: x 0..20 is two bars.
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: {
+        series: candleSeries(),
+        data: candles.map((candle, index) => ({ ...candle, x: index * 10 })),
+      },
+      config: {
+        showGrid: false,
+        axis: { x: { showLabels: false }, y: { showLabels: false } },
+      },
+    });
+    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
+    tools.add({ type: "barMeasure", a: { x: 0, price: 100 }, b: { x: 20, price: 110 } });
+
+    const labels = model
+      .commands()
+      .flatMap((command) => (command.type === "drawText" ? [command.params.text] : []));
+    expect(labels).toContain("2 bars");
+    model.plot.destroy();
   });
 });
 

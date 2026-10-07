@@ -22,6 +22,9 @@ import {
   parseDrawings,
   serializeDrawings,
 } from "../index";
+import type { Drawing } from "../drawings";
+import type { DrawingSelectionChange } from "../tools";
+import { mountDrawingStage } from "./drawing-stage.fixture";
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -384,8 +387,8 @@ describe("self-completeness -- the door-by-door verdict table", () => {
     expect(Object.keys(table).filter((d) => !real.includes(d))).toEqual([]);
   });
 
-  /** No `〃` (ditto mark) allowed -- it's a notation a machine can't read, so the verdict table blocks it. */
-  it("should not let any verdict lean on a ditto mark", () => {
+  /** No `〃` (ditto mark) allowed -- it's a notation a machine can't read, so the verdict table blocks it. A lint of the table's text, not of any door's behaviour. */
+  it("table lint: no verdict text uses a ditto mark", () => {
     const dittos: string[] = [];
     for (const [group, table] of TABLES) {
       for (const [door, verdict] of Object.entries(table)) {
@@ -439,7 +442,8 @@ describe("self-completeness -- the door-by-door verdict table", () => {
 
   });
 
-  it("should give every verdict a reason on all three axes", () => {
+  /** A lint of the table's text, not of any door's behaviour. */
+  it("table lint: every verdict has non-blank text on all three axes", () => {
     const blank: string[] = [];
     for (const [group, table] of TABLES) {
       for (const [door, verdict] of Object.entries(table)) {
@@ -511,13 +515,12 @@ describe("self-completeness -- the door-by-door verdict table", () => {
       expect(() => drawingTools({ plot } as never)).toThrow(ContractError);
     });
 
+    // snap, snapRadius, style, and defaults are refused in their own
+    // suites (zero-trust and log-fib-defaults); only the ordering options
+    // have no other home.
     it.each([
       ["zIndex", { zIndex: Number.NaN }],
       ["priority", { priority: "high" }],
-      ["snap", { snap: 1 }],
-      ["snapRadius", { snapRadius: 0 }],
-      ["style", { style: "red" }],
-      ["defaults", { defaults: { fib: { levelSpacing: "LOG" } } }],
     ])("drawingTools({ %s })", (_door, bad) => {
       expect(() => drawingTools({ ...stage(), ...bad } as never)).toThrow(
         ContractError,
@@ -554,22 +557,46 @@ describe("self-completeness -- the door-by-door verdict table", () => {
     });
 
     /**
-     * A no-argument door's promise is about before dispose. If the
-     * table only wrote "does not throw," the behavior after dispose
-     * would be missing, and that statement could turn out to be a lie.
+     * "Returns a copy" -- every value handed out (a handle's read, the
+     * list, a selection notification) is the consumer's to edit. If any
+     * of them were the owned object, the edit would reach the ledger
+     * without passing a door, and the next save would store it.
      */
-    it("write doors close after dispose while history reads stay open", () => {
-      const api = drawingTools(stage())(pane() as never);
-      expect(() => api.cancel()).not.toThrow();
-      expect(() => api.clear()).not.toThrow();
-      api.add({ type: "horizontal", price: 1 });
-      api.dispose();
-      expect(() => api.cancel()).toThrow(ContractError);
-      expect(() => api.clear()).toThrow(ContractError);
-      expect(() => api.undo()).toThrow(ContractError);
-      expect(() => api.redo()).toThrow(ContractError);
-      expect(api.canUndo()).toBe(true);
-      expect(api.canRedo()).toBe(false);
+    describe("handed-out drawings are copies -- editing one leaves the ledger alone", () => {
+      const editPrice = (drawing: Drawing | null): void => {
+        if (drawing?.type !== "horizontal") throw new Error("expected a horizontal line");
+        drawing.price = 999;
+      };
+
+      it("handle.read()", () => {
+        const { api } = mountDrawingStage();
+        const handle = api.add({ type: "horizontal", price: 50 });
+        editPrice(handle.read());
+        expect(api.list()).toMatchObject([{ price: 50 }]);
+        expect(handle.read()).toMatchObject({ price: 50 });
+        api.dispose();
+      });
+
+      it("list()", () => {
+        const { api } = mountDrawingStage();
+        api.add({ type: "horizontal", price: 50 });
+        editPrice(api.list()[0]);
+        expect(api.list()).toMatchObject([{ price: 50 }]);
+        api.dispose();
+      });
+
+      it("the selectionChanges payload", () => {
+        const { api } = mountDrawingStage();
+        const seen: DrawingSelectionChange[] = [];
+        const off = api.selectionChanges.subscribe((change) => seen.push(change));
+        api.add({ type: "horizontal", price: 50 }, { select: true });
+        off();
+        expect(seen).toHaveLength(1);
+        editPrice(seen[0].selection);
+        expect(api.list()).toMatchObject([{ price: 50 }]);
+        expect(api.selection()).toMatchObject({ price: 50 });
+        api.dispose();
+      });
     });
 
     it("both parser doors do not throw no matter what comes in as the argument", () => {

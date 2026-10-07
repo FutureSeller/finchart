@@ -4,6 +4,7 @@
  * - `options` is `PlotOptionsPatch` minus the keys that have a door of their
  *   own (`axis` → `<XAxis>/<YAxis>`, `style.grid` → `gridStyle`, `showGrid`,
  *   `paneGap`). Two doors to one value erase each other — the axis proved it.
+ *   For the same reason `<ChartPane>` takes no `axis`; `<YAxis>` owns it.
  * - `<ChartLine>`/`<ChartCandles>` take the imperative lane's override shape
  *   through `style`; the flat mirror props are gone.
  * - A `SeriesHandle` is a `Source`, so it hands straight to anything that
@@ -11,7 +12,7 @@
  */
 import type { LineDataPoint, OHLC, SeriesHandle, Source } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
-import { ChartCandles, ChartContainer, ChartLine } from '../components';
+import { ChartCandles, ChartContainer, ChartLine, ChartPane } from '../components';
 
 const deps = browserDeps();
 const data: LineDataPoint[] = [];
@@ -43,6 +44,12 @@ export const showGridIsAProp = (
 export const paneGapIsAProp = (
   // @ts-expect-error paneGap has a prop
   <ChartContainer deps={deps} data={data} options={{ paneGap: 4 }} />
+);
+export const paneAxisHasItsOwnDoor = (
+  <ChartContainer deps={deps} data={data}>
+    {/* @ts-expect-error a pane's value axis is `<YAxis>`'s — a second door would erase it */}
+    <ChartPane axis={{ showLabels: false }} />
+  </ChartContainer>
 );
 export const gridStyleIsAProp = (
   // @ts-expect-error style.grid is `gridStyle`

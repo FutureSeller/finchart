@@ -89,16 +89,40 @@ describe("eventChannel", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("should call everyone and then report the failures", () => {
+  it("should call everyone and then rethrow a lone failure as itself", () => {
     const events = eventChannel<Events>();
     const after = vi.fn();
+    const boom = new Error("boom");
     events.on("a", () => {
-      throw new Error("boom");
+      throw boom;
     });
     events.on("a", after);
 
-    expect(() => events.emit("a", 1)).toThrow(/"a" subscriber threw|boom/);
+    expect(() => events.emit("a", 1)).toThrow(boom);
     expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("should aggregate several failures under the event's name", () => {
+    const events = eventChannel<Events>();
+    const first = new Error("first");
+    const second = new Error("second");
+    events.on("a", () => {
+      throw first;
+    });
+    events.on("a", () => {
+      throw second;
+    });
+
+    let caught: unknown;
+    try {
+      events.emit("a", 1);
+    } catch (error) {
+      caught = error;
+    }
+
+    if (!(caught instanceof AggregateError)) throw new Error("expected an AggregateError");
+    expect(caught.message).toBe('"a" subscriber threw');
+    expect(caught.errors).toEqual([first, second]);
   });
 
   it("should drop every handler on clear", () => {

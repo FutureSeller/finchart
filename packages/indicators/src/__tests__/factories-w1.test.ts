@@ -1,8 +1,9 @@
 /**
  * Stochastic RSI, MFI, Ultimate Oscillator — wave 1. Exact values pinned
  * with short scripts checked by hand, the conventions at their edges
- * (first bar, zero denominators, a bar without volume), and Stochastic RSI
- * held to the array kernels it is built from.
+ * (first bar, zero denominators, a bar without volume), and Stochastic RSI's
+ * composition checked against the package's own rsi and array kernels — the
+ * same folds the node runs, so not an independent check of their values.
  */
 import type { HistogramPoint, LineDataPoint, OHLC, Source } from "@finchart/core";
 import { ContractError, M4Decimation } from "@finchart/core";
@@ -94,7 +95,7 @@ describe("stochasticRsi", () => {
   const closes = Array.from({ length: 80 }, (_, i) => 100 + Math.sin(i / 4) * 8 + (i % 3));
   const tape = closes.map((c, i) => bar(i, c + 1, c - 1, c));
 
-  it("is the stochastic of the rsi — held to the array kernels", () => {
+  it("is the stochastic of the rsi — the composition against the package's own rsi, extremum and sma kernels", () => {
     const options = { rsiPeriod: 7, period: 5, smooth: 3, signal: 2 };
     const node = stochasticRsi(sourceOf(tape), options);
     const r = ys(rsi(sourceOf(tape), { period: options.rsiPeriod }).out.rsi.read());
@@ -215,7 +216,11 @@ describe("elderRay", () => {
   });
 });
 
-/** LazyBear's script, written out over arrays — the oracle the fold node is held to. */
+/**
+ * LazyBear's script, written out over arrays — the oracle the fold node is held to. Its means,
+ * deviations and extremums come from the package's own array kernels (the folds the node runs),
+ * so those parts check the composition; the regression and the squeeze states are written out.
+ */
 function squeezeReference(
   tape: readonly OHLC[],
   bb: number,
@@ -278,7 +283,7 @@ describe("squeezeMomentum", () => {
   const closes = Array.from({ length: 120 }, (_, i) => 100 + Math.sin(i / 6) * 6 + Math.sin(i / 23) * 12 + (i % 4));
   const tape = closes.map((c, i) => bar(i, c + 1.5 + (i % 3), c - 1 - (i % 5) * 0.4, c));
 
-  it("is the script's momentum and squeeze states — held to an array oracle", () => {
+  it("is the script's momentum and squeeze states — held to an array oracle built on the package's own kernels", () => {
     const options = { bbPeriod: 10, bbMultiplier: 2, kcPeriod: 8, kcMultiplier: 1.5 };
     const node = squeezeMomentum(sourceOf(tape), options);
     const want = squeezeReference(tape, 10, 2, 8, 1.5);

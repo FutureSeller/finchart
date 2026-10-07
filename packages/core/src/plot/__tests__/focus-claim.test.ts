@@ -1,9 +1,8 @@
 /**
- * The focus mechanism's invariants — the core's own witness. The sole
- * witness for focusAreaOf/containsFocus used to be `tools`, and `tools`
- * reads the core from dist, so mutations in the core source all survived
- * green. These two tests are the core's own witness, one that never goes
- * through dist.
+ * The chart wires its focus contest through `claimFocusArea`. The contest's
+ * own rules (an exclusive bottom edge, degenerate or throwing neighbours,
+ * release) are pinned in `interaction/__tests__/focus-claims.test.ts`; this
+ * only checks that claims made through the chart meet in one contest.
  */
 import { expect, it } from "vitest";
 import type { OHLC } from "../../data";
@@ -18,56 +17,21 @@ const candles: OHLC[] = Array.from({ length: 10 }, (_, i) => ({
   close: 102,
 }));
 
-function mounted() {
-  return createPlotModel({
+it("claims made through the chart contest each other until released", () => {
+  const { plot } = createPlotModel({
     size: { width: 400, height: 300 },
     series: { series: candleSeries(), data: candles },
     config: { showGrid: false },
   });
-}
+  const other = plot.claimFocusArea(() => ({ left: 0, right: 100, top: 0, bottom: 50 }));
+  const mine = plot.claimFocusArea(() => null);
 
-it("the bottom edge is exclusive — the 1px boundary belongs to the neighbor below", () => {
-  const { plot } = mounted();
-  const upper = plot.claimFocusArea(() => ({
-    left: 0,
-    right: 100,
-    top: 0,
-    bottom: 50,
-  }));
-  const lower = plot.claimFocusArea(() => ({
-    left: 0,
-    right: 100,
-    top: 50,
-    bottom: 100,
-  }));
+  expect(mine.contestedAt({ x: 10, y: 10 })).toBe(true);
+  expect(mine.contestedAt({ x: 10, y: 60 })).toBe(false);
 
-  // y=50 belongs to the lower area: the upper area must yield it exclusively so the lower one can contest it.
-  expect(upper.contestedAt({ x: 10, y: 50 })).toBe(true); // lower contests it
-  expect(lower.contestedAt({ x: 10, y: 50 })).toBe(false); // upper yields it
-  // Just above the boundary belongs to the upper area — the control case.
-  expect(lower.contestedAt({ x: 10, y: 49 })).toBe(true);
+  other.release();
+  expect(mine.contestedAt({ x: 10, y: 10 })).toBe(false);
 
-  upper.release();
-  lower.release();
-});
-
-it("a degenerate area contests nothing — not even a zero-width vertical line", () => {
-  const { plot } = mounted();
-  const degenerate = plot.claimFocusArea(() => ({
-    left: 40,
-    right: 40, // zero width — the entire vertical line at x=40 must not be contested
-    top: 0,
-    bottom: 100,
-  }));
-  const witness = plot.claimFocusArea(() => ({
-    left: 200,
-    right: 300,
-    top: 0,
-    bottom: 100,
-  }));
-
-  expect(witness.contestedAt({ x: 40, y: 50 })).toBe(false);
-
-  degenerate.release();
-  witness.release();
+  mine.release();
+  plot.destroy();
 });

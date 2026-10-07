@@ -104,13 +104,15 @@ describe("width-aware decimation", () => {
 
   it("should target roughly pointsPerPixel per pixel", () => {
     const dataManager = manager({ pointsPerPixel: 1, maxPoints: 100000 });
-    dataManager.setData(series(10000));
+    // Not a multiple of the budget, so the step has to round up to stay
+    // within it.
+    dataManager.setData(series(10050));
 
     const visible = dataManager.getVisibleData(viewport(400));
 
-    // 400px * 1 ~= 400 points (not exact, due to bucket boundaries)
-    expect(visible.length).toBeLessThanOrEqual(420);
-    expect(visible.length).toBeGreaterThan(300);
+    // 400px * 1 = a 400 point budget, plus the guaranteed last point.
+    expect(visible.length).toBeLessThanOrEqual(401);
+    expect(visible.length).toBeGreaterThan(380);
   });
 
   it("should never exceed maxPoints however wide the plot is", () => {
@@ -130,24 +132,15 @@ describe("width-aware decimation", () => {
     expect(dataManager.getVisibleData(viewport(800))).toHaveLength(50);
   });
 
-  it("should survive a zero-width viewport", () => {
+  it("should fall back to the endpoints on a zero-width viewport", () => {
     const dataManager = manager();
     dataManager.setData(series(100));
 
-    expect(() => dataManager.getVisibleData(viewport(0))).not.toThrow();
-  });
-});
-
-describe("decimation strategies", () => {
-  // The matching two lines for step decimation (SimpleDecimation) live in
-  // their own describe below — this copy just got renamed here when
-  // GridDecimation was removed.
-  it("should let LttbDecimation use coordinates for shape preservation", () => {
-    const decimated = new LttbDecimation(new LineDataAccessor()).decimate(...whole(series(1000)),
-      100,
-    );
-
-    expect(decimated).toHaveLength(100);
+    // A zero budget is floored to one, and step decimation always keeps
+    // the last point.
+    expect(
+      dataManager.getVisibleData(viewport(0)).map((point) => point.x),
+    ).toEqual([0, 99]);
   });
 });
 
@@ -200,8 +193,11 @@ describe("SimpleDecimation", () => {
   });
 
   it("should thin the data by a fixed step", () => {
-    const decimated = simple().decimate(...whole(series(1000)), 100);
+    // Not a multiple of the threshold, so the step has to round up to stay
+    // within it.
+    const decimated = simple().decimate(...whole(series(1050)), 100);
 
+    // At most the threshold, plus the guaranteed last point.
     expect(decimated.length).toBeLessThanOrEqual(101);
     expect(decimated.length).toBeGreaterThan(90);
   });
@@ -215,8 +211,17 @@ describe("SimpleDecimation", () => {
   });
 
   it("should work without a coordinate accessor", () => {
-    // Index-based, so it doesn't need to know the coordinates.
-    expect(() => simple().decimate(...whole(series(500)), 50)).not.toThrow();
+    // Index-based, so the default accessor gives the same answer as an
+    // explicit one for {x, y} points.
+    const data = series(500);
+    const implicit = simple().decimate(...whole(data), 50);
+    const explicit = new SimpleDecimation(new LineDataAccessor()).decimate(
+      ...whole(data),
+      50,
+    );
+
+    expect(implicit).toHaveLength(51); // every 10th point plus the last
+    expect(implicit).toEqual(explicit);
   });
 });
 

@@ -50,7 +50,7 @@ function fullHeightVerticals(model: ReturnType<typeof createPlotModel>) {
 describe("syncCrosshair", () => {
   it("should raise a time ghost on the other plots at the same data x", () => {
     const { a, b, c } = trio();
-    syncCrosshair(a.plot, b.plot, c.plot);
+    const release = syncCrosshair(a.plot, b.plot, c.plot);
 
     // a's cursor — over mainPane (the data x is inverted from the pixel).
     const y = (a.plot.mainPane.area.top + a.plot.mainPane.area.bottom) / 2;
@@ -62,13 +62,19 @@ describe("syncCrosshair", () => {
     const ghostsC = fullHeightVerticals(c);
     expect(ghostsB.length).toBeGreaterThan(0);
     expect(ghostsC.length).toBeGreaterThan(0);
-    // Same data x → same screen x (since both stages share the same view).
-    expect(ghostsB[0][0].x).toBeCloseTo(ghostsC[0][0].x, 6);
+    // Same data x → same screen x as the source cursor (all three stages
+    // share the same view), so the ghost lands right under pixel 400.
+    expect(ghostsB[0][0].x).toBeCloseTo(400, 6);
+    expect(ghostsC[0][0].x).toBeCloseTo(400, 6);
 
     // The originating stage has no ghost of its own — that's the real
     // line's spot (the crosshair plugin).
     a.plot.render();
     expect(fullHeightVerticals(a).length).toBe(0);
+    release();
+    a.plot.destroy();
+    b.plot.destroy();
+    c.plot.destroy();
   });
 
   it("should clear ghosts when the cursor leaves and on release", () => {

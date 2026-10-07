@@ -10,10 +10,10 @@
  * that had nothing to do with the axis made `<ChartPane axis>`'s format the
  * one called from then on — same JSX, a different owner.
  *
- * The fix was to cut it down to one door (see `chart-pane.tsx`). The first
- * test is a **type lock** — if the door reopens to two, compilation fails
- * first. The second is a **behavior lock** that checks the one remaining
- * door actually holds up under that scenario.
+ * The fix was to cut it down to one door (see `chart-pane.tsx`). The type
+ * lock lives in `react-lane.types.tsx` — if the door reopens to two,
+ * compilation fails there. This is the **behavior lock** that checks the
+ * one remaining door actually holds up under that scenario.
  */
 import type { LineDataPoint, Plot } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
@@ -66,20 +66,6 @@ function marker() {
 }
 
 describe('the value axis has exactly one door to write through', () => {
-  it('<ChartPane axis> no longer exists — reopening it breaks compilation here', () => {
-    const { deps } = setup();
-    const tree = (
-      <ChartContainer deps={deps} data={data}>
-        {/* @ts-expect-error: the axis's second door is closed — <YAxis> is the one place for it now */}
-        <ChartPane axis={{ showLabels: false }}>
-          <ChartSeries series={lineSeries()} />
-        </ChartPane>
-      </ChartContainer>
-    );
-
-    expect(tree).not.toBeNull();
-  });
-
   it('<YAxis> inside a pane keeps ownership even when an unrelated prop changes', () => {
     const { deps, ref, plot } = setup();
     const axis = marker();

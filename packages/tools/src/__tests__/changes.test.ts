@@ -109,15 +109,17 @@ describe("drawingTools.applyOptions", () => {
 
 describe("a disposed toolbox", () => {
   it("should refuse to be used after dispose", () => {
-    const { tools } = mount();
+    const { model, tools } = mount();
     tools.dispose();
 
     expect(tools.disposed).toBe(true);
     // Silent success would let a list grow that never gets drawn anywhere.
     expect(() => tools.add({ type: "horizontal", price: 1 })).toThrow();
     expect(() => tools.clear()).toThrow();
+    expect(() => tools.cancel()).toThrow();
     // Reads are not blocked -- saving the last state is a normal path.
     expect(() => tools.serialize()).not.toThrow();
+    model.plot.destroy();
   });
 });
 

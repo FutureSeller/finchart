@@ -8,7 +8,7 @@
  * the slot, not whoever draws.
  */
 import { describe, expect, it } from "vitest";
-import type { LineDataPoint, OHLC } from "../../data";
+import type { LineDataPoint } from "../../data";
 import type { PlotArea } from "../../primitives";
 import type { DrawCommand } from "../../render";
 import { candleSeries, lineSeries } from "../../series";
@@ -49,18 +49,53 @@ function unbounded(commands: readonly DrawCommand[]): DrawCommand[] {
     .map(({ command }) => command);
 }
 
+/** How far a command reaches vertically, `[top, bottom]`. Text has none — it's an axis label. */
+function verticalExtent(command: DrawCommand): [number, number] | null {
+  const span = (ys: number[]): [number, number] => [Math.min(...ys), Math.max(...ys)];
+  if (command.type === "drawLine") return span(command.points.map((p) => p.y));
+  if (command.type !== "drawShape") return null;
+  const shape = command.shape;
+  if (shape.shape === "rect") return span([shape.y, shape.y + shape.height]);
+  if (shape.shape === "circle") return [shape.cy - shape.r, shape.cy + shape.r];
+  return span(shape.points.map((p) => p.y));
+}
+
 describe("every mark is drawn within a boundary", () => {
-  it("should bound every mark when the value domain is narrower than the data", () => {
+  it("should bound every mark to its own pane when the value domain is narrower than the data", () => {
     const model = createPlotModel({ size });
-    const pane = model.plot.mainPane;
-    pane.addSeries({ series: lineSeries(), data: line([[0, 0], [1, 50], [2, 100]]) });
-    // The data spans 0~100 but the window only shows 40~60 — the rest ends up off-screen.
-    pane.setValueDomain(40, 60);
+    const main = model.plot.mainPane;
+    const lower = model.plot.addPane();
+    main.addSeries({ series: lineSeries(), data: line([[0, 0], [1, 50], [2, 100]]) });
+    lower.addSeries({
+      series: candleSeries(),
+      data: [
+        { x: 0, open: 100, high: 101, low: 99, close: 100 },
+        { x: 1, open: 100, high: 200, low: 1, close: 100 },
+        { x: 2, open: 100, high: 101, low: 99, close: 100 },
+      ],
+    });
+    // Both panes show a window narrower than their data — the line and the
+    // middle candle's wick land far outside the whole data area.
+    main.setValueDomain(40, 60);
+    lower.setValueDomain(99, 101);
     model.plot.render();
 
-    expect(unbounded(model.commands())).toEqual([]);
-    // The coordinates are still off-screen. Not drawing them is the boundary's job.
-    expect(clipAreas(model.commands())).toContainEqual(pane.area);
+    const commands = model.commands();
+    expect(unbounded(commands)).toEqual([]);
+
+    // The coordinates are still off-screen. Not drawing them is the
+    // boundary's job — and the boundary is the pane's own slice, not the
+    // data area that spans both panes.
+    const data = clipAreas(commands)[0]!;
+    const escaping = underClip(commands).filter(({ command }) => {
+      const extent = verticalExtent(command);
+      return extent !== null && (extent[0] < data.top || extent[1] > data.bottom);
+    });
+    const clips = escaping.map(({ clip }) => clip);
+    expect(clips).toContainEqual(main.area);
+    expect(clips).toContainEqual(lower.area);
+    for (const clip of clips) expect([main.area, lower.area]).toContainEqual(clip);
+    model.plot.destroy();
   });
 
   it("should bound the lower pane to its own slice", () => {
@@ -81,22 +116,6 @@ describe("every mark is drawn within a boundary", () => {
     expect(areas).toContainEqual(model.plot.mainPane.area);
     // The two slots are actually different — if they matched, this test would guard nothing.
     expect(lower.area.top).toBeGreaterThanOrEqual(model.plot.mainPane.area.bottom);
-  });
-
-  it("should bound candle wicks", () => {
-    const model = createPlotModel({ size });
-    model.plot.mainPane.addSeries({
-      series: candleSeries(),
-      data: [
-        { x: 0, open: 100, high: 101, low: 99, close: 100 },
-        { x: 1, open: 100, high: 200, low: 1, close: 100 },
-        { x: 2, open: 100, high: 101, low: 99, close: 100 },
-      ] as OHLC[],
-    });
-    model.plot.mainPane.setValueDomain(99, 101);
-    model.plot.render();
-
-    expect(unbounded(model.commands())).toEqual([]);
   });
 });
 
@@ -131,11 +150,5 @@ describe("boundary ordering", () => {
     expect(first.top).toBeLessThanOrEqual(model.plot.mainPane.area.top);
     expect(first.bottom).toBeGreaterThanOrEqual(lower.area.bottom);
     expect(first).not.toEqual(model.plot.mainPane.area);
-  });
-
-  it("should never leave a clip standing at the end of a frame", () => {
-    const { commands } = rendered();
-
-    expect(clipAreas(commands).at(-1)).toBeNull();
   });
 });

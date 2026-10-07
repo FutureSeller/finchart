@@ -175,24 +175,32 @@ describe("baselineSeries", () => {
   });
 
   it("should change color exactly at the crossing, not at a bar", () => {
-    // baseline at y=0. 10 → -10 crosses it at x 0.5.
+    // baseline at y=0. 30 → -10 crosses it three quarters of the way
+    // along — asymmetric, so measuring t from the wrong end shows up.
     const data: LineDataPoint[] = [
-      { x: 0, y: 10 },
+      { x: 0, y: 30 },
       { x: 1, y: -10 },
     ];
     const { model, lines } = mounted({ series: baselineSeries(), data });
 
     expect(lines).toHaveLength(2);
     const [above, below] = lines;
-    if (above.type !== "drawLine" || below.type !== "drawLine") return;
+    if (above.type !== "drawLine" || below.type !== "drawLine") {
+      throw new Error("expected two drawLine commands");
+    }
 
     // The two lines meet at the same point (the crossing) — that y is the
-    // baseline's screen y.
+    // baseline's screen y, and its x is 3/4 of the way from the first
+    // point to the last.
     const seam = above.points.at(-1)!;
     expect(below.points[0]).toEqual(seam);
     expect(seam.y).toBeCloseTo(model.plot.mainPane.yScale.scale(0), 6);
+    const startX = above.points[0].x;
+    const endX = below.points.at(-1)!.x;
+    expect(seam.x).toBeCloseTo(startX + (endX - startX) * 0.75, 6);
     // The colors differ.
     expect(above.style.color).not.toBe(below.style.color);
+    model.plot.destroy();
   });
 
   it("should keep a graze on the baseline in one segment", () => {

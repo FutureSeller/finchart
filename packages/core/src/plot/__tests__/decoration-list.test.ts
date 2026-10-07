@@ -1,8 +1,8 @@
 /**
- * The decoration list's two axes — stacking order (z) and update
- * frequency. Nothing reads `updates` yet — since everything draws onto a
- * single canvas, a drawing test wouldn't catch it even if it were stored
- * wrong, so the list itself has to be checked directly.
+ * The decoration list's stacking order (z), and how a walk behaves when
+ * the list changes under it. Everything draws onto a single canvas, so a
+ * drawing test can't tell which entry landed where — the list itself has
+ * to be checked directly.
  */
 import { describe, expect, it } from "vitest";
 import {

@@ -13,75 +13,9 @@ const mount = () =>
   mountPlot({ deps: testBrowserDeps(), series: lineSeries(), config: defaultConfig });
 
 describe("event subscription", () => {
-  it("should still reach later handlers when one unsubscribes itself", () => {
-    const { plot, handle } = mount();
-    const heard: string[] = [];
-
-    // This is exactly the shape of an effect cleanup.
-    const off = plot.on("render", () => {
-      heard.push("a");
-      off();
-    });
-    plot.on("render", () => heard.push("b"));
-    plot.on("render", () => heard.push("c"));
-
-    handle.setData(data);
-
-    expect(heard).toEqual(["a", "b", "c"]);
-  });
-
-  it("should not run a handler subscribed during the same emit", () => {
-    const { plot, handle } = mount();
-    const heard: string[] = [];
-
-    plot.on("render", () => {
-      heard.push("a");
-      plot.on("render", () => heard.push("late"));
-    });
-
-    handle.setData(data);
-    expect(heard).toEqual(["a"]);
-
-    // It joins starting from the next round.
-    plot.render();
-    expect(heard).toEqual(["a", "a", "late"]);
-  });
-
-  it("should keep the two registrations apart when the same function is added twice", () => {
-    const { plot, handle } = mount();
-    let calls = 0;
-    const handler = () => {
-      calls += 1;
-    };
-
-    const off = plot.on("render", handler);
-    plot.on("render", handler);
-    off();
-
-    handle.setData(data);
-
-    // Each disposer removes only its own registration.
-    expect(calls).toBe(1);
-  });
-
-  /** A bug where registering the same function twice and calling the first disposer twice made indexOf remove the remaining registration too. */
-  it("should not drop the other registration when one disposer runs twice", () => {
-    const { plot, handle } = mount();
-    let calls = 0;
-    const handler = () => {
-      calls += 1;
-    };
-
-    const off = plot.on("render", handler);
-    plot.on("render", handler);
-    off();
-    off();
-
-    handle.setData(data);
-
-    expect(calls).toBe(1);
-  });
-
+  // The channel's own semantics (self-unsubscribe mid-emit, late joiners,
+  // duplicate registrations) are pinned in event-channel.test.ts. These
+  // only check that Plot.on is wired to it.
   it("should be safe to unsubscribe twice", () => {
     const { plot, handle } = mount();
     let calls = 0;

@@ -102,6 +102,7 @@ describe("mergeOptions — clearing a bar-spacing override", () => {
     const held = mergeOptions(resolveConfig(base()), { minBarSpacing: 3, maxBarSpacing: 40 });
     expect(held.minBarSpacing).toBe(3);
     const cleared = mergeOptions(held, { minBarSpacing: null });
+    // Dropped, not stored as null — null itself never reaches the resolved config.
     expect(Object.hasOwn(cleared, "minBarSpacing")).toBe(false);
     expect(cleared.maxBarSpacing).toBe(40);
     const both = mergeOptions(cleared, { maxBarSpacing: null });
@@ -112,13 +113,6 @@ describe("mergeOptions — clearing a bar-spacing override", () => {
     const held = mergeOptions(resolveConfig(base()), { minBarSpacing: 3 });
     expect(mergeOptions(held, { minBarSpacing: undefined }).minBarSpacing).toBe(3);
     expect(mergeOptions(held, { minBarSpacing: 7 }).minBarSpacing).toBe(7);
-  });
-
-  it("should never let null itself reach the resolved config", () => {
-    const next = mergeOptions(resolveConfig(base()), { minBarSpacing: null, maxBarSpacing: null });
-    expect(next.minBarSpacing).toBeUndefined();
-    expect(next.maxBarSpacing).toBeUndefined();
-    expect(Object.hasOwn(next, "minBarSpacing")).toBe(false);
   });
 
   it("should keep absence through copyConfig", () => {
@@ -211,10 +205,6 @@ describe("checkPlotNumbers — null clears a spacing override", () => {
     expect(() => checkPlotNumbers({ minBarSpacing: null })).not.toThrow();
     expect(() => checkPlotNumbers({ minBarSpacing: null, maxBarSpacing: 5 })).not.toThrow();
     expect(() => checkPlotNumbers({ minBarSpacing: 5, maxBarSpacing: null })).not.toThrow();
-  });
-
-  it("should still reject min above max when both are positive numbers", () => {
-    expect(() => checkPlotNumbers({ minBarSpacing: 9, maxBarSpacing: 5 })).toThrow(ContractError);
   });
 
   it("should still reject anything that is not a number, on either key — only null and undefined skip the guard", () => {

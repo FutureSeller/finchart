@@ -172,11 +172,13 @@ describe("computation", () => {
     const node = computation({
       inputs: [price, other],
       calc: (first: DataView<OHLC>, second: DataView<OHLC>) => ({
-        merged: [{ x: 0, y: first.length + second.length }] as LineDataPoint[],
+        merged: [{ x: 0, y: first.length * 10 + second.length }],
       }),
     });
 
-    expect(node.out.merged.read()).toEqual([{ x: 0, y: 5 }]);
+    // 4 bars then 1 bar reads as 41; swapped inputs would read as 14.
+    expect(node.out.merged.read()).toEqual([{ x: 0, y: 41 }]);
+    plot.destroy();
   });
 });
 
