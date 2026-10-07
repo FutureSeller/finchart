@@ -9,27 +9,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { FALLBACK_FONT, noStyle } from "../../render";
-import { AXIS_LABEL_SPEC, labelFont, labelFontFamily } from "../labels";
+import { labelFont } from "../labels";
 
 describe("axis label fallback ↔ renderer fallback", () => {
-  it("should declare the same font size in both places", () => {
-    expect(FALLBACK_FONT.startsWith(AXIS_LABEL_SPEC.fontSize.fallback)).toBe(
-      true,
-    );
-  });
-
-  it("should declare the same last-resort family in both places", () => {
-    const family = FALLBACK_FONT.slice(
-      AXIS_LABEL_SPEC.fontSize.fallback.length,
-    ).trim();
-
-    expect(labelFontFamily(noStyle)).toBe(family);
-  });
-
   /**
    * In wiring where no variable resolves at all — headless, `noStyle` —
    * the font the axis builds must be the same string as the renderer's
-   * fallback.
+   * fallback. The size and the family are both inside that one string, so
+   * either drifting fails here.
    */
   it("should produce the renderer's fallback when nothing is set", () => {
     expect(labelFont(noStyle)).toBe(FALLBACK_FONT);

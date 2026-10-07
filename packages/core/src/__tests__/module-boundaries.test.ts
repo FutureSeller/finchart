@@ -54,6 +54,41 @@ function moduleOf(path: string): string {
   return relative(SRC, path).split(sep)[0];
 }
 
+/**
+ * Every relative specifier one file pulls in: `import … from` / `export …
+ * from`, a bare side-effect `import "…"`, and a dynamic `import("…")`. A
+ * side-effect or dynamic import still runs the other module's code, so it
+ * crosses the boundary just as much.
+ *
+ * This reads text, not a syntax tree, so its limits are deliberate and
+ * pinned by the detector tests below: a dynamic import whose first argument is
+ * not a plain quoted literal can't be resolved at all, so it is reported as
+ * `computed` and fails the rules rather than slipping past them; and import-
+ * shaped text inside a comment or a string counts as an import — a loud
+ * false positive, never a silent miss.
+ */
+function importsIn(source: string): { specifiers: string[]; computed: number } {
+  // Whitespace or block comments — both may sit between `import` and its path.
+  const gap = String.raw`(?:\s|\/\*[\s\S]*?\*\/)*`;
+  const literal = new RegExp(
+    String.raw`(?:\bfrom|\bimport${gap}(?:\(${gap})?)${gap}["'](\.[^"']+)["']`,
+    "g",
+  );
+  // The lookahead takes the gap itself, so backing off a space can't turn
+  // a quoted path into a "computed" one.
+  const computed = new RegExp(
+    String.raw`\bimport${gap}\((?!${gap}["'][^"'\`$]*["']${gap}[,)])`,
+    "g",
+  );
+  return {
+    specifiers: [...source.matchAll(literal)].map(([, specifier]) => specifier),
+    computed: [...source.matchAll(computed)].length,
+  };
+}
+
+/** Stands in for the target of an import whose path can't be read. */
+const COMPUTED = "<computed import path>";
+
 function collectCrossModuleImports(): CrossModuleImport[] {
   const imports: CrossModuleImport[] = [];
 
@@ -64,14 +99,16 @@ function collectCrossModuleImports(): CrossModuleImport[] {
     // Membership in that layer is guarded separately (the last test).
     if (from.endsWith(".ts")) continue;
 
-    const source = readFileSync(file, "utf8");
-    const specifiers = source.matchAll(/from\s+["'](\.[^"']+)["']/g);
+    const { specifiers, computed } = importsIn(readFileSync(file, "utf8"));
 
-    for (const [, specifier] of specifiers) {
+    for (const specifier of specifiers) {
       const to = moduleOf(resolve(dirname(file), specifier));
       if (to !== from) {
         imports.push({ from, to, file: relative(SRC, file) });
       }
+    }
+    for (let i = 0; i < computed; i++) {
+      imports.push({ from, to: COMPUTED, file: relative(SRC, file) });
     }
   }
 
@@ -136,5 +173,47 @@ describe("module boundaries", () => {
     const union = readFileSync(resolve(SRC, "style-var-names.ts"), "utf8");
     const runtimeImports = [...union.matchAll(/^import (?!type )/gm)];
     expect(runtimeImports).toEqual([]);
+  });
+});
+
+describe("importsIn", () => {
+  it.each([
+    { name: "a static import", source: 'import { Pane } from "../plot/pane";', expected: ["../plot/pane"] },
+    { name: "a type import", source: 'import type { Pane } from "../plot/pane";', expected: ["../plot/pane"] },
+    { name: "a re-export", source: 'export * from "../plot";', expected: ["../plot"] },
+    { name: "a side-effect import", source: 'import "../plot/pane";', expected: ["../plot/pane"] },
+    { name: "a dynamic import", source: 'const m = await import("../plot/pane");', expected: ["../plot/pane"] },
+    { name: "a dynamic import with spaces", source: 'const m = await import( "../plot/pane" );', expected: ["../plot/pane"] },
+    { name: "a side-effect import behind a comment", source: 'import /* why */ "../plot/pane";', expected: ["../plot/pane"] },
+    { name: "a dynamic import behind a comment", source: 'const m = await import(/* lazy */ "../plot/pane");', expected: ["../plot/pane"] },
+    {
+      name: "a dynamic import with options",
+      source: 'const m = await import("../plot/pane", { with: { type: "json" } });',
+      expected: ["../plot/pane"],
+    },
+  ])("should read $name", ({ source, expected }) => {
+    expect(importsIn(source)).toEqual({ specifiers: expected, computed: 0 });
+  });
+
+  it.each([
+    { name: "a template path", source: "const m = await import(`../plot/${name}`);" },
+    { name: "a variable path", source: "const m = await import(path);" },
+    { name: "a concatenated path", source: 'const m = await import("../plot/" + name);' },
+  ])("should report $name as computed, never let it through", ({ source }) => {
+    expect(importsIn(source).computed).toBe(1);
+  });
+
+  // The documented false positive: the detector reads text, so import-shaped
+  // text counts even where it can't run. Loud on purpose — the reverse would
+  // let a real import hide.
+  it.each([
+    { name: "a comment", source: '// import "../plot/pane";' },
+    { name: "a string", source: 'const hint = \'import("../plot/pane")\';' },
+  ])("should count import-shaped text in $name as an import", ({ source }) => {
+    expect(importsIn(source).specifiers).toEqual(["../plot/pane"]);
+  });
+
+  it("should take no relative path from a package import", () => {
+    expect(importsIn('import { describe } from "vitest";')).toEqual({ specifiers: [], computed: 0 });
   });
 });

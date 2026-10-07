@@ -3,27 +3,27 @@ import { ContractError } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import {
   emaFold,
-  highest,
   highestFold,
   lagFold,
   linregFold,
-  lowest,
   lowestFold,
   rmaFold,
   seededRmaFold,
   sma,
   smaFold,
-  stddev,
   stddevFold,
   sumFold,
 } from "../kernels";
 
 /**
- * Every fold agrees with its array form on every input — pseudo-random
- * sequences with a gap at each position in turn — bit for bit, except
- * `linregFold`, whose centered fit is a different arithmetic from the
- * reference's uncentered one (tolerance, stated). And a fold resumed from a snapshot continues
- * exactly as one that never stopped: the checkpoint is the whole state.
+ * Every windowed fold agrees with a reference written out here over the
+ * whole window — not with the package's array kernels, which are these same
+ * folds in a loop — on pseudo-random sequences with a gap at each position in
+ * turn: bit for bit for the sum and the extremums, within a stated tolerance
+ * for `stddevFold` (two-pass reference) and `linregFold` (whose centered fit is
+ * a different arithmetic from the reference's uncentered one). And a fold
+ * resumed from a snapshot continues exactly as one that never stopped: the
+ * checkpoint is the whole state.
  */
 
 function sequence(seed: number, length: number): number[] {
@@ -75,6 +75,16 @@ function sumReference(values: readonly (number | null)[], period: number): (numb
   });
 }
 
+/** The largest or smallest value of each full window, scanned afresh — no deque, no state carried between steps. */
+function extremumReference(values: readonly (number | null)[], period: number, pick: (a: number, b: number) => number): (number | null)[] {
+  return values.map((_, end) => {
+    if (end < period - 1) return null;
+    const window = values.slice(end - period + 1, end + 1);
+    if (window.some((v) => v === null)) return null;
+    return window.map((v) => v ?? 0).reduce((a, b) => pick(a, b));
+  });
+}
+
 /**
  * The mean of `count` doubles from `start`, exact up to two roundings: each normal double is an
  * integer times a power of two, so their sum is exact in a BigInt at a common scale (2⁶⁰ —
@@ -112,6 +122,7 @@ describe("every fold takes a non-finite input as no observation", () => {
     ["stddevFold", () => stddevFold(2)],
     ["lagFold", () => lagFold(1)],
     ["highestFold", () => highestFold(2)],
+    ["lowestFold", () => lowestFold(2)],
     ["linregFold", () => linregFold(2)],
   ];
   it.each(folds)("%s — Infinity and NaN are null, and the fold recovers", (_name, make) => {
@@ -184,13 +195,6 @@ describe("a recursion step that saturates is no reading", () => {
     // products are 8.5e307 and 2.5e307.)
     expect(run(rmaFold(3), [5e307, 5e307, 5e307, 1.7e308, 1])).toEqual([null, null, 5e307, null, (5e307 * 2 + 1) / 3]);
     expect(run(emaFold(3), [5e307, 5e307, 5e307, 1.7e308])).toEqual([null, null, 5e307, 1.1e308]);
-  });
-});
-
-describe("the array extremums are the folds in a loop", () => {
-  it("highest/lowest take a non-finite input as no observation, like their folds", () => {
-    expect(highest([1, Number.POSITIVE_INFINITY, 2, 3], 2)).toEqual(highest([1, null, 2, 3], 2));
-    expect(lowest([1, Number.NaN, 2, 3], 2)).toEqual(lowest([1, null, 2, 3], 2));
   });
 });
 
@@ -299,18 +303,6 @@ describe("sumFold ↔ a fresh window sum", () => {
     }
   });
 
-  it("agrees with sma × period on ordinary data to 1e-9 — sma over a window", () => {
-    for (const values of inputs) {
-      const want = sma(values, 5);
-      const got = run(sumFold(5), values);
-      for (let i = 0; i < want.length; i++) {
-        const w = want[i];
-        if (w === null) expect(got[i]).toBeNull();
-        else expect(Math.abs((got[i] ?? Number.NaN) / 5 - w)).toBeLessThan(1e-9);
-      }
-    }
-  });
-
   it("a departing 1e20 leaves the ones intact — a running total would have rounded them away", () => {
     expect(run(sumFold(3), [1e20, 1, 1, 1])).toEqual([null, null, 1e20, 3]);
   });
@@ -337,12 +329,12 @@ describe("sumFold ↔ a fresh window sum", () => {
   });
 });
 
-describe("highestFold / lowestFold ↔ highest / lowest", () => {
-  it.each([1, 3, 8])("period %i — including the tie rule", (period) => {
-    const ties = base.map((v, i) => (i % 4 === 0 ? 105 : v));
-    for (const values of [...inputs, ties]) {
-      expect(run(highestFold(period), values)).toEqual(highest(values, period));
-      expect(run(lowestFold(period), values)).toEqual(lowest(values, period));
+describe("highestFold / lowestFold ↔ a fresh window scan", () => {
+  it.each([1, 3, 8])("period %i — bit for bit, gap at every position, and with repeated values", (period) => {
+    const repeated = base.map((v, i) => (i % 4 === 0 ? 105 : v));
+    for (const values of [...inputs, repeated]) {
+      expect(run(highestFold(period), values)).toEqual(extremumReference(values, period, Math.max));
+      expect(run(lowestFold(period), values)).toEqual(extremumReference(values, period, Math.min));
     }
   });
 
@@ -364,17 +356,10 @@ function stddevReference(window: readonly number[]): number {
   return Math.sqrt(squares / n);
 }
 
-describe("stddevFold ↔ stddev", () => {
+describe("stddevFold ↔ a two-pass reference", () => {
   it("period 1 is always 0; period 2 is half the gap", () => {
     expect(run(stddevFold(1), [7, null, 1e20])).toEqual([0, null, 0]);
     expect(run(stddevFold(2), [1, 3, 3])).toEqual([null, 1, 0]);
-  });
-
-  it("the array wrapper agrees with the fold bit for bit", () => {
-    const period = 5;
-    for (const values of inputs) {
-      expect(run(stddevFold(period), values)).toEqual(stddev(values, period));
-    }
   });
 
   it.each([2, 5, 20])("period %i — within relative 1e-9 of a two-pass reference, gap at every position", (period) => {

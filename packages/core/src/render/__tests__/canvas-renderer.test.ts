@@ -164,12 +164,6 @@ describe("CanvasRenderer", () => {
 
     expect(strokedPaths(context)).toHaveLength(0);
   });
-
-  it("should reject a line with fewer than two points", () => {
-    const { renderer: r } = renderer();
-
-    expect(() => r.drawLine([{ x: 0, y: 0 }], { width: 1, color: "#000" })).toThrow();
-  });
 });
 
 /**

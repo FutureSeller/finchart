@@ -15,13 +15,6 @@ import {
 const JSON_INFINITY = JSON.parse('{"v":1e999}').v as number;
 const JSON_NEG_INFINITY = JSON.parse('{"v":-1e999}').v as number;
 
-describe("Infinity via JSON — the premise behind these tests", () => {
-  it("should produce Infinity from an overflowing JSON literal", () => {
-    expect(JSON_INFINITY).toBe(Infinity);
-    expect(JSON_NEG_INFINITY).toBe(-Infinity);
-  });
-});
-
 describe("requireFinite", () => {
   it("should pass finite numbers through unchanged", () => {
     expect(requireFinite(0, "x")).toBe(0);
@@ -83,6 +76,10 @@ describe("requireInterval", () => {
     expect(() => requireInterval(5, JSON_NEG_INFINITY, "domain")).toThrow(ContractError);
     expect(() => requireInterval(JSON_NEG_INFINITY, 5, "domain")).toThrow(ContractError);
     expect(() => requireInterval(NaN, 5, "domain")).toThrow(ContractError);
+    // A bad max that the ordering check can't see: `5 >= NaN` and
+    // `5 >= Infinity` are both false.
+    expect(() => requireInterval(5, NaN, "domain")).toThrow(ContractError);
+    expect(() => requireInterval(5, JSON_INFINITY, "domain")).toThrow(ContractError);
   });
 
   it("should reject the infinite span that min < max lets through", () => {

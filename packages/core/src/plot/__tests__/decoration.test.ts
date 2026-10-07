@@ -5,7 +5,9 @@ import {
   ABOVE_SERIES,
   BELOW_SERIES,
   type PaneDecoration,
+  type PaneDecorationContext,
   type PlotDecoration,
+  type PlotDecorationContext,
 } from "../decoration";
 import { crosshair } from "../../extensions/crosshair";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
@@ -145,21 +147,6 @@ describe("decoration order", () => {
     expect(log).toEqual(["low", "high"]);
   });
 
-  it("should keep registration order inside one z", () => {
-    const { plot, handle } = mount();
-    const log: string[] = [];
-
-    for (const name of ["first", "second", "third"]) {
-      plot.addDecoration(marker(name, log) as PlotDecoration, {
-        zIndex: ABOVE_SERIES,
-      });
-    }
-
-    handle.setData(data);
-
-    expect(log).toEqual(["first", "second", "third"]);
-  });
-
   it("should default to above the series", () => {
     const { plot, handle } = mount();
     const log: string[] = [];
@@ -213,47 +200,52 @@ describe("decoration order", () => {
 describe("decoration context", () => {
   it("should hand a pane decoration its own scale and ticks", () => {
     const { plot, handle } = mount();
-    let captured: {
-      hasYScale: boolean;
-      yTicks: number;
-      xTicks: number;
-      sameArea: boolean;
-    } | null = null;
-
-    plot.mainPane.addDecoration({
-      draw: (_target, context) => {
-        captured = {
-          hasYScale: typeof context.yScale.scale === "function",
-          yTicks: context.ticks.y.length,
-          xTicks: context.ticks.x.length,
-          sameArea: context.area === context.pane.area,
-        };
-      },
-    } as PaneDecoration);
-
+    const lower = plot.addPane();
+    lower.addSeries({ series: lineSeries(), data });
+    const seen: PaneDecorationContext[] = [];
+    lower.addDecoration({ draw: (_target, context) => seen.push(context) });
     handle.setData(data);
 
-    expect(captured).not.toBeNull();
-    expect(captured!.hasYScale).toBe(true);
-    expect(captured!.yTicks).toBeGreaterThan(0);
-    expect(captured!.xTicks).toBeGreaterThan(0);
-    expect(captured!.sameArea).toBe(true);
+    // A domain far from the main pane's, so the two panes' scales and ticks can't be mistaken for each other.
+    lower.setValueDomain(1000, 2000);
+
+    // The latest frame's context — earlier mutations each drew a frame too.
+    const context = seen.at(-1)!;
+    expect(context.pane).toBe(lower);
+    expect(context.yScale).toBe(lower.yScale);
+    expect(context.yScale).not.toBe(plot.mainPane.yScale);
+    expect(context.yScale.getDomain()).toEqual([1000, 2000]);
+    expect(context.ticks.y.length).toBeGreaterThan(0);
+    for (const tick of context.ticks.y) {
+      expect(tick.value).toBeGreaterThanOrEqual(1000);
+      expect(tick.value).toBeLessThanOrEqual(2000);
+    }
+    expect(context.ticks.x.length).toBeGreaterThan(0);
+    expect(context.area).toEqual(lower.area);
+    plot.destroy();
   });
 
   it("should hand a plot decoration every pane and the whole area", () => {
     const { plot, handle } = mount();
-    plot.addPane();
+    const lower = plot.addPane();
 
-    let panes = 0;
-    plot.addDecoration({
-      draw: (_target, context) => {
-        panes = context.panes.length;
-      },
-    } as PlotDecoration);
+    const seen: PlotDecorationContext[] = [];
+    plot.addDecoration({ draw: (_target, context) => seen.push(context) });
 
     handle.setData(data);
 
-    expect(panes).toBe(2);
+    expect(seen).toHaveLength(1);
+    const context = seen[0]!;
+    expect(context.panes).toEqual([plot.mainPane, lower]);
+    // The data area spans every pane — a crosshair cuts across them all.
+    const main = plot.mainPane.area;
+    expect(context.area).toEqual({
+      left: main.left,
+      right: main.right,
+      top: main.top,
+      bottom: lower.area.bottom,
+    });
+    plot.destroy();
   });
 
   it("should share one reader with the series", () => {

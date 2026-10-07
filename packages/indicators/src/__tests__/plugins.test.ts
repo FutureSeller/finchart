@@ -438,13 +438,48 @@ describe("own-pane oscillators — the attach mould", () => {
     expect(names.some((name) => name === "Mine" || name.startsWith("Mine "))).toBe(true);
   });
 
-  it("the reference levels are exported — the same values the panes draw", () => {
+  it("the reference levels are exported, and each own pane draws its two lines at those values", () => {
     expect(RSI_LEVELS).toEqual({ overbought: 70, oversold: 30 });
     expect(STOCHASTIC_RSI_LEVELS).toEqual({ overbought: 80, oversold: 20 });
     expect(MFI_LEVELS).toEqual({ overbought: 80, oversold: 20 });
     expect(ULTIMATE_OSCILLATOR_LEVELS).toEqual({ overbought: 70, oversold: 30 });
     expect(PSY_LEVELS).toEqual({ overbought: 75, oversold: 25 });
     expect(KDJ_LEVELS).toEqual({ overbought: 80, oversold: 20 });
+
+    // The flat two-point strokes on the own pane that only the levels add, read back as values.
+    const drawnLevels = (make: (o: Mould) => Plugin<PaneHost, PluginApi>) => {
+      const flatStrokes = (levels?: false) => {
+        const { model, price } = pricedModel();
+        model.plot.use(make({ source: price, levels }));
+        model.plot.render();
+        const ys = model.commands().flatMap((c) =>
+          c.type === "drawLine" && c.points.length === 2 && c.points[0].y === c.points[1].y ? [c.points[0].y] : [],
+        );
+        return { ys, model };
+      };
+      const bare = flatStrokes(false);
+      const without = new Set(bare.ys);
+      const { ys, model } = flatStrokes();
+      const pane = model.plot.panes[1];
+      const levels = ys.filter((y) => !without.has(y)).map((y) => pane.valueAt(y));
+      bare.model.plot.destroy();
+      model.plot.destroy();
+      return levels;
+    };
+    const panes: [(o: Mould) => Plugin<PaneHost, PluginApi>, { overbought: number; oversold: number }][] = [
+      [(o) => attachRsi({ period: 5, ...o }), RSI_LEVELS],
+      [(o) => attachStochasticRsi({ rsiPeriod: 5, period: 5, ...o }), STOCHASTIC_RSI_LEVELS],
+      [(o) => attachMfi({ period: 5, ...o }), MFI_LEVELS],
+      [(o) => attachUltimateOscillator({ fast: 2, middle: 3, slow: 4, ...o }), ULTIMATE_OSCILLATOR_LEVELS],
+      [(o) => attachPsy({ period: 5, signal: 3, ...o }), PSY_LEVELS],
+      [(o) => attachKdj({ period: 3, ...o }), KDJ_LEVELS],
+    ];
+    for (const [make, levels] of panes) {
+      const drawn = drawnLevels(make);
+      expect(drawn).toHaveLength(2);
+      expect(drawn[0]).toBeCloseTo(levels.overbought, 6);
+      expect(drawn[1]).toBeCloseTo(levels.oversold, 6);
+    }
   });
 });
 

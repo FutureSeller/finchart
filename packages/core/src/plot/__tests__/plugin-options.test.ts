@@ -4,11 +4,10 @@
  * force a detach-and-reattach for a single option change — for the
  * drawing toolbox, that means erasing every line the user drew.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import { crosshair } from "../../extensions/crosshair";
-import { emitter } from "../../primitives";
 import { createPlotModel } from "../model";
 
 const data: LineDataPoint[] = [
@@ -88,75 +87,6 @@ describe("crosshair.applyOptions", () => {
       .filter((command) => command.type === "drawText")
       .map((command) => command.params.text);
     expect(texts).toContain("PINNED");
-  });
-});
-
-/** The rules for an extension's notification channel: disposal, subscriber
- * isolation, unsubscribing mid-iteration — reinvented per extension, all
- * three end up inconsistent. */
-describe("emitter", () => {
-  it("should stop calling a listener that unsubscribed", () => {
-    const changes = emitter<number>();
-    const seen: number[] = [];
-    const off = changes.subscribe((n) => seen.push(n));
-
-    changes.emit(1);
-    off();
-    off(); // Safe to call twice
-    changes.emit(2);
-
-    expect(seen).toEqual([1]);
-  });
-
-  it("should not skip the next listener when one unsubscribes mid-emit", () => {
-    const changes = emitter<void>();
-    const seen: string[] = [];
-
-    const off = changes.subscribe(() => {
-      seen.push("first");
-      off();
-    });
-    changes.subscribe(() => seen.push("second"));
-
-    changes.emit();
-
-    // Iterating the original array as-is would shift the index and skip second.
-    expect(seen).toEqual(["first", "second"]);
-  });
-
-  it("should call every listener even when one throws", () => {
-    const changes = emitter<void>();
-    const second = vi.fn();
-
-    changes.subscribe(() => {
-      throw new Error("boom");
-    });
-    changes.subscribe(second);
-
-    expect(() => changes.emit()).toThrow("boom");
-    expect(second).toHaveBeenCalledTimes(1);
-  });
-
-  it("should report how many are listening", () => {
-    const changes = emitter<void>();
-    expect(changes.size).toBe(0);
-
-    const off = changes.subscribe(() => {});
-    expect(changes.size).toBe(1);
-
-    off();
-    expect(changes.size).toBe(0);
-  });
-
-  it("should not call listeners subscribed during the same emit", () => {
-    const changes = emitter<void>();
-    const late = vi.fn();
-
-    changes.subscribe(() => changes.subscribe(late));
-    changes.emit();
-
-    // Otherwise a handler could keep growing itself forever.
-    expect(late).not.toHaveBeenCalled();
   });
 });
 

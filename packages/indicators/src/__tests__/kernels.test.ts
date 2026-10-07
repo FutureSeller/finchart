@@ -96,7 +96,10 @@ describe("highest / lowest", () => {
   });
 
   it("should drop the extremum once it leaves the window", () => {
-    expect(highest([9, 1, 1, 1], 2)).toEqual([null, 9, 1, 1]);
+    // The departing 9 is still ahead of a smaller candidate (5) that stays: the
+    // answer must come from the candidate, not from the slot the 9 vacated.
+    expect(highest([9, 5, 2], 2)).toEqual([null, 9, 5]);
+    expect(lowest([1, 5, 8], 2)).toEqual([null, 1, 5]);
   });
 
   it("should follow the same null rules as sma", () => {

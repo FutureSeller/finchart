@@ -5,7 +5,7 @@ import {
   fakeElement,
   type FakeElement,
 } from "./fakes";
-import type { PlotArea } from "@finchart/core";
+import { AXIS_LABEL_OFFSET, type PlotArea } from "@finchart/core";
 import { createDomAxisLabels } from "../dom-labels";
 import type { Tick } from "@finchart/core";
 
@@ -232,6 +232,7 @@ describe("createDomAxisLabels", () => {
     expect(badge.style.color).toBe("#f8fafc");
     // Same placement convention as the tick — an x badge sits centered below the axis.
     expect(badge.style.left).toBe("40px");
+    expect(badge.style.top).toBe(`${area.bottom + AXIS_LABEL_OFFSET}px`);
     expect(badge.style.transform).toBe("translateX(clamp(0px, -50%, calc(740px - 100%)))");
   });
 

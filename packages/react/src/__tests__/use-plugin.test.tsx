@@ -150,7 +150,9 @@ describe('usePlugin', () => {
     expect(target).not.toBe(plotRef.current?.mainPane);
   });
 
-  it('should expose the api after commit and null it out before dispose', async () => {
+  // Nulling the api on cleanup is only observable when the component
+  // outlives its effect — React's <Activity> — so activity.test.tsx pins it.
+  it('should return null before commit, the api after it, and unmount without throwing', async () => {
     const seen: Array<string> = [];
 
     function Consumer() {

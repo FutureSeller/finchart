@@ -450,7 +450,14 @@ describe("ticks never leave the index stale", () => {
     plot.fitDomains();
     plot.render();
 
-    expect(bodyCenters(layers)).toHaveLength(TRADING_DAYS.length + 1);
+    const centers = bodyCenters(layers);
+    expect(centers).toHaveLength(TRADING_DAYS.length + 1);
+    // The new bar is the next index — one pitch past the last, not drawn at
+    // its data x (9) or stacked on a stale slot.
+    const pitch = centers[1]! - centers[0]!;
+    const steps = centers.slice(1).map((c, i) => c - centers[i]!);
+    for (const step of steps) expect(step).toBeCloseTo(pitch, 6);
+    plot.destroy();
   });
 
   /** A tick that replaces the same x — only the value changes, so the index must stay put. */

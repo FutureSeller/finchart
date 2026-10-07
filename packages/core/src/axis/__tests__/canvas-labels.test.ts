@@ -205,5 +205,25 @@ describe("createCanvasAxisLabels", () => {
       { left: 40, right: 816 },
     ]);
   });
+
+  it("lets x labels use a left y gutter, and leaves y badges unbounded", () => {
+    const { labels, texts } = mounted();
+
+    labels.render({
+      x: [{ value: 0, position: 40, label: "edge" }],
+      y: [],
+      badges: [{ axis: "y", position: 300, label: "10", back: "#000", color: "#fff" }],
+      area,
+      axes,
+      readStyle: () => "",
+    });
+
+    // The x label may reach into the gutter on the left, up to the axis's
+    // outer edge; a y badge sits in the gutter itself and has no x bound.
+    expect(texts.map((text) => text.within)).toEqual([
+      { left: 4, right: 780 },
+      undefined,
+    ]);
+  });
 });
 

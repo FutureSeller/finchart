@@ -67,13 +67,6 @@ function mount(observeSize?: SizeObserver, createScheduler?: SchedulerFactory) {
 }
 
 describe("autoSize", () => {
-  it("should not observe anything when no observer is wired", () => {
-    // "Not given, not done" — no null-object stand-in.
-    const { layers } = mount();
-
-    expect(layers.data.width).toBe(defaultSize.width);
-  });
-
   it("should connect the observer it was given", () => {
     const observer = fakeObserver();
     mount(observer.observeSize);

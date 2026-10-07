@@ -147,9 +147,13 @@ describe("barIndexX", () => {
     it("should count in x units around a single bar", () => {
       const { mapping } = mounted([10]);
 
-      // With no gap known, one unit of x counts as one slot — it just needs to be finite.
+      // With no gap known, one unit of x counts as one slot.
       expect(mapping.toDomain(10)).toBe(0);
+      expect(mapping.toDomain(11)).toBe(1);
+      expect(mapping.toDomain(8)).toBe(-2);
       expect(mapping.fromDomain(0)).toBe(10);
+      expect(mapping.fromDomain(1)).toBe(11);
+      expect(mapping.scanToDomain?.()(11)).toBe(1);
       expect(Number.isFinite(mapping.toPixel(11))).toBe(true);
     });
 

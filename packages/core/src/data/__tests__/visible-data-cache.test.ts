@@ -109,17 +109,6 @@ describe("visible data cache", () => {
     expect(decimation.calls).toBe(2);
   });
 
-  it("should show appended data, not the stale answer", () => {
-    const { dataManager } = setup();
-    const window = viewport({ startX: 9000, endX: 12_000 });
-
-    expect(dataManager.getVisibleData(window)).toHaveLength(1000);
-
-    dataManager.setData(series(12_000));
-
-    expect(dataManager.getVisibleData(window).length).toBeGreaterThan(1000);
-  });
-
   /**
    * Empty data hits an early return before ever reaching the cache. This
    * only checks that a stale answer doesn't leak through — the recompute

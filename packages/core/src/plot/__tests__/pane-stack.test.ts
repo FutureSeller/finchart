@@ -9,6 +9,7 @@ import type { DataManagerFactory } from "../../data";
 import { M4Decimation, SimpleDataManager } from "../../data";
 import { ContractError } from "../../primitives";
 import { LinearScale } from "../../scale";
+import { lineSeries } from "../../series";
 import { resolveConfig } from "../config";
 import type { Pane, PaneChange } from "../pane";
 import { pluginApi } from "../../primitives";
@@ -95,23 +96,33 @@ describe("PaneStack", () => {
     expect(stack.list).toEqual([stack.main]);
   });
 
-  it("should detach every pane on teardown even when one removes another", () => {
+  it("should detach every pane on teardown even when one removes an earlier one", () => {
+    // [main, a, b, c] — b's cleanup removes a, which sits before it. Walking
+    // the live list would shift c into b's slot and never reach it.
     const { stack } = setup();
     const a = stack.add(new LinearScale(), {});
     const b = stack.add(new LinearScale(), {});
-    const bDisposed = vi.fn();
-    a.use(() => pluginApi({}, () => void stack.remove(b)));
-    b.use(() => pluginApi({}, bDisposed));
+    const c = stack.add(new LinearScale(), {});
+    const cDisposed = vi.fn();
+    b.use(() => pluginApi({}, () => void stack.remove(a)));
+    c.use(() => pluginApi({}, cDisposed));
 
     const failures = stack.detachAll();
 
     expect(failures).toEqual([]);
-    expect(bDisposed).toHaveBeenCalledTimes(1);
+    expect(cDisposed).toHaveBeenCalledTimes(1);
   });
 
   it("should union the x range across panes and answer null when empty", () => {
     const { stack } = setup();
     expect(stack.xRange()).toBeNull();
+
+    const lower = stack.add(new LinearScale(), {});
+    stack.main.addSeries({ series: lineSeries(), data: [{ x: 10, y: 1 }, { x: 20, y: 1 }] });
+    // The lower pane reaches past the main pane on both sides.
+    lower.addSeries({ series: lineSeries(), data: [{ x: 5, y: 1 }, { x: 40, y: 1 }] });
+
+    expect(stack.xRange()).toEqual({ min: 5, max: 40 });
   });
 });
 

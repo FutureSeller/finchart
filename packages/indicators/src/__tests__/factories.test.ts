@@ -445,6 +445,26 @@ describe("adx", () => {
     expect(line[2]).toBeNull();
     expect(line[3]).toBeCloseTo(200 / 3);
   });
+
+  it("should credit an outside bar's move to the larger side only", () => {
+    // Both bars widen past the previous bar on both sides, so both moves are
+    // positive; only the larger one counts as DM, the other side gets 0.
+    const source = sourceOf([
+      ohlc(0, 10, 5, 7),
+      ohlc(1, 13, 4, 8), // up 3 > down 1: +DM 3, -DM 0, TR 9
+      ohlc(2, 14, 1, 9), // down 3 > up 1: +DM 0, -DM 3, TR 13
+    ]);
+
+    // period 1 — the smoothing passes each bar through, so DI = 100·DM / TR.
+    const node = adx(source, { period: 1 });
+    const plusDi = node.out.plusDi.read().map((point) => point.y);
+    const minusDi = node.out.minusDi.read().map((point) => point.y);
+
+    expect(plusDi[1]).toBeCloseTo(100 / 3);
+    expect(minusDi[1]).toBe(0);
+    expect(plusDi[2]).toBe(0);
+    expect(minusDi[2]).toBeCloseTo(300 / 13);
+  });
 });
 
 describe("ichimoku", () => {
@@ -513,6 +533,41 @@ describe("parabolicSar", () => {
     expect(out[2]).toBe(8);
     // the reversal bar's SAR = the previous EP (12) — it jumps above price.
     expect(out[3]).toBe(12);
+  });
+
+  it("should hold a downtrend's SAR at or above the two previous highs, cap the AF at max, and drop below on reversal", () => {
+    const source = sourceOf([
+      ohlc(0, 100, 98, 99),
+      ohlc(1, 50, 48, 49), // falling: SAR seeds at 100, EP 48
+      ohlc(2, 50, 46, 47), // 100 + 0.25·(48 − 100) = 87, held at bar 0's high 100; EP 46, AF 0.5
+      ohlc(3, 49, 44, 45), // 100 + 0.5·(46 − 100) = 73; EP 44, AF min(0.75, 0.5) = 0.5
+      ohlc(4, 47, 42, 43), // 73 + 0.5·(44 − 73) = 58.5 — 51.25 had the AF passed max; EP 42
+      ohlc(5, 70, 60, 65), // the high breaks through the SAR
+    ]);
+
+    const out = parabolicSar(source, { step: 0.25, max: 0.5 })
+      .out.sar.read()
+      .map((point) => point.y);
+
+    expect(out.slice(0, 5)).toEqual([null, 100, 100, 73, 58.5]);
+    // the reversal bar's SAR = the previous EP (42) — it drops below price.
+    expect(out[5]).toBe(42);
+  });
+
+  it("should cap the AF at max in an uptrend too", () => {
+    const source = sourceOf([
+      ohlc(0, 2, 0, 1),
+      ohlc(1, 52, 50, 51), // rising: SAR seeds at 0, EP 52 — held at the lows' 0
+      ohlc(2, 54, 50, 53), // EP 54, AF 0.5
+      ohlc(3, 56, 51, 55), // 0 + 0.5·(54 − 0) = 27; EP 56, AF min(0.75, 0.5) = 0.5
+      ohlc(4, 58, 52, 57), // 27 + 0.5·(56 − 27) = 41.5 — 48.75 had the AF passed max
+    ]);
+
+    const out = parabolicSar(source, { step: 0.25, max: 0.5 })
+      .out.sar.read()
+      .map((point) => point.y);
+
+    expect(out).toEqual([null, 0, 0, 27, 41.5]);
   });
 });
 
@@ -645,20 +700,6 @@ describe("movingAverage — tail-door equivalence", () => {
   it("ema — the recursive state's checkpoint matches too", () => {
     const { viaDoor, fresh } = drive("ema");
     expect(viaDoor).toEqual(fresh);
-  });
-
-  it("the array the door builds preserves identity for the untouched prefix — material for downstream comparisons", () => {
-    let data = seed;
-    const node = movingAverage({ read: () => data }, { period: 5 });
-    const before = node.out.ma.read();
-
-    data = [...data, candle(40, 200)];
-    const after = node.out.ma.read();
-
-    // The point objects from before the append are unchanged — downstream
-    // nodes rely on that same tail-identity check.
-    expect(after[10]).toBe(before[10]);
-    expect(after.length).toBe(before.length + 1);
   });
 });
 

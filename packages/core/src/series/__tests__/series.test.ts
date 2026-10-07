@@ -3,6 +3,7 @@ import type { ContextCall } from "../../__tests__/dom-fakes";
 import {
   fakeCanvasContext,
   filledCircles,
+  filledRects,
   strokedPaths,
 } from "../../__tests__/dom-fakes";
 import type { PlotArea } from "../../primitives";
@@ -11,11 +12,13 @@ import { OHLCAccessor } from "../../data";
 import type { StyleReader } from "../../render";
 import { CanvasRenderer } from "../../render";
 import { continuousX, LinearScale } from "../../scale";
-import { CandleSeries, candleSeries } from "../candle-series";
+import { CandleSeries, candleSeries, DEFAULT_CANDLE_STYLE } from "../candle-series";
 import { DEFAULT_LINE_STYLE, LineSeries, lineSeries } from "../line-series";
 import type { SeriesContext } from "../types";
 
 const area: PlotArea = { left: 20, right: 780, top: 20, bottom: 580 };
+/** The same x mapping `contextFor` hands the series, computed independently. */
+const xPixel = (x: number) => new LinearScale(0, 100, area.left, area.right).scale(x);
 
 function surface() {
   const context = fakeCanvasContext();
@@ -161,34 +164,64 @@ describe("CandleSeries", () => {
     expect(candleSeries().valueExtent([])).toBeNull();
   });
 
-  it("should draw one wick per candle", () => {
+  it("should draw one vertical wick per candle at the candle's x", () => {
     const { renderer, context } = surface();
+    const seriesContext = contextFor(candles, 2, 40);
 
-    candleSeries().draw(renderer, contextFor(candles, 2, 40));
+    candleSeries().draw(renderer, seriesContext);
     renderer.commit();
 
-    expect(strokedPaths(context)).toHaveLength(candles.length);
+    const wickXs = strokedPaths(context).map((p) => [p.points[0].x, p.points[1].x]);
+    expect(wickXs).toEqual(
+      candles.map((c) => {
+        const x = xPixel(c.x);
+        return [x, x];
+      }),
+    );
   });
 
-  it("should draw a body rect per candle", () => {
+  it("should centre each body on its x and span open to close", () => {
     const { renderer, context } = surface();
+    const seriesContext = contextFor(candles, 2, 40);
+    const y = (value: number) => seriesContext.yScale.scale(value);
 
-    candleSeries().draw(renderer, contextFor(candles, 2, 40));
+    candleSeries().draw(renderer, seriesContext);
     renderer.commit();
 
-    const rects = context.calls.filter((c) => c.method === "fillRect");
+    const rects = filledRects(context);
     expect(rects).toHaveLength(candles.length);
+    const bodyAt = (candle: OHLC) => {
+      const centre = xPixel(candle.x);
+      const rect = rects.find((r) => r.x + r.width / 2 === centre);
+      if (rect === undefined) throw new Error(`no body centred on ${centre}`);
+      return rect;
+    };
+
+    // Up candle (open 10 → close 20): close is higher, so its pixel is the top.
+    const up = bodyAt(candles[0]);
+    expect(up.y).toBeCloseTo(y(20));
+    expect(up.height).toBeCloseTo(y(10) - y(20));
+
+    // Down candle (open 20 → close 18): open is higher, so its pixel is the top.
+    const down = bodyAt(candles[1]);
+    expect(down.y).toBeCloseTo(y(20));
+    expect(down.height).toBeCloseTo(y(18) - y(20));
   });
 
-  it("should colour rising and falling candles differently", () => {
+  it("should colour a rising candle up, a falling candle down, and a doji up", () => {
     const { renderer, context } = surface();
+    const withDoji: OHLC[] = [
+      ...candles,
+      { x: 75, open: 22, high: 25, low: 15, close: 22 },
+    ];
 
-    candleSeries().draw(renderer, contextFor(candles, 2, 40));
+    candleSeries().draw(renderer, contextFor(withDoji, 2, 40));
     renderer.commit();
 
     const colors = strokedPaths(context).map((p) => p.color);
-    // index 0 is up (20 >= 10), index 1 is down (18 < 20)
-    expect(colors[0]).not.toBe(colors[1]);
+    const { up, down } = DEFAULT_CANDLE_STYLE;
+    // close >= open is up, so a doji (close === open) counts as up.
+    expect(colors).toEqual([up, down, up, up]);
   });
 
   it("should keep the wick spanning high to low", () => {

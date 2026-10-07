@@ -1,7 +1,9 @@
 import { space } from "./drawing-stage.fixture";
-import type { LineDataPoint } from "@finchart/core";
+import type { DrawTarget, LineDataPoint } from "@finchart/core";
 import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
+import type { Drawing } from "../drawings";
+import { drawOne } from "../render";
 import { drawingTools } from "../tools";
 import type { DrawingPane, DrawingStage } from '../tools';
 
@@ -96,6 +98,61 @@ describe("drawingTools drawing", () => {
     model.plot.routeInput({ type: "pointerup", point: a, pointerId: 1 });
 
     expect(handles()).toHaveLength(2);
+  });
+
+  /**
+   * Where each handle sits, per kind — on the anchors it moves, or at the
+   * middle of the pane for a line with no endpoints. Drawn in the identity
+   * space so a handle's centre reads as its anchor.
+   */
+  it.each<[string, Drawing, { x: number; y: number }[]]>([
+    ["horizontal", { type: "horizontal", id: "d", price: 30 }, [{ x: 50, y: 30 }]],
+    ["vertical", { type: "vertical", id: "d", x: 30 }, [{ x: 30, y: 50 }]],
+    [
+      "trend",
+      { type: "trend", id: "d", a: { x: 10, price: 20 }, b: { x: 70, price: 80 } },
+      [{ x: 10, y: 20 }, { x: 70, y: 80 }],
+    ],
+    [
+      "fib",
+      { type: "fib", id: "d", a: { x: 10, price: 20 }, b: { x: 70, price: 80 } },
+      [{ x: 10, y: 20 }, { x: 70, y: 80 }],
+    ],
+    [
+      "parallelChannel",
+      {
+        type: "parallelChannel",
+        id: "d",
+        a: { x: 10, price: 20 },
+        b: { x: 50, price: 40 },
+        c: { x: 30, price: 70 },
+      },
+      [{ x: 10, y: 20 }, { x: 50, y: 40 }, { x: 30, y: 70 }],
+    ],
+    [
+      "fibExtension",
+      {
+        type: "fibExtension",
+        id: "d",
+        a: { x: 10, price: 20 },
+        b: { x: 50, price: 40 },
+        c: { x: 70, price: 30 },
+      },
+      [{ x: 10, y: 20 }, { x: 50, y: 40 }, { x: 70, y: 30 }],
+    ],
+  ])("should centre a selected %s's handles on its grab points", (_kind, drawing, expected) => {
+    const centres: { x: number; y: number }[] = [];
+    const target: DrawTarget = {
+      drawLine: () => undefined,
+      drawShape: (shape) => {
+        if (shape.shape === "circle") centres.push({ x: shape.cx, y: shape.cy });
+      },
+      drawText: () => undefined,
+      drawCustom: () => undefined,
+    };
+    const context = { readStyle: () => "", formatValue: String, barIndexAt: () => null };
+    drawOne(target, space, context, drawing, { width: 1, color: "#000" }, true);
+    expect(centres).toEqual(expected);
   });
 
   it("should take a drawing back through its handle", () => {

@@ -116,11 +116,16 @@ describe("cheap path", () => {
   it("should repaint on a pane decoration", () => {
     const { plot } = setup();
     const draw = vi.fn();
+    const renders = vi.fn();
+    const off = plot.on("render", renders);
 
+    // No manual render — adding it must be what asks for the frame.
     plot.mainPane.addDecoration({ draw });
-    plot.render();
 
-    expect(draw).toHaveBeenCalled();
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(draw).toHaveBeenCalledTimes(1);
+    off();
+    plot.destroy();
   });
 });
 

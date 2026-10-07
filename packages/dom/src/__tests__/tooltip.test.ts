@@ -178,6 +178,28 @@ describe("tooltip", () => {
     expect(overlay.querySelector("[data-chart-tooltip]")).toBeNull();
   });
 
+  it("should stop following crosshair and render events once disposed", () => {
+    const { plot, handle, overlay, paneCenter } = mounted();
+    const installed = plot.use(tooltip());
+    plot.crosshair(paneCenter());
+    const box = overlay.querySelector<HTMLElement>("[data-chart-tooltip]");
+    expect(box?.textContent).toContain("120.00");
+
+    installed.dispose();
+    handle.setData([
+      { x: 0, y: 100 },
+      { x: 5, y: 300 },
+      { x: 10, y: 110 },
+    ]);
+    plot.render();
+    plot.crosshair(null);
+
+    // A listener left behind would keep rebuilding the removed box.
+    expect(box?.textContent).toContain("120.00");
+    expect(box?.style.display).toBe("block");
+    plot.destroy();
+  });
+
   it("should refuse a headless stage", () => {
     const model = createPlotModel({ size: { width: 800, height: 600 } });
 
@@ -223,6 +245,27 @@ describe("legend", () => {
 
     // A fixed dark default vanished on a dark page.
     expect(overlay.querySelector<HTMLElement>("[data-chart-legend]")?.style.color).toBe("var(--chart-legend, inherit)");
+  });
+
+  it("should leave the overlay and stop following crosshair and render events once disposed", () => {
+    const { plot, handle, overlay, paneCenter } = mounted();
+    const installed = plot.use(legend());
+    const box = overlay.querySelector<HTMLElement>("[data-chart-legend]");
+    expect(box?.textContent).toContain("BTC 110.00");
+
+    installed.dispose();
+    expect(overlay.querySelector("[data-chart-legend]")).toBeNull();
+    plot.crosshair(paneCenter());
+    handle.setData([
+      { x: 0, y: 100 },
+      { x: 5, y: 120 },
+      { x: 10, y: 300 },
+    ]);
+    plot.render();
+
+    // A listener left behind would keep rebuilding the removed box.
+    expect(box?.textContent).toBe("● BTC 110.00");
+    plot.destroy();
   });
 });
 

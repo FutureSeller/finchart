@@ -11,6 +11,7 @@
  * - Params of the wrong shape arriving under the same name doesn't pass silently
  */
 import { describe, expect, it } from "vitest";
+import type { FakeCanvasContext } from "../../__tests__/dom-fakes";
 import { fakeCanvasContext, lastFrame } from "../../__tests__/dom-fakes";
 import type { DrawSurface, DrawTarget } from "../types";
 import { createCanvasRenderer } from "../canvas-renderer";
@@ -92,6 +93,26 @@ describe("paintLinearGradient (the default painter)", () => {
     expect(() => renderer.commit()).toThrowError(/params don't match the contract/);
   });
 
+  it("should choke on a stop of the wrong shape even when the rest fits", () => {
+    const context = fakeCanvasContext();
+    const badStops = { ...params, stops: [{ offset: 0, color: 5 }] };
+
+    expect(() => paintLinearGradient(context, badStops)).toThrowError(
+      /params don't match the contract/,
+    );
+  });
+
+  it("should draw nothing for a polygon with fewer than three points", () => {
+    const context = fakeCanvasContext();
+
+    paintLinearGradient(context, { ...params, points: params.points.slice(0, 2) });
+
+    const drawn = context.calls.filter(
+      (call) => call.method === "moveTo" || call.method === "fill",
+    );
+    expect(drawn).toEqual([]);
+  });
+
   it("should degrade CSS-borne value errors to a flat fill, not an exception", () => {
     // A real canvas's addColorStop throws on an invalid color or an
     // out-of-range offset — asymmetric with a fillStyle assignment silently
@@ -113,6 +134,36 @@ describe("paintLinearGradient (the default painter)", () => {
     const fills = frame.filter((call) => call.method === "set:fillStyle");
     expect(fills.at(-1)?.args).toEqual(["rgba(59, 130, 246, 0.35)"]);
     expect(frame.some((call) => call.method === "fill")).toBe(true);
+  });
+
+  it("should not inherit the neighbour's fill when the first stop's colour is rejected too", () => {
+    // The common way addColorStop throws is a bad first-stop colour — and
+    // that same string is the demotion brush. A canvas ignores an invalid
+    // fillStyle, so a raw assignment would leave the previous command's
+    // colour in place and paint the polygon in it.
+    const base = fakeCanvasContext();
+    let fillStyle = "#ff0000";
+    const context: FakeCanvasContext = Object.create(base);
+    Object.defineProperty(context, "fillStyle", {
+      get: () => fillStyle,
+      set: (next: unknown) => {
+        if (typeof next === "string" && /^(#|rgba?\()/.test(next)) fillStyle = next;
+      },
+    });
+    context.createLinearGradient = () => ({
+      addColorStop: (_offset: number, color: string) => {
+        if (!/^(#|rgba?\()/.test(color)) throw new Error("SyntaxError: not a color");
+      },
+    });
+
+    paintLinearGradient(context, {
+      ...params,
+      stops: [{ offset: 0, color: "not-a-color" }],
+    });
+
+    expect(fillStyle).not.toBe("#ff0000");
+    expect(fillStyle).toBe("rgba(0,0,0,0)");
+    expect(base.calls.some((call) => call.method === "fill")).toBe(true);
   });
 
   it("should release the clip even when a painter throws (frame isolation)", () => {

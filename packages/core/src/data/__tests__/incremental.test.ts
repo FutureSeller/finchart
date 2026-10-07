@@ -18,11 +18,26 @@ const point = (x: number, y = x): LineDataPoint => ({ x, y });
 
 describe("DataManager.append", () => {
   it("should extend the range without a full re-check", () => {
-    const m = manager([point(0), point(1)]);
+    // Counts how many points get validated — only the chunk should be.
+    class CountingAccessor extends LineDataAccessor {
+      checked = 0;
+      override assertFinite(point: LineDataPoint, index: number, label?: string): void {
+        this.checked += 1;
+        super.assertFinite(point, index, label);
+      }
+    }
+    const coordinates = new CountingAccessor();
+    const m = new SimpleDataManager<LineDataPoint>({
+      decimation: new M4Decimation(coordinates),
+      coordinates,
+    });
+    m.setData([point(0), point(1), point(2)]);
+    coordinates.checked = 0;
 
-    m.append([point(2), point(3)]);
+    m.append([point(3), point(4)]);
 
-    expect(m.getXRange()).toEqual({ min: 0, max: 3 });
+    expect(coordinates.checked).toBe(2);
+    expect(m.getXRange()).toEqual({ min: 0, max: 4 });
   });
 
   it("should allow an equal x at the seam — one tick, two points", () => {

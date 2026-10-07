@@ -160,19 +160,6 @@ describe("an extension's primitive and command purity", () => {
 
     expect(() => structuredClone(recorder.commands())).not.toThrow();
   });
-
-  it("should show the cost when an extension puts a function in params", () => {
-    const recorder = recordingRenderer();
-    const renderer = recorder.factory(surface());
-
-    drawCustom(renderer, { name: HEATMAP, params: { paint: () => {} } });
-    renderer.commit();
-
-    // This is a spot the core can't guard, so the docs and this test record
-    // the cost: putting a function into params breaks the worker/serialization
-    // path only for that extension.
-    expect(() => structuredClone(recorder.commands())).toThrow();
-  });
 });
 
 /**

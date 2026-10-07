@@ -12,7 +12,12 @@ import { ema, sma } from "../kernels";
  * source within a tolerance (parity of values, not of rounding; with our null
  * rule where the canonical writes 0 for a case its formula leaves undefined: a
  * missing predecessor, a zero denominator, a zero box-ratio divisor, a gap is
- * "no value", not a reading).
+ * "no value", not a reading). Where an oracle averages through this package's
+ * own `sma` / `ema` array kernels — signal lines, BBI, DMA, TRIX, CR's
+ * averages — those kernels are the same folds the node runs, so that part
+ * checks the composition and the default windows, not the averages' values;
+ * the kernels' own values are held to hand calculations and fresh references
+ * in their own tests.
  */
 
 function bar(i: number, close: number, volume: number | null = 1000): OHLC {
@@ -45,7 +50,7 @@ describe("roc", () => {
     expect(ys(roc(sourceOf(tape), { period: 1, signal: 1 }).out.roc.read())).toEqual([null, null, 20]);
   });
 
-  it("matches the canonical array form over a tape", () => {
+  it("matches the percent change written out over a tape with the default windows — the signal against the package's own sma kernel", () => {
     const c = closes(80);
     const want = c.map((v, i) => (i < 12 || c[i - 12] === 0 ? null : ((v - c[i - 12]) / c[i - 12]) * 100));
     const node = roc(sourceOf(c.map((v, i) => bar(i, v))), {});
@@ -69,7 +74,7 @@ describe("trix", () => {
     expectClose(ys(node.out.trix.read()), [null, null, null, null, 200 / 13, 200 / 15], "trix");
   });
 
-  it("chains three sma-seeded emas, then the one-bar change, then the signal sma — held to the array kernels", () => {
+  it("chains three sma-seeded emas, then the one-bar change, then the signal sma — the composition and default windows against the package's own ema and sma kernels", () => {
     const c = closes(120);
     const tr = ema(ema(ema(c, 12), 12), 12);
     const want = tr.map((v, i) => {
@@ -104,7 +109,7 @@ describe("psy", () => {
     expect(ys(psy(sourceOf(tape), { period: 2, signal: 1 }).out.psy.read())).toEqual([null, null, 0]);
   });
 
-  it("matches the canonical array form over a tape", () => {
+  it("matches the up-close share written out over a tape with the default window — the signal against the package's own sma kernel", () => {
     const c = closes(80);
     const up = c.map((v, i) => (i === 0 ? null : v > c[i - 1] ? 1 : 0));
     const want = up.map((_, i) => {
@@ -126,7 +131,7 @@ describe("bbi", () => {
     expectClose(out, [null, null, null, 3.25, 4.25, 5.25, 6.25, 7.25], "bbi");
   });
 
-  it("matches the canonical array form with the default windows", () => {
+  it("is the mean of the package's own sma kernel at the four default windows — composition, not the smas' values", () => {
     const c = closes(80);
     const mean = (a: (number | null)[], b: (number | null)[], d: (number | null)[], e: (number | null)[]) =>
       a.map((v, i) => (v === null || b[i] === null || d[i] === null || e[i] === null ? null : (v + b[i]! + d[i]! + e[i]!) / 4));
@@ -165,7 +170,7 @@ describe("dma", () => {
     expectClose(ys(node.out.signal.read()), [null, null, 0.5, 0.5, 0.5, 0.5], "signal");
   });
 
-  it("matches the canonical array form with the default windows", () => {
+  it("is the package's own sma kernel, fast minus slow, with its sma as the signal at the default windows — composition, not the smas' values", () => {
     const c = closes(120);
     const fast = sma(c, 10);
     const slow = sma(c, 50);
@@ -203,7 +208,7 @@ describe("brar", () => {
     expectClose(ys(brar(sourceOf(two), { period: 2 }).out.br.read()), [null, null, ((13 - 11 + (24 - 12)) / (11 - 9 + 0)) * 100], "br");
   });
 
-  it("matches the canonical array form (with BR clipped) over a tape", () => {
+  it("matches window sums written out over a tape with the default window (BR clipped)", () => {
     const c = closes(80);
     const tape = c.map((v, i) => ohlc(i, v - 0.3 + (i % 2), v + 1 + (i % 3) * 0.4, v - 1 - (i % 5) * 0.3, v));
     const n = 26;
@@ -345,7 +350,7 @@ describe("vr", () => {
     expectClose(out.slice(4), [(400 / 300) * 100, (400 / 500) * 100], "vr");
   });
 
-  it("matches the canonical formula over a tape — with the project's first-bar policy (null, not flat against itself)", () => {
+  it("matches the formula written out over a tape, within a tolerance — with the project's first-bar policy (null, not flat against itself); the signal against the package's own sma kernel", () => {
     const c = closes(80);
     const vol = c.map((_, i) => 1000 + (i % 7) * 50);
     const tape = c.map((v, i) => traded(i, v, vol[i]));
@@ -369,7 +374,7 @@ describe("vr", () => {
     expectClose(ys(node.out.signal.read()), sma(want, 6), "signal");
   });
 
-  it("reads exactly what its stated order gives — `((up + flat/2) × 100) / (down + flat/2)`", () => {
+  it("reads exactly what its stated order gives — `((up + flat/2) × 100) / (down + flat/2)`; the signal against the package's own sma kernel", () => {
     // The canonical divides first, then multiplies by 100; on this tape the two orders first part at
     // bar 28, by one ulp (1.4e-14 on 101.94). The exact oracle is the stated order; the tolerance above
     // is parity.
@@ -471,7 +476,7 @@ describe("emv", () => {
     expect(ys(emv(sourceOf(tape), { period: 1 }).out.emv.read())).toEqual([null, null, null, 0]);
   });
 
-  it("matches the canonical array form (its 0 for undefined bars → null) over a tape, within a tolerance", () => {
+  it("matches the canonical formula written out (its 0 for undefined bars → null) over a tape, within a tolerance — the signal against the package's own sma kernel", () => {
     const c = closes(80);
     const tape = c.map((v, i) => ohlcv(i, v + 1 + (i % 3) * 0.4, v - 1 - (i % 5) * 0.3, 1e8 + (i % 7) * 1e7));
     const want = tape.map((b, i) => {
@@ -486,7 +491,7 @@ describe("emv", () => {
     expectClose(ys(node.out.signal.read()), sma(want, 14), "signal");
   });
 
-  it("reads exactly what its stated order gives — the extremes' moves halved, times range over volume times 1e8", () => {
+  it("reads exactly what its stated order gives — the extremes' moves halved, times range over volume times 1e8; the signal against the package's own sma kernel", () => {
     // The canonical rounds two midpoints and divides the other way round; on this tape the orders part at
     // bar 1 by 20 ulp (1.8e-14 on 5.6) and near 0.09 at bar 8 by 1722 ulp — the midpoints' rounding
     // cancels in the canonical's subtraction. The exact oracle is the stated order; the tolerance above
@@ -532,7 +537,7 @@ describe("cr", () => {
     expect(ys(out.ma1.read())).toEqual([null, null, null, 300]);
   });
 
-  it("reads exactly what its stated order gives over a tape — window sums, smas, displaced by index", () => {
+  it("reads exactly what its stated order gives over a tape — window sums written out; the averages are the package's own sma kernel, displaced by index", () => {
     const c = closes(200);
     const tape = c.map((v, i) => ohlc(i, v + 1 + (i % 3) * 0.4, v - 1 - (i % 5) * 0.3));
     const n = 26, periods = [10, 20, 40, 60] as const;

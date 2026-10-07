@@ -89,9 +89,10 @@ describe("divider placement", () => {
     const { plot, layers } = setup({ paneGap: 10 }, 1);
     const [divider] = dividers(layers.overlay);
 
-    const top = Number.parseFloat(divider.style.top);
-    expect(top).toBeGreaterThanOrEqual(plot.mainPane.area.bottom - 8);
-    expect(top).toBeLessThanOrEqual(plot.panes[1].area.top + 8);
+    // The 7px handle is centred on the middle of the gap.
+    const middle = (plot.mainPane.area.bottom + plot.panes[1].area.top) / 2;
+    expect(divider.style.top).toBe(`${middle - 3.5}px`);
+    plot.destroy();
   });
 });
 

@@ -40,8 +40,12 @@ const ext: Drawing = {
 
 describe("levels and formula — separate from the retracement", () => {
   it("has its own default levels, reaching past 1", () => {
+    // Pinned exactly — a saved extension without `levels` redraws at
+    // these, so changing one moves every such drawing on reload.
+    expect(FIB_EXTENSION_LEVELS).toEqual([
+      0, 0.236, 0.382, 0.5, 0.618, 1, 1.618, 2.618, 3.618, 4.236,
+    ]);
     expect(FIB_EXTENSION_LEVELS).not.toEqual(FIB_LEVELS);
-    expect(Math.max(...FIB_EXTENSION_LEVELS)).toBeGreaterThan(1);
     expect(fibExtensionLevels({ levels: undefined })).toEqual(FIB_EXTENSION_LEVELS);
     expect(fibExtensionLevels({ levels: [0, 1.5] })).toEqual([0, 1.5]);
   });

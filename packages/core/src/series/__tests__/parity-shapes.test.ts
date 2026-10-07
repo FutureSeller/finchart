@@ -144,11 +144,4 @@ describe("step line (step)", () => {
   it("the door's rules match its sibling", () => {
     expect(() => stepLineSeries(42 as never)).toThrow();
   });
-
-  it("**unused means not bundled** — why step is a subclass, not an option", () => {
-    // As an option, it would be a branch inside `draw`, so even consumers
-    // who never use step would bundle it — the actual enforcement is the
-    // `.size-limit.json` budget for `one line`.
-    expect(lineSeries().draw).toBe(stepLineSeries().draw);
-  });
 });

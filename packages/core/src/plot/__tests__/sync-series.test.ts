@@ -398,7 +398,7 @@ describe("a re-render that rebuilds only the series object", () => {
 });
 
 describe("a re-synced spec with new display fields", () => {
-  it("updates the name, colour, readout and draw order it reports", () => {
+  it("updates the name, colour and readout it reports when they all change", () => {
     const plot = loaded();
     const spec = (name: string, color: string, readout: boolean, zIndex: number) =>
       seriesSpec<LineDataPoint>({ id: "s", series: lineSeries(), data, name, color, readout, zIndex });
@@ -408,5 +408,40 @@ describe("a re-synced spec with new display fields", () => {
 
     const [sample] = plot.mainPane.probe(50);
     expect(sample).toMatchObject({ name: "MA(20)", color: "blue", readout: false });
+    plot.destroy();
+  });
+
+  it("updates the readout when it is the only field that changed", () => {
+    const plot = loaded();
+    const series = lineSeries();
+    const spec = (readout: boolean) =>
+      seriesSpec<LineDataPoint>({ id: "s", series, data, name: "MA(5)", readout });
+    plot.mainPane.syncSeries([spec(true)]);
+    // A sample carries `readout` only when it is left out of readouts.
+    expect(plot.mainPane.probe(50)[0]).not.toHaveProperty("readout");
+
+    plot.mainPane.syncSeries([spec(false)]);
+
+    expect(plot.mainPane.probe(50)[0]).toMatchObject({ readout: false });
+    plot.destroy();
+  });
+
+  it("redraws in the new order when only the zIndex changed", () => {
+    const plot = loaded();
+    const log: string[] = [];
+    const a = fakeSeries("a", log);
+    const b = fakeSeries("b", log);
+    const specs = (aZ: number) => [
+      seriesSpec<LineDataPoint>({ id: "a", series: a, data, zIndex: aZ }),
+      seriesSpec<LineDataPoint>({ id: "b", series: b, data }),
+    ];
+    plot.mainPane.syncSeries(specs(0));
+    expect(drawOrder(plot, log)).toEqual(["a", "b"]);
+
+    // Same series, same data — only the stacking moved.
+    plot.mainPane.syncSeries(specs(5));
+
+    expect(drawOrder(plot, log)).toEqual(["b", "a"]);
+    plot.destroy();
   });
 });
