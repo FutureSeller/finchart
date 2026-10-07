@@ -72,7 +72,10 @@ Keep credentials in the ignored local environment file; account data and saved
 market snapshots are not part of this example.
 
 Install the required Playwright browsers before browser tests. The projects and
-server setup are in [playwright.config.ts](../e2e/playwright.config.ts). These
+server setup are in [playwright.config.ts](../e2e/playwright.config.ts). CI runs
+them in the official Playwright container image, pinned in
+[ci.yml](../.github/workflows/ci.yml); when Playwright is upgraded, update the
+image tag, its digest, and `PLAYWRIGHT_IMAGE_VERSION` together. These
 tests assert real canvas pixel properties and input behavior; recording-renderer
 tests alone cannot establish browser playback correctness.
 
