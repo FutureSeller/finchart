@@ -164,10 +164,12 @@ wherever it lands.
 
 The JSX owns the order of the panes it declares, but only when that order
 changes: a `plot.setPaneOrder` you make through `plotRef` holds across
-re-renders until some `ChartPane`'s place in the tree moves (a pane mounted
-among them, one above it gone, keyed panes reordered), which restacks the
-panes to the JSX again, once per commit. A pane added through `plotRef`
-stays where you put it until then, and below the declared panes after.
+re-renders until some `ChartPane`'s place among the declared panes moves (a
+pane mounted anywhere among them, keyed panes reordered), which restacks the
+panes to the JSX again, once per commit. A pane going, or a series appearing
+between two panes, moves no other pane past another and leaves your order as
+it is. A pane added through `plotRef` stays where you put it until then, and
+below the declared panes after.
 
 Naming: the `Chart*` prefix marks structure and series (`ChartContainer`,
 `ChartPane`, `ChartLine`, …); no prefix marks attachments (`XAxis`,

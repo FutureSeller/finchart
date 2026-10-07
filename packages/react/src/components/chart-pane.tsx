@@ -1,8 +1,8 @@
 import type { Pane, PaneOptions, Scale } from '@finchart/core';
 import { PANE_OPTION_DEFAULTS } from '@finchart/core';
 import type { ReactNode } from 'react';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { PaneProvider, SeriesPlacementProvider, useChartApi, useSeriesPlacement } from './chart-context';
+import { useEffect, useId, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import { PaneProvider, SeriesPlacementProvider, useChartApi, useJsxRank } from './chart-context';
 import { createSeriesPlacement } from './series-collector';
 
 /*
@@ -82,10 +82,10 @@ export function ChartPane({
   const domainMax = valueDomain?.[1];
   const fixed = domainMin !== undefined && domainMax !== undefined;
   const placementId = useId();
-  const parentPlacement = useSeriesPlacement();
   // Reserve the subtree's JSX position even before this pane is acquired.
-  const prefix = parentPlacement?.place(placementId);
-  const placement = createSeriesPlacement(prefix ?? [Number.MAX_SAFE_INTEGER]);
+  const prefix = useJsxRank(placementId);
+  const [, rerender] = useReducer((round: number) => round + 1, 0);
+  const placement = createSeriesPlacement(prefix ?? [Number.MAX_SAFE_INTEGER], rerender);
   // biome-ignore lint/suspicious/noExplicitAny: the context erases the data type
   const [pane, setPane] = useState<Pane | null>(null);
 

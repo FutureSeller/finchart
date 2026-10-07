@@ -12,7 +12,7 @@ import type {
 import { LinearScale } from '@finchart/core';
 import type { BrowserDeps, ThemeObserverOptions } from '@finchart/dom';
 import type { AriaRole, CSSProperties, ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { PlotOptions } from '../hooks/plot-options';
 import { usePlot } from '../hooks/use-chart';
 import {
@@ -288,8 +288,10 @@ export function ChartContainer<T extends BaseDataPoint>({
     previousScale.current = null;
     collectors.current = new Map();
     const paneRanks = new Map<Pane, readonly number[]>();
-    /** A rank moved since the last restack. */
+    /** A pane's raw rank changed since the last check — the cue to compare places. */
     let restack = false;
+    /** Each declared pane's index among the declared panes at the last check. */
+    let paneIndex = new Map<Pane, number>();
 
     return {
       plot,
@@ -328,6 +330,15 @@ export function ChartContainer<T extends BaseDataPoint>({
       },
 
       releasePane(pane: Pane): void {
+        // Its JSX place goes with the wrapper — the main pane included, which
+        // stays on the chart unclaimed and is placed afresh when claimed again.
+        // A pane going moves no other pane past another, so it is no reason
+        // to restack.
+        // The survivors close up in the order last checked, not by current
+        // ranks: a reorder in this same commit has yet to be compared.
+        paneRanks.delete(pane);
+        paneIndex.delete(pane);
+        paneIndex = new Map([...paneIndex.keys()].map((survivor, at) => [survivor, at]));
         if (pane === plot.mainPane) {
           // Outside series share this collector and survive the pane wrapper.
           mainPaneTaken.current = false;
@@ -339,7 +350,6 @@ export function ChartContainer<T extends BaseDataPoint>({
           return;
         }
         collectors.current.delete(pane);
-        paneRanks.delete(pane);
         plot.removePane(pane);
       },
 
@@ -351,10 +361,17 @@ export function ChartContainer<T extends BaseDataPoint>({
       },
 
       stackPanes(): void {
-        // Only when a JSX rank moved — re-sorting on every commit would undo
-        // a `setPaneOrder` the user made since.
+        // Only when a pane's place among the declared panes moved —
+        // re-sorting on every commit would undo a `setPaneOrder` the user
+        // made since. Raw ranks are not enough: series outside any pane are
+        // counted in the same JSX positions, so one appearing between two
+        // panes renumbers the panes below it without moving any of them.
         if (!restack) return;
         restack = false;
+        const declared = [...paneRanks.keys()].sort((a, b) => compareRank(paneRanks.get(a) ?? [], paneRanks.get(b) ?? []));
+        const moved = declared.some((pane, at) => paneIndex.get(pane) !== at);
+        paneIndex = new Map(declared.map((pane, at) => [pane, at]));
+        if (!moved) return;
         // An unclaimed main pane stays on top; a pane added outside the JSX
         // (through `plotRef`) keeps its place below the declared ones.
         const rankOf = (candidate: Pane): readonly number[] =>
@@ -377,7 +394,8 @@ export function ChartContainer<T extends BaseDataPoint>({
   // a pane took over `mainPane`, it's the same collector, so the order
   // chains into one.
   const mainCollector = api ? api.seriesCollector(api.plot.mainPane) : null;
-  const placement = createSeriesPlacement();
+  const [, rerender] = useReducer((round: number) => round + 1, 0);
+  const placement = createSeriesPlacement([], rerender);
 
   useEffect(() => {
     placement.commit();

@@ -1,5 +1,5 @@
 import type { BaseDataPoint, Pane, PaneOptions, Plot, Scale } from '@finchart/core';
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useLayoutEffect } from 'react';
 import type { SeriesCollector, SeriesPlacement } from './series-collector';
 
 /**
@@ -44,7 +44,11 @@ export interface ChartApi<T extends BaseDataPoint = BaseDataPoint> {
    * keyed panes reordered, land where the tree puts them.
    */
   rankPane(pane: Pane, rank: readonly number[]): void;
-  /** Restacks the panes if a rank moved since the last time, and only then. */
+  /**
+   * Restacks the panes when a declared pane's place among the declared
+   * panes changed since the last check (one mounted, keyed panes
+   * reordered), and only then.
+   */
   stackPanes(): void;
 }
 
@@ -71,8 +75,21 @@ export const PaneProvider = PaneContext.Provider;
 export const ChartDataProvider = DataContext.Provider;
 export const SeriesPlacementProvider = SeriesPlacementContext.Provider;
 
-export function useSeriesPlacement(): SeriesPlacement | null {
-  return useContext(SeriesPlacementContext);
+/**
+ * Where this child sits in the JSX of the nearest container or pane.
+ *
+ * `undefined` outside any container, or when the child rendered without its
+ * owner — its own component's state switched it on — so that pass never
+ * counted it. It then asks the owner for a fresh pass; a layout effect, so
+ * the corrected order commits before a frame is drawn.
+ */
+export function useJsxRank(id: string): readonly number[] | undefined {
+  const placement = useContext(SeriesPlacementContext);
+  const rank = placement?.place(id);
+  useLayoutEffect(() => {
+    if (rank === undefined) placement?.missed();
+  }, [rank, placement]);
+  return rank;
 }
 /** Exposed because `<YAxis>` has to tell on its own whether it's inside a pane or not. */
 export const PaneContextValue = PaneContext;

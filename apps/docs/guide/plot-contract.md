@@ -1137,10 +1137,14 @@ value that ticks every frame moves the line, not the registration.
   Same rule as `useMemo`'s dependency array — if the value is unchanged the
   derive isn't run again.
 - **Draw order is JSX order.** An indicator toggled off and on behind a condition
-  comes back to its place. But only the render phase knows the order, so **when a
+  comes back to its place. Only the render phase knows the order, so **when a
   child mounts on its own without the pane rendering** (a component wedged in
-  between changed its own state), that series is appended at the end. It finds
-  its place on the next pane render.
+  between changed its own state), the pane — or the container, outside one —
+  renders again to place it. That pass commits before the next frame is drawn,
+  so the series is never listed or drawn at the end. A `<ChartPane>` mounted
+  that way is never drawn out of place either, but `panesChange` can ring once
+  with it last before the restack puts it in its place — as for any pane the
+  JSX inserts above others.
 - **The `data` prop flows straight through to the series.** The container sends it
   down through context and `<ChartSeries>` puts it in its own spec — the chart has
   no slot to receive data. So gluing history on is

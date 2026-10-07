@@ -7,8 +7,8 @@ import type {
   Source,
 } from '@finchart/core';
 import { seriesSpec } from '@finchart/core';
-import { useEffect, useId } from 'react';
-import { useChartData, useSeriesCollector, useSeriesPlacement } from './chart-context';
+import { useEffect, useId, useLayoutEffect } from 'react';
+import { useChartData, useJsxRank, useSeriesCollector } from './chart-context';
 
 /** What every variant accepts. */
 interface CommonSeriesProps<TSource extends BaseDataPoint> {
@@ -180,12 +180,20 @@ export function ChartSeries<
   const spec = toSpec(id, props, props.data ?? inherited);
 
   // This is the only place that knows the JSX order — effects run in mount order.
-  const placement = useSeriesPlacement();
-  const rank = placement?.place(id);
+  const rank = useJsxRank(id);
+
+  // Each sibling's `keep` flushes on its own; recording every slot of the
+  // commit first keeps those flushes from sorting against stale ranks.
+  useLayoutEffect(() => {
+    if (rank !== undefined) collector.rank(id, rank);
+  }, [collector, id, rank]);
 
   // Each effect closes over the render that actually committed. Shared
   // refs written during render would expose abandoned Suspense candidates.
   useEffect(() => {
+    // No slot yet: the owner's corrective pass, already asked for, registers
+    // it in place — keeping it now would list it out of place first.
+    if (rank === undefined) return;
     collector.keep(spec, rank);
     collector.flush();
   });

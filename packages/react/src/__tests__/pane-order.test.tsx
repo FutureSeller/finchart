@@ -3,12 +3,18 @@ import type { LineDataPoint, Plot } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
-import { createRef } from 'react';
-import { afterEach, expect, it } from 'vitest';
+import { createRef, type ReactElement, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartContainer, ChartPane, ChartSeries } from '../components';
 import { layersSpy } from './fake-layers';
 
 afterEach(cleanup);
+
+function current(ref: { current: Plot | null }): Plot {
+  if (!ref.current) throw new Error('plot is not mounted');
+  return ref.current;
+}
 
 const data: LineDataPoint[] = [{ x: 0, y: 10 }, { x: 50, y: 20 }, { x: 100, y: 15 }];
 const series = { price: lineSeries(), rsi: lineSeries(), macd: lineSeries() };
@@ -110,8 +116,204 @@ it('stacks a pane above the pane nested in it once a JSX move restacks', () => {
   expect(keys()).toEqual(['price', 'rsi', 'macd']);
   act(() => plot.setPaneOrder([...plot.panes].reverse()));
 
-  // The inserted pane moves the rank of the one after it, so the stack is sorted by JSX path again.
+  // A pane mounting restacks, so the stack is sorted by JSX path again.
   act(() => view.rerender(ui(true)));
 
   expect(keys()).toEqual(['price', 'rsi', 'empty', 'macd']);
+});
+
+/**
+ * A series outside every pane is counted among the same JSX positions as
+ * the panes, so one appearing between them renumbers the panes below it
+ * without moving any pane past another.
+ */
+describe("a series appearing among the panes keeps the user's own order", () => {
+  const late = lineSeries();
+  const tree = (ref: { current: Plot | null }, middle: ReactElement | false) => (
+    <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={data} plotRef={ref}>
+      <ChartPane><ChartSeries series={series.price} /></ChartPane>
+      <ChartPane><ChartSeries series={series.rsi} /></ChartPane>
+      {middle}
+      <ChartPane><ChartSeries series={series.macd} /></ChartPane>
+    </ChartContainer>
+  );
+  const keys = (plot: Plot) => plot.panes.map((pane) => nameOf.get(pane.getSeries()[0]));
+
+  it('when its own component switches it on', () => {
+    const ref = createRef<Plot>();
+    let turnOn = () => {};
+    function Late() {
+      const [on, setOn] = useState(false);
+      turnOn = () => setOn(true);
+      return on ? <ChartSeries series={late} /> : null;
+    }
+    render(tree(ref, <Late />));
+    const plot = current(ref);
+    act(() => plot.setPaneOrder([...plot.panes].reverse()));
+
+    act(() => turnOn());
+
+    expect(keys(plot)).toEqual(['macd', 'rsi', 'price']);
+    expect(plot.mainPane.getSeries()).toEqual([series.price, late]);
+  });
+
+  it('when the container switches it on', () => {
+    const ref = createRef<Plot>();
+    const view = render(tree(ref, false));
+    const plot = current(ref);
+    act(() => plot.setPaneOrder([...plot.panes].reverse()));
+
+    act(() => view.rerender(tree(ref, <ChartSeries series={late} />)));
+
+    expect(keys(plot)).toEqual(['macd', 'rsi', 'price']);
+    expect(plot.mainPane.getSeries()).toEqual([series.price, late]);
+  });
+});
+
+it('puts a pane switched on by its own component where the JSX puts it', () => {
+  const ref = createRef<Plot>();
+  let turnOn = () => {};
+  function Late() {
+    const [on, setOn] = useState(false);
+    turnOn = () => setOn(true);
+    return on ? <ChartPane><ChartSeries series={series.rsi} /></ChartPane> : null;
+  }
+  render(
+    <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={data} plotRef={ref}>
+      <ChartPane><ChartSeries series={series.price} /></ChartPane>
+      <Late />
+      <ChartPane><ChartSeries series={series.macd} /></ChartPane>
+    </ChartContainer>,
+  );
+
+  act(() => turnOn());
+
+  expect(ref.current?.panes.map((pane) => nameOf.get(pane.getSeries()[0]))).toEqual(['price', 'rsi', 'macd']);
+});
+
+/**
+ * The corrective pass has to land in the same task as the mount — a frame
+ * drawn in between would show the pane last. `flushSync` outside `act`
+ * returns once React stops working synchronously, as it does before the
+ * browser gets a frame.
+ */
+it('has a pane switched on by its own component in place by the time the update returns', () => {
+  const ref = createRef<Plot>();
+  let turnOn = () => {};
+  function Late() {
+    const [on, setOn] = useState(false);
+    turnOn = () => setOn(true);
+    return on ? <ChartPane><ChartSeries series={series.rsi} /></ChartPane> : null;
+  }
+  render(
+    <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={data} plotRef={ref}>
+      <ChartPane><ChartSeries series={series.price} /></ChartPane>
+      <Late />
+      <ChartPane><ChartSeries series={series.macd} /></ChartPane>
+    </ChartContainer>,
+  );
+  const plot = current(ref);
+
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', false);
+  let panes: (Name | undefined)[];
+  try {
+    flushSync(() => turnOn());
+    panes = plot.panes.map((pane) => nameOf.get(pane.getSeries()[0]));
+  } finally {
+    vi.unstubAllGlobals();
+  }
+
+  expect(panes).toEqual(['price', 'rsi', 'macd']);
+});
+
+it('follows keyed panes that reorder in the same commit one of them goes', () => {
+  const { keys, show } = mount(['price', 'rsi', 'macd']);
+
+  show(['macd', 'price']);
+
+  expect(keys()).toEqual(['macd', 'price']);
+});
+
+/** A pane going moves no other pane past another, so the user's later order holds. */
+describe("a pane switched off by its own component keeps the user's later order", () => {
+  function setup() {
+    const ref = createRef<Plot>();
+    let turnOff = () => {};
+    let grow = () => {};
+    function Toggle() {
+      const [on, setOn] = useState(true);
+      turnOff = () => setOn(false);
+      return on ? <ChartPane><ChartSeries series={series.rsi} /></ChartPane> : null;
+    }
+    function Last() {
+      const [flex, setFlex] = useState(1);
+      grow = () => setFlex((value) => value + 1);
+      return <ChartPane flex={flex}><ChartSeries series={series.macd} /></ChartPane>;
+    }
+    const tree = (points: LineDataPoint[]) => (
+      <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={points} plotRef={ref}>
+        <ChartPane><ChartSeries series={series.price} /></ChartPane>
+        <Toggle />
+        <Last />
+      </ChartContainer>
+    );
+    const view = render(tree(data));
+    const plot = current(ref);
+    act(() => turnOff());
+    act(() => plot.setPaneOrder([...plot.panes].reverse()));
+    const keys = () => plot.panes.map((pane) => nameOf.get(pane.getSeries()[0]));
+    return { keys, grow: () => act(() => grow()), rerender: () => act(() => view.rerender(tree([...data]))) };
+  }
+
+  it('when a pane below re-renders on its own', () => {
+    const { keys, grow } = setup();
+
+    grow();
+
+    expect(keys()).toEqual(['macd', 'price']);
+  });
+
+  it('when the container re-renders', () => {
+    const { keys, rerender } = setup();
+
+    rerender();
+
+    expect(keys()).toEqual(['macd', 'price']);
+  });
+});
+
+/** The main pane outlives its `<ChartPane>`; giving it up must not leave its JSX place behind. */
+describe('the main pane after its ChartPane goes', () => {
+  it('stays on top, empty, while the remaining panes reorder', () => {
+    const { keys, show } = mount(['price', 'rsi', 'macd']);
+    show(['rsi', 'price', 'macd']);
+    show(['rsi', 'macd']);
+
+    show(['macd', 'rsi']);
+
+    expect(keys()).toEqual(['empty', 'macd', 'rsi']);
+  });
+
+  it('takes its JSX place again when a ChartPane claims it back', () => {
+    const ref = createRef<Plot>();
+    let toggle = (_on: boolean) => {};
+    function First() {
+      const [on, setOn] = useState(true);
+      toggle = setOn;
+      return on ? <ChartPane><ChartSeries series={series.price} /></ChartPane> : null;
+    }
+    render(
+      <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={data} plotRef={ref}>
+        <First />
+        <ChartPane><ChartSeries series={series.rsi} /></ChartPane>
+      </ChartContainer>,
+    );
+    const plot = current(ref);
+    act(() => toggle(false));
+    act(() => plot.setPaneOrder([...plot.panes].reverse()));
+
+    act(() => toggle(true));
+
+    expect(plot.panes.map((pane) => nameOf.get(pane.getSeries()[0]))).toEqual(['price', 'rsi']);
+  });
 });

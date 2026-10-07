@@ -26,7 +26,14 @@ export interface SeriesCollector<T extends BaseDataPoint> {
    * StrictMode attaches, detaches, and reattaches an effect, so something
    * that left through cleanup has to come back without a render.
    */
-  keep(spec: SeriesSpec<T>, rank?: readonly number[]): void;
+  keep(spec: SeriesSpec<T>, rank: readonly number[]): void;
+
+  /**
+   * Layout phase. Records the slot a committed render assigned. Every layout
+   * effect of a commit runs before its first `flush`, so no flush sorts a
+   * series against a sibling's rank from the previous pass.
+   */
+  rank(id: string, rank: readonly number[]): void;
 
   /** Unmount. A replayed effect carries its captured rank when it reattaches. */
   remove(id: string): void;
@@ -56,29 +63,15 @@ export function createSeriesCollector<T extends BaseDataPoint>(
 
   /** Whether anything has ever been applied to the chart → see `flush` below. */
   let owned = false;
-  /** The largest rank assigned in `ranks` so far. `rankOf` uses it to pick the next slot. */
-  let maxRank = -1;
-
-  const setRank = (id: string, value: readonly number[]): void => {
-    ranks.set(id, value);
-    if (value[0] > maxRank) maxRank = value[0];
-  };
-
-  /** Sends anything render didn't assign a slot to, to the back. */
-  const rankOf = (id: string): readonly number[] => {
-    const known = ranks.get(id);
-    if (known !== undefined) return known;
-
-    const assigned = [maxRank + 1];
-    setRank(id, assigned);
-    return assigned;
-  };
 
   return {
     keep(spec, rank) {
-      if (rank !== undefined) setRank(spec.id, rank);
+      ranks.set(spec.id, rank);
       specs.set(spec.id, spec);
-      rankOf(spec.id);
+    },
+
+    rank(id, rank) {
+      ranks.set(id, rank);
     },
 
     remove(id) {
@@ -87,16 +80,16 @@ export function createSeriesCollector<T extends BaseDataPoint>(
     },
 
     flush() {
-      // Rebuilds using only the rank, while keeping the previous order.
-      // Since `sort` is stable, entries with the same rank (ones that
-      // didn't take part in this render) keep their place.
+      // Rebuilds using only the rank. Since `sort` is stable, ties keep
+      // the previous order.
       const live = order.filter((id) => specs.has(id));
       // Checked against a `Set` instead of `includes` — with `specs` growing, that would be a linear scan every time.
       const known = new Set(live);
       for (const id of specs.keys()) {
         if (!known.has(id)) live.push(id);
       }
-      live.sort((a, b) => compareRank(rankOf(a), rankOf(b)));
+      // Every admitted spec carries a rank — `keep` takes one.
+      live.sort((a, b) => compareRank(ranks.get(a) ?? [], ranks.get(b) ?? []));
       order = live;
 
       const list: SeriesSpec<T>[] = [];
@@ -143,9 +136,19 @@ export function compareRank(a: readonly number[], b: readonly number[]): number 
 export interface SeriesPlacement {
   place(id: string): readonly number[] | undefined;
   commit(): void;
+  /**
+   * A child rendered on its own after this pass committed — its component's
+   * state switched it on — so `place` had no slot for it. Only the owner
+   * walking its JSX again knows where it sits, so this asks for that pass.
+   */
+  missed(): void;
 }
 
-export function createSeriesPlacement(prefix: readonly number[] = []): SeriesPlacement {
+export function createSeriesPlacement(
+  prefix: readonly number[],
+  /** Renders the owner again. Its fresh placement reaches every child through context, in JSX order. */
+  rerender: () => void,
+): SeriesPlacement {
   const positions = new Map<string, readonly number[]>();
   let committed = false;
   return {
@@ -157,6 +160,7 @@ export function createSeriesPlacement(prefix: readonly number[] = []): SeriesPla
       return rank;
     },
     commit() { committed = true; },
+    missed: rerender,
   };
 }
 
