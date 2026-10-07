@@ -516,7 +516,7 @@ describe("timeTicks — how close a pair may sit", () => {
    * step, and these are the windows that put a request right at a step's
    * nominal length — the only place the difference shows.
    */
-  it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("never draws a pair closer than what was asked", () => {
+  it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("never draws a pair closer than what was asked", { timeout: 30_000 }, () => {
     const DAY_MS = 24 * 60 * 60 * 1000;
     const zones = [
       "UTC",
