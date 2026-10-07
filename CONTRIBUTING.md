@@ -30,8 +30,10 @@ behavior, public API, types, dependencies, or shipped artifacts. Describe the
 consumer-visible result and select the affected package and bump type.
 
 Docs, tests, private apps, and internal refactors that leave shipped behavior
-unchanged do not require a version bump. When CI detects a package change that
-needs no release, use `pnpm changeset --empty` and explain why in the PR.
+unchanged do not require a version bump. Changes confined to a package's
+`src/**/__tests__/` never reach its published files, so CI does not count them
+as package changes. When CI detects any other package change that needs no
+release, use `pnpm changeset --empty` and explain why in the PR.
 CI checks changesets added since the PR's target branch. It does not prove that
 every affected package or the selected bump type is correct; the maintainer
 reviews those decisions. The trusted bot's version PR consumes existing
