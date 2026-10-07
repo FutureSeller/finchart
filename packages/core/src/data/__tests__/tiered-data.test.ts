@@ -215,6 +215,37 @@ describe("tiered data", () => {
     expect(measure(true)).toBeGreaterThan(measure(false) * 0.8);
   });
 
+  /**
+   * A strategy whose tier comes back no smaller than its source: the
+   * manager gives up on that level and remembers it, so a later frame
+   * neither builds the same tier again nor stacks copies of it.
+   */
+  it("should try a tier that cannot shrink once, across frames", () => {
+    let tierBuilds = 0;
+    const aggregation = new OhlcAggregation();
+    const stubborn: DecimationStrategy<OHLC> = {
+      decimate(data, range, threshold) {
+        if (range.preserveBuckets !== true) return aggregation.decimate(data, range, threshold);
+        tierBuilds += 1;
+        // A runaway tier loop never returns on its own — fail it instead.
+        if (tierBuilds > 10) throw new Error("tier building did not stop");
+        return data.slice(range.start, range.end);
+      },
+    };
+    const dataManager = new SimpleDataManager<OHLC>({
+      decimation: stubborn,
+      coordinates: new OHLCAccessor(),
+      pointsPerPixel: 1,
+      tiered: true,
+    });
+    dataManager.setData(candles(100_000));
+
+    dataManager.getVisibleData(wide(0));
+    dataManager.getVisibleData(wide(1));
+
+    expect(tierBuilds).toBe(1);
+  });
+
   it("should terminate on data that cannot shrink further", () => {
     const { dataManager } = setup(true, candles(3));
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CandleResponse, Interval } from "../../lib/candles";
@@ -24,8 +24,14 @@ let state: MarketDataState;
 const fetchMock = vi.fn<typeof fetch>();
 const liveStreams: (EventTarget & { closed: boolean })[] = [];
 
-function Probe({ symbol, interval = "1d" }: { symbol: string; interval?: Interval }) {
-  state = useMarketData(symbol, interval);
+function Probe({ symbol, interval = "1d", onCommit }: {
+  symbol: string;
+  interval?: Interval;
+  onCommit?: (committed: MarketDataState) => void;
+}) {
+  const current = useMarketData(symbol, interval);
+  state = current;
+  useLayoutEffect(() => onCommit?.(current));
   return null;
 }
 
@@ -95,6 +101,54 @@ describe("market data ownership", () => {
     expect(state.result?.symbol).toBe("AAPL");
     expect(state.bars).toBe(before);
     expect(fetchMock.mock.calls[1][1]?.signal?.aborted).toBe(true);
+  });
+
+  it("drops a live REST refresh that lands after a new market commits but before the old poll is cancelled", async () => {
+    // Only the poll is faked: React's own scheduling must run on real tasks below.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const refresh = deferred<Response>();
+    const load = deferred<Response>();
+    const stale = candles("005930", "toss");
+    stale.candles[0].highPrice = "500";
+    let refreshSignal: AbortSignal | null | undefined;
+    // Whether the old poll was already cancelled when its snapshot was read —
+    // the race exists only if it was not.
+    let cancelledWhenRead: boolean | undefined;
+    class WatchedResponse extends Response {
+      override json() {
+        cancelledWhenRead = refreshSignal?.aborted;
+        return super.json();
+      }
+    }
+    const staleResponse = new WatchedResponse(JSON.stringify(stale));
+    fetchMock.mockResolvedValueOnce(Response.json(candles("005930", "toss")))
+      .mockReturnValueOnce(refresh.promise)
+      .mockReturnValueOnce(load.promise);
+    // The old market's snapshot arrives the moment the new one is on screen.
+    const onCommit = (committed: MarketDataState) => {
+      if (committed.result?.symbol === "AAPL") refresh.resolve(staleResponse);
+    };
+    await act(async () => root.render(<Probe symbol="005930" />));
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    refreshSignal = fetchMock.mock.calls[1][1]?.signal;
+    await act(async () => root.render(<Probe symbol="AAPL" onCommit={onCommit} />));
+
+    // Outside act React commits in one task and cancels the old poll in a
+    // later one, as in a browser; a response landing between the two is
+    // told apart only by which load it was requested under.
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", false);
+    load.resolve(Response.json(candles("AAPL")));
+    // Settled once the new market is shown, the stale snapshot has been read
+    // and the old poll is cancelled; the cap only bounds a hang.
+    const settled = () =>
+      state.result?.symbol === "AAPL" && staleResponse.bodyUsed && refreshSignal?.aborted === true;
+    for (let turn = 0; turn < 200 && !settled(); turn++) await new Promise((done) => setTimeout(done, 0));
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+
+    expect(settled()).toBe(true);
+    expect(cancelledWhenRead).toBe(false);
+    expect(state.result?.symbol).toBe("AAPL");
+    expect(state.bars.map((bar) => bar.high)).toEqual([110]);
   });
 
   it("does not poll synthetic data and aborts an unfinished load on unmount", async () => {

@@ -31,6 +31,11 @@ describe("OhlcAggregation", () => {
     expect(aggregation().decimate(...whole(data), 50)).toBe(data);
   });
 
+  it("should return the data untouched when it fills the threshold exactly", () => {
+    const data = candles(20);
+    expect(aggregation().decimate(...whole(data), 20)).toBe(data);
+  });
+
   it("should stay within the threshold", () => {
     for (const threshold of [1, 10, 100, 997]) {
       expect(

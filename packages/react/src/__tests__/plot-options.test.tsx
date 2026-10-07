@@ -15,7 +15,7 @@
  *   the series' own effect depending on JSX order.
  */
 import type { LineDataPoint, Plot, PlotOptionsPatch } from '@finchart/core';
-import { ContractError, immediateScheduler, lineSeries } from '@finchart/core';
+import { ContractError, DEFAULT_PADDING, immediateScheduler, lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { cleanup, render } from '@testing-library/react';
 import { Component, createRef, type ReactNode } from 'react';
@@ -58,6 +58,28 @@ describe('shallowEqual — the comparison the option props stand on', () => {
     expect(shallowEqual({ padding: { left: undefined } }, { padding: { top: 11 } })).toBe(false);
     expect(shallowEqual({ padding: { left: 1 } }, { padding: { left: 1 } })).toBe(true);
     expect(shallowEqual({ a: 1, b: undefined }, { a: 1, b: undefined })).toBe(true);
+  });
+
+  it('tells a value with an extra key apart, in either order', () => {
+    expect(shallowEqual({ rightOffset: 5 }, { rightOffset: 5, axisDrag: false })).toBe(false);
+    expect(shallowEqual({ rightOffset: 5, axisDrag: false }, { rightOffset: 5 })).toBe(false);
+  });
+
+  it('tells arrays apart when one is the other plus more elements', () => {
+    const first = { x: 10, price: 110 };
+    const second = { x: 50, price: 112 };
+    expect(shallowEqual([first], [first, second])).toBe(false);
+    expect(shallowEqual([first, second], [first, second])).toBe(true);
+  });
+
+  it('compares one nested level by value, and settles on two distinct circular values', () => {
+    expect(shallowEqual({ style: { color: 'red' } }, { style: { color: 'red' } })).toBe(true);
+    // The depth cap is what stops this — descending without one recurses until the stack overflows.
+    const a: Record<string, unknown> = {};
+    a.self = a;
+    const b: Record<string, unknown> = {};
+    b.self = b;
+    expect(shallowEqual(a, b)).toBe(false);
   });
 });
 
@@ -166,6 +188,17 @@ describe('<ChartContainer options>', () => {
     );
     const other = plot().getOptions().padding;
     expect([other.top, other.right, other.bottom, other.left]).toEqual([base.top, 7, 8, base.left]);
+  });
+
+  it('keeps the built padding on every side the options do not name', () => {
+    const { deps, ref, plot } = setup();
+    const view = render(<ChartContainer deps={deps} data={data} plotRef={ref} />);
+    expect(plot().getOptions().padding).toEqual(DEFAULT_PADDING);
+
+    view.rerender(
+      <ChartContainer deps={deps} data={data} plotRef={ref} options={{ padding: { left: 9 } }} />,
+    );
+    expect(plot().getOptions().padding).toEqual({ ...DEFAULT_PADDING, left: 9 });
   });
 
   it('treats a key that is present but undefined as absent — a different key with a value is a change', () => {

@@ -100,6 +100,33 @@ describe("CanvasRenderer", () => {
     expect(strokedPaths(context)[0].dash).toEqual([5, 5]);
   });
 
+  /**
+   * A canvas ignores a zero, negative or non-numeric `lineWidth` and keeps
+   * the previous command's width, so such a line must reach the context
+   * as a positive hairline nobody can see — not as itself, and not at a
+   * visible default either.
+   */
+  it.each([
+    ["zero", 0],
+    ["negative", -3],
+    ["NaN", Number.NaN],
+  ])("should hide a line whose width is %s", (_label, width) => {
+    const { renderer: r, context } = renderer();
+
+    r.drawLine(
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 10 },
+      ],
+      { width, color: "#123456" },
+    );
+    r.commit();
+
+    const [path] = strokedPaths(context);
+    expect(path.width).toBeGreaterThan(0);
+    expect(path.width).toBeLessThan(0.01);
+  });
+
   it("should replay a circle with the given fill", () => {
     const { renderer: r, context } = renderer();
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ContractError } from "@finchart/core";
 import { parseDrawings, serializeDrawings, type Drawing, channelParallel, fibExtensionPrice, fibLevelPrice, pitchforkLines } from "../drawings";
-import { distanceToSegment } from "../geometry";
+import { distanceToPoint, distanceToSegment } from "../geometry";
 
 describe("serialization", () => {
   const drawings: Drawing[] = [
@@ -126,6 +126,22 @@ describe("distanceToSegment", () => {
   it("should treat a zero-length segment as a point", () => {
     expect(distanceToSegment({ x: 3, y: 4 }, a, a)).toBe(5);
   });
+
+  it("should measure zero for a point sitting on a zero-length segment", () => {
+    expect(distanceToSegment(a, a, a)).toBe(0);
+  });
+
+  /** The anchors' span leaves the doubles, but the distance itself is an ordinary 1e308. */
+  it("should keep an exact perpendicular when the anchors' span overflows", () => {
+    expect(distanceToSegment({ x: 0, y: 1e308 }, { x: -1e308, y: 0 }, { x: 1e308, y: 0 })).toBe(1e308);
+  });
+
+  /** A missing point is a false hit, never a distance from the origin. */
+  it("should answer NaN for a point that is not there", () => {
+    // Sent through Reflect.apply, since the type checker would refuse the missing point.
+    expect(Reflect.apply(distanceToPoint, undefined, [null, a])).toBeNaN();
+    expect(Reflect.apply(distanceToSegment, undefined, [null, a, b])).toBeNaN();
+  });
 });
 
 /**
@@ -180,4 +196,37 @@ it('keeps repaired IDs valid and avoids collisions with existing shortened IDs',
   expect(parsed.every((drawing) => drawing.id.length <= 128)).toBe(true);
   expect(parseDrawings(serializeDrawings(parsed))).toEqual(parsed);
   expect(parseDrawings(JSON.stringify({ version: 2, drawings }))).toEqual(parsed);
+});
+
+it('keeps an overflowing retracement level proportional to the swing', () => {
+  const a = { x: 0, price: 1e308 }, b = { x: 1, price: -1e308 };
+  // A quarter of the way up a swing whose height leaves the doubles.
+  expect(Math.abs(fibLevelPrice({ type: 'fib', id: 'f', a, b }, 0.25) / (-a.price / 2) - 1)).toBeLessThan(1e-9);
+});
+
+it('puts every log extension level at c when the swing is flat', () => {
+  expect(fibExtensionPrice({
+    a: { x: 0, price: 100 },
+    b: { x: 1, price: 100 },
+    c: { x: 2, price: 150 },
+    levelSpacing: 'log',
+  }, 1.618)).toBe(150);
+});
+
+describe('stored size limits', () => {
+  const fibWith = (levels: number[]) =>
+    JSON.stringify({ version: 2, drawings: [{ type: 'fib', id: 'f', a: { x: 0, price: 0 }, b: { x: 1, price: 1 }, levels }] });
+  const horizontalWith = (id: string) =>
+    JSON.stringify({ version: 2, drawings: [{ type: 'horizontal', id, price: 1 }] });
+
+  it('reads a hundred fib levels and refuses a hundred and one', () => {
+    const levels = (count: number) => Array.from({ length: count }, (_, index) => index / 100);
+    expect(parseDrawings(fibWith(levels(100)))).not.toBeNull();
+    expect(parseDrawings(fibWith(levels(101)))).toBeNull();
+  });
+
+  it('reads a 128-character id and refuses a 129-character one', () => {
+    expect(parseDrawings(horizontalWith('a'.repeat(128)))).not.toBeNull();
+    expect(parseDrawings(horizontalWith('a'.repeat(129)))).toBeNull();
+  });
 });

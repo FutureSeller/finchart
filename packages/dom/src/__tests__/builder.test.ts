@@ -121,6 +121,23 @@ describe("PlotBuilder", () => {
     expect(grid[0].color).toBe("#abcdef");
   });
 
+  it("should merge successive grid style overrides", () => {
+    const { deps, factory } = withFakeLayers(testBrowserDeps());
+
+    const plot = PlotBuilder.create(deps, lineSeries())
+      .setGridStyle({ width: 1.5 })
+      .setGridStyle({ color: "#abcdef" })
+      .addDataPoints(series)
+      .build(fakeContainer());
+
+    const grid = strokedPaths(factory.created[0].context).filter(
+      (p) => p.width === 1.5,
+    );
+    expect(grid.length).toBeGreaterThan(0);
+    expect(grid[0].color).toBe("#abcdef");
+    plot.destroy();
+  });
+
   it("should take series style from the series, not the builder", () => {
     const { deps, factory } = withFakeLayers(testBrowserDeps());
 

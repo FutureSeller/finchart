@@ -299,6 +299,20 @@ describe("scanToDomain", () => {
     }
   });
 
+  /**
+   * After a step of two bars the pass first looks two bars ahead — from
+   * x = 2 that is 6, which sits past 3, but so does 5 before it. The
+   * answer has to come from the bar 3 actually lands before.
+   */
+  it("matches toDomain for a query that falls short of the last step's stride", () => {
+    const mapping = mounted();
+    const scan = mapping.scanToDomain?.();
+
+    scan?.(0);
+    scan?.(2);
+    expect(scan?.(3)).toBe(mapping.toDomain(3));
+  });
+
   it("a rebuild mid-pass answers against the new list", () => {
     const mapping = mounted();
     const scan = mapping.scanToDomain?.();
@@ -455,6 +469,27 @@ describe("tail fast path of a rebuild", () => {
     mapping.rebuild?.([[3, 4, 5, 6, 7]]);
     expect(mapping.toDomain(5)).toBe(0);
     expect(mapping.toDomain(3)).toBe(-2);
+  });
+
+  it("falls back to a full rebuild when a source is rewritten in place at the same length", () => {
+    let fulls = 0;
+    const mapping = barIndexX(new LinearScale(0, 10, 0, 1000), {
+      onFullRebuild: () => {
+        fulls += 1;
+      },
+    });
+    const xs = [0, 2, 4];
+    mapping.rebuild?.([xs]);
+
+    // Same identity, same length, a different front.
+    xs[0] = 1;
+    mapping.rebuild?.([xs]);
+
+    expect(fulls).toBe(2);
+    const expected = fresh([[1, 2, 4]]);
+    for (const x of [1, 1.5, 2, 4]) {
+      expect(mapping.toDomain(x)).toBe(expected.toDomain(x));
+    }
   });
 
   it("falls back to a full rebuild when the appended value is below the existing max", () => {

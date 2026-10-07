@@ -137,6 +137,33 @@ describe('<ChartSeries> order', () => {
     expect(drawOrder(plot(), log)).toEqual(['a', 'b', 'c']);
   });
 
+  /** The toggle lives in a child, so the container doesn't re-render and the series gets no slot from it. */
+  it('should draw a series a child mounts on its own, last in JSX, after its siblings', () => {
+    const { deps, ref, plot } = setup();
+    const log: string[] = [];
+    function Toggle() {
+      const [on, setOn] = useState(false);
+      return on ? (
+        <ChartSeries series={fakeSeries('late', log)} />
+      ) : (
+        <button type="button" onClick={() => setOn(true)}>
+          late
+        </button>
+      );
+    }
+
+    const view = mount(
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartSeries series={fakeSeries('a', log)} />
+        <ChartSeries series={fakeSeries('b', log)} />
+        <Toggle />
+      </ChartContainer>,
+    );
+    act(() => view.getByText('late').click());
+
+    expect(drawOrder(plot(), log)).toEqual(['a', 'b', 'late']);
+  });
+
   it('should drop a series that unmounted', () => {
     const { deps, ref, plot } = setup();
     const log: string[] = [];

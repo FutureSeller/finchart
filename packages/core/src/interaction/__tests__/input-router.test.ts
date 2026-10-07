@@ -147,6 +147,25 @@ describe("InputRouter", () => {
     expect(router.route(move())).toBe(false);
   });
 
+  it("should not call a consumer that an earlier one removed while routing the same event", () => {
+    const router = new InputRouter();
+    const seen: string[] = [];
+    const removeBelow = router.add(consumer("below", seen, true), { priority: 0 });
+    router.add(
+      {
+        handle(event) {
+          seen.push(`above:${event.type}`);
+          removeBelow();
+          return false;
+        },
+      },
+      { priority: 1 },
+    );
+
+    expect(router.route(down())).toBe(false);
+    expect(seen).toEqual(["above:pointerdown"]);
+  });
+
   it("should never capture on wheel", () => {
     const router = new InputRouter();
     const seen: string[] = [];
@@ -270,6 +289,16 @@ describe("the input door — synthesized coordinates aren't ours", () => {
         point: { x: 1, y: 1 },
         pointerId,
       } as never),
+    ).toThrow(ContractError);
+  });
+
+  /** A non-finite button would fail every `=== 0` check and read as a secondary button. */
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+  ])("should refuse %s as a button", (_label, button) => {
+    expect(() =>
+      router().route({ type: "pointerdown", point: { x: 1, y: 1 }, pointerId: 1, button }),
     ).toThrow(ContractError);
   });
 

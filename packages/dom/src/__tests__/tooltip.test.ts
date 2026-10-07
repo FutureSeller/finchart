@@ -151,6 +151,31 @@ describe("tooltip", () => {
     expect(tooltipBox().textContent).toContain("120won");
   });
 
+  it("should mark the row with a dot in its series colour", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    plot.use(tooltip());
+
+    plot.crosshair(paneCenter());
+
+    const dot = tooltipBox().querySelector("span");
+    expect(dot?.textContent).toBe("● ");
+    // jsdom reports the colour in its computed rgb() form.
+    expect(dot?.style.color).toBe("rgb(245, 158, 11)");
+    plot.destroy();
+  });
+
+  it("should redraw the shown box when options change, without waiting for the cursor", () => {
+    const { plot, tooltipBox, paneCenter } = mounted();
+    const installed = plot.use(tooltip());
+    plot.crosshair(paneCenter());
+    expect(tooltipBox().textContent).toContain("120.00");
+
+    installed.applyOptions({ formatValue: (value) => `${value.toFixed(0)}won` });
+
+    expect(tooltipBox().textContent).toContain("120won");
+    plot.destroy();
+  });
+
   it("should never interpret a name as markup", () => {
     const { plot, handle, tooltipBox, paneCenter } = mounted();
     handle.dispose();

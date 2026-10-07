@@ -129,6 +129,23 @@ describe("createSeriesHandle", () => {
     expect(() => handle.dispose()).not.toThrow();
   });
 
+  it("should notify the host once when disposed, and not again on a second dispose", () => {
+    const { handle, notified } = setup();
+    handle.dispose();
+    handle.dispose();
+    expect(notified).toEqual(["default"]);
+  });
+
+  it.each([true, false])(
+    "should hand the host upsert's answer on whether the x values changed (%s)",
+    (answer) => {
+      const { entry, handle, notified } = setup();
+      entry.upsert = () => answer;
+      handle.upsert([{ x: 3 }]);
+      expect(notified).toEqual([{ data: true, refit: false, xValues: answer }]);
+    },
+  );
+
   it("should answer attached from the host, and dispose through it once", () => {
     const remove = vi.fn();
     let registered = true;

@@ -187,6 +187,22 @@ describe("indicator plugins", () => {
     expect(model.plot.panes).toHaveLength(1);
   });
 
+  it("should pin an owned oscillator pane's value axis to its definition's range", () => {
+    const { model, price } = pricedModel();
+    const rsi = model.plot.use(attachRsi({ source: price, period: 5 }));
+    const williams = model.plot.use(attachWilliamsR({ source: price, period: 5 }));
+    model.plot.render();
+
+    // The bounds come from the oscillator's definition, exactly — no
+    // padding and no fit to whatever values the data happened to reach.
+    expect(model.plot.panes[1].yScale.getDomain()).toEqual([0, 100]);
+    expect(model.plot.panes[2].yScale.getDomain()).toEqual([-100, 0]);
+
+    williams.dispose();
+    rsi.dispose();
+    model.plot.destroy();
+  });
+
   it("should leave a borrowed pane's axis alone", () => {
     const { model, price } = pricedModel();
 

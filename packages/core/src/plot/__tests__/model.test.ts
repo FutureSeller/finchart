@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createCanvasAxisLabels } from "../../axis";
 import type { LineDataPoint } from "../../data";
+import { DataError } from "../../primitives";
 import { lineSeries } from "../../series";
 import { createPlotModel } from "../model";
 
@@ -54,6 +56,28 @@ describe("createPlotModel", () => {
 
     const after = model.commands().find((c) => c.type === "drawLine");
     expect(after?.points[0].x).not.toBe(before?.points[0].x);
+  });
+
+  it("should release the plot it built when the initial series is refused", () => {
+    let released = 0;
+    const create = () =>
+      createPlotModel({
+        size,
+        // Out of order — the registration refuses it.
+        series: { series: lineSeries(), data: [{ x: 1, y: 1 }, { x: 0, y: 1 }] },
+        deps: {
+          createAxisLabels: (args) => ({
+            ...createCanvasAxisLabels(args),
+            destroy: () => {
+              released += 1;
+            },
+          }),
+        },
+      });
+
+    expect(create).toThrow(DataError);
+    // The caller never received the plot, so only the model can tear it down.
+    expect(released).toBe(1);
   });
 
   it("should let the wiring override collaborators", () => {

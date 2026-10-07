@@ -283,6 +283,24 @@ describe("createDomDividers on its own", () => {
     dividers.destroy();
   });
 
+  it("ends a drag on a handle whose boundary is gone", () => {
+    const overlay = document.createElement("div");
+    container.appendChild(overlay);
+    const drags: Array<[number, number]> = [];
+    const dividers = createDomDividers(overlay, (index, dy) => void drags.push([index, dy]));
+
+    dividers.render([boundary(0, 100), boundary(1, 120)]);
+    const [, second] = overlay.querySelectorAll("[data-chart-divider]");
+    second.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientY: 200 }));
+    // A pane removed mid-drag leaves one boundary; the grabbed handle has nothing left to resize.
+    dividers.render([boundary(0, 100)]);
+    document.dispatchEvent(new MouseEvent("pointermove", { clientY: 240 }));
+
+    expect(drags).toEqual([]);
+    expect(second.hasAttribute("data-dragging")).toBe(false);
+    dividers.destroy();
+  });
+
   describe("a handle that cannot move", () => {
     const at = (value: { now: number; min: number; max: number }) => ({ index: 0, y: 100, left: 0, right: 200, value, panes: pair });
     let pair: readonly [Pane, Pane];

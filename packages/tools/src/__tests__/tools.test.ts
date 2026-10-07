@@ -155,6 +155,43 @@ describe("drawingTools drawing", () => {
     expect(centres).toEqual(expected);
   });
 
+  /** The line segments `drawOne` emits for `drawing`, in the identity space. */
+  const segmentsOf = (drawing: Drawing): { x: number; y: number }[][] => {
+    const segments: { x: number; y: number }[][] = [];
+    const target: DrawTarget = {
+      drawLine: (points) => {
+        segments.push(points.map(({ x, y }) => ({ x, y })));
+      },
+      drawShape: () => undefined,
+      drawText: () => undefined,
+      drawCustom: () => undefined,
+    };
+    const context = { readStyle: () => "", formatValue: String, barIndexAt: () => null };
+    drawOne(target, space, context, drawing, { width: 1, color: "#000" }, false);
+    return segments;
+  };
+
+  it("should run a horizontal line from the pane's left edge to its right edge", () => {
+    expect(segmentsOf({ type: "horizontal", id: "d", price: 30 })).toEqual([
+      [{ x: 0, y: 30 }, { x: 100, y: 30 }],
+    ]);
+  });
+
+  /** b to the left of a — the levels still cover the whole swing, whichever anchor came first. */
+  it("should span a fib's levels between its anchors when b lies left of a", () => {
+    const segments = segmentsOf({
+      type: "fib",
+      id: "d",
+      a: { x: 70, price: 80 },
+      b: { x: 10, price: 20 },
+      levels: [0, 1],
+    });
+    expect(segments).toEqual([
+      [{ x: 10, y: 20 }, { x: 70, y: 20 }],
+      [{ x: 10, y: 80 }, { x: 70, y: 80 }],
+    ]);
+  });
+
   it("should take a drawing back through its handle", () => {
     const { model, tools } = mounted();
     const before = lines(model).length;

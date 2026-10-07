@@ -306,6 +306,27 @@ describe("PointerInteractions wheel", () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it("should cap one event at one notch when zooming out too", () => {
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    wheel(1000);
+
+    expect(product()).toBeCloseTo(1 / 1.1);
+    interactions.disconnect();
+  });
+
+  it("should read a page-mode delta as the element's width", () => {
+    Object.defineProperty(element, "clientWidth", { value: 800 });
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    element.dispatchEvent(new WheelEvent("wheel", { deltaX: -1, deltaMode: 2, clientX: 150, cancelable: true }));
+
+    expect(target.pixelPans).toEqual([800]);
+    interactions.disconnect();
+  });
+
   it("should leave a horizontal swipe to the page when panning is off", () => {
     new PointerInteractions(element, { pan: false }).connect(target.target);
     const event = new WheelEvent("wheel", { deltaX: -40, clientX: 150, cancelable: true });
@@ -659,6 +680,33 @@ describe("PointerInteractions pinch (2.4)", () => {
     expect(target.pixelPans).toEqual([30]);
   });
 
+  it("should hold the zoom while the fingers overlap, instead of collapsing it", () => {
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    downAt(1, 100);
+    downAt(2, 200);
+    // 100px squeezed to 4px would be a 0.04x zoom in one frame.
+    moveAt(2, 104);
+
+    expect(target.pixelZooms).toEqual([]);
+    interactions.disconnect();
+  });
+
+  it("should anchor the pinch midpoint inside the container's border", () => {
+    Object.defineProperty(element, "clientLeft", { value: 3 });
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    downAt(1, 100);
+    downAt(2, 200);
+    moveAt(2, 250);
+
+    // Midpoint 175 - rect.left 50 - border 3.
+    expect(target.pixelZooms[0].screenX).toBe(122);
+    interactions.disconnect();
+  });
+
   it("should not pinch when zooming is disabled", () => {
     new PointerInteractions(element, { zoom: false }).connect(target.target);
 
@@ -882,6 +930,39 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     expect(target.pixelZooms[0].screenX).toBe(400);
   });
 
+  it("should zoom in with the unshifted plus key", () => {
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    // `=` shares the key with `+`; without Shift it is what the key sends.
+    element.dispatchEvent(new KeyboardEvent("keydown", { key: "=", bubbles: true }));
+
+    expect(target.pixelZooms.map((zoom) => zoom.factor)).toEqual([1.1]);
+    interactions.disconnect();
+  });
+
+  it("should leave Alt combos to the browser", () => {
+    const routed: string[] = [];
+    const spying = {
+      ...target.target,
+      routeInput: (event: InputEvent) => {
+        if (event.type === "keydown") routed.push(event.key);
+        return false;
+      },
+    };
+    const interactions = new PointerInteractions(element);
+    interactions.connect(spying);
+
+    // Alt+← is the browser's back navigation.
+    const event = new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true, cancelable: true });
+    element.dispatchEvent(event);
+
+    expect(routed).toEqual([]);
+    expect(target.pixelPans).toEqual([]);
+    expect(event.defaultPrevented).toBe(false);
+    interactions.disconnect();
+  });
+
   it("should leave modifier combos to the browser", () => {
     new PointerInteractions(element).connect(target.target);
 
@@ -990,6 +1071,90 @@ describe("PointerInteractions kinetic scroll (2.4)", () => {
     expect(target.pixelPans.length).toBe(panned);
   });
 
+  /**
+   * A hand-driven clock and frame queue — how long the pointer rested and
+   * how the coast decays are about elapsed time, which real waits make
+   * flaky.
+   */
+  function manualFrames() {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const queued = new Map<number, FrameRequestCallback>();
+    let nextId = 0;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextId += 1;
+      queued.set(nextId, callback);
+      return nextId;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => void queued.delete(id));
+
+    return {
+      advance: (ms: number) => void (now += ms),
+      /** Runs queued frames 16ms apart; true when the coast ended within `limit` frames. */
+      settle: (limit = 1_000) => {
+        for (let frame = 0; frame < limit; frame++) {
+          const [entry] = queued;
+          if (!entry) return true;
+          queued.delete(entry[0]);
+          now += 16;
+          entry[1](now);
+        }
+        return queued.size === 0;
+      },
+    };
+  }
+
+  it("should not coast when the pointer rested before release", () => {
+    const frames = manualFrames();
+    const interactions = new PointerInteractions(element, { kineticScroll: true });
+    interactions.connect(target.target);
+
+    down(100);
+    frames.advance(16);
+    move(160);
+    frames.advance(200);
+    up();
+    frames.settle();
+
+    expect(target.pixelPans).toEqual([60]);
+    interactions.disconnect();
+  });
+
+  it("should not coast after a drag too slow to throw", () => {
+    const frames = manualFrames();
+    const interactions = new PointerInteractions(element, { kineticScroll: true });
+    interactions.connect(target.target);
+
+    down(100);
+    frames.advance(40);
+    move(101);
+    frames.advance(10);
+    up();
+    frames.settle();
+
+    expect(target.pixelPans).toEqual([1]);
+    interactions.disconnect();
+  });
+
+  it("should slow the coast frame by frame until it stops", () => {
+    const frames = manualFrames();
+    const interactions = new PointerInteractions(element, { kineticScroll: true });
+    interactions.connect(target.target);
+
+    down(100);
+    frames.advance(16);
+    move(148);
+    frames.advance(16);
+    up();
+    const stopped = frames.settle();
+
+    const coast = target.pixelPans.slice(1);
+    expect(stopped).toBe(true);
+    expect(coast.length).toBeGreaterThan(1);
+    for (let i = 1; i < coast.length; i++) expect(coast[i]).toBeLessThan(coast[i - 1]);
+    interactions.disconnect();
+  });
+
   it("should not flow at all by default", async () => {
     new PointerInteractions(element).connect(target.target);
 
@@ -1028,6 +1193,33 @@ describe("PointerInteractions click trio (2.5)", () => {
     );
 
     expect(target.clicks).toEqual([]);
+  });
+
+  /** A press that wandered five pixels is still a click; one more pixel makes it a drag. */
+  it("should pass the click through after five pixels of travel", () => {
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    down(100);
+    move(105);
+    up();
+    element.dispatchEvent(new MouseEvent("click", { clientX: 105, bubbles: true }));
+
+    expect(target.clicks).toHaveLength(1);
+    interactions.disconnect();
+  });
+
+  it("should swallow the click after a short drag just past the threshold", () => {
+    const interactions = new PointerInteractions(element);
+    interactions.connect(target.target);
+
+    down(100);
+    move(106);
+    up();
+    element.dispatchEvent(new MouseEvent("click", { clientX: 106, bubbles: true }));
+
+    expect(target.clicks).toEqual([]);
+    interactions.disconnect();
   });
 
   it("should echo the context menu", () => {

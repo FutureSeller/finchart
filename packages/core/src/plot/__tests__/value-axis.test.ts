@@ -41,6 +41,13 @@ describe("replantScale", () => {
     expect(next.getDomain()).toEqual(before);
   });
 
+  it("should refuse a scale whose kind is empty", () => {
+    const blank = Object.assign(new LinearScale(), { kind: "" });
+    expect(() => replantScale(blank, new LinearScale(), null, 0.1, noHints)).toThrow(
+      /nonempty kind/,
+    );
+  });
+
   it("should not swallow anything but a contract violation", () => {
     const current = new LinearScale();
     const broken = new LinearScale();

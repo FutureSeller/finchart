@@ -176,6 +176,20 @@ describe("autoScale: false", () => {
     expect(plot.mainPane.yScale.getDomain()).toEqual([-5, 5]);
   });
 
+  it("should fit the whole dataset when asked to fit a visible slice", () => {
+    const { plot, handle } = mount({ autoScale: false });
+    handle.setData(ramp);
+    plot.render();
+
+    // The slice is ignored with autoScale off — that is what keeps a manual axis whole.
+    plot.mainPane.fitValueDomain({ startX: 90, endX: 99, width: 800, height: 600 });
+
+    const { min, max } = fittedExtent(plot.mainPane.yScale.getDomain());
+    expect(min).toBeCloseTo(0, 5);
+    expect(max).toBeCloseTo(990, 5);
+    plot.destroy();
+  });
+
   it("should still fit once when a series is added", () => {
     const { plot } = mount({ autoScale: false });
     plot.mainPane.clearSeries();

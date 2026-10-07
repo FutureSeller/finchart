@@ -152,6 +152,16 @@ describe("render draws what hit-testing checks", () => {
     expect(record(fromZero).texts[0].text).toBe("+20.00");
   });
 
+  it("priceMeasure: a flat move reads as no change, not as a loss", () => {
+    const flat: Drawing = {
+      type: "priceMeasure",
+      id: "f",
+      a: { x: 20, price: 50 },
+      b: { x: 60, price: 50 },
+    };
+    expect(record(flat).texts[0].text).toBe("+0.00 (+0.00%)");
+  });
+
   it("barMeasure: counts bars by the pane's bar index, not by x", () => {
     // Bars every 10 x — data x 20..60 are bars 2..6.
     const { lines, texts } = record(box("barMeasure"), {

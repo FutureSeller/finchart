@@ -51,6 +51,18 @@ describe("zero-coverage reporter", () => {
     expect(run(true, measured(0))).not.toHaveBeenCalled();
   });
 
+  // One verdict per measurement: a run end that brought no new coverage map
+  // must not repeat the failure an earlier one already reported.
+  it("reports an empty measurement once, not again at a later run end", () => {
+    const fail = vi.fn<(message: string) => void>();
+    const reporter = new ZeroCoverageReporter({ fail });
+    reporter.onInit({ config: { watch: false } });
+    reporter.onCoverage(measured(0));
+    reporter.onTestRunEnd();
+    reporter.onTestRunEnd();
+    expect(fail).toHaveBeenCalledOnce();
+  });
+
   it("fails closed on a coverage map it cannot read — a guard that cannot look must not pass", () => {
     expect(run(false, {})).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/cannot read the coverage map/));
     expect(run(false, undefined)).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/cannot read the coverage map/));

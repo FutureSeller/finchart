@@ -121,6 +121,23 @@ describe("LogScale.tickGeometry — stepAt", () => {
     expect(geometry.stepAt(1.234)).toBe(0.1);
   });
 
+  /**
+   * `0.9000000000000001 / 0.1` rounds down to exactly 9, and 9 × 0.1 is
+   * 0.9 — below the domain. The run starts at the next multiple instead of
+   * at the domain's unrounded edge.
+   */
+  it("starts the linear run on a multiple of its step when the edge sits a rounding past one", () => {
+    const values = logScale(0.9000000000000001, 1.8).tickGeometry(SPACING).values();
+    expect(Math.abs(values[0] / 1 - 1)).toBeLessThan(1e-9);
+    expect(Math.abs(values[1] / 1.1 - 1)).toBeLessThan(1e-9);
+  });
+
+  /** Two ticks either way on [1, 4.06] at 100px — the rounder ladder takes the tie. */
+  it("prefers the ladder when both candidates offer as many ticks", () => {
+    const geometry = logScale(1, 4.06, 100).tickGeometry(SPACING);
+    expect(geometry.values()).toEqual([1, 2]);
+  });
+
   it("stays positive and finite for any input", () => {
     const geometry = logScale(0.5011, 1995.3).tickGeometry(SPACING);
     for (const v of [0, -1, Number.MIN_VALUE, 1e308, Number.NaN, Infinity]) {

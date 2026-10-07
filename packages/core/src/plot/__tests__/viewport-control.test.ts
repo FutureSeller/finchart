@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import { createPlotModel } from "../model";
+import type { PlotEventSource, ViewportControl } from "../capabilities";
+import type { PlotEvents } from "../events";
+import { eventChannel } from "../../primitives";
 import { syncX } from "../../extensions/sync";
 
 const data: LineDataPoint[] = [
@@ -154,6 +157,34 @@ describe("syncX (2.3)", () => {
     b.pan(10);
     expect(a.getVisibleRange()).not.toEqual(b.getVisibleRange());
     expect(c.getVisibleRange()).toEqual(window);
+  });
+
+  /**
+   * Nothing in the contract promises that a host stays quiet when handed the
+   * window it already shows, so the echo must be cut on the syncing side.
+   */
+  it("should not bounce a change back to its origin when a host announces every set", () => {
+    function announcingHost() {
+      const events = eventChannel<PlotEvents>();
+      const sets: number[][] = [];
+      const host: PlotEventSource & ViewportControl = {
+        on: (event, handler) => events.on(event, handler),
+        setVisibleRange(startX, endX) {
+          sets.push([startX, endX]);
+          events.emit("xDomainChange", { startX, endX, dataRange: null });
+        },
+      };
+      return { host, sets };
+    }
+    const a = announcingHost();
+    const b = announcingHost();
+    const release = syncX(a.host, b.host);
+
+    a.host.setVisibleRange(10, 40);
+
+    expect(a.sets).toEqual([[10, 40]]);
+    expect(b.sets).toEqual([[10, 40]]);
+    release();
   });
 
   it("should not double-shift on new bars when every synced plot follows", () => {

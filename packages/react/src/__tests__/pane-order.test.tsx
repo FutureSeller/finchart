@@ -85,3 +85,33 @@ it('leaves a pane added through plotRef where it was put', () => {
 
   expect(keys()).toEqual(['empty', 'price', 'rsi']);
 });
+
+it('stacks a pane above the pane nested in it once a JSX move restacks', () => {
+  const deps = browserDeps({ createLayers: layersSpy().createLayers });
+  const ref = createRef<Plot>();
+  const ui = (inserted: boolean) => (
+    <ChartContainer deps={deps} data={data} plotRef={ref}>
+      <ChartPane key="price">
+        <ChartSeries series={series.price} />
+        <ChartPane key="rsi">
+          <ChartSeries series={series.rsi} />
+        </ChartPane>
+      </ChartPane>
+      {inserted && <ChartPane key="empty" />}
+      <ChartPane key="macd">
+        <ChartSeries series={series.macd} />
+      </ChartPane>
+    </ChartContainer>
+  );
+  const view = render(ui(false));
+  const plot = ref.current;
+  if (!plot) throw new Error('plot is not mounted');
+  const keys = () => plot.panes.map((pane) => nameOf.get(pane.getSeries()[0]) ?? 'empty');
+  expect(keys()).toEqual(['price', 'rsi', 'macd']);
+  act(() => plot.setPaneOrder([...plot.panes].reverse()));
+
+  // The inserted pane moves the rank of the one after it, so the stack is sorted by JSX path again.
+  act(() => view.rerender(ui(true)));
+
+  expect(keys()).toEqual(['price', 'rsi', 'empty', 'macd']);
+});

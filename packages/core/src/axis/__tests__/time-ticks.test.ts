@@ -1079,3 +1079,164 @@ describe("timeTicks.format — the decorations' label, in the strategy's own clo
     expect(onTheMinute).toContain(":00");
   });
 });
+
+/**
+ * A bar-index context: the domain is a bar's index, a boundary that falls
+ * between bars is drawn on the first bar after it, and `positions` says
+ * where each bar is drawn (100px apart unless given).
+ */
+function barContext(
+  bars: readonly number[],
+  minTickSpacing: number,
+  positions: readonly number[] = bars.map((_, index) => index * 100),
+): TickStrategyContext {
+  return {
+    min: 0,
+    max: bars.length - 1,
+    span: positions[positions.length - 1] - positions[0],
+    minTickSpacing,
+    xOf: (value) => bars[value],
+    domainOf: (x) => {
+      let at = 0;
+      while (at < bars.length - 2 && bars[at + 1] <= x) at++;
+      return at + (x - bars[at]) / (bars[at + 1] - bars[at]);
+    },
+    positionOf: (value) => positions[value],
+    snap: (value) => Math.ceil(value),
+  };
+}
+
+/**
+ * **Where several boundaries land on one bar, the bar keeps the heaviest,
+ * and the nearest only between equals.** Nothing about a bar's position
+ * changes with the choice; what changes is what the tick reads and how it
+ * fares against its neighbours for room.
+ */
+describe("timeTicks — boundaries that share a bar", () => {
+  const MINUTE_MS = 60 * 1000;
+  const HOUR_MS = 60 * MINUTE_MS;
+
+  /**
+   * Six-hourly bars with the night of the 5th missing: its midnight, 06:00
+   * and 12:00 all land on the 12:00 bar, which is drawn 10px after the
+   * 18:00 bar of the 4th. The midnight is the heavier of the crowded pair,
+   * so the 18:00 tick gives way — even though 12:00, the boundary the bar
+   * sits on, is nearer.
+   */
+  it("keeps a day's start on the bar it lands on over a nearer time of day", () => {
+    const start = ms("2026-03-04T00:00Z");
+    const bars = [0, 6, 12, 18, 36, 42, 48, 54].map((hours) => start + hours * HOUR_MS);
+    const ticks = timeTicks(UTC).ticks(
+      barContext(bars, 60, [0, 100, 200, 300, 310, 410, 510, 610]),
+    );
+
+    expect(ticks.map((tick) => tick.label)).toEqual([
+      "3/4",
+      "06:00",
+      "12:00",
+      "3/5",
+      "18:00",
+      "3/6",
+      "06:00",
+    ]);
+  });
+
+  /**
+   * Minute bars, fifteen-second boundaries: 00:00:15, :30 and :45 all land
+   * on the 00:01 bar. Being a few seconds past midnight makes none of them
+   * a day's start, so the bar keeps its own boundary.
+   */
+  it("weighs a boundary seconds past midnight as a time of day", () => {
+    const start = ms("2026-03-04T00:00Z");
+    const bars = [0, 1, 2].map((minutes) => start + minutes * MINUTE_MS);
+    const ticks = timeTicks(UTC).ticks(barContext(bars, 10));
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["3/4", "00:01", "00:02"]);
+  });
+});
+
+describe("timeTicks — boundaries at the window's own edges and weights", () => {
+  /**
+   * A year's January outweighs every other 1st. Drawn 10px before
+   * January, the 1st of December is the one that gives way.
+   */
+  it("keeps a year over the month crowding it", () => {
+    const min = ms("2025-10-15T00:00Z");
+    const max = ms("2026-03-15T00:00Z");
+    const december = ms("2025-12-01T00:00Z");
+    const january = ms("2026-01-01T00:00Z");
+    const base = context(min, max);
+    const ticks = timeTicks(UTC).ticks({
+      ...base,
+      positionOf: (value) =>
+        value === december ? base.positionOf(january) - 10 : base.positionOf(value),
+    });
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["Nov", "2026", "Feb", "Mar"]);
+  });
+
+  /**
+   * The allowance is a millionth of a pixel and no more: a pair standing
+   * exactly that much closer than asked is kept, a pair two millionths of a
+   * pixel closer is not.
+   */
+  it("keeps a pair standing a millionth of a pixel closer than asked", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const min = ms("2026-03-02T00:00Z");
+    const ticks = timeTicks(UTC).ticks({
+      ...context(min, min + DAY_MS, 80, 80),
+      positionOf: (value) => ((value - min) / DAY_MS) * (80 - 1e-6),
+    });
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["3/2", "3/3"]);
+  });
+
+  it("drops a pair standing two millionths of a pixel closer than asked", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const min = ms("2026-03-02T00:00Z");
+    const ticks = timeTicks(UTC).ticks({
+      ...context(min, min + DAY_MS, 80, 80),
+      positionOf: (value) => ((value - min) / DAY_MS) * (80 - 2e-6),
+    });
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["3/2"]);
+  });
+
+  it("opens on the month a window starts exactly at", () => {
+    const ticks = timeTicks(UTC).ticks(
+      context(ms("2026-02-01T00:00Z"), ms("2026-07-15T00:00Z")),
+    );
+
+    expect(ticks.map((tick) => tick.label)).toEqual(["Feb", "Mar", "Apr", "May", "Jun", "Jul"]);
+  });
+
+  /**
+   * Fifty 365-day years over 800px at 80px apart asks for exactly five
+   * years between ticks — a rung of the 1·2·5 ladder, so it is taken
+   * rather than the next one up.
+   */
+  it("takes a five-year step when exactly five years are asked for", () => {
+    const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+    const min = Date.UTC(2000, 0, 1);
+    const ticks = timeTicks(UTC).ticks(context(min, min + 50 * YEAR_MS, 800, 80));
+
+    expect(ticks.map((tick) => tick.label)).toEqual([
+      "2000", "2005", "2010", "2015", "2020", "2025", "2030", "2035", "2040", "2045",
+    ]);
+  });
+
+  /**
+   * At the earliest January a `Date` reaches, a fifty-year step still lands
+   * on multiples of fifty — the first year that can be asked about is not
+   * one, so the axis starts at the first multiple after it.
+   */
+  it("keeps the year ladder on its multiples at the start of what a Date can hold", () => {
+    const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+    const ticks = timeTicks(UTC).ticks(context(-8.64e15, -8.64e15 + 500 * YEAR_MS, 800, 80));
+
+    expect(new Date(ticks[0].value).toISOString()).toBe("-271800-01-01T00:00:00.000Z");
+    for (const tick of ticks) {
+      expect(Math.abs(new Date(tick.value).getUTCFullYear() % 50)).toBe(0);
+    }
+  });
+});

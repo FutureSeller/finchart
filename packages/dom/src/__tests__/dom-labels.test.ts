@@ -5,7 +5,7 @@ import {
   fakeElement,
   type FakeElement,
 } from "./fakes";
-import { AXIS_LABEL_OFFSET, type PlotArea } from "@finchart/core";
+import { AXIS_LABEL_OFFSET, BADGE_PADDING, type PlotArea } from "@finchart/core";
 import { createDomAxisLabels } from "../dom-labels";
 import type { Tick } from "@finchart/core";
 
@@ -196,6 +196,35 @@ describe("createDomAxisLabels", () => {
     expect(first.style.font).toBeUndefined();
   });
 
+  it("should size labels from the label font-size variable", () => {
+    const target = overlay();
+    const labels = createDomAxisLabels({ overlay: target, target: noopTarget });
+
+    labels.render({ x: xTicks, y: [], badges: [], area, axes, readStyle });
+
+    const [first] = axisLabels(target);
+    expect(first.style.fontSize).toContain("--chart-label-font-size");
+    labels.destroy();
+  });
+
+  it("should pad a badge so its text does not touch the box edge", () => {
+    const target = overlay();
+    const labels = createDomAxisLabels({ overlay: target, target: noopTarget });
+
+    labels.render({
+      x: [],
+      y: [],
+      badges: [{ axis: "y", position: 300, label: "104.40", back: "#334155", color: "#f8fafc" }],
+      area,
+      axes,
+      readStyle,
+    });
+
+    const [badge] = axisLabels(target);
+    expect(badge.style.padding).toBe(`${BADGE_PADDING}px ${BADGE_PADDING}px`);
+    labels.destroy();
+  });
+
   it("should let pointer events pass through", () => {
     const target = overlay();
     createDomAxisLabels({ overlay: target, target: noopTarget });
@@ -252,6 +281,24 @@ describe("createDomAxisLabels", () => {
       "translateX(clamp(0px, -50%, calc(776px - 100%)))",
       "translateX(clamp(-370px, -50%, calc(406px - 100%)))",
     ]);
+  });
+
+  it("lets x labels spread into a left y gutter", () => {
+    const target = overlay();
+    const labels = createDomAxisLabels({ overlay: target, target: noopTarget });
+    const leftAxes = {
+      x: null,
+      y: { left: 0, right: area.left, top: area.top, bottom: area.bottom },
+    };
+
+    labels.render({ x: xTicks, y: [], badges: [], area, axes: leftAxes, readStyle });
+
+    // The left bound is the gutter's left edge (0), not the data area's (40).
+    expect(axisLabels(target).map((label) => label.style.transform)).toEqual([
+      "translateX(clamp(-40px, -50%, calc(740px - 100%)))",
+      "translateX(clamp(-410px, -50%, calc(370px - 100%)))",
+    ]);
+    labels.destroy();
   });
 });
 

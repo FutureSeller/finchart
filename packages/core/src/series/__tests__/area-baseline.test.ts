@@ -53,6 +53,26 @@ describe("areaSeries", () => {
     }
   });
 
+  it("should drop each fill straight down from both ends of its line", () => {
+    const { model, polygons, lines } = mounted({ series: areaSeries(), data });
+
+    const bottom = model.plot.mainPane.area.bottom;
+    expect(polygons).toHaveLength(lines.length);
+    for (const [i, polygon] of polygons.entries()) {
+      const line = lines[i];
+      if (polygon.type !== "drawShape" || polygon.shape.shape !== "polygon") throw new Error("no fill drawn");
+      if (line.type !== "drawLine") throw new Error("no line drawn");
+      const first = line.points[0];
+      const last = line.points[line.points.length - 1];
+      // The closing corners, in drawing order: under the last point, then under the first.
+      expect(polygon.shape.points.slice(-2)).toEqual([
+        { x: last.x, y: bottom },
+        { x: first.x, y: bottom },
+      ]);
+    }
+    model.plot.destroy();
+  });
+
   it("should stay a flat fill without fillBottom — no custom command", () => {
     const { model } = mounted({ series: areaSeries(), data });
 

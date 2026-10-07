@@ -242,3 +242,25 @@ it('does not complete a stationary click merely because the first anchor snapped
   expect(api.list()).toHaveLength(1);
   api.dispose();
 });
+
+it('snaps a vertical line to a bar exactly the snap radius away', () => {
+  const { api, route, setSamples } = mountDrawingStage();
+  api.setSnap(true);
+  setSamples([{ series: lineSeries(), name: null, color: null, x: 50, value: 56, min: null, max: null, index: 0 }]);
+  api.begin('vertical');
+  route('pointerdown', 58, 20); route('pointerup', 58, 20);
+  expect(api.list()).toMatchObject([{ type: 'vertical', x: 50 }]);
+  api.dispose();
+});
+
+it('leaves a trend anchor free when it is level with a bar value but too far from the bar', () => {
+  const { api, route, setSamples } = mountDrawingStage();
+  api.setSnap(true);
+  setSamples([{ series: lineSeries(), name: null, color: null, x: 50, value: 56, min: null, max: null, index: 0 }]);
+  api.begin('trend');
+  // On the bar's value, 20px to its side — the radius is measured on screen in both axes.
+  route('pointerdown', 70, 56); route('pointerup', 70, 56);
+  route('pointerdown', 90, 90); route('pointerup', 90, 90);
+  expect(api.list()).toMatchObject([{ type: 'trend', a: { x: 70, price: 56 } }]);
+  api.dispose();
+});

@@ -142,6 +142,26 @@ describe("issues", () => {
     expect(issues?.[0]?.message).toContain("coordinates accessor");
   });
 
+  /**
+   * A point without a value in the middle is whitespace, but a mis-mapped
+   * field leaves every point without one — the last point is read too, so
+   * the mistake shows even when the first point happens to carry a value.
+   */
+  it("should flag a last point the accessor reads no value from", () => {
+    interface Reading {
+      x: number;
+      value?: number;
+    }
+    const byValue: CoordinateAccessor<Reading> = {
+      getX: (point) => point.x,
+      getY: (point) => point.value,
+    };
+
+    const issues = validateSeriesData<Reading>([{ x: 0, value: 1 }, { x: 1, value: 2 }, { x: 2 }], byValue);
+
+    expect(issues?.map((issue) => [issue.code, issue.index])).toEqual([["unreadable-y", 2]]);
+  });
+
   it("should check OHLC fields through the given accessor", () => {
     const issues = validateSeriesData(
       [{ x: 0, open: 1, high: Number.NaN, low: 0, close: 1 }],

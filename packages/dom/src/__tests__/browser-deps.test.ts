@@ -77,6 +77,31 @@ describe("browserDeps's resolution observation", () => {
   });
 });
 
+describe("browserDeps's pointer input", () => {
+  it("should wire pointer input by default", () => {
+    const deps = browserDeps()(document.createElement("div"));
+
+    expect(deps.interactions).toBeDefined();
+  });
+
+  it("should wire no input at all for pointer: false", () => {
+    const deps = browserDeps({ pointer: false })(document.createElement("div"));
+
+    expect(deps.interactions).toBeUndefined();
+  });
+});
+
+describe("browserDeps's overrides", () => {
+  it("should use a consumer's style reader instead of the container's CSS", () => {
+    const reader = (name: string) => (name === "--chart-up" ? "#00ff00" : "");
+    const deps = browserDeps({ pointer: false, createStyleReader: () => reader })(
+      document.createElement("div"),
+    );
+
+    expect(deps.createStyleReader()).toBe(reader);
+  });
+});
+
 describe("browserDeps's layers", () => {
   const { getContext } = HTMLCanvasElement.prototype;
   afterEach(() => {

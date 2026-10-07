@@ -10,7 +10,7 @@ import { volumeProfile } from "../volume-profile";
 const FILL = "#vp-fill";
 const POC = "#vp-poc";
 
-function mounted(candles: OHLC[], bins: number) {
+function mounted(candles: OHLC[], bins: number, widthFraction?: number) {
   const model = createPlotModel({
     size: { width: 800, height: 600 },
     series: { series: candleSeries(), data: candles },
@@ -23,6 +23,7 @@ function mounted(candles: OHLC[], bins: number) {
     volumeProfile({
       source: { read: () => candles },
       bins,
+      widthFraction,
       style: { fill: FILL, poc: POC },
     }),
   );
@@ -74,6 +75,91 @@ describe("volumeProfile", () => {
     );
     // POC(30) : the rest(5) = 6 : 1
     expect(Math.max(...widths) / Math.min(...widths)).toBeCloseTo(6, 6);
+  });
+
+  it("should paint the POC colour on the peak bucket when the peak is not the lowest price", () => {
+    // ~10 (vol 5) lands in the lower bucket, ~40 (vol 30) in the upper one.
+    const model = mounted([bar(0, 10, 5), bar(1, 40, 30)], 2);
+
+    const shapes = profileRects(model).flatMap((command) =>
+      command.type === "drawShape" && command.shape.shape === "rect" ? [command.shape] : [],
+    );
+    expect(shapes).toHaveLength(2);
+    const [poc, rest] = [shapes.filter((s) => s.fill === POC), shapes.filter((s) => s.fill === FILL)];
+    expect(poc).toHaveLength(1);
+    expect(rest).toHaveLength(1);
+    expect(poc[0].width).toBeGreaterThan(rest[0].width);
+    // Higher price is higher on screen — a smaller pixel y.
+    expect(poc[0].y).toBeLessThan(rest[0].y);
+    model.plot.destroy();
+  });
+
+  it("should bucket a typical price into the range that contains it, not the nearest boundary", () => {
+    // Prices span 9..41, so with two buckets the boundary is 25. A typical
+    // price of 18 sits in the lower bucket even though it is past that
+    // bucket's midpoint — together with ~10 it makes the lower bucket the peak.
+    const model = mounted([bar(0, 10, 1), bar(1, 40, 1), bar(2, 18, 10)], 2);
+
+    const shapes = profileRects(model).flatMap((command) =>
+      command.type === "drawShape" && command.shape.shape === "rect" ? [command.shape] : [],
+    );
+    const poc = shapes.filter((s) => s.fill === POC);
+    const rest = shapes.filter((s) => s.fill === FILL);
+    expect(poc).toHaveLength(1);
+    expect(rest).toHaveLength(1);
+    // Lower prices sit lower on screen — a larger pixel y.
+    expect(poc[0].y).toBeGreaterThan(rest[0].y);
+    // 1 + 10 against 1.
+    expect(poc[0].width / rest[0].width).toBeCloseTo(11, 6);
+    model.plot.destroy();
+  });
+
+  it("should count a bar whose typical price is the range's very top in the top bucket", () => {
+    // A flat bar (H = L = C) at the highest price puts its typical price
+    // exactly on the upper bound of the range.
+    const flatTop: OHLC = { x: 1, open: 20, high: 20, low: 20, close: 20, volume: 5 };
+    const model = mounted([bar(0, 10, 5), flatTop], 2);
+
+    const shapes = profileRects(model).flatMap((command) =>
+      command.type === "drawShape" && command.shape.shape === "rect" ? [command.shape] : [],
+    );
+    expect(shapes).toHaveLength(2);
+    expect(shapes[0].width).toBeCloseTo(shapes[1].width, 6);
+    model.plot.destroy();
+  });
+
+  it("should stack the buckets edge to edge over the price range, right-aligned, with a 1px gap", () => {
+    // Prices span 9..41, so two buckets meet at 25.
+    const model = mounted([bar(0, 10, 5), bar(1, 40, 30)], 2);
+
+    const shapes = profileRects(model).flatMap((command) =>
+      command.type === "drawShape" && command.shape.shape === "rect" ? [command.shape] : [],
+    );
+    expect(shapes).toHaveLength(2);
+    const [lower, upper] = shapes;
+    const y = (price: number) => model.plot.mainPane.yScale.scale(price);
+    expect(upper.y).toBeCloseTo(y(41), 6);
+    expect(upper.height).toBeCloseTo(y(25) - y(41) - 1, 6);
+    expect(lower.y).toBeCloseTo(y(25), 6);
+    expect(lower.height).toBeCloseTo(y(9) - y(25) - 1, 6);
+    // Bars of different lengths grow leftward from one shared right edge.
+    expect(lower.width).not.toBeCloseTo(upper.width, 6);
+    expect(lower.x + lower.width).toBeCloseTo(upper.x + upper.width, 6);
+    model.plot.destroy();
+  });
+
+  it("should size the longest bar by widthFraction of the data area", () => {
+    const candles = [bar(0, 10, 5), bar(1, 40, 30)];
+    const longest = (widthFraction: number) => {
+      const model = mounted(candles, 2, widthFraction);
+      const widths = profileRects(model).flatMap((command) =>
+        command.type === "drawShape" && command.shape.shape === "rect" ? [command.shape.width] : [],
+      );
+      model.plot.destroy();
+      return Math.max(...widths);
+    };
+
+    expect(longest(0.4) / longest(0.2)).toBeCloseTo(2, 6);
   });
 
   it("should treat a null volume as absence — the halted day draws no bar", () => {

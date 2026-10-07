@@ -141,3 +141,36 @@ describe('<ChartContainer containerRef>', () => {
     expect(heard).toEqual(['Escape']);
   });
 });
+
+/** The chart's own handles follow the same lifetime: the live plot while mounted, then `null`, so nothing holds a destroyed one. */
+describe('<ChartContainer plotRef> and onPlot', () => {
+  it('plotRef holds the live plot while mounted, and null after', () => {
+    const { deps } = setup();
+    const plotRef = createRef<Plot>();
+    const view = render(
+      <ChartContainer deps={deps} data={candles} plotRef={plotRef}>
+        <ChartCandles />
+      </ChartContainer>,
+    );
+    expect(plotRef.current?.mainPane.probe(5)).toHaveLength(1);
+
+    view.unmount();
+    expect(plotRef.current).toBeNull();
+  });
+
+  it('onPlot hears the plot on mount, and null on unmount', () => {
+    const { deps } = setup();
+    const heard: (Plot | null)[] = [];
+    const view = render(
+      <ChartContainer deps={deps} data={candles} onPlot={(plot) => heard.push(plot)}>
+        <ChartCandles />
+      </ChartContainer>,
+    );
+    expect(heard).toHaveLength(1);
+    expect(heard[0]).not.toBeNull();
+
+    view.unmount();
+    expect(heard).toHaveLength(2);
+    expect(heard[1]).toBeNull();
+  });
+});

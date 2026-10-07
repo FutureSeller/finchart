@@ -163,6 +163,44 @@ describe("paneMaximize gestures", () => {
     expect(max.maximizedPane).toBe(added[1]);
   });
 
+  it("leaves a double-click in the gap between panes alone", () => {
+    const { plot, added } = setup();
+    const max = plot.use(paneMaximize({ gestures: true }));
+    plot.applyOptions({ paneGap: 20 });
+    plot.render();
+    const { area } = added[0];
+
+    const consumed = plot.routeInput({
+      type: "dblclick",
+      point: { x: (area.left + area.right) / 2, y: area.bottom + 10 },
+    });
+
+    expect(consumed).toBe(false);
+    expect(max.maximizedPane).toBeNull();
+    plot.destroy();
+  });
+
+  it("lets a consumer at the default priority answer Escape first, even one installed earlier", () => {
+    const { plot, added } = setup();
+    const keys: string[] = [];
+    // Stands in for a drawing tool cancelling its own gesture.
+    plot.addInputConsumer({
+      handle(event) {
+        if (event.type !== "keydown") return false;
+        keys.push(event.key);
+        return true;
+      },
+    });
+    const max = plot.use(paneMaximize());
+    max.maximize(added[0]);
+
+    expect(plot.routeInput({ type: "keydown", key: "Escape" })).toBe(true);
+
+    expect(keys).toEqual(["Escape"]);
+    expect(max.maximizedPane).toBe(added[0]);
+    plot.destroy();
+  });
+
   it("restores with Escape regardless of the gestures option", () => {
     const { plot, added } = setup();
     const max = plot.use(paneMaximize());

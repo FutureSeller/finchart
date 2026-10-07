@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AxisBadge, AxisLabelsInput } from "../../axis";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import { crosshair, timeCursor } from "../../extensions/crosshair";
+import { crosshair, crosshairLine, timeCursor } from "../../extensions/crosshair";
 import type { PlotDecoration } from "../decoration";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -133,6 +133,47 @@ describe("crosshair axis badges", () => {
 
     expect(spy.seen.at(-1)!.badges).toEqual([]);
   });
+
+  it("should put the x badge on the snapped bar when the magnet is on", () => {
+    const spy = labelSpy();
+    const deps = testBrowserDeps({ createAxisLabels: spy.createAxisLabels });
+    const { plot, handle } = mountPlot({ deps, series: lineSeries() });
+    handle.setData(data);
+    plot.use(crosshair({ magnet: true }));
+    const { area } = plot.mainPane;
+
+    // x = 15 lies between the bars at 0 and 50, nearer 0.
+    plot.crosshair({ x: plot.pixelAtX(15), y: (area.top + area.bottom) / 2 });
+    plot.render();
+
+    const labels = spy.seen.at(-1);
+    if (!labels) throw new Error("the axis labels were never rendered");
+    const [xBadge] = labels.badges.filter((entry) => entry.axis === "x");
+    expect(xBadge.position).toBeCloseTo(plot.pixelAtX(0), 6);
+    plot.destroy();
+  });
+
+  it("should give no y badge for a cursor in the gap between panes", () => {
+    const spy = labelSpy();
+    const deps = testBrowserDeps({ createAxisLabels: spy.createAxisLabels });
+    const { plot, handle } = mountPlot({ deps, series: lineSeries() });
+    handle.setData(data);
+    plot.addPane().addSeries(lineSeries());
+    plot.applyOptions({ paneGap: 20 });
+    // Fed directly: the plugin never follows a cursor outside every pane, but the line is public.
+    const line = crosshairLine();
+    plot.addDecoration(line);
+    plot.render();
+    const { area } = plot.mainPane;
+
+    line.follow({ x: (area.left + area.right) / 2, y: area.bottom + 10 });
+    plot.render();
+
+    const labels = spy.seen.at(-1);
+    if (!labels) throw new Error("the axis labels were never rendered");
+    expect(labels.badges.map((entry) => entry.axis)).toEqual(["x"]);
+    plot.destroy();
+  });
 });
 
 describe("time ghost badge", () => {
@@ -146,11 +187,17 @@ describe("time ghost badge", () => {
     plot.addDecoration(ghost);
     ghost.follow(x);
     plot.render();
-    return spy.seen.at(-1)?.badges.filter((entry) => entry.axis === "x") ?? [];
+    const badges = spy.seen.at(-1)?.badges.filter((entry) => entry.axis === "x") ?? [];
+    plot.destroy();
+    return badges;
   }
 
   it("shows no badge for a synced x outside this chart's window", () => {
     expect(ghostAt(10)).toEqual([]);
+  });
+
+  it("shows no badge for a synced x past the right of this chart's window", () => {
+    expect(ghostAt(500)).toEqual([]);
   });
 
   it("shows the badge for a synced x inside the window", () => {

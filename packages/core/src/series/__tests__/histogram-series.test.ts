@@ -77,6 +77,39 @@ describe("histogramSeries", () => {
     expect(above.shape.y + above.shape.height).toBeCloseTo(baseY, 6);
   });
 
+  it("should reach up to a baseline that sits above every value", () => {
+    const extent = histogramSeries({ baseline: 100 }).valueExtent([
+      { x: 0, y: 40 },
+      { x: 1, y: 60 },
+    ]);
+
+    expect(extent).toEqual({ min: 40, max: 100 });
+  });
+
+  it("should keep a bar that sits on the baseline one pixel tall", () => {
+    const { model, bars } = mounted(undefined, [
+      { x: 0, y: 0 },
+      { x: 1, y: 5 },
+    ]);
+
+    const [flat] = bars;
+    if (flat.type !== "drawShape" || flat.shape.shape !== "rect") throw new Error("no bar drawn");
+    expect(flat.shape.height).toBe(1);
+    model.plot.destroy();
+  });
+
+  it("should centre each bar on its point's x", () => {
+    const { model, bars } = mounted();
+
+    const drawn = volume.filter((point) => point.y !== null);
+    expect(bars).toHaveLength(drawn.length);
+    for (const [i, bar] of bars.entries()) {
+      if (bar.type !== "drawShape" || bar.shape.shape !== "rect") throw new Error("no bar drawn");
+      expect(bar.shape.x + bar.shape.width / 2).toBeCloseTo(model.plot.pixelAtX(drawn[i].x), 6);
+    }
+    model.plot.destroy();
+  });
+
   it("should say nothing when everything is a hole", () => {
     expect(
       histogramSeries().valueExtent([{ x: 0, y: null }]),

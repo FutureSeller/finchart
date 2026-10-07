@@ -71,14 +71,18 @@ describe("the crosshair keeps reading while a gesture is in flight", () => {
 
 type Commands = ReturnType<ReturnType<typeof mounted>["lines"]>;
 
+/** Whether a polyline ends where it began — the snap ring does; no drawing's outline here does. */
+function closesOnItself(points: readonly Point[]): boolean {
+  const first = points[0];
+  const last = points.at(-1);
+  return points.length > 2 && last !== undefined && first.x === last.x && first.y === last.y;
+}
+
 /** The centers of every closed ring (the snap marker) among `commands`. */
 function rings(commands: Commands): Point[] {
   const centers: Point[] = [];
   for (const command of commands) {
-    if (command.type !== "drawLine" || command.points.length < 9) continue;
-    const first = command.points[0];
-    const last = command.points.at(-1);
-    if (!last || first.x !== last.x || first.y !== last.y) continue;
+    if (command.type !== "drawLine" || !closesOnItself(command.points)) continue;
     centers.push({
       x: command.points.reduce((sum, p) => sum + p.x, 0) / command.points.length,
       y: command.points.reduce((sum, p) => sum + p.y, 0) / command.points.length,
@@ -105,6 +109,33 @@ describe("a snapped anchor shows a ring", () => {
     // Move far from any bar value — the ring goes away.
     route("pointermove", { x: near.x, y: at(1, 112).y + 40 });
     expect(rings(lines())).toEqual([]);
+  });
+
+  /** The ring is a marker, not part of the drawing — it keeps a thin solid stroke whatever the drawing's style. */
+  it("draws the ring one pixel wide and undashed under a heavy dashed style", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: candleSeries(), data: candles },
+      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+    });
+    const pane = model.plot.mainPane;
+    const tools = pane.use(drawingTools({
+      plot: model.plot,
+      snap: true,
+      style: { width: 3, dashArray: "4 2" },
+    }));
+    tools.begin("horizontal");
+    const close = { x: model.plot.pixelAtX(1), y: pane.yScale.scale(112) };
+    model.plot.routeInput({ type: "pointerdown", point: { x: close.x, y: close.y + 3 }, pointerId: 1 });
+
+    const ringStrokes = model
+      .commands()
+      .flatMap((command) =>
+        command.type === "drawLine" && closesOnItself(command.points) ? [command.style] : [],
+      );
+    expect(ringStrokes).toHaveLength(1);
+    expect(ringStrokes[0]).toMatchObject({ width: 1, dashArray: "" });
+    model.plot.destroy();
   });
 
   it("no ring with snapping off, and none once the drawing is placed", () => {
@@ -173,5 +204,17 @@ describe("when handles overlap, the nearest one wins", () => {
       c: { x: 14, price: 10 },
     };
     expect(gripAt([fork], space, { x: 15, y: 10 })).toMatchObject({ part: "c" });
+  });
+
+  /** Past the line's end only the handle can catch the press, so its radius alone decides. */
+  it("a handle grabs from up to six pixels away and no farther", () => {
+    const trend: Drawing = {
+      type: "trend",
+      id: "t",
+      a: { x: 10, price: 10 },
+      b: { x: 40, price: 10 },
+    };
+    expect(gripAt([trend], space, { x: 46, y: 10 })).toMatchObject({ part: "b" });
+    expect(gripAt([trend], space, { x: 46.5, y: 10 })).toBeNull();
   });
 });

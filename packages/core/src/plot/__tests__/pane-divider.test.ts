@@ -289,6 +289,25 @@ describe("divider moves between frames", () => {
     expect(height(upper)).toBe(total - lower.minHeight);
   });
 
+  it("should write no flex and announce nothing for a move its floor stops entirely", () => {
+    const { plot, upper, lower, height, drag } = mountDragging();
+    // Pinned at its floor, so its equal flex share no longer matches its height.
+    upper.applyOptions({ minHeight: 400 });
+    plot.render();
+    expect(height(upper)).toBe(400);
+    let announced = 0;
+    plot.on("panesChange", () => {
+      announced += 1;
+    });
+
+    drag(-10);
+    plot.render();
+
+    expect([upper.flex, lower.flex]).toEqual([1, 1]);
+    expect(announced).toBe(0);
+    plot.destroy();
+  });
+
   it("should start from the flex someone else wrote after the move", () => {
     const { plot, upper, lower, height, drag } = mountDragging();
     const start = height(upper);

@@ -71,6 +71,65 @@ describe("hit vocabulary", () => {
   });
 });
 
+describe("hit tolerance and the pane's edges", () => {
+  const level = (price: number): Drawing => ({ type: "horizontal", id: "h", price });
+
+  it("a line grabs from up to four pixels away and no farther", () => {
+    expect(gripAt([level(50)], space, { x: 50, y: 54 })).toMatchObject({ part: "whole" });
+    expect(gripAt([level(50)], space, { x: 50, y: 54.5 })).toBeNull();
+  });
+
+  /** Panes stack vertically, so the shared bottom row belongs to the pane below. */
+  it("the pane's bottom row grabs nothing, even on a line within tolerance", () => {
+    expect(gripAt([level(98)], space, { x: 50, y: 99 })).toMatchObject({ part: "whole" });
+    expect(gripAt([level(98)], space, { x: 50, y: 100 })).toBeNull();
+  });
+
+  it("a pane with no width grabs nothing", () => {
+    const narrow: DrawingSpace = { ...space, area: { left: 0, right: 0, top: 0, bottom: 100 } };
+    expect(gripAt([level(50)], narrow, { x: 0, y: 50 })).toBeNull();
+  });
+
+  it("a fib's levels grab within tolerance of its anchors' x span, not beyond", () => {
+    const fib: Drawing = { type: "fib", id: "f", a: { x: 20, price: 20 }, b: { x: 60, price: 80 } };
+    // The 50% level sits at y 50.
+    expect(gripAt([fib], space, { x: 63, y: 50 })).toMatchObject({ part: "whole" });
+    expect(gripAt([fib], space, { x: 70, y: 50 })).toBeNull();
+  });
+
+  it("an extension's levels grab within tolerance left of its leftmost anchor", () => {
+    const extension: Drawing = {
+      type: "fibExtension",
+      id: "e",
+      a: { x: 20, price: 20 },
+      b: { x: 50, price: 60 },
+      c: { x: 80, price: 40 },
+    };
+    // The 0 level runs through c at y 40, starting from x 20.
+    expect(gripAt([extension], space, { x: 17, y: 40 })).toMatchObject({ part: "whole" });
+    expect(gripAt([extension], space, { x: 15, y: 40 })).toBeNull();
+  });
+
+  /** Steep enough to leave through the top edge before reaching the left one. */
+  it("an extended line grabs where it crosses the top edge", () => {
+    const steep: Drawing = { type: "extended", id: "x", a: { x: 80, price: 50 }, b: { x: 90, price: 59 } };
+    // y = 0.9x − 22 crosses y 0 at x ≈ 24.4.
+    expect(gripAt([steep], space, { x: 25, y: 1 })).toMatchObject({ part: "whole" });
+  });
+
+  /**
+   * One anchor astronomically far off: the line still runs through the
+   * near one. Building it from the far anchor would round away the
+   * near anchor's offset.
+   */
+  it("a line with one far-off anchor still passes through the near one, in either order", () => {
+    const near = { x: 10, y: 10 };
+    const far = { x: 1e20, y: 5e19 };
+    expect(infiniteEndpoints("extended", near, far, space)).toEqual([{ x: 0, y: 5 }, { x: 100, y: 55 }]);
+    expect(infiniteEndpoints("extended", far, near, space)).toEqual([{ x: 100, y: 55 }, { x: 0, y: 5 }]);
+  });
+});
+
 describe("render draws what hit-testing checks", () => {
   function linesOf(drawing: Drawing): Point[][] {
     const lines: Point[][] = [];

@@ -2,6 +2,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { StrictMode, type RefObject } from 'react';
 import type {
   BaseDataPoint,
+  CrosshairPayload,
   LineDataPoint,
   Plot,
   XDomainChangePayload,
@@ -92,6 +93,19 @@ describe('usePlot lifecycle', () => {
     expect(spy.resizes).toContainEqual({ width: 400, height: 300 });
   });
 
+  it('should resize when only the height changes', () => {
+    const { spy, deps, series } = setup();
+    const { rerender } = render(
+      <Harness deps={deps} series={series} data={data} width={800} height={600} />,
+    );
+
+    rerender(
+      <Harness deps={deps} series={series} data={data} width={800} height={300} />,
+    );
+
+    expect(spy.resizes).toContainEqual({ width: 800, height: 300 });
+  });
+
   it('should swap the series without recreating the plot', () => {
     const { spy, deps, series } = setup();
     const { rerender } = render(
@@ -175,6 +189,31 @@ describe('onXDomainChange', () => {
     expect(seen.at(-1)).toMatchObject({ startX: 0, endX: 200 });
   });
 
+  it('should deliver refits to the callback of the latest render, not the first', () => {
+    const { deps, series } = setup();
+    const first: XDomainChangePayload[] = [];
+    const second: XDomainChangePayload[] = [];
+    const { rerender } = render(
+      <Harness deps={deps} series={series} data={data} onXDomainChange={(change) => first.push(change)} />,
+    );
+    const heardBefore = first.length;
+
+    rerender(
+      <Harness
+        deps={deps}
+        series={series}
+        data={[
+          { x: 0, y: 1 },
+          { x: 200, y: 2 },
+        ]}
+        onXDomainChange={(change) => second.push(change)}
+      />,
+    );
+
+    expect(first).toHaveLength(heardBefore);
+    expect(second.at(-1)).toMatchObject({ startX: 0, endX: 200 });
+  });
+
   /**
    * StrictMode runs mount twice: it builds a plot, tears it down, and
    * builds another. There used to be an incident where hooking `plot.on`
@@ -211,6 +250,31 @@ describe('onXDomainChange', () => {
   });
 });
 
+describe('onCrosshair', () => {
+  it('should deliver cursor moves to the callback of the latest render, not the first', () => {
+    const { deps, series } = setup();
+    let plotRef: RefObject<Plot | null> = { current: null };
+    const expose = (ref: RefObject<Plot | null>) => { plotRef = ref; };
+    const first: (CrosshairPayload | null)[] = [];
+    const second: (CrosshairPayload | null)[] = [];
+    const { rerender } = render(
+      <Harness deps={deps} series={series} data={data} expose={expose} onCrosshair={(c) => first.push(c)} />,
+    );
+
+    rerender(
+      <Harness deps={deps} series={series} data={data} expose={expose} onCrosshair={(c) => second.push(c)} />,
+    );
+    const plot = plotRef.current;
+    if (!plot) throw new Error('plot is not mounted');
+    const { area } = plot.mainPane;
+    act(() => plot.crosshair({ x: (area.left + area.right) / 2, y: (area.top + area.bottom) / 2 }));
+
+    expect(first).toEqual([]);
+    expect(second).toHaveLength(1);
+    expect(second[0]).not.toBeNull();
+  });
+});
+
 
 describe('usePlot series changes', () => {
   it('stops drawing the series when it is omitted, and draws the next one given', () => {
@@ -236,5 +300,17 @@ describe('usePlot series changes', () => {
     rerender(<Harness deps={deps} series={next} data={[{ x: 0, y: 1 }, { x: 50, y: 99 }]} expose={expose} />);
 
     expect(plotRef.current?.mainPane.probe(50)).toMatchObject([{ series: next, value: 99 }]);
+  });
+
+  it('draws nothing at an x once the data prop is no longer given', () => {
+    const { deps, series } = setup();
+    let plotRef: RefObject<Plot | null> = { current: null };
+    const expose = (ref: RefObject<Plot | null>) => { plotRef = ref; };
+    const { rerender } = render(<Harness deps={deps} series={series} data={data} expose={expose} />);
+    expect(plotRef.current?.mainPane.probe(50)).toMatchObject([{ value: 20 }]);
+
+    rerender(<Harness deps={deps} series={series} expose={expose} />);
+
+    expect(plotRef.current?.mainPane.probe(50)).toEqual([]);
   });
 });

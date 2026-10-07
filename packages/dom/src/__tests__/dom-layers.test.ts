@@ -295,3 +295,18 @@ it("does not publish children when backing store initialization throws", () => {
   expect(() => createDomLayers(container, 100, 100)).toThrow(/transform failed/);
   expect(container.childElementCount).toBe(0);
 });
+
+it("takes the canvas back out when the overlay cannot be appended", () => {
+  const append = container.appendChild.bind(container);
+  let appended = 0;
+  vi.spyOn(container, "appendChild").mockImplementation((node) => {
+    appended += 1;
+    // The canvas goes in; the overlay after it is refused.
+    if (appended === 2) throw new Error("append failed");
+    return append(node);
+  });
+
+  expect(() => createDomLayers(container, 100, 100)).toThrow(/append failed/);
+  expect(container.childElementCount).toBe(0);
+  expect(container.style.position).toBe("");
+});

@@ -71,6 +71,85 @@ describe("bandSeries", () => {
     expect(polygons).toHaveLength(2);
   });
 
+  it("should draw nothing for a lone bounded point, whether a gap or the end follows it", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+    });
+    model.plot.mainPane.addSeries({
+      series: bandSeries(),
+      data: [
+        { x: 0, upper: 10, lower: 5 },
+        { x: 1, upper: null, lower: null },
+        { x: 2, upper: 11, lower: 6 },
+        { x: 3, upper: 12, lower: 7 },
+        { x: 4, upper: null, lower: null },
+        { x: 5, upper: 13, lower: 8 },
+      ],
+    });
+    model.plot.render();
+
+    const polygons = model
+      .commands()
+      .filter((c) => c.type === "drawShape" && c.shape.shape === "polygon");
+    // A single point has no width to fill — only the two-point run at x 2–3 draws.
+    expect(polygons).toHaveLength(1);
+    const polygon = polygons[0];
+    if (polygon.type !== "drawShape" || polygon.shape.shape !== "polygon") {
+      throw new Error("expected a band polygon");
+    }
+    expect(polygon.shape.points).toHaveLength(4);
+    model.plot.destroy();
+  });
+
+  it("should outline the upper edge left to right, then the lower edge back right to left", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+    });
+    model.plot.mainPane.addSeries({
+      series: bandSeries(),
+      data: [
+        { x: 0, upper: 10, lower: 5 },
+        { x: 1, upper: 11, lower: 6 },
+        { x: 2, upper: 13, lower: 7 },
+      ],
+    });
+    model.plot.render();
+
+    const polygon = model
+      .commands()
+      .find((c) => c.type === "drawShape" && c.shape.shape === "polygon");
+    if (polygon?.type !== "drawShape" || polygon.shape.shape !== "polygon") {
+      throw new Error("expected a band polygon");
+    }
+    const y = (value: number) => model.plot.mainPane.yScale.scale(value);
+    const points = polygon.shape.points;
+    expect(points.map((p) => p.y)).toEqual([y(10), y(11), y(13), y(7), y(6), y(5)]);
+    // The walk back retraces the same columns in reverse, closing the outline.
+    expect(points[0].x).toBeLessThan(points[1].x);
+    expect(points[1].x).toBeLessThan(points[2].x);
+    expect(points.slice(3).map((p) => p.x)).toEqual(points.slice(0, 3).map((p) => p.x).reverse());
+    model.plot.destroy();
+  });
+
+  it("should read the upper edge as the band's value under the crosshair", () => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+    });
+    model.plot.mainPane.addSeries({
+      series: bandSeries(),
+      data: [
+        { x: 0, upper: 10, lower: 5 },
+        { x: 1, upper: 11, lower: 6 },
+      ],
+    });
+
+    expect(model.plot.mainPane.probe(1).map((sample) => sample.value)).toEqual([11]);
+    model.plot.destroy();
+  });
+
   it("should claim the y axis for both edges", () => {
     const extent = bandSeries().valueExtent([
       { x: 0, upper: 10, lower: 5 },

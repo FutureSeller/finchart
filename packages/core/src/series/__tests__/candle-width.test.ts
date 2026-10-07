@@ -149,6 +149,20 @@ it("measures dense uniformly spaced bars and duplicate-heavy spacing", () => {
   expect(slotWidth(points, mapping)).toBe([...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]);
 });
 
+it("averages a lone visible point's two neighbours in the full data when they sit at different distances", () => {
+  const mapping = continuousX(new LinearScale());
+  const full = [{ x: 0 }, { x: 10 }, { x: 30 }];
+
+  expect(slotWidth([{ x: 10 }], mapping, null, full)).toBe(15);
+});
+
+it("measures the full data when every visible point shares one pixel", () => {
+  const mapping = continuousX(new LinearScale());
+  const full = Array.from({ length: 10 }, (_, i) => ({ x: i * 6 }));
+
+  expect(slotWidth([{ x: 12 }, { x: 12 }], mapping, null, full)).toBe(6);
+});
+
 it("agrees with a sorted median for ascending, descending, and mixed gaps", () => {
   const mapping = continuousX(new LinearScale());
   for (const gaps of [Array.from({ length: 1000 }, (_, i) => i + 1), Array.from({ length: 1000 }, (_, i) => 1000 - i), Array.from({ length: 1000 }, (_, i) => 1 + (i * 7919) % 101)]) {

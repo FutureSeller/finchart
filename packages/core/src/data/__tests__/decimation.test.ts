@@ -265,3 +265,60 @@ it("LTTB preserves small price differences around a large common offset", () => 
     expect(decimator.decimate(data, { start: 0, end: data.length }, 5).map(p => p.x)).toEqual([0, 6, 11, 13, 19]);
   }
 });
+
+it.each([
+  ["x", (id: number, y: number) => ({ x: (id - 10) * 1e307, y })],
+  ["y", (id: number, y: number) => ({ x: id, y: (y - 51.5) * 3.9e306 })],
+])("LTTB retains the same shape when the %s span overflows a double", (_axis, place) => {
+  const values = [46, 14, 50, 33, 66, 21, 49, 25, 7, 36, 86, 17, 9, 16, 8, 44, 82, 96, 85, 31];
+  const decimator = new LttbDecimation<{ x: number; y: number; id: number }>();
+  const data = values.map((y, id) => ({ ...place(id, y), id }));
+
+  expect(decimator.decimate(data, { start: 0, end: data.length }, 5).map((p) => p.id)).toEqual([0, 1, 10, 14, 19]);
+});
+
+describe("decimating around holes", () => {
+  const holed = (count: number, holes: readonly number[]): LineDataPoint[] =>
+    Array.from({ length: count }, (_, i) => ({ x: i, y: holes.includes(i) ? null : i % 13 }));
+
+  it("keeps a hole that ends the window — the data really stops there", () => {
+    const data = holed(100, [99]);
+    const out = m4().decimate(...whole(data), 20);
+
+    expect(out[out.length - 1]).toBe(data[99]);
+  });
+
+  /** LTTB emits exactly its budget per run, so the count shows how the budget was split. */
+  it("keeps the break signals inside the threshold", () => {
+    const lttb = new LttbDecimation(new LineDataAccessor());
+    const out = lttb.decimate(...whole(holed(100, [50])), 21);
+
+    expect(out).toHaveLength(21);
+  });
+
+  it("keeps a lone value between two holes once", () => {
+    const data = holed(103, [50, 52]);
+    const lttb = new LttbDecimation(new LineDataAccessor());
+    const out = lttb.decimate(...whole(data), 20);
+
+    expect(out.filter((point) => point === data[51])).toHaveLength(1);
+  });
+});
+
+describe("LTTB bucket choice", () => {
+  const lttb = () => new LttbDecimation(new LineDataAccessor());
+
+  /**
+   * At 32 points into 13 the bucket edges round so that the last
+   * look-ahead bucket holds the final two points; its centroid includes
+   * the last point, which decides the second-to-last pick.
+   */
+  it("averages the last look-ahead bucket through the final point", () => {
+    const ys = [84, 95, 31, 82, 5, 57, 6, 53, 55, 89, 47, 43, 84, 89, 25, 43, 71, 48, 59, 83, 23, 38, 26, 9, 24, 88, 47, 25, 90, 81, 18, 65];
+    const data = ys.map((y, x) => ({ x, y }));
+
+    expect(lttb().decimate(...whole(data), 13).map((point) => point.x)).toEqual([
+      0, 2, 3, 6, 9, 11, 14, 19, 20, 23, 25, 28, 31,
+    ]);
+  });
+});

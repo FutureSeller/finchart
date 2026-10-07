@@ -74,6 +74,7 @@ describe("applyPaneOptions", () => {
   it("should flag a settings change only when an announced field actually moves", () => {
     const current = settleOptions({ flex: 2 });
     expect(applyPaneOptions(current, { flex: 2 }).settings).toBe(false);
+    expect(applyPaneOptions(current, { minHeight: current.minHeight }).settings).toBe(false);
     expect(applyPaneOptions(current, { valuePadding: 0.3 }).settings).toBe(false);
     expect(applyPaneOptions(current, { axis: { showLabels: false } }).settings).toBe(false);
     expect(applyPaneOptions(current, { minHeight: 99 }).settings).toBe(true);
