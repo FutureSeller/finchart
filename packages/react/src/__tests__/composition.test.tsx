@@ -1,4 +1,4 @@
-import type { DataView, LineDataPoint, Plot, Series } from '@finchart/core';
+import type { DataView, LineDataPoint, Plot, Series, TickStrategy } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
@@ -57,6 +57,21 @@ describe('ChartContainer', () => {
     );
 
     expect(spy.created).toHaveLength(1);
+  });
+
+  it('should size its element from style when no width or height prop is given', () => {
+    const { deps } = setup();
+
+    const view = mount(
+      <ChartContainer deps={deps} data={data} id="sized" style={{ width: '50%', height: 240 }}>
+        <ChartSeries series={price} />
+      </ChartContainer>,
+    );
+
+    const host = view.container.querySelector('#sized');
+    if (!(host instanceof HTMLElement)) throw new Error('no container element');
+    expect(host.style.width).toBe('50%');
+    expect(host.style.height).toBe('240px');
   });
 
   it('should refuse children placed outside it', () => {
@@ -189,6 +204,27 @@ describe('ChartPane', () => {
     expect(instance.mainPane.flex).toBe(5);
     expect(instance.mainPane.getSeries()).toEqual([price]);
   });
+
+  it('should fit the value axis with a changed valuePadding', () => {
+    const { deps, ref, plot } = setup();
+    const ui = (valuePadding: number) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane valuePadding={valuePadding}>
+          <ChartSeries series={price} />
+        </ChartPane>
+      </ChartContainer>
+    );
+
+    const view = mount(ui(0));
+    act(() => plot().render());
+    expect(plot().mainPane.yScale.getDomain()).toEqual([10, 20]);
+
+    view.rerender(ui(0.5));
+    act(() => plot().render());
+    const [min, max] = plot().mainPane.yScale.getDomain();
+    expect(min).toBeLessThan(10);
+    expect(max).toBeGreaterThan(20);
+  });
 });
 
 describe('axes', () => {
@@ -204,6 +240,38 @@ describe('axes', () => {
     );
 
     expect(plot().getOptions().axis?.x?.format).toBe(format);
+  });
+
+  it('should apply a changed x axis size', () => {
+    const { deps, ref, plot } = setup();
+    const ui = (size: number) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <XAxis size={size} />
+        <ChartSeries series={price} />
+      </ChartContainer>
+    );
+
+    const view = mount(ui(30));
+    expect(plot().getOptions().axis.x.size).toBe(30);
+
+    view.rerender(ui(44));
+    expect(plot().getOptions().axis.x.size).toBe(44);
+  });
+
+  it('should hand a YAxis tick strategy to the pane it sits in', () => {
+    const { deps, ref, plot } = setup();
+    const ticks: TickStrategy = { ticks: () => [] };
+
+    mount(
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartPane>
+          <YAxis ticks={ticks} />
+          <ChartSeries series={price} />
+        </ChartPane>
+      </ChartContainer>,
+    );
+
+    expect(plot().mainPane.axis.ticks).toBe(ticks);
   });
 
   it('should apply a YAxis inside a pane to that pane only', () => {

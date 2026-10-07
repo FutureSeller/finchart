@@ -77,6 +77,18 @@ describe("drawingTools history", () => {
     expect(tools.selection()).toEqual(handle.read());
   });
 
+  it("redoes an unselected add without moving the selection", () => {
+    const { model, tools } = mounted();
+    const picked = tools.add({ type: "horizontal", price: 101 }, { select: true });
+    tools.add({ type: "horizontal", price: 105 });
+
+    expect(tools.undo()).toBe(true);
+    expect(tools.redo()).toBe(true);
+    expect(tools.list()).toHaveLength(2);
+    expect(tools.selection()).toEqual(picked.read());
+    model.plot.destroy();
+  });
+
   it("restores a selected removal at the same stacking index", () => {
     const { tools } = mounted();
     const low = tools.add({ type: "horizontal", price: 101 });
@@ -417,6 +429,24 @@ describe("drawingTools history", () => {
     expect(tools.undo()).toBe(true);
     expect(handle.read()).toMatchObject({ price: 105 });
     expect(tools.mode()).toBe("trend");
+  });
+
+  it("keeps the dragged position when a new tool is armed mid-drag", () => {
+    const { model, tools, route, onLine } = mounted();
+    const handle = tools.add({ type: "horizontal", price: 105 });
+    const grab = onLine(105);
+    route({ type: "pointerdown", point: grab, pointerId: 1 });
+    route({
+      type: "pointermove",
+      point: { x: grab.x, y: grab.y + 30 },
+      pointerId: 1,
+    });
+    const dragged = handle.read();
+
+    tools.begin("trend");
+    expect(handle.read()).toEqual(dragged);
+    expect(dragged).not.toMatchObject({ price: 105 });
+    model.plot.destroy();
   });
 
   it("commits a drag before removing its drawing", () => {

@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataManagerFactory } from "../../data";
 import { ContractError } from "../../primitives";
 import type { Entry, SeriesSpec } from "../../registration";
+import { LinearScale } from "../../scale";
 import { SeriesList } from "../series-list";
 
 const managers: DataManagerFactory = () => {
@@ -135,6 +136,31 @@ describe("SeriesList.sync", () => {
     expect(fed.built).toHaveBeenCalledTimes(1);
   });
 
+  it("should rebuild when the derive key gains a value after an unchanged prefix", () => {
+    const list = new SeriesList();
+    list.sync([spec("a", fakeEntry(), { deriveKey: [14] })], managers);
+
+    const longer = spec("a", fakeEntry(), { deriveKey: [14, 3] });
+    list.sync([longer], managers);
+
+    expect(longer.built).toHaveBeenCalledTimes(1);
+  });
+
+  it("should compare derive key values as same-value — NaN matches itself, -0 differs from 0", () => {
+    const list = new SeriesList();
+    const a = fakeEntry();
+    list.sync([spec("a", a, { deriveKey: [NaN, 0] })], managers);
+
+    const same = spec("a", fakeEntry(), { deriveKey: [NaN, 0] });
+    list.sync([same], managers);
+    expect(same.built).not.toHaveBeenCalled();
+    expect(list.entries[0]).toBe(a);
+
+    const signed = spec("a", fakeEntry(), { deriveKey: [NaN, -0] });
+    list.sync([signed], managers);
+    expect(signed.built).toHaveBeenCalledTimes(1);
+  });
+
   it("should follow array order, not registration order", () => {
     const list = new SeriesList();
     const a = fakeEntry();
@@ -187,6 +213,32 @@ describe("SeriesList queries and drawing", () => {
     });
 
     expect(order).toEqual(["band", "ma", "candles"]);
+  });
+
+  it("should skip a registration removed by an earlier one's draw in the same frame", () => {
+    const list = new SeriesList();
+    const order: string[] = [];
+    const later = fakeEntry({ draw: () => void order.push("later") });
+    // A series draw is someone else's code — this one disposes the next registration.
+    const first = fakeEntry({
+      draw: () => {
+        order.push("first");
+        list.remove(later);
+      },
+    });
+    list.add(first);
+    list.add(later);
+
+    const target = { drawLine: () => {}, drawShape: () => {}, drawText: () => {} };
+    list.draw(target, {
+      viewport: { startX: 0, endX: 1, width: 1, height: 1 },
+      x: { toPixel: (x) => x, fromPixel: (p) => p, toDomain: (x) => x, fromDomain: (d) => d },
+      yScale: new LinearScale(),
+      area: { left: 0, right: 1, top: 0, bottom: 1 },
+      readStyle: () => "",
+    });
+
+    expect(order).toEqual(["first"]);
   });
 
   it("should take the smallest positive floor across entries", () => {

@@ -121,6 +121,18 @@ describe("mergeOptions — clearing a bar-spacing override", () => {
   });
 });
 
+describe("resolveConfig", () => {
+  it("should fill a padding side given as undefined from the default", () => {
+    const padding = { ...PLOT_CONFIG_DEFAULTS.padding, left: 40 };
+    // What an untyped caller can hand in — the type alone does not rule it out at runtime.
+    Reflect.set(padding, "top", undefined);
+
+    const resolved = resolveConfig({ padding });
+
+    expect(resolved.padding).toEqual({ ...PLOT_CONFIG_DEFAULTS.padding, left: 40 });
+  });
+});
+
 describe("copyConfig", () => {
   it("should copy every nested spot so a later edit stays out", () => {
     const source = resolveConfig(base());

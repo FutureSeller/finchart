@@ -13,7 +13,7 @@
  * a load `reset` replaced is dropped; an end stays an end; the status is
  * state.
  */
-import type { LineDataPoint, Plot } from '@finchart/core';
+import type { CoordinateAccessor, LineDataPoint, Plot } from '@finchart/core';
 import { immediateScheduler, lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
@@ -264,6 +264,42 @@ describe('useInfiniteHistory', () => {
 
     expect(asked).toEqual([100]);
     expect(history().status).toBe('done');
+  });
+
+  it("pages by time from the first bar's x as the given accessor reads it", async () => {
+    // Placed by `t`; the `x` field holds something else, so reading it would page from the wrong place.
+    type Bar = { x: number; t: number; y: number };
+    const BY_TIME: CoordinateAccessor<Bar> = { getX: (bar) => bar.t, getY: (bar) => bar.y };
+    const bars = (from: number, to: number): Bar[] => {
+      const out: Bar[] = [];
+      for (let t = from; t < to; t++) out.push({ x: t - 1000, t, y: 1 });
+      return out;
+    };
+    const series = lineSeries({ coordinates: BY_TIME });
+    const asked: number[] = [];
+    const fetch = (before: number) => {
+      asked.push(before);
+      return bars(before - 20, before);
+    };
+    const deps = makeDeps();
+    const plotRef = createRef<Plot>();
+    const out: { history: InfiniteHistoryState<Bar> | null } = { history: null };
+    function App() {
+      const history = useInfiniteHistory<Bar>({ coordinates: BY_TIME });
+      out.history = history;
+      return (
+        <ChartContainer deps={deps} data={[]} plotRef={plotRef}>
+          <ChartSeries series={series} data={history.data} />
+          <InfiniteHistory history={history} />
+        </ChartContainer>
+      );
+    }
+    render(<App />);
+    act(() => out.history?.reset(bars(100, 120), { fetch }));
+    act(() => plotRef.current?.setVisibleRange(95, 115));
+    await settle();
+
+    expect(asked).toEqual([100]);
   });
 
   it('a load without paging holds its bars and asks nothing', async () => {

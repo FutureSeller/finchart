@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LinearScale } from "../../scale";
-import { Axis } from "../axis";
+import { Axis, autoTickStep } from "../axis";
 
 describe("Axis", () => {
   let scale: LinearScale;
@@ -235,4 +235,30 @@ it("does not lose a positive tick interval to subnormal underflow", () => {
   const ticks = new Axis(new LinearScale(min, min * 2, 0, 1000), "horizontal", {}).getTicks();
   expect(ticks.map(t => t.value)).toEqual([min, min * 2]);
   expect(ticks.map(t => t.position)).toEqual([0, 1000]);
+});
+
+describe("autoTickStep", () => {
+  it("answers a unit step for a domain with no width", () => {
+    expect(autoTickStep({ min: 5, max: 5, pixels: 800, orientation: "horizontal" })).toBe(1);
+  });
+
+  /**
+   * An axis a million pixels tall has room for far more than a thousand
+   * labels; the step is still the one for a thousand intervals, the most
+   * the axis will ever draw.
+   */
+  it("asks for no more than a thousand intervals however many pixels there are", () => {
+    expect(autoTickStep({ min: 0, max: 1, pixels: 1e6, orientation: "vertical" })).toBe(0.001);
+  });
+});
+
+it("draws at most a thousand ticks when a config range bypasses the scale", () => {
+  const ticks = new Axis(new LinearScale(0, 100, 0, 800), "horizontal", {
+    min: 0,
+    max: 1e6,
+    tickInterval: 1,
+  }).getTicks();
+
+  expect(ticks).toHaveLength(1000);
+  expect(ticks[999].value).toBe(999);
 });

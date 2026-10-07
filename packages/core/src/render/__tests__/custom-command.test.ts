@@ -95,6 +95,48 @@ describe("an extension's primitive", () => {
     expect(drawn).toEqual(["shape"]);
   });
 
+  it("should replay every fallback command, in order, on a target that has no drawCustom", () => {
+    const drawn: string[] = [];
+    const old: DrawTarget = {
+      drawLine: () => drawn.push("line"),
+      drawShape: () => drawn.push("shape"),
+      drawText: () => drawn.push("text"),
+    };
+
+    drawCustom(old, {
+      name: "acme/annotated",
+      params: null,
+      fallback: [
+        { type: "drawLine", points: [{ x: 0, y: 0 }, { x: 5, y: 5 }], style: { width: 1, color: "#000" } },
+        ...fallback,
+        {
+          type: "drawText",
+          params: { text: "A", at: { x: 1, y: 1 }, align: "left", baseline: "top", style: { font: "11px sans-serif", color: "#000" } },
+        },
+      ],
+    });
+
+    expect(drawn).toEqual(["line", "shape", "text"]);
+  });
+
+  it("should unfold another extension's primitive nested inside a fallback", () => {
+    // The outer surface knows neither name, so the inner fallback is what gets drawn.
+    const drawn: string[] = [];
+    const old: DrawTarget = {
+      drawLine: () => drawn.push("line"),
+      drawShape: () => drawn.push("shape"),
+      drawText: () => drawn.push("text"),
+    };
+
+    drawCustom(old, {
+      name: "acme/outer",
+      params: null,
+      fallback: [{ type: "custom", ...heatmap(3) }],
+    });
+
+    expect(drawn).toEqual(["shape"]);
+  });
+
   it("should keep the command in a recording renderer instead of unfolding it", () => {
     // A replayer needs the original to draw a name it recognizes directly.
     const recorder = recordingRenderer();

@@ -45,6 +45,12 @@ describe("TextParams.within", () => {
     }
   });
 
+  it("slides text back even when it crosses the right edge by under a pixel", () => {
+    // "161.8%" is 42px wide, so anchored at 258.5 its right edge sits at 300.5.
+    const { right } = draw({ text: "161.8%", at: { x: 258.5, y: 20 }, align: "left", baseline: "middle", style: STYLE, within: { left: 0, right: 300 } });
+    expect(right).toBe(300);
+  });
+
   it("leaves text that already fits exactly where its anchor put it", () => {
     for (const align of aligns) {
       const bounded = draw({ text: "50%", at: { x: 150, y: 20 }, align, baseline: "middle", style: STYLE, within: { left: 0, right: 300 } });

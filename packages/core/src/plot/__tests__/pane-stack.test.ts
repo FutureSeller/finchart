@@ -142,6 +142,13 @@ describe("PaneStack.at", () => {
     expect(stack.at({ x: 200, y: 75 })).toBeNull();
   });
 
+  it("should not let a pane with no width win a hit", () => {
+    const { stack } = setup();
+    // Tall but zero wide — a point on its edge touches an area nobody can see.
+    stack.main.setArea({ left: 50, right: 50, top: 0, bottom: 100 });
+    expect(stack.at({ x: 50, y: 10 })).toBeNull();
+  });
+
   it("should not let a pane with no area yet win a hit", () => {
     // Before its first frame a pane's area is the empty box at (0,0) — a
     // phantom hit there used to read a value off a pane nobody can see.

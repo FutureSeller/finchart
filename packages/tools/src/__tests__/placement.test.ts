@@ -98,6 +98,43 @@ describe("drawingTools placement", () => {
     expect(tools.mode()).toBeNull();
   });
 
+  it("should draw the line being drafted before it is finished", () => {
+    const { model, tools, route, at } = mounted();
+    const lines = () => model.commands().filter((command) => command.type === "drawLine");
+    const before = lines().length;
+
+    tools.begin("trend");
+    route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
+    route({ type: "pointermove", point: at(8, 115), pointerId: 1 });
+
+    const drawn = lines();
+    expect(tools.list()).toHaveLength(0);
+    expect(drawn).toHaveLength(before + 1);
+    expect(drawn.at(-1)?.points).toEqual([at(2, 105), at(8, 115)]);
+    model.plot.destroy();
+  });
+
+  /** Under five pixels of travel the press placed one anchor; five or more drew the whole line in one gesture. */
+  it("should tell a click from a drag at five pixels of travel", () => {
+    const click = mounted();
+    click.tools.begin("trend");
+    const start = click.at(2, 105);
+    click.route({ type: "pointerdown", point: start, pointerId: 1 });
+    click.route({ type: "pointerup", point: { x: start.x + 4, y: start.y }, pointerId: 1 });
+    expect(click.tools.list()).toHaveLength(0);
+    expect(click.tools.mode()).toBe("trend");
+    click.model.plot.destroy();
+
+    const drag = mounted();
+    drag.tools.begin("trend");
+    const dragStart = drag.at(2, 105);
+    drag.route({ type: "pointerdown", point: dragStart, pointerId: 1 });
+    drag.route({ type: "pointerup", point: { x: dragStart.x + 5, y: dragStart.y }, pointerId: 1 });
+    expect(drag.tools.list()).toHaveLength(1);
+    expect(drag.tools.mode()).toBeNull();
+    drag.model.plot.destroy();
+  });
+
   it("should keep the draft out of the list and serialization", () => {
     const { tools, route, at } = mounted();
     tools.begin("trend");

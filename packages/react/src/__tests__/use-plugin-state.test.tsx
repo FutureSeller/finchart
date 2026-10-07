@@ -111,6 +111,23 @@ describe('usePluginState', () => {
     expect(seen.at(-1)).toBe('second');
   });
 
+  it("should keep the first render's fallback once the api comes and goes", () => {
+    const seen: string[] = [];
+    const api = fakeApi('live');
+
+    function Fallback({ current, fallback }: { current: FakeApi | null; fallback: string }) {
+      seen.push(usePluginState(current, subscribeFake, readFake, fallback));
+      return null;
+    }
+
+    const screen = render(<Fallback current={null} fallback="first" />);
+    screen.rerender(<Fallback current={api} fallback="second" />);
+    expect(seen.at(-1)).toBe('live');
+
+    screen.rerender(<Fallback current={null} fallback="third" />);
+    expect(seen.at(-1)).toBe('first');
+  });
+
   /**
    * **Server rendering must also work outside `<ChartContainer>`.**
    *

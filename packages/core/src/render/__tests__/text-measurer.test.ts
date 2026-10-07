@@ -54,6 +54,19 @@ describe("createCanvasTextMeasurer", () => {
     expect(m.measure("42", "11px sans-serif").height).toBe(13);
   });
 
+  it("should fall back to the font px when the bounding box has no height", () => {
+    const context = fakeCanvasContext();
+    // A zero-height box would collapse the label box and the axis rows built from it.
+    context.measureText = () => ({
+      width: 20,
+      fontBoundingBoxAscent: 0,
+      fontBoundingBoxDescent: 0,
+    });
+    const m = createCanvasTextMeasurer({ width: 400, height: 300, context });
+
+    expect(m.measure("42", "11px sans-serif").height).toBe(11);
+  });
+
   it("should fall back to a constant for non-px fonts", () => {
     const { measurer: m } = measurer();
 

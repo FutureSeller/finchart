@@ -132,6 +132,26 @@ describe("width-aware decimation", () => {
     expect(dataManager.getVisibleData(viewport(800))).toHaveLength(50);
   });
 
+  it("should round a fractional point budget up", () => {
+    const thresholds: number[] = [];
+    const dataManager = new SimpleDataManager<LineDataPoint>({
+      decimation: {
+        decimate: (data, range, threshold) => {
+          thresholds.push(threshold);
+          return data.slice(range.start, range.end);
+        },
+      },
+      coordinates: new LineDataAccessor(),
+      pointsPerPixel: 1,
+    });
+    dataManager.setData(series(1000));
+
+    // A layout width is not always whole pixels: 100.5px asks for 101 points.
+    dataManager.getVisibleData(viewport(100.5));
+
+    expect(thresholds).toEqual([101]);
+  });
+
   it("should fall back to the endpoints on a zero-width viewport", () => {
     const dataManager = manager();
     dataManager.setData(series(100));

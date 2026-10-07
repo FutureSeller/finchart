@@ -105,6 +105,25 @@ describe("drawingTools.applyOptions", () => {
       true,
     );
   });
+
+  /** `{ style: undefined }` resets to the default — different from leaving the key out. */
+  it("should keep a style override when the key is left out and drop it when given as undefined", () => {
+    const { model, tools } = mount();
+    tools.add({ type: "horizontal", price: 15 });
+    const colors = () =>
+      model
+        .commands()
+        .flatMap((command) => (command.type === "drawLine" ? [command.style.color] : []));
+    const defaults = colors();
+
+    tools.applyOptions({ style: { color: "#00ff00" } });
+    tools.applyOptions({});
+    expect(colors()).toContain("#00ff00");
+
+    tools.applyOptions({ style: undefined });
+    expect(colors()).toEqual(defaults);
+    model.plot.destroy();
+  });
 });
 
 describe("a disposed toolbox", () => {

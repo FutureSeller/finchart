@@ -98,6 +98,37 @@ describe("if the cursor is over another pane, the key belongs there", () => {
     expect(s.main.selection()).toBeNull();
   });
 
+  /**
+   * Main is asked first, so a deselect that skipped the ownership check
+   * would swallow the key before the pane under the cursor saw it.
+   */
+  it("should leave Escape's deselect to the pane under the cursor", () => {
+    const s = stage({ toolsOnIndicator: true, indicatorFirst: true });
+    s.main.select(s.main.handles()[0]);
+    const [rsiLine] = s.rsi?.handles() ?? [];
+    s.rsi?.select(rsiLine);
+    s.hover(s.indicator);
+
+    s.key("Escape");
+
+    expect(s.main.selection()).not.toBeNull();
+    expect(s.rsi?.selection()).toBeNull();
+    s.plot.destroy();
+  });
+
+  /** A right-click arrives with no hover, so it moves keyboard ownership itself. */
+  it("should hand the keyboard to the pane that was right-clicked", () => {
+    const s = stage({ toolsOnIndicator: true });
+    s.hover(s.indicator);
+
+    const onMainLine = { x: 100, y: s.plot.mainPane.yScale.scale(110) };
+    s.plot.routeInput({ type: "contextmenu", point: onMainLine });
+    s.key("Delete");
+
+    expect(s.main.list()).toEqual([]);
+    s.plot.destroy();
+  });
+
   /** A disposed toolbox must not keep hold of the keyboard for the remaining toolbox -- its claim is released. */
   it("should release its area claim on dispose", () => {
     const s = stage({ toolsOnIndicator: true });

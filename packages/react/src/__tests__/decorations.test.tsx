@@ -19,7 +19,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { createRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { ChartContainer, ChartSeries, Markers, PriceLine } from '../components';
+import { ChartContainer, ChartSeries, Markers, PriceLine, Span, Watermark } from '../components';
 import { PaneProvider } from '../components/chart-context';
 import type { LineDataPoint } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
@@ -544,5 +544,67 @@ describe('decorations — one live registration per mounted component', () => {
     expect(second.counts).toEqual({ installs: 2, removes: 0 });
     expect(drawn(second.pane).badges).toContain('v120');
     expect(drawn(second.pane).badges).not.toContain('v112');
+  });
+});
+
+/** `<Watermark>` and `<Span>` re-register their decoration on a value change — the old drawing must go with the old registration. */
+describe('decorations — a remounting decoration draws once, and not after it goes', () => {
+  function drawing() {
+    const renderer = rendererSpy();
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createRenderer: renderer.createRenderer,
+      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+    });
+    const ref = createRef<Plot>();
+    const commands = () => {
+      act(() => ref.current?.render());
+      return renderer.committed;
+    };
+    return { deps, ref, commands };
+  }
+
+  it('a span is drawn, redrawn alone over a changed range, and erased on unmount', () => {
+    const { deps, ref, commands } = drawing();
+    const INK = '#123456';
+    const spans = () =>
+      commands().flatMap((c) => (c.type === 'drawShape' && c.shape.shape === 'rect' && c.shape.fill === INK ? [c.shape] : []));
+    const ui = (to: number | null) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartSeries series={lineSeries()} />
+        {to !== null && <Span from={20} to={to} fill={INK} />}
+      </ChartContainer>
+    );
+    const view = render(ui(40));
+    const before = spans();
+    expect(before).toHaveLength(1);
+
+    view.rerender(ui(80));
+    const after = spans();
+    expect(after).toHaveLength(1);
+    expect(after[0]?.width).toBeGreaterThan(before[0]?.width ?? Number.POSITIVE_INFINITY);
+
+    view.rerender(ui(null));
+    expect(spans()).toHaveLength(0);
+  });
+
+  it('a watermark is drawn, redrawn alone with changed text, and erased on unmount', () => {
+    const { deps, ref, commands } = drawing();
+    const texts = () =>
+      commands().flatMap((c) => (c.type === 'drawText' && c.params.text.startsWith('WM-') ? [c.params.text] : []));
+    const ui = (text: string | null) => (
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartSeries series={lineSeries()} />
+        {text !== null && <Watermark text={text} />}
+      </ChartContainer>
+    );
+    const view = render(ui('WM-AAPL'));
+    expect(texts()).toEqual(['WM-AAPL']);
+
+    view.rerender(ui('WM-MSFT'));
+    expect(texts()).toEqual(['WM-MSFT']);
+
+    view.rerender(ui(null));
+    expect(texts()).toEqual([]);
   });
 });

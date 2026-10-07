@@ -269,6 +269,22 @@ describe("pixels stay finite at the edge of the doubles", () => {
     expect(narrow.scale(1e308)).toBe(Number.NEGATIVE_INFINITY);
   });
 
+  it("LinearScale: a value whose distance from the domain overflows still lands at its finite pixel", () => {
+    // The span is finite; the offset of -1e308 from 1e308 is not.
+    const scale = new LinearScale(1e308, 1.5e308, 0, 100);
+    expect(scale.scale(-1e308)).toBe(-400);
+  });
+
+  it("LogScale: inverting inside the range never answers past an end of a two-double domain", () => {
+    const max = nextUp(3);
+    const scale = new LogScale(3, max, 0, 1000);
+    for (let pixel = 1; pixel < 1000; pixel++) {
+      const value = scale.invert(pixel);
+      expect(value).toBeGreaterThanOrEqual(3);
+      expect(value).toBeLessThanOrEqual(max);
+    }
+  });
+
   it("LinearScale: an ordinary domain's pixels are the same bits as the plain arithmetic", () => {
     const scale = new LinearScale(0.1, 0.7, 0, 800);
     for (const value of [0.1, 0.3, 0.45, 0.7, 1.3]) {

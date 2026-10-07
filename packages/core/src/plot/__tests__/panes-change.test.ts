@@ -284,6 +284,17 @@ describe("setValueDomain", () => {
     expect(seen).toHaveLength(before);
   });
 
+  it("should announce a manual range that moves only its top", () => {
+    const { plot, seen } = mounted();
+    plot.mainPane.setValueDomain(0, 100);
+    const before = seen.length;
+
+    plot.mainPane.setValueDomain(0, 200);
+
+    expect(seen).toHaveLength(before + 1);
+    plot.destroy();
+  });
+
   it("should announce a scale swap once — a log toggle is a mode, like invert", () => {
     const { plot, seen } = mounted();
 

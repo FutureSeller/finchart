@@ -301,6 +301,27 @@ describe("drawingTools select and keyboard traversal", () => {
     expect(tools.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
   });
 
+  it("should start [ from the last drawing when nothing is selected", () => {
+    const { model, tools, route } = mounted();
+    tools.add({ type: "horizontal", price: 105 });
+    tools.add({ type: "horizontal", price: 110 });
+    tools.add({ type: "horizontal", price: 115 });
+
+    expect(route({ type: "keydown", key: "[" })).toBe(true);
+    expect(tools.selection()).toMatchObject({ type: "horizontal", price: 115 });
+    model.plot.destroy();
+  });
+
+  it("should keep the selection when a different drawing is removed", () => {
+    const { model, tools } = mounted();
+    const kept = tools.add({ type: "horizontal", price: 105 }, { select: true });
+    const other = tools.add({ type: "horizontal", price: 115 });
+
+    other.remove();
+    expect(tools.selection()).toEqual(kept.read());
+    model.plot.destroy();
+  });
+
   it("should not eat the bracket keys when there is nothing to select", () => {
     const { tools, route } = mounted();
     expect(route({ type: "keydown", key: "]" })).toBe(false);

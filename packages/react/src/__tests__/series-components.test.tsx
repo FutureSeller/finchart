@@ -338,6 +338,40 @@ describe('<Crosshair>', () => {
 
     expect(lines(drawn()).filter((c) => c.style.dashArray)).toHaveLength(0);
   });
+
+  it('should label its badge with the format of the latest render', () => {
+    // The badges are a DOM concern in the browser; this stub keeps the y labels the frame handed it.
+    const seen: { badges: string[] } = { badges: [] };
+    const deps = browserDeps({
+      createLayers: layersSpy().createLayers,
+      createAxisLabels: () => ({
+        render: (input) => {
+          seen.badges = input.badges.filter((badge) => badge.axis === 'y').map((badge) => badge.label);
+        },
+        clear: () => undefined,
+        destroy: () => undefined,
+      }),
+    });
+    const ref = createRef<Plot>();
+    const view = (unit: string) => (
+      <ChartContainer deps={deps} data={candles} plotRef={ref}>
+        <ChartCandles />
+        <Crosshair format={{ y: (value) => `${Math.round(value)}${unit}` }} />
+      </ChartContainer>
+    );
+    const labels = () => {
+      act(() => ref.current?.render());
+      return seen.badges;
+    };
+
+    const mounted = mount(view('a'));
+    act(() => ref.current?.render());
+    act(() => ref.current?.crosshair({ x: 400, y: 300 }));
+    expect(labels()).toEqual([expect.stringMatching(/^\d+a$/)]);
+
+    mounted.rerender(view('b'));
+    expect(labels()).toEqual([expect.stringMatching(/^\d+b$/)]);
+  });
 });
 
 

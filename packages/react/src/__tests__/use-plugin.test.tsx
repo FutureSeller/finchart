@@ -13,6 +13,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { createRef, StrictMode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartPane } from '../components';
+import { PaneProvider } from '../components/chart-context';
 import { usePlugin } from '../hooks';
 import { layersSpy } from './fake-layers';
 
@@ -148,6 +149,42 @@ describe('usePlugin', () => {
     expect(target).toBeDefined();
     // The first <ChartPane> reuses mainPane, so the consumer inside the second one sees a different pane.
     expect(target).not.toBe(plotRef.current?.mainPane);
+  });
+
+  it('should move to the new target when the pane it is handed changes', async () => {
+    const spy = pluginSpy();
+    const plotRef = createRef<Plot>();
+
+    function Consumer() {
+      usePlugin(spy.install, []);
+      return null;
+    }
+
+    // The pane context changes under a consumer that stays mounted.
+    function Harness() {
+      const [pane, setPane] = useState<Pane | null>(null);
+      return (
+        <ChartContainer deps={makeDeps()} data={data} plotRef={plotRef}>
+          <button type="button" onClick={() => setPane(plotRef.current?.addPane() ?? null)}>
+            move
+          </button>
+          <PaneProvider value={pane}>
+            <Consumer />
+          </PaneProvider>
+        </ChartContainer>
+      );
+    }
+
+    const screen = render(<Harness />);
+    expect(spy.log.targets).toEqual([plotRef.current?.mainPane]);
+
+    await act(async () => {
+      screen.getByText('move').click();
+    });
+
+    expect(spy.log.targets).toHaveLength(2);
+    expect(spy.log.targets[1]).toBe(plotRef.current?.panes[1]);
+    expect(spy.log.installs - spy.log.disposes).toBe(1);
   });
 
   // Nulling the api on cleanup is only observable when the component

@@ -14,7 +14,7 @@ import type { CrosshairPayload } from "../../plot";
 import { createPlotModel } from "../../plot/model";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "../../plot/__tests__/helpers";
-import { crosshair as attach } from "../crosshair";
+import { crosshair as attach, crosshairLine } from "../crosshair";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 10 },
@@ -180,6 +180,49 @@ describe("crosshairLine — what the plugin draws", () => {
     if (badge?.type !== "drawText") throw new Error(`no y badge reading ${label}`);
     expect(badge.params.at.y).toBeCloseTo(cursor.y, 6);
     model.plot.destroy();
+  });
+});
+
+/**
+ * `crosshairLine` is public, so a host can feed it any position — one over
+ * an axis strip included. A guide line has no place outside the area it
+ * spans, so each direction is dropped on its own once the cursor leaves it.
+ */
+describe("crosshairLine — a position outside the area", () => {
+  function guidesAt(position: (area: { left: number; right: number; top: number; bottom: number }) => { x: number; y: number }) {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: lineSeries(), data },
+      config: { showGrid: false },
+    });
+    const line = crosshairLine();
+    model.plot.addDecoration(line);
+    line.follow(position(model.plot.mainPane.area));
+    model.plot.render();
+
+    // The guides are the dashed two-point lines; the series line is solid.
+    const guides = model
+      .commands()
+      .flatMap((c) => (c.type === "drawLine" && c.points.length === 2 && c.style.dashArray ? [c.points] : []));
+    const result = {
+      vertical: guides.filter(([from, to]) => from.x === to.x).length,
+      horizontal: guides.filter(([from, to]) => from.y === to.y).length,
+    };
+    model.plot.destroy();
+    return result;
+  }
+
+  const midY = (area: { top: number; bottom: number }) => (area.top + area.bottom) / 2;
+  const midX = (area: { left: number; right: number }) => (area.left + area.right) / 2;
+
+  it("should drop the vertical guide left or right of the area and keep the horizontal one", () => {
+    expect(guidesAt((area) => ({ x: area.left - 5, y: midY(area) }))).toEqual({ vertical: 0, horizontal: 1 });
+    expect(guidesAt((area) => ({ x: area.right + 5, y: midY(area) }))).toEqual({ vertical: 0, horizontal: 1 });
+  });
+
+  it("should drop the horizontal guide above or below the area and keep the vertical one", () => {
+    expect(guidesAt((area) => ({ x: midX(area), y: area.top - 5 }))).toEqual({ vertical: 1, horizontal: 0 });
+    expect(guidesAt((area) => ({ x: midX(area), y: area.bottom + 5 }))).toEqual({ vertical: 1, horizontal: 0 });
   });
 });
 

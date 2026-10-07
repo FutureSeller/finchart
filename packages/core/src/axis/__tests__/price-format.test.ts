@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ContractError } from "../../primitives";
 import { priceFormat } from "../price-format";
 
 describe("priceFormat", () => {
@@ -84,4 +85,12 @@ it("uses scientific labels beyond Intl's decimal limit and preserves finite snap
   const automatic = priceFormat({ locale: "en-US" });
   expect(automatic(1e-310, 1e-310)).not.toBe(automatic(2e-310, 1e-310));
   expect(priceFormat({ minMove: 1e308, locale: "en-US" })(Number.MAX_VALUE)).not.toContain("∞");
+});
+
+/**
+ * Intl truncates a fractional digit count without a word, so 1.5 would
+ * quietly print one decimal; the helper refuses it instead.
+ */
+it("refuses a precision that is not a whole number of digits", () => {
+  expect(() => priceFormat({ precision: 1.5 })).toThrow(ContractError);
 });

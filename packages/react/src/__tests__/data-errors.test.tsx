@@ -65,6 +65,24 @@ describe('<ChartContainer onError>', () => {
     expect(ref.current?.mainPane.probe(100)[0]?.value).toBe(2);
   });
 
+  it('reports to the handler of the latest render, not the first', () => {
+    const deps = browserDeps({ createLayers: layersSpy().createLayers });
+    const first: unknown[] = [];
+    const second: unknown[] = [];
+    const ui = (data: LineDataPoint[], onError: (error: DataError) => void) => (
+      <ChartContainer deps={deps} data={data} onError={onError}>
+        <ChartSeries series={series} />
+      </ChartContainer>
+    );
+    const view = render(ui(sorted, (error) => void first.push(error)));
+
+    view.rerender(ui(unsorted, (error) => void second.push(error)));
+
+    expect(first).toEqual([]);
+    expect(second).toHaveLength(1);
+    expect(second[0]).toBeInstanceOf(DataError);
+  });
+
   it('still throws a ContractError to the boundary — a mistake in the code is not bad data', () => {
     const deps = browserDeps({ createLayers: layersSpy().createLayers });
     const caught: unknown[] = [];

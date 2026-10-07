@@ -318,6 +318,49 @@ describe("infiniteHistory", () => {
     expect(calls).toEqual([100]);
   });
 
+  it("a blank strip a couple of pixels wide before the data is a gap; under half a pixel is not", async () => {
+    // At this plot width a blank 0.05 of a unit wide sits well past the half-pixel threshold, 0.01 short of it.
+    const visible = chart();
+    const narrow = servedFetch(points(80, 100));
+    visible.plot.setVisibleRange(99.95, 119.95);
+    const fills = infiniteHistory(visible.plot, recordingSink().sink, narrow.fetch, { from: 100 });
+
+    const hidden = chart();
+    const sliver = servedFetch(points(80, 100));
+    hidden.plot.setVisibleRange(99.99, 119.99);
+    const waits = infiniteHistory(hidden.plot, recordingSink().sink, sliver.fetch, { from: 100 });
+    await settle();
+
+    expect(narrow.calls).toEqual([100]);
+    expect(sliver.calls).toEqual([]);
+    fills.dispose();
+    waits.dispose();
+    visible.plot.destroy();
+    hidden.plot.destroy();
+  });
+
+  it("screensAhead widens the prefetch runway to that many screens", async () => {
+    const { plot } = chart(points(100, 200));
+    const { calls, fetch } = servedFetch(points(80, 100));
+    const loader = infiniteHistory(plot, recordingSink().sink, fetch, { from: 100, screensAhead: 3 });
+
+    plot.setVisibleRange(150, 165);
+    await settle();
+    expect(calls).toEqual([]);
+
+    // A left move leaving 46 units of runway: just over three 15-unit screens, so still enough.
+    plot.setVisibleRange(146, 161);
+    await settle();
+    expect(calls).toEqual([]);
+
+    // A left move leaving 30 units of runway: two 15-unit screens, inside three.
+    plot.setVisibleRange(130, 145);
+    await settle();
+    expect(calls).toEqual([100]);
+    loader.dispose();
+    plot.destroy();
+  });
+
   it("guard 4: events during an in-flight fetch do not stack requests", async () => {
     const { plot } = chart();
     const { calls, fetch, land } = heldFetch();

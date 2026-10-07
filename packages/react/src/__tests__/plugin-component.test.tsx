@@ -114,6 +114,25 @@ describe('<Plugin>', () => {
     expect(api).toBe(installed[1]);
   });
 
+  it('tells the old onApi its api is gone, then reinstalls with the install and onApi of the render that changed deps', () => {
+    const heard: string[] = [];
+    const deps = makeDeps();
+
+    const view = (period: number) => (
+      <ChartContainer deps={deps} data={data}>
+        <Plugin
+          install={() => ({ period, dispose: () => undefined })}
+          deps={[period]}
+          onApi={(api) => heard.push(`${period} heard ${api ? api.period : 'null'}`)}
+        />
+      </ChartContainer>
+    );
+    const screen = render(view(14));
+    act(() => screen.rerender(view(21)));
+
+    expect(heard).toEqual(['14 heard 14', '14 heard null', '21 heard 21']);
+  });
+
   it('installs on the pane it sits in', () => {
     const { install } = installer();
     const heard: { api: FakeApi | null } = { api: null };
@@ -250,6 +269,29 @@ describe('<Plugin>', () => {
       );
       const screen = render(view(true));
       expect(() => screen.rerender(view(false))).toThrow('on the way out');
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+
+  it('keeps the first error and still disposes when onApi throws announcing the api and again letting it go', () => {
+    const { install, installed } = installer();
+    const deps = makeDeps();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        render(
+          <ChartContainer deps={deps} data={data}>
+            <Plugin
+              install={install}
+              onApi={(api) => {
+                throw new Error(api ? 'refused' : 'and again');
+              }}
+            />
+          </ChartContainer>,
+        ),
+      ).toThrow('refused');
+      expect(installed.every((api) => api.disposed)).toBe(true);
     } finally {
       quiet.mockRestore();
     }

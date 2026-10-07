@@ -189,6 +189,62 @@ describe("headLookback — the declared door", () => {
     expect(after).toEqual(sum(a.source.read(), b.source.read()));
   });
 
+  it("falls back to the full path when the previous branch is shorter than the corrected zone", () => {
+    // Position for position on a short input, nothing at all on a long one:
+    // the prefix probe is 1:1, but there is no previous tail to keep.
+    const calc = (data: readonly Pt[]) => ({
+      line: data.length <= 10 ? data.map((p) => ({ x: p.x, y: p.x })) : [],
+    });
+    const f = feed(pts(10, 30));
+    const node = computation({ inputs: [f.source], calc, headLookback: 2 });
+    expect(node.out.line.read()).toEqual([]);
+
+    f.prepend(pts(4, 10));
+
+    expect(node.out.line.read()).toEqual(calc(f.source.read()).line);
+  });
+
+  /**
+   * An upstream landing corrects positions past the landed count, so the
+   * prefix reaches into the corrected zone by the lookback — and a lookback
+   * that is no count of positions is no declaration at all.
+   */
+  it.each([-1, 1.5])("declines a lookback of %s positions and answers like a cold node", (look) => {
+    const mean3 = (values: readonly (number | null)[]): (number | null)[] =>
+      values.map((_, i) => {
+        if (i < 2) return null;
+        const window = values.slice(i - 2, i + 1);
+        let sum = 0;
+        for (const value of window) {
+          if (value === null) return null;
+          sum += value;
+        }
+        return sum / 3;
+      });
+    const f = feed(pts(10, 30));
+    const upstream = computation({
+      inputs: [f.source],
+      calc: (data) => {
+        const ys = mean3(data.map((p) => p.x));
+        return { line: data.map((p, i) => ({ x: p.x, y: ys[i] })) };
+      },
+      headLookback: 2,
+    });
+    const downstream = computation({
+      inputs: [upstream.out.line],
+      calc: (data) => {
+        const ys = mean3(data.map((p) => p.y));
+        return { line: data.map((p, i) => ({ x: p.x, y: ys[i] })) };
+      },
+      headLookback: () => look,
+    });
+    downstream.out.line.read();
+
+    f.prepend(pts(4, 10));
+
+    expect(downstream.out.line.read().map((p) => p.y)).toEqual(mean3(mean3(pts(4, 30).map((p) => p.x))));
+  });
+
   it("refuses a spec carrying both doors — one way per direction", () => {
     const f = feed(pts(10, 30));
     expect(() =>

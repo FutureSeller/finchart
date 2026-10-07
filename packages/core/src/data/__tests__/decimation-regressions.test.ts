@@ -308,6 +308,22 @@ describe("hole presence is rewritten on every mutation", () => {
     expect(visibleHoles(m, 400)).toBeGreaterThan(0);
   });
 
+  it("catches a hole carried in by an adopted head", () => {
+    const m = manager(
+      dense(300).map((point) => ({ ...point, x: point.x + 100 })),
+    );
+    m.adoptHeadRetainingTail(
+      [
+        { x: 0, y: 5 },
+        { x: 1, y: null },
+        ...Array.from({ length: 60 }, (_, i) => ({ x: 2 + i, y: i % 7 })),
+      ],
+      0,
+    );
+
+    expect(visibleHoles(m, 400)).toBeGreaterThan(0);
+  });
+
   /** A hole that arrives via a tick isn't cleared at that moment because it's the last point, but it must stay uncleared once the next bar makes it interior. */
   it("catches a hole carried in by updateLast", () => {
     const m = manager(dense(300));

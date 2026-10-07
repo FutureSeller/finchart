@@ -44,6 +44,12 @@ describe("readableTextOn", () => {
     for (const colour of unreadable) expect({ colour, text: readableTextOn(colour) }).toEqual({ colour, text: null });
   });
 
+  it("weighs green far above red and blue — at the same channel value only green reads black", () => {
+    expect(readableTextOn("#cc0000")).toBe("#ffffff");
+    expect(readableTextOn("#00cc00")).toBe("#000000");
+    expect(readableTextOn("#0000cc")).toBe("#ffffff");
+  });
+
   it("uses the larger WCAG contrast — a mid grey goes to whichever side wins", () => {
     // The crossover sits between these two: #757575 is 4.61:1 on white and
     // 4.56:1 on black, #767676 is 4.54:1 on white and 4.62:1 on black.

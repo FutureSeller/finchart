@@ -332,6 +332,14 @@ describe("Zone", () => {
       expect(() => zone.parts(edge)).not.toThrow();
       expect(zone.toUtc(zone.parts(edge - 60_000))).toBe(edge - 60_000);
     });
+
+    it("still answers at the very start of time", () => {
+      // The first instants a Date holds — a day before them is no instant.
+      const zone = new Zone("UTC");
+      const edge = -8.64e15;
+
+      expect(zone.toUtc(zone.parts(edge + 60_000))).toBe(edge + 60_000);
+    });
   });
 
   describe("the axis it cuts into runs", () => {

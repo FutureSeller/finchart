@@ -105,10 +105,14 @@ describe("an inverted pane's ticks land on the same side as the data", () => {
 });
 
 describe("a y-axis drag stops at the range the scale can't accept", () => {
-  function dragConsumer(scale: LinearScale | LogScale) {
+  /** `afterSet` runs once the domain is planted — where a pane notifies its subscribers. */
+  function dragConsumer(scale: LinearScale | LogScale, afterSet: () => void = () => undefined) {
     const pane = {
       yScale: scale,
-      setValueDomain: (min: number, max: number) => scale.setDomain(min, max),
+      setValueDomain: (min: number, max: number) => {
+        scale.setDomain(min, max);
+        afterSet();
+      },
       resetValueAxis: () => undefined,
     };
     return axisDragConsumer({
@@ -153,6 +157,19 @@ describe("a y-axis drag stops at the range the scale can't accept", () => {
 
     const [min, max] = scale.getDomain();
     expect(max - min).toBeGreaterThan(100);
+  });
+
+  it("does not swallow a contract error thrown after the domain moved", () => {
+    const scale = new LinearScale(100, 200, 300, 0);
+    // A subscriber's own mistake, raised from inside the notification.
+    const consumer = dragConsumer(scale, () => {
+      throw new ContractError("a subscriber's mistake");
+    });
+    consumer.handle({ type: "pointerdown", point: { x: 20, y: 150 }, pointerId: 1 });
+
+    expect(() =>
+      consumer.handle({ type: "pointermove", point: { x: 20, y: 170 }, pointerId: 1 }),
+    ).toThrow("a subscriber's mistake");
   });
 });
 

@@ -181,6 +181,29 @@ describe('<Legend> inside a <ChartPane>', () => {
   });
 });
 
+describe('<Tooltip> lifetime', () => {
+  it('leaves one box under StrictMode, and none once removed', () => {
+    const { deps, ref, plot, overlay, frame } = setup();
+    const boxes = () => overlay().querySelectorAll('[data-chart-tooltip]').length;
+    const ui = (shown: boolean): ReactElement => (
+      <StrictMode>
+        <ChartContainer deps={deps} data={upper} plotRef={ref}>
+          <ChartLine name="PRICE" data={upper} />
+          {shown && <Tooltip />}
+        </ChartContainer>
+      </StrictMode>
+    );
+    const view = render(ui(true));
+    frame();
+    const { area } = plot().mainPane;
+    act(() => plot().crosshair({ x: area.left + 5, y: area.top + 5 }));
+    expect(boxes()).toBe(1);
+
+    view.rerender(ui(false));
+    expect(boxes()).toBe(0);
+  });
+});
+
 describe('<Tooltip offset>', () => {
   // jsdom has no layout: the overlay reads as the default 800×600 chart and
   // the box as 100×40, so the tooltip's edge checks have something to measure.

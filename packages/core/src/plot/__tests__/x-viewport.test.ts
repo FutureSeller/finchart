@@ -77,6 +77,34 @@ describe("first fit", () => {
     // The offset adds on top of the half bar.
     expect(s.domain()).toEqual([5, 40]);
   });
+
+  it("should drop a negative rightOffset that would flip the window and show the whole range", () => {
+    const s = setup({ rightOffset: -1000 });
+    s.load([10, 20, 30]);
+
+    expect(() => s.viewport.fit()).not.toThrow();
+    expect(s.domain()).toEqual([5, 35]);
+  });
+
+  it("should size each end's margin by the spacing at that end", () => {
+    const s = setup();
+    // 10 apart at the start, 20 apart at the end.
+    s.load([0, 10, 20, 40]);
+
+    s.viewport.fit();
+
+    expect(s.domain()).toEqual([-5, 50]);
+  });
+
+  it("should not count a repeated first x as zero spacing", () => {
+    const s = setup();
+    // A line may repeat an x; the margin still comes from a real gap.
+    s.load([10, 10, 20, 30]);
+
+    s.viewport.fit();
+
+    expect(s.domain()).toEqual([5, 35]);
+  });
 });
 
 describe("when a window is set before the data", () => {
@@ -145,6 +173,21 @@ describe("when a new bar arrives", () => {
 
     expect(after[0]).toBeCloseTo(before[0] + 10);
     expect(after[1]).toBeCloseTo(before[1] + 10);
+  });
+
+  it("should shift by the new bar's distance, not all the way to the live edge", () => {
+    const s = setup({ shiftVisibleRangeOnNewBar: true });
+    s.load([0, 10, 20, 30]);
+    s.viewport.noteData({ min: 0, max: 30 });
+    // The last bar is in view, but the right edge sits short of live (35).
+    s.viewport.setVisibleRange(0, 32);
+
+    s.load([0, 10, 20, 30, 40]);
+    const previous = s.viewport.noteData({ min: 0, max: 40 });
+    s.viewport.followNewBar(previous, { min: 0, max: 40 });
+
+    // Moved by the 10 the data grew — the live edge (45) is further than that.
+    expect(s.domain()).toEqual([10, 42]);
   });
 
   it("should not shift while scrolled into the past", () => {
@@ -271,6 +314,21 @@ describe("bar spacing limits", () => {
     s.viewport.setVisibleRange(200, 400);
 
     expect(s.viewport.visibleRange()).toEqual({ min: 200, max: 400 });
+  });
+
+  /** The zoom-in side of "never gets worse": a window already narrower than
+   * maxBarSpacing allows stays put on a zoom-in instead of jumping wider. */
+  it("should stand still when zooming in on a window already past maxBarSpacing", () => {
+    // 800px / 100px = width 8 is the lower bound; the chosen window is 2 wide.
+    const s = setup({ maxBarSpacing: 100 });
+    s.load([0, 50, 100]);
+    s.viewport.setVisibleRange(40, 42);
+    const before = s.changes.length;
+
+    s.viewport.zoom(2, 41);
+
+    expect(s.domain()).toEqual([40, 42]);
+    expect(s.changes).toHaveLength(before);
   });
 
   /** The limit only applies to zoom — a window widened past the limit by
@@ -526,6 +584,20 @@ describe("pan boundaries", () => {
     expect(s.domain()).toEqual([1500, 2300]);
   });
 
+  it("should hold a window parked before the data against a pan further into the past", () => {
+    const s = setup();
+    s.load([0, 800]);
+    s.viewport.setVisibleRange(-2000, -1200);
+
+    const before = s.changes.length;
+    s.viewport.pan(-100); // further from the data — blocked, not flipped into a jump toward it
+    expect(s.domain()).toEqual([-2000, -1200]);
+    expect(s.changes).toHaveLength(before);
+
+    s.viewport.pan(500); // toward the data — goes through
+    expect(s.domain()).toEqual([-1500, -700]);
+  });
+
   it("should pan freely when there is no data to bound against", () => {
     const s = setup();
 
@@ -619,6 +691,18 @@ describe("zoom center clamp", () => {
     expect(min).toBeLessThanOrEqual(800);
   });
 
+  it("should zoom at the window's edge when the clamped center falls outside a window parked past the data", () => {
+    const s = setup();
+    s.load([0, 800]);
+    s.viewport.setVisibleRange(2000, 2800);
+
+    // The data clamp moves the anchor to 800 — outside the window, so it is
+    // pulled to the window's left edge and the zoom stays a zoom, not a pan.
+    s.viewport.zoom(2, 2400);
+
+    expect(s.domain()).toEqual([2000, 2400]);
+  });
+
   it("should zoom freely when there is no data to clamp against", () => {
     const s = setup();
 
@@ -705,5 +789,29 @@ describe("when a window set before the data misses it", () => {
     s.load([10, 20, 30]);
     s.viewport.fit();
     expect(s.viewport.visibleRange()).toEqual({ min: 15, max: 25 });
+  });
+});
+
+describe("a window asked for before the data held", () => {
+  it("should stop re-placing it once older data reaches exactly its start", () => {
+    const s = setup();
+    s.load([10, 20, 30]);
+    s.viewport.setVisibleRange(0, 20);
+
+    s.load([0, 10, 20, 30]);
+    expect(s.viewport.resolveWanted()).toBe(true);
+
+    // Its start now sits on the first bar — the placement is exact, nothing left to correct.
+    expect(s.viewport.resolveWanted()).toBe(false);
+  });
+
+  it("should not hold a window that only reaches into the first bar's half-bar margin", () => {
+    const s = setup();
+    s.load([10, 20, 30]);
+
+    // 7 is inside the 5 of margin a fit leaves before the first bar.
+    s.viewport.setVisibleRange(7, 30);
+
+    expect(s.viewport.resolveWanted()).toBe(false);
   });
 });

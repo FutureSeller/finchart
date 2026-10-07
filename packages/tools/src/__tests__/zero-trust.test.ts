@@ -1,4 +1,4 @@
-import { mountDrawingStage } from "./drawing-stage.fixture";
+import { mountDrawingStage, space } from "./drawing-stage.fixture";
 /**
  * Don't trust the consumer. If `add` only validates the argument and
  * then saves it via `structuredClone`, an argument that uses getters or
@@ -16,7 +16,7 @@ import {
   createPlotModel,
   lineSeries,
 } from "@finchart/core";
-import { drawingTools } from "../tools";
+import { drawingTools, type DrawingStage } from "../tools";
 
 const mount = () => {
   const model = createPlotModel({
@@ -146,6 +146,20 @@ describe("assembly is held to the same rule", () => {
 
   it.each(["red", 42])("should refuse style: %s", (bad) => {
     expect(() => mountWith({ style: bad })).toThrow(ContractError);
+  });
+
+  /** Present is not enough — a member that can't be called would fail on the first event instead. */
+  it("should refuse a plot whose stage member is not a function", () => {
+    const plot: DrawingStage = {
+      ...space,
+      requestRender() {},
+      addInputConsumer: () => () => {},
+      claimCursor: () => () => {},
+      claimFocusArea: () => ({ contestedAt: () => false, release() {} }),
+      crosshair() {},
+    };
+    Reflect.set(plot, "crosshair", 1);
+    expect(() => drawingTools({ plot })).toThrow(/missing crosshair/);
   });
 
   it("should accept a well-formed assembly", () => {

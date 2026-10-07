@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import { createPlotModel } from "../../plot/model";
+import { timeCursor } from "../crosshair";
 import { syncCrosshair } from "../sync";
 
 const data: LineDataPoint[] = [
@@ -96,5 +97,29 @@ describe("syncCrosshair", () => {
     release();
     b.plot.render();
     expect(fullHeightVerticals(b).length).toBe(0);
+  });
+});
+
+describe("timeCursor", () => {
+  function ghostLinesAt(x: number) {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: lineSeries(), data },
+      config: bare,
+    });
+    model.plot.setVisibleRange(20, 60);
+    const ghost = timeCursor();
+    model.plot.addDecoration(ghost);
+    ghost.follow(x);
+    model.plot.render();
+    const lines = fullHeightVerticals(model);
+    model.plot.destroy();
+    return lines;
+  }
+
+  it("should draw no line for an x outside this chart's window, on either side", () => {
+    expect(ghostLinesAt(10)).toEqual([]);
+    expect(ghostLinesAt(90)).toEqual([]);
+    expect(ghostLinesAt(40)).toHaveLength(1);
   });
 });
