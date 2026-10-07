@@ -138,7 +138,10 @@ relative-link review.
 and React-floor jobs. `gate-parity-check.mjs` compares the local gate with the
 CI check job and documents exemptions; it does not run the other jobs. CI sets
 `FINCHART_SKIP_STRESS=1` for coverage, while the normal local gate retains the
-long sweeps. Do not describe a focused test run as equivalent to all CI jobs.
+long sweeps. The gate runs every package's coverage at once, which can slow a
+sweep well over ten times, so each sweep sets an explicit `timeout` with that
+headroom rather than relying on the five-second default. Do not describe a
+focused test run as equivalent to all CI jobs.
 
 ## Packaging and releases
 
