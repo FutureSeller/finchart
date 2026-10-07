@@ -90,11 +90,11 @@ export interface FoldSpec<T extends BaseDataPoint, F, S, K extends string, TK ex
   step(folds: F, point: T): Record<K, number | null>;
   /**
    * How far back a landing corrects — the chained sum of the folds'
-   * memories: `period − 1` for a window, `decayHorizon` for a recursion,
-   * `lag` (not `lag − 1`) for a lag.
+   * memories: `period − 1` for a window, `lag` (not `lag − 1`) for a lag.
    *
    * Omit it when no constant is true: a running sum whose memory is the
-   * whole history, or a recursion fed a nullable input, whose memory is
+   * whole history, a recursion, whose state keeps the seed's magnitude
+   * however far back it was, or a recursion fed a nullable input, whose memory is
    * measured in valid inputs rather than bars (once seeded, a null pauses
    * the recursion and keeps its state; while seeding, a null restarts the
    * seed). Without a door a landing recomputes everything — always right,
