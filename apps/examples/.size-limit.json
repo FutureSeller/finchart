@@ -41,7 +41,7 @@
     "gzip": true
   },
   {
-    "name": "+ every drawing tool · 53.0 KB gzip (52983B measured)",
+    "name": "+ every drawing tool · 53.0 KB gzip (52982B measured)",
     "path": [
       "../../packages/core/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -58,7 +58,7 @@
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 53.5 KB gzip (53467B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 53.5 KB gzip (53466B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",

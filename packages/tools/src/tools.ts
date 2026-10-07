@@ -325,12 +325,15 @@ export const DRAWING_STYLE_SPEC = /* @__PURE__ */ styleSpec({
 }) satisfies StyleSpec<LineStyle>;
 
 /**
- * If a drawing's down and up are at least this far apart (px), it counts
- * as drawn by dragging — the release point becomes b and it's done. Inside
- * that, it's a click — b keeps following the cursor and the next click
- * finishes it. 5px matches pan's own "that counted as a drag" threshold.
+ * The most a press may travel (px), straight-line from down to up, and
+ * still be a click — the next anchor keeps following the cursor until the
+ * next click. Farther than this, it counts as drawn by dragging — the
+ * release point confirms the next anchor, which finishes a two-anchor
+ * drawing. The chart's pan uses the same 5px (pan counts the farthest
+ * horizontal travel during the press): exactly 5px of travel is a click
+ * there too.
  */
-const PLACEMENT_DRAG_MIN = 5;
+const PLACEMENT_CLICK_MAX = 5;
 
 /** The snap marker's radius (px) — outside the handle so the two read as different things. */
 const SNAP_RING_RADIUS = 7;
@@ -1361,10 +1364,10 @@ export function drawingTools(
         }
 
         // Measure the hand, not the snapped anchor: snapping alone can
-        // move an anchor farther than the drag threshold. Each new press
+        // move an anchor farther than a click may travel. Each new press
         // replaces this origin, including the second press of a three-point tool.
         const reference = state.press;
-        const moved = distanceToPoint(event.point, reference) >= PLACEMENT_DRAG_MIN;
+        const moved = distanceToPoint(event.point, reference) > PLACEMENT_CLICK_MAX;
         if (moved) {
           // Drawn by dragging — the release point confirms the next
           // anchor (which finishes a two-anchor kind).
