@@ -71,8 +71,18 @@ jobs:
       - run: node --version
       - run: node e2e/node-floor-smoke.mjs
 
+  # The Playwright image already carries the browsers and the system libraries
+  # they need, so this job downloads nothing from the Ubuntu mirror, whose
+  # speed has swung from about a minute to a quarter of an hour for the same
+  # packages. The image must match the lockfile's Playwright; the version step
+  # below fails the job with a clear message when they drift apart.
   e2e:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user 1001
+    env:
+      PLAYWRIGHT_IMAGE_VERSION: 1.63.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -85,7 +95,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: |
+          installed="$(npx playwright --version)"
+          if [ "$installed" != "Version $PLAYWRIGHT_IMAGE_VERSION" ]; then
+            echo "::error::Lockfile Playwright is '$installed' but the e2e image is $PLAYWRIGHT_IMAGE_VERSION; update the image tag, digest, and PLAYWRIGHT_IMAGE_VERSION together."
+            exit 1
+          fi
         working-directory: e2e
       - run: pnpm e2e
         working-directory: e2e
