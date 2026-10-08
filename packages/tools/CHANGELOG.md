@@ -1,5 +1,12 @@
 # @finchart/tools
 
+## 0.0.2
+
+### Patch Changes
+
+- 7b02f50: Placing a drawing uses the chart pan's 5px click boundary: a press that travels exactly 5px before release is now a click and leaves the next anchor following the cursor. Only more than 5px, measured in a straight line from press to release, places the next anchor at the release point, which finishes a two-anchor drawing.
+- @finchart/core@0.0.2
+
 ## 0.0.1
 
 Initial public release. These notes describe development before the first publication.

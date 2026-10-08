@@ -1,6 +1,6 @@
 {
   "name": "@finchart/react",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "React components for @finchart/core — composable chart, pane, series and decoration components over the same headless engine.",
   "license": "MIT",
   "engines": {

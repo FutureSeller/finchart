@@ -1,6 +1,6 @@
 {
   "name": "@finchart/tools",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Drawing tools for @finchart/core — horizontal lines, trend lines and Fibonacci retracements in domain coordinates, with serialization.",
   "license": "MIT",
   "engines": {
