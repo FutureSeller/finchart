@@ -1117,7 +1117,32 @@ value that ticks every frame moves the line, not the registration.
   panes. It's separate from `<ChartContainer onCrosshair>`, so **you can take the
   crosshair off and still receive cursor values.**
 - **The first `<ChartPane>` reuses `mainPane`.** A `Plot` always has a mainPane,
-  so making a new one would leave an empty pane taking up space at the top.
+  so making a new one would leave an empty pane taking up space at the top. When
+  the pane holding it goes, `mainPane` stays on the chart without the series
+  that were inside that wrapper (series outside any pane stay); it goes back to
+  the top at the next restack, and the next `<ChartPane>` to arrive — mounted,
+  or shown again by `<Activity>` — takes it.
+- **A pane follows its `<ChartPane>`.** Each `<ChartPane>` declares itself, and
+  the container builds, ranks and places the declared panes before paint, on
+  React 18 and 19 alike; a pane leaves in the same passive flush as its
+  `<ChartPane>` and the series inside it. A Suspense boundary hiding a pane —
+  one, or the whole chart — leaves it on the chart as it is, with its series,
+  the user's drags and ranges, the components inside it and their state, and
+  your `plot.setPaneOrder`; showing it applies any prop that changed meanwhile,
+  announcing nothing unless one did. While hidden it stays right after the pane
+  it followed, whatever is added or removed around it, so a pane inserted
+  between that one and it meanwhile sits after it until it shows again and the
+  reveal restacks the panes to JSX order. (React 19's development StrictMode
+  replays effects on that reveal: a pane hidden on its own is rebuilt instead,
+  the components inside it starting over, and a chart hidden whole gets a new
+  `Plot`; production keeps both.) An `<Activity>` hiding one pane takes it off
+  the chart, with the panes nested in it, and showing it builds it afresh from
+  its current props in its JSX place — the user's drag and range are gone, the
+  components inside it start over, and like any pane arriving it restacks every
+  declared pane to JSX order, dropping a `plot.setPaneOrder` you made. An
+  `<Activity>` hiding the whole chart destroys it, and showing it builds a new
+  one from the JSX and current props. Unmounting the chart, or remounting it
+  under a new `key`, announces no pane change.
 - **A pane's value axis is props.** `valueDomain={[0, 100]}` pins a range (an
   oscillator's) and wins over `autoScale` while it's set; once removed, the
   pane does what `autoScale` says. `yScale` is a factory called on updates;
@@ -1142,9 +1167,9 @@ value that ticks every frame moves the line, not the registration.
   between changed its own state), the pane — or the container, outside one —
   renders again to place it. That pass commits before the next frame is drawn,
   so the series is never listed or drawn at the end. A `<ChartPane>` mounted
-  that way is never drawn out of place either, but `panesChange` can ring once
-  with it last before the restack puts it in its place — as for any pane the
-  JSX inserts above others.
+  that way is never drawn out of place either, on React 18 or 19, but
+  `panesChange` can ring once with it last before the restack puts it in its
+  place — as for any pane the JSX inserts above others.
 - **The `data` prop flows straight through to the series.** The container sends it
   down through context and `<ChartSeries>` puts it in its own spec — the chart has
   no slot to receive data. So gluing history on is

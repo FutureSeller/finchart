@@ -30,5 +30,3 @@ export type { PluginProps } from './plugin';
 export { XAxis, YAxis } from './axes';
 export type { XAxisProps, YAxisProps } from './axes';
 export { useChartPlot } from './chart-context';
-export type { ChartApi, PaneAcquisition } from './chart-context';
-export type { SeriesCollector } from './series-collector';

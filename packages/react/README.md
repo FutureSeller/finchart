@@ -156,11 +156,46 @@ reader. Changing that reference reinstalls the registration so drawing,
 decimation and readouts agree; for a derived series this also rebuilds its
 cached output. Keep a custom accessor stable when its meaning is unchanged.
 
-The first `ChartPane` borrows the plot's persistent `mainPane`; later panes
-are created and removed by their wrapper. Panes stack in JSX order: a `ChartPane` inserted above others, or keyed panes
-reordered, move on the chart (`plot.setPaneOrder`) while keeping their
-instances, series, scales and settings. `mainPane` retains its identity
-wherever it lands.
+A `ChartPane` declares itself to its container, and the container builds the
+declared panes, ranks them and places them before the browser paints — on React
+18 as on 19, for a `flushSync`, a default or a transition update alike, so a
+pane that mounts is never drawn out of place, nor empty unless what it holds
+suspends on mount: inside a Suspense boundary of its own within the chart, the
+pane sits empty until that resolves; with the nearest boundary outside the
+chart, that boundary shows its fallback instead, even for a transition. A pane
+leaves in the same passive flush as its `ChartPane` and the series inside it.
+The first `ChartPane` to arrive borrows the plot's persistent `mainPane`; the
+others are added and removed for it. When the pane holding `mainPane` goes,
+`mainPane` stays on the chart without the series that were inside that wrapper
+(series outside any pane stay on it), with the scale a `yScale` prop replaced
+put back; it goes back to the top at the next restack, and the next `ChartPane`
+to arrive — mounted, or shown again by `<Activity>` — takes it. Panes stack in
+JSX order: a `ChartPane` inserted above others, or keyed panes reordered, move
+on the chart (`plot.setPaneOrder`) while keeping their instances, series, scales
+and settings. `mainPane` retains its identity wherever it lands.
+
+A Suspense boundary hiding a `ChartPane` — one pane, or the whole chart — leaves
+its pane on the chart as it is: its series, what the user did to it (a divider
+drag's `flex`, an axis drag's fixed range), the components inside it with their
+React state, and your `plot.setPaneOrder`. Showing it again applies any prop
+that changed meanwhile, and announces nothing unless one did. A pane can fetch
+its own data inside its own boundary this way. While it is hidden it stays right
+after the pane it followed, whatever is added or removed around it: a pane
+inserted between that one and it meanwhile sits after it until it shows again,
+and the reveal then restacks the panes to JSX order, dropping a
+`plot.setPaneOrder` you made. (In development, React 19's StrictMode replays
+effects on that reveal: a pane hidden on its own is rebuilt instead, the
+components inside it starting over, and a chart hidden whole gets a new `Plot` —
+see the Next.js guide.) An `<Activity>` hiding one `ChartPane` takes its pane
+off the chart, with every `ChartPane` nested in it — announced like any pane
+going, unless it held `mainPane`, which stays — and showing it builds the pane
+afresh from its current props, in its JSX place: the user's drag and range are
+gone, the components inside it start over, and like any pane arriving it
+restacks the declared panes to JSX order, dropping a `plot.setPaneOrder` you
+made. An `<Activity>` hiding the whole chart destroys it, and showing it builds
+a new chart from the JSX and its current props. The chart going — unmounted,
+remounted under a new `key` — announces no pane change; its own teardown takes
+the panes.
 
 The JSX owns the order of the panes it declares, but only when that order
 changes: a `plot.setPaneOrder` you make through `plotRef` holds across
@@ -322,20 +357,21 @@ current right edge, including a margin the user panned to; it does not snap
 the chart to `rightOffset`. Historical windows and zooming in remain anchored
 under the cursor. The option is off by default.
 
-**A pane's value scale is a prop.** `<ChartPane yScale={log ? LOG : undefined}>` (with `const LOG = () => new LogScale()` at module level)
-is the log toggle — the pane, its series and its height stay. The factory's
-scale's declared `kind` is the change: the factory is called on updates, but
-only a different kind is installed. Inline arrows are fine. Custom scales
-must declare a stable `kind`. Removing the prop puts back a linear
-scale (on the main pane, the instance it replaced). A fixed range is `valueDomain={[0, 100]}` — an
-oscillator pane, declared like any other. `valueDomain`, `autoScale` and
-`invert` are directives applied when they change (`valueDomain` by its two
-numbers, so an inline array is fine; removing it hands the axis back to
-`autoScale`), and an axis drag turning a fixed range
-on flips `autoScale` off on the pane the way a divider drag moves `flex` — and
-a double-click on that axis, or `fitDomains()`, flips it back on. To follow
-those changes in React state (an "Auto" toggle that tracks an axis drag),
-subscribe through `onPlot`:
+**A pane's value scale is a prop.** `<ChartPane yScale={log ? LOG : undefined}>`
+(with `const LOG = () => new LogScale()` at module level) is the log toggle —
+the pane, its series and its height stay. The factory's scale's declared `kind`
+is the change: the factory is called when the pane is built and on later
+updates, but only a different kind is installed. Inline arrows are fine. Custom
+scales must declare a stable `kind`. Removing the prop puts back a linear scale
+(on the main pane, the instance it replaced). A fixed range is
+`valueDomain={[0, 100]}` — an oscillator pane, declared like any other.
+`valueDomain`, `autoScale` and `invert` are directives applied when they change
+(`valueDomain` by its two numbers, so an inline array is fine; removing it hands
+the axis back to `autoScale`), and an axis drag turning a fixed range on flips
+`autoScale` off on the pane the way a divider drag moves `flex` — and a
+double-click on that axis, or `fitDomains()`, flips it back on. To follow those
+changes in React state (an "Auto" toggle that tracks an axis drag), subscribe
+through `onPlot`:
 
 ```tsx
 const [plot, setPlot] = useState<Plot | null>(null);

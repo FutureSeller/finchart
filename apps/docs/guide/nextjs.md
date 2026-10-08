@@ -59,15 +59,33 @@ prerender (a page that must not carry chart markup); declare it inside a Client
 Component, where `ssr: false` is allowed. It does not make the chart work where
 it otherwise would not.
 
+Panes and series render only once the chart exists, in the browser, so their
+layout effects never meet the server: `renderToString` of a `<ChartContainer>`
+with its children prints no `useLayoutEffect` warning on React 18.
+
 ## StrictMode
 
 Development StrictMode mounts, unmounts and mounts again, and replays effects.
 The library is written for that:
 
-- A pane is **acquired** once per mount — twice under the replay — so a
-  `yScale` factory is called twice at mount and must be pure. After that a
-  factory is called on committed updates; only a change in the scale's
-  declared `kind` installs it. Inline factories are fine.
+- A pane mounted with the chart is **built** once: the replay declares the
+  same render again, which the container reads as no change, on React 18 and
+  19, and adds no `yScale` factory call. A pane added later by a render of the
+  container itself is built, taken off and built again by the replay. Either
+  way the factory is called on committed updates, so it must be pure; only a
+  change in the scale's declared `kind` installs it. Inline factories are
+  fine.
+- React 19's StrictMode also replays effects when a Suspense boundary shows
+  its content again. A pane the boundary hid is then released, with its
+  series (a main pane it held goes to the next pane to arrive), and built
+  afresh in its JSX place — a new pane, or the main pane set up again — with
+  the components inside it starting over, and without the user's divider
+  drag, axis range or `plot.setPaneOrder`. Moving the hidden content (a keyed
+  wrapper around it reordered) replays effects too, which can take the hidden
+  pane off or restack it into its new JSX place before the reveal; the reveal
+  still builds it afresh. A chart the boundary hid whole gets a new `Plot`,
+  while the components inside it keep their state. React 18 keeps both, and
+  production builds don't replay.
 - A plugin installed through `usePlugin` is installed, disposed and installed
   again. Its `install` may return `null` for "not yet".
 - A decoration (`<PriceLine>`, `<Markers>`) is added, removed and added
