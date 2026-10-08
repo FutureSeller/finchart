@@ -7,7 +7,7 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
 staged="$(git write-tree 2>/dev/null || true)"
-stamped="$(cat .git/gate-ok 2>/dev/null || true)"
+stamped="$(cat "$(git rev-parse --git-path gate-ok)" 2>/dev/null || true)"
 
 if [ -n "$staged" ] && [ "$staged" = "$stamped" ]; then
   echo "✔ Gate stamp verified (${staged})"
