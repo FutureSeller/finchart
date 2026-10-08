@@ -1952,10 +1952,13 @@ function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean {
  * had — so a split frozen from the screen keeps the panes' own units.
  *
  * **A power of two**, the one nearest the exact ratio: scaling by it is exact
- * in floating point, so the split lays the panes out at precisely the
- * heights that were on screen (a pane at its floor stays exactly at it),
- * while the total lands within a factor of √2 of what it was. Panes that
- * were all collapsed (total 0) fall back to one unit per pane.
+ * in floating point, so the flex carries the heights that were on screen
+ * without rounding them, while the total lands within a factor of √2 of what
+ * it was. The layout's own split of the space by flex still rounds, so the
+ * panes come back at those heights to within a few ulps, not bit for bit (the
+ * layout pins a pane whose flex would put it under its `minHeight`, so a pane
+ * at its `minHeight` is laid out no shorter than it). Panes that were all
+ * collapsed (total 0) fall back to one unit per pane.
  */
 function unitsPerPixel(flexes: readonly number[], heights: readonly number[]): number {
   const pixels = heights.reduce((sum, height) => sum + height, 0);

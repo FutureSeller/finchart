@@ -637,6 +637,67 @@ describe("a divider drag keeps flex in the units the panes were given", () => {
     expect(dragged[0] - dragged[1]).toBeCloseTo(60, 0);
   });
 
+  // The flex is scaled exactly, but the layout's split by flex rounds, so the
+  // heights come back to within rounding rather than bit for bit
+  // (184.00000000000003 for 184 at dy = 5): a few ulps of the height. The
+  // height is read as the area's bottom minus its top, and that subtraction
+  // rounds by up to an ulp of the bottom — the lower the pane sits, the more.
+  const laidOutNear = (area: { top: number; bottom: number }, expected: number): boolean =>
+    Math.abs(area.bottom - area.top - expected) <= 2 * Number.EPSILON * expected + Number.EPSILON * area.bottom;
+
+  it("lays the panes out at the heights the drag left on screen, to within rounding", () => {
+    // 5, 33 and 104 are drags whose heights come back an ulp or two off.
+    for (const step of [1, 5, 17, 33, 58, 77, 104, 120]) {
+      for (const dy of [step, step + 0.37, -step, -(step + 0.37)]) {
+        const { plot, heights, drag } = threeEven();
+        const [upper, lower, rest] = heights();
+
+        drag(0, dy);
+
+        const expected = [upper + dy, lower - dy, rest];
+        // The flex carries those heights unrounded: one power of two per pixel
+        // for every pane. Exact to compare because the fixture starts at whole
+        // pixels on whole-pixel tops, so these spans are the heights the drag
+        // measured.
+        const units = [...new Set(plot.panes.map((pane, slot) => pane.flex / expected[slot]))];
+        const context = `dy = ${dy}: ${units.join(", ")}`;
+        expect(units, context).toHaveLength(1);
+        expect(Number.isInteger(Math.log2(units[0])), context).toBe(true);
+        const laidOut = heights();
+        expect(
+          plot.panes.every((pane, slot) => laidOutNear(pane.area, expected[slot])),
+          `dy = ${dy}: ${laidOut.join(", ")}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("lays a pane dragged to its floor out at the floor, never below it", () => {
+    // Checked as the layout places it — top plus the floor — rather than as
+    // bottom minus top, which can round an ulp under a height laid out exactly.
+    // 7.92 and 8.29 are floors the flex split lands a few ulps under, so the
+    // layout's pin at the floor is what holds them.
+    for (const floor of [7.92, 8.29, 12, 40, 87.3, 115]) {
+      for (const pre of [0, 3.3, -7.71, 11, 0.1]) {
+        // The middle pane goes to its floor from below (divider 0 pushed down)
+        // and from above (divider 1 pulled up).
+        for (const [index, dy] of [[0, 1000], [1, -1000]]) {
+          const { plot, heights, drag } = threeEven();
+          plot.panes[1].applyOptions({ minHeight: floor });
+          drag(1, pre);
+
+          drag(index, dy);
+
+          const settled = heights()[1];
+          const { top, bottom } = plot.panes[1].area;
+          const context = `floor ${floor}, pre-drag ${pre}, divider ${index}: ${settled}`;
+          expect(bottom, context).toBeGreaterThanOrEqual(top + floor);
+          expect(laidOutNear(plot.panes[1].area, floor), context).toBe(true);
+        }
+      }
+    }
+  });
+
   it("gives a pane added after a drag its fair share at the default flex", () => {
     const { plot, heights, drag } = threeEven();
     drag(0, 30);
