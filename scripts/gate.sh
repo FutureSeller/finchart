@@ -15,7 +15,7 @@ fi
 worktree_tree() {
   local tmp
   tmp="$(mktemp)"
-  cp .git/index "$tmp" 2>/dev/null || true
+  cp "$(git rev-parse --git-path index)" "$tmp" 2>/dev/null || true
   GIT_INDEX_FILE="$tmp" git add -A
   GIT_INDEX_FILE="$tmp" git write-tree
   rm -f "$tmp"
@@ -53,5 +53,5 @@ node scripts/gate-parity-check.mjs
 # an explicit release check (`--consume`) because it needs a fresh install.
 node scripts/release-artifact-check.mjs
 
-echo "$tree" > .git/gate-ok
+echo "$tree" > "$(git rev-parse --git-path gate-ok)"
 echo "✔ Gate passed — tree ${tree}"
