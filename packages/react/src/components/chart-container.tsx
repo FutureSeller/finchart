@@ -6,13 +6,11 @@ import type {
   Pane,
   Plot,
   PlotDeps,
-  Scale,
   XDomainChangePayload,
 } from '@finchart/core';
-import { LinearScale } from '@finchart/core';
 import type { BrowserDeps, ThemeObserverOptions } from '@finchart/dom';
 import type { AriaRole, CSSProperties, ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { PlotOptions } from '../hooks/plot-options';
 import { usePlot } from '../hooks/use-chart';
 import {
@@ -20,7 +18,8 @@ import {
   ChartProvider,
   SeriesPlacementProvider,
   type ChartApi,
-  type PaneAcquisition,
+  type HeldPane,
+  type PaneDeclaration,
 } from './chart-context';
 import {
   compareRank,
@@ -268,107 +267,147 @@ export function ChartContainer<T extends BaseDataPoint>({
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
-  const mainPaneTaken = useRef(false);
-  // The main pane's scale before a `<ChartPane yScale>` replaced it — put
-  // back on release, so a keyed swap to a pane without `yScale` returns to
-  // what was there. This is a weaker ownership than a pane's series list
-  // has: the core *refuses* a second series owner, but it cannot tell a
-  // wrapper's `setYScale` from a consumer's, so a swap made while the pane
-  // holds the main pane is allowed and then overwritten on release. What
-  // comes back is the instance, not its old domain — `setYScale` writes the
-  // current range onto it (`replantScale`), falling back to the instance's
-  // own when that range does not fit.
-  const previousScale = useRef<Scale | null>(null);
-  const collectors = useRef(new Map<Pane, SeriesCollector<T>>());
-
   const api = useMemo<ChartApi<T> | null>(() => {
     if (!plot) return null;
-    // A new chart starts with nothing taken, replaced or collected.
-    mainPaneTaken.current = false;
-    previousScale.current = null;
-    collectors.current = new Map();
-    const paneRanks = new Map<Pane, readonly number[]>();
-    /** A rank moved since the last restack. */
-    let restack = false;
+    const collectors = new WeakMap<Pane, SeriesCollector<T>>();
+    /** What the `<ChartPane>`s declared last, by wrapper id, until each is released. */
+    const declared = new Map<string, PaneDeclaration>();
+    /** The panes the chart holds for them. */
+    const held = new Map<string, HeldPane>();
+    /** Wrappers whose layout effects are down — hidden by Suspense, or on their way out. */
+    const down = new Set<string>();
+    /** The held ids in the order last compared — the cue to restack is that changing. */
+    let order: string[] = [];
+    /** A pane arrived, came back or moved in the JSX since the last settle — nothing else needs one. */
+    let unsettled = false;
+    /** This settle already waited once for the main pane's holder to be released. */
+    let waited = false;
+    let wake = () => {};
+    /**
+     * Between `<Settle>`'s layout setup and its cleanup. Closed while the
+     * whole chart is going (unmounted, a new `key`) or hidden — that cleanup
+     * runs before any passive one — so a release then takes nothing off: the
+     * chart's own teardown takes the panes, unannounced. A deletion inside a
+     * hidden chart commits with its reveal, after this has opened again.
+     */
+    let open = false;
+
+    const reconcile = (): void => {
+      // Only saves work: a settle with nothing arrived, back or moved changes nothing.
+      if (!unsettled) return;
+
+      let mainHolder: string | undefined;
+      for (const [id, { pane }] of held) if (pane === plot.mainPane) mainHolder = id;
+      const ranked = [...declared].sort(([, a], [, b]) => compareRank(a.rank, b.rank));
+      // A keyed swap takes the main pane's wrapper down and brings its
+      // successor in the same commit, and only the old wrapper's passive
+      // cleanup tells that from a Suspense boundary hiding it. Settle again
+      // once instead: an update asked for here renders before paint, after
+      // this commit's passive effects, so the successor takes the main pane.
+      if (!waited && mainHolder !== undefined && down.has(mainHolder) && ranked.some(([id]) => !held.has(id))) {
+        waited = true;
+        wake();
+        return;
+      }
+      waited = false;
+      unsettled = false;
+
+      for (const [id, next] of ranked) {
+        if (held.has(id)) continue;
+        // The first to arrive while the main pane is free takes it — an
+        // empty main pane would otherwise sit on top taking space for nothing.
+        const hold = next.build(mainHolder === undefined);
+        if (hold.pane === plot.mainPane) mainHolder = id;
+        held.set(id, hold);
+      }
+
+      // Restacked only when a declared pane's place among the declared panes
+      // moved — one arrived, or keyed panes swapped — so a `setPaneOrder` the
+      // user made holds until then. A pane going moves no other past
+      // another: the rest close up in the order last compared. A wrapper
+      // that is down — on its way out, or hidden by Suspense — keeps the rank
+      // it last declared while its siblings were ranked afresh around it, so
+      // it takes no part in the comparison.
+      const settled = (id: string): boolean => held.has(id) && !down.has(id);
+      const survivors = order.filter(settled);
+      const now = ranked.map(([id]) => id).filter((id) => !down.has(id));
+      const unmoved = now.length === survivors.length && now.every((id, at) => survivors[at] === id);
+      order = keepDownInPlace(now, order, (id) => down.has(id));
+      if (unmoved) return;
+      // Stacked by `order`, not by declared ranks: a wrapper that is down
+      // still carries the rank it last declared, while `order` keeps it where
+      // it stood among its siblings. The chart and the next comparison then
+      // agree on where every pane is.
+      const ranks = new Map<Pane, readonly number[]>();
+      order.forEach((id, at) => {
+        const hold = held.get(id);
+        if (hold) ranks.set(hold.pane, [at]);
+      });
+      // An unclaimed main pane goes to the top; a pane added outside the JSX
+      // (through `plotRef`) keeps its place below the declared ones.
+      const rankOf = (pane: Pane): readonly number[] =>
+        ranks.get(pane) ?? (pane === plot.mainPane ? [-1] : [Number.POSITIVE_INFINITY]);
+      plot.setPaneOrder([...plot.panes].sort((a, b) => compareRank(rankOf(a), rankOf(b))));
+    };
 
     return {
       plot,
 
-      acquirePane(options: PaneAcquisition): Pane {
-        const { yScale, ...pane } = options;
-        if (mainPaneTaken.current) {
-          return plot.addPane(yScale ? { ...pane, yScale: yScale() } : pane);
-        }
-        mainPaneTaken.current = true;
-        plot.mainPane.applyOptions(pane);
-        if (yScale) {
-          previousScale.current = plot.mainPane.yScale;
-          plot.mainPane.setYScale(yScale());
-        }
-        return plot.mainPane;
-      },
-
-      swapPaneScale(pane: Pane, yScale: Scale | undefined): void {
-        const main = pane === plot.mainPane;
-        if (yScale) {
-          if (main && !previousScale.current) previousScale.current = pane.yScale;
-          pane.setYScale(yScale);
+      declarePane(id, declaration) {
+        if (!declaration) {
+          down.add(id);
           return;
         }
-        if (main) {
-          const previous = previousScale.current;
-          if (previous) {
-            previousScale.current = null;
-            pane.setYScale(previous);
-          }
-          return;
+        // Back from being down — a Suspense reveal, a StrictMode replay: it
+        // was held in place while its siblings may have moved around it, so
+        // its place is compared afresh even when its own rank is unchanged.
+        const back = down.delete(id);
+        const last = declared.get(id);
+        declared.set(id, declaration);
+        // A moved prop concerns this pane alone, so it lands now, with no
+        // settle: a data tick re-renders every pane, and waking the
+        // container for each would cost every tick a second commit.
+        held.get(id)?.update(declaration);
+        // Only a pane arriving, coming back or moving in the JSX changes the
+        // set or its order. The same rank again — a tick — is no reason.
+        if (!back && last && compareRank(last.rank, declaration.rank) === 0) return;
+        unsettled = true;
+        wake();
+      },
+
+      releasePane(id) {
+        // Gone for good: no longer down, so nothing waits on it as a
+        // keyed swap's departing holder and the set doesn't grow per wrapper.
+        down.delete(id);
+        if (!declared.delete(id)) return;
+        // Off at once, so the pane goes in the same flush as its series.
+        const hold = open ? held.get(id) : undefined;
+        if (hold) {
+          held.delete(id);
+          hold.release();
+          // Out of the order too: built again — StrictMode replaying the
+          // wrapper's effects — it is a pane arriving, to be placed. Nothing
+          // else needs settling: a pane going moves no other.
+          order = order.filter((other) => other !== id);
         }
-        // The prop installed what's there; without it a pane is linear, as `addPane` builds it.
-        pane.setYScale(new LinearScale());
       },
 
-      releasePane(pane: Pane): void {
-        if (pane === plot.mainPane) {
-          // Outside series share this collector and survive the pane wrapper.
-          mainPaneTaken.current = false;
-          const previous = previousScale.current;
-          if (previous) {
-            previousScale.current = null;
-            plot.mainPane.setYScale(previous);
-          }
-          return;
-        }
-        collectors.current.delete(pane);
-        paneRanks.delete(pane);
-        plot.removePane(pane);
-      },
-
-      rankPane(pane: Pane, rank: readonly number[]): void {
-        const known = paneRanks.get(pane);
-        if (known && compareRank(known, rank) === 0) return;
-        paneRanks.set(pane, rank);
-        restack = true;
-      },
-
-      stackPanes(): void {
-        // Only when a JSX rank moved — re-sorting on every commit would undo
-        // a `setPaneOrder` the user made since.
-        if (!restack) return;
-        restack = false;
-        // An unclaimed main pane stays on top; a pane added outside the JSX
-        // (through `plotRef`) keeps its place below the declared ones.
-        const rankOf = (candidate: Pane): readonly number[] =>
-          paneRanks.get(candidate) ?? (candidate === plot.mainPane ? [-1] : [Number.POSITIVE_INFINITY]);
-        plot.setPaneOrder([...plot.panes].sort((a, b) => compareRank(rankOf(a), rankOf(b))));
+      settle(next) {
+        wake = next;
+        open = true;
+        reconcile();
+        return () => {
+          open = false;
+        };
       },
 
       seriesCollector(pane: Pane): SeriesCollector<T> {
-        const existing = collectors.current.get(pane);
-        if (existing) return existing;
-
-        const created = createSeriesCollector<T>(pane, () => onErrorRef.current);
-        collectors.current.set(pane, created);
-        return created;
+        let collector = collectors.get(pane);
+        if (!collector) {
+          collector = createSeriesCollector<T>(pane, () => onErrorRef.current);
+          collectors.set(pane, collector);
+        }
+        return collector;
       },
     };
   }, [plot]);
@@ -377,7 +416,8 @@ export function ChartContainer<T extends BaseDataPoint>({
   // a pane took over `mainPane`, it's the same collector, so the order
   // chains into one.
   const mainCollector = api ? api.seriesCollector(api.plot.mainPane) : null;
-  const placement = createSeriesPlacement();
+  const [, rerender] = useReducer((round: number) => round + 1, 0);
+  const placement = createSeriesPlacement([], rerender);
 
   useEffect(() => {
     placement.commit();
@@ -401,8 +441,54 @@ export function ChartContainer<T extends BaseDataPoint>({
           <SeriesPlacementProvider value={placement}>
             <ChartDataProvider value={data}>{children}</ChartDataProvider>
           </SeriesPlacementProvider>
+          <Settle api={api} />
         </ChartProvider>
       ) : null}
     </>
   );
+}
+
+/**
+ * Brings the chart's panes in line with what the `<ChartPane>`s declare.
+ *
+ * Rendered after the children, so when the container renders, this layout
+ * effect runs after every pane's and sees the whole commit. A pane that
+ * declares in a commit the container sat out wakes it instead: an update
+ * asked for from a layout effect is rendered before the browser paints, on
+ * React 18 as on 19, whatever the priority of the update that got there —
+ * a pane arriving is never drawn empty or out of place. Only this renders
+ * again. A pane released from a passive cleanup is taken off there and
+ * then, with its series, and needs no settle: a pane going moves no other.
+ *
+ * Inside the chart's tree on purpose: unmounted with the chart, it settles
+ * nothing on the way out, so the chart's own teardown takes the panes,
+ * unannounced. A component of its own also keeps layout effects off the
+ * server: it renders only once there is a chart.
+ */
+function Settle({ api }: { api: ChartApi }) {
+  const [, wake] = useReducer((round: number) => round + 1, 0);
+  // The cleanup closes the chart to immediate releases until the next settle.
+  useLayoutEffect(() => api.settle(wake));
+  return null;
+}
+
+/**
+ * The order to compare against next time: `now`, with each wrapper that is
+ * down put back right after the one it followed in `last`. Its declared rank
+ * is stale while its siblings are ranked afresh, so placing it by rank would
+ * read, once it shows again, as a pane passing another.
+ */
+function keepDownInPlace(now: readonly string[], last: readonly string[], isDown: (id: string) => boolean): string[] {
+  const merged = [...now];
+  let at = 0;
+  for (const id of last) {
+    if (isDown(id)) {
+      merged.splice(at, 0, id);
+      at += 1;
+      continue;
+    }
+    const found = merged.indexOf(id);
+    if (found >= 0) at = found + 1;
+  }
+  return merged;
 }

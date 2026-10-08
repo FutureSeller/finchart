@@ -8,7 +8,7 @@
  * range. The same defect already existed for `flex` itself (a divider drag
  * undone by a `minHeight` change), so that is measured too.
  *
- * `yScale` is a factory called at acquisition, like `deps.mainPaneYScale`,
+ * `yScale` is a factory called when the pane is built, like `deps.mainPaneYScale`,
  * and on later commits, installing a scale only when its kind changes. On
  * the main pane the wrapper keeps the instance it replaced and puts
  * it back on release or when the prop goes, so a keyed swap to a pane
@@ -254,7 +254,7 @@ describe('<ChartPane yScale>', () => {
     expect(plot().mainPane.yScale).not.toBe(made[0]);
   });
 
-  it('under StrictMode the factory runs once per acquisition — twice — and the live one wins', () => {
+  it('under StrictMode the factory runs once, and its scale is the one on the pane', () => {
     const { deps, ref, plot } = setup();
     const { made, factory } = logFactory();
     render(
@@ -264,8 +264,10 @@ describe('<ChartPane yScale>', () => {
         </ChartContainer>
       </StrictMode>,
     );
-    expect(made).toHaveLength(2);
-    expect(plot().mainPane.yScale).toBe(made[1]);
+    // The replay declares the same render again, which is no change.
+    expect(made).toHaveLength(1);
+    expect(plot().panes).toHaveLength(1);
+    expect(plot().mainPane.yScale).toBe(made[0]);
   });
 
   it('puts the instance it replaced back when the pane holding the main pane is swapped out', () => {

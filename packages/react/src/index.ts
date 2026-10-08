@@ -62,8 +62,6 @@ export type { SyncXProps } from "./components/sync-x";
 
 // ---- where to reach into the chart ----
 export { useChartPlot } from "./components/chart-context";
-export type { ChartApi } from "./components/chart-context";
-export type { SeriesCollector } from "./components/series-collector";
 
 // ---- the hooks ----
 export { usePlot } from "./hooks/use-chart";

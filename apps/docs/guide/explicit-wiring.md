@@ -18,7 +18,7 @@ scenario `pnpm size` measures on every CI run — minified, gzipped, with every
 | ...plus a volume pane, axes, crosshair, legend and tooltip | 37.4 KB |
 | ...plus four indicators (MA, MACD, RSI, Bollinger) | 43.7 KB |
 | ...plus every drawing tool | 53.2 KB |
-| The same screen through `@finchart/react` | 53.7 KB |
+| The same screen through `@finchart/react` | 53.8 KB |
 
 <!-- bundle-budgets:end -->
 

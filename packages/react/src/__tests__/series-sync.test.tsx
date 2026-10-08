@@ -16,6 +16,7 @@ import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
 import {
   createRef,
+  Profiler,
   type ReactElement,
   StrictMode,
   Suspense,
@@ -604,6 +605,114 @@ it('preserves JSX order across series inside and outside the main ChartPane', ()
   expect(drawOrder(plot(), log)).toEqual(['inside-first', 'outside']);
   mounted.rerender(view(true));
   expect(drawOrder(plot(), log)).toEqual(['inside-first', 'inside-next', 'outside']);
+});
+
+/**
+ * A series switched on by its own component's state renders without the
+ * container: the slot has to come from a fresh pass over the JSX, not from
+ * the end of the list.
+ */
+describe("a series mounted by a child's own state", () => {
+  function lateSwitch(log: string[]) {
+    let turnOn = () => {};
+    function Late() {
+      const [on, setOn] = useState(false);
+      turnOn = () => setOn(true);
+      return on ? <ChartSeries series={fakeSeries('late', log)} /> : null;
+    }
+    return { Late, turnOn: () => act(() => turnOn()) };
+  }
+
+  it("draws in its JSX slot among the container's series", () => {
+    const { deps, ref, plot } = setup();
+    const log: string[] = [];
+    const { Late, turnOn } = lateSwitch(log);
+    mount(<ChartContainer deps={deps} data={data} plotRef={ref}>
+      <ChartSeries series={fakeSeries('a', log)} />
+      <Late />
+      <ChartSeries series={fakeSeries('b', log)} />
+    </ChartContainer>);
+
+    turnOn();
+
+    expect(drawOrder(plot(), log)).toEqual(['a', 'late', 'b']);
+  });
+
+  it('draws in its JSX slot inside the main ChartPane, below a series after the pane', () => {
+    const { deps, ref, plot } = setup();
+    const log: string[] = [];
+    const { Late, turnOn } = lateSwitch(log);
+    mount(<ChartContainer deps={deps} data={data} plotRef={ref}>
+      <ChartPane>
+        <ChartSeries series={fakeSeries('inside', log)} />
+        <Late />
+      </ChartPane>
+      <ChartSeries series={fakeSeries('outside', log)} />
+    </ChartContainer>);
+
+    turnOn();
+
+    expect(drawOrder(plot(), log)).toEqual(['inside', 'late', 'outside']);
+  });
+
+  it('is never listed at the back, not even before its slot arrives', () => {
+    const { deps, ref, plot } = setup();
+    const log: string[] = [];
+    const named = new Map<unknown, string>();
+    const stable = (name: string) => {
+      const series = fakeSeries(name, log);
+      named.set(series, name);
+      return series;
+    };
+    const [a, late, b] = [stable('a'), stable('late'), stable('b')];
+    let turnOn = () => {};
+    function Late() {
+      const [on, setOn] = useState(false);
+      turnOn = () => setOn(true);
+      return on ? <ChartSeries series={late} /> : null;
+    }
+    mount(<ChartContainer deps={deps} data={data} plotRef={ref}>
+      <ChartSeries series={a} />
+      <Late />
+      <ChartSeries series={b} />
+    </ChartContainer>);
+    const lists: string[][] = [];
+    const pane = plot().mainPane;
+    const stop = pane.subscribe((change) => {
+      if (change.data) lists.push(pane.getSeries().map((series) => named.get(series) ?? '?'));
+    });
+
+    act(() => turnOn());
+    stop();
+
+    expect(lists).toEqual([['a', 'late', 'b']]);
+  });
+
+  /** A series that already holds its slot has nothing to ask of its owner. */
+  it('does not render its owner again when a placed series re-renders on its own', () => {
+    const { deps, ref, plot } = setup();
+    const log: string[] = [];
+    let bump = () => {};
+    function Middle() {
+      const [n, setN] = useState(0);
+      bump = () => setN((value) => value + 1);
+      return <ChartSeries series={fakeSeries(`m${n}`, log)} />;
+    }
+    let commits = 0;
+    mount(<Profiler id="chart" onRender={() => { commits += 1; }}>
+      <ChartContainer deps={deps} data={data} plotRef={ref}>
+        <ChartSeries series={fakeSeries('a', log)} />
+        <Middle />
+        <ChartSeries series={fakeSeries('b', log)} />
+      </ChartContainer>
+    </Profiler>);
+    commits = 0;
+
+    act(() => bump());
+
+    expect(commits).toBe(1);
+    expect(drawOrder(plot(), log)).toEqual(['a', 'm1', 'b']);
+  });
 });
 
 

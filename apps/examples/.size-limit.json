@@ -58,7 +58,7 @@
     "gzip": true
   },
   {
-    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 53.5 KB gzip (53466B measured)",
+    "name": "the same screen through @finchart/react (react and react-dom are the consumer's, so excluded) · 53.7 KB gzip (53746B measured)",
     "path": [
       "../../packages/react/dist/index.mjs",
       "../../packages/dom/dist/index.mjs",
@@ -71,7 +71,7 @@
       "../../packages/indicators/dist/index.mjs": "{ attachMovingAverage, attachMacd, attachRsi, attachBollingerBands }",
       "../../packages/tools/dist/index.mjs": "{ drawingTools, serializeDrawings, parseDrawings }"
     },
-    "limit": "53.7 KB",
+    "limit": "53.8 KB",
     "ignore": [
       "react",
       "react-dom"

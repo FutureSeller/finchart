@@ -9,7 +9,7 @@ import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef, StrictMode } from 'react';
 import { renderToString } from 'react-dom/server';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartCandles, ChartContainer } from '../components';
 import { layersSpy } from './fake-layers';
 
@@ -105,6 +105,22 @@ describe('<ChartContainer containerRef>', () => {
       ),
     ).not.toThrow();
     expect(containerRef.current).toBeNull();
+  });
+
+  it('renders on the server without a warning', () => {
+    const { deps } = setup();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      renderToString(
+        <ChartContainer deps={deps} data={candles}>
+          <ChartCandles />
+        </ChartContainer>,
+      );
+
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it('gives a toolbar the way to hand the keyboard back — Esc reaches the chart only after focus returns', () => {
