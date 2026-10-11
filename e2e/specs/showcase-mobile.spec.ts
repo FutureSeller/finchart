@@ -12,10 +12,14 @@ for (const width of [320, 390, 492, 768]) {
     expect(stage!.height).toBeGreaterThanOrEqual(320);
     expect(stage!.height).toBeGreaterThanOrEqual(844 * 0.7);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(844);
-    const symbol = await page.locator(".chart-symbol").boundingBox();
-    const legend = await page.locator("[data-chart-legend]").boundingBox();
-    expect(legend!.y).toBeGreaterThanOrEqual(symbol!.y + symbol!.height);
-    expect(legend!.x + legend!.width).toBeLessThanOrEqual(width);
+    await expect(page.locator("[data-chart-legend]")).toBeAttached();
+    const { symbolBottom, legendTop, legendRight } = await page.evaluate(() => {
+      const symbol = document.querySelector(".chart-symbol")!.getBoundingClientRect();
+      const legend = document.querySelector("[data-chart-legend]")!.getBoundingClientRect();
+      return { symbolBottom: symbol.bottom, legendTop: legend.top, legendRight: legend.right };
+    });
+    expect(legendTop).toBeGreaterThanOrEqual(symbolBottom);
+    expect(legendRight).toBeLessThanOrEqual(width);
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(page.locator("#controls")).toBeVisible();
@@ -39,20 +43,26 @@ for (const width of [320, 390, 492, 768]) {
       await page.locator("#layouts").getByRole("button", { name: String(layout), exact: true }).click();
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await expect(page.locator(".chart-cell")).toHaveCount(layout);
-      const cells = await page.locator(".chart-cell").all();
+      // One snapshot: rects read one call at a time can straddle a scroll or reflow and look overlapped.
+      const boxes = await page.locator(".chart-cell").evaluateAll((elements) =>
+        elements.map((element) => {
+          const { top, bottom, width, height } = element.getBoundingClientRect();
+          return { top, bottom, width, height };
+        }),
+      );
       let previousBottom = 0;
-      for (const cell of cells) {
-        const box = await cell.boundingBox();
-        expect(box!.width).toBeGreaterThanOrEqual(width - 2);
-        expect(box!.height).toBeGreaterThanOrEqual(320);
-        expect(box!.y).toBeGreaterThanOrEqual(previousBottom);
-        previousBottom = box!.y + box!.height;
+      for (const box of boxes) {
+        expect(box.width).toBeGreaterThanOrEqual(width - 2);
+        expect(box.height).toBeGreaterThanOrEqual(320);
+        expect(box.top).toBeGreaterThanOrEqual(previousBottom);
+        previousBottom = box.bottom;
       }
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(844);
-      await cells.at(-1)!.locator(".chart-symbol").scrollIntoViewIfNeeded();
-      await cells.at(-1)!.locator(".chart-symbol").focus();
-      await expect(cells.at(-1)!).toHaveAttribute("data-focused", "true");
+      const last = page.locator(".chart-cell").last();
+      await last.locator(".chart-symbol").scrollIntoViewIfNeeded();
+      await last.locator(".chart-symbol").focus();
+      await expect(last).toHaveAttribute("data-focused", "true");
     }
   });
 }
@@ -84,17 +94,48 @@ test("resizing retains settings and restores the desktop panel grid", async ({ p
   await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeHidden();
   await expect(page.locator("#controls")).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
-  const cells = await page.locator(".chart-cell").all();
-  const first = await cells[0].boundingBox();
-  const second = await cells[1].boundingBox();
-  const third = await cells[2].boundingBox();
-  expect(second!.x).toBeGreaterThan(first!.x);
-  expect(second!.y).toBe(first!.y);
-  expect(third!.y).toBeGreaterThan(first!.y);
+  const [first, second, third] = await page.locator(".chart-cell").evaluateAll((elements) =>
+    elements.map((element) => {
+      const { left, top } = element.getBoundingClientRect();
+      return { left, top };
+    }),
+  );
+  expect(second!.left).toBeGreaterThan(first!.left);
+  expect(second!.top).toBe(first!.top);
+  expect(third!.top).toBeGreaterThan(first!.top);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("#controls")).toBeHidden();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.locator("#layouts").getByRole("button", { name: "4", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".chart-cell")).toHaveCount(4);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test("live updates do not replace the icon buttons' contents", async ({ page }) => {
+  await page.goto("http://127.0.0.1:5178");
+  await expect(page.locator("#ohlc")).toContainText("O ");
+  // A browser may send no click when the pressed node is swapped out before the release. The desktop
+  // rail is enough: the mobile one in Settings renders the same buttons.
+  const { buttons, connected, ticks, swaps } = await page.evaluate(
+    () =>
+      new Promise<{ buttons: number; connected: boolean; ticks: number; swaps: number }>((resolve) => {
+        let ticks = 0;
+        let swaps = 0;
+        const tickObserver = new MutationObserver(() => (ticks += 1));
+        tickObserver.observe(document.querySelector("#ohlc")!, { childList: true, subtree: true, characterData: true });
+        const swapObserver = new MutationObserver((records) => (swaps += records.length));
+        const targets = document.querySelectorAll("#rail button, #to-live");
+        for (const button of targets) swapObserver.observe(button, { childList: true, subtree: true });
+        setTimeout(() => {
+          tickObserver.disconnect();
+          swapObserver.disconnect();
+          const connected = [...targets].every((button) => button.isConnected);
+          resolve({ buttons: targets.length, connected, ticks, swaps });
+        }, 2000);
+      }),
+  );
+  expect(buttons).toBe(7);
+  expect(connected).toBe(true);
+  expect(ticks).toBeGreaterThan(0);
+  expect(swaps).toBe(0);
 });
