@@ -47,11 +47,19 @@ const DOWN = "220,38,38"; // #dc2626 — DEFAULT_CANDLE_STYLE.down
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("bars loaded")).toBeVisible();
-  // The first frame arrives on a rAF — give it a moment to get painted.
+  // The first frame arrives on a rAF — give it a moment to get painted. A frame can be painted at the
+  // default size before the chart is fitted to its container; the fit clears the canvas, so wait for
+  // the fitted size as well as for ink, or "before" readings are taken from that default-size picture.
   await page.waitForFunction(() => {
     const canvas = document.querySelector("canvas");
     const context = canvas?.getContext("2d");
-    if (!canvas || !context) return false;
+    const host = canvas?.parentElement;
+    if (!canvas || !context || !host) return false;
+    // Within a pixel: the fit rounds the container's size, which a fractional width can put 1px off clientWidth.
+    const fitted =
+      Math.abs(Number.parseFloat(canvas.style.width) - host.clientWidth) <= 1 &&
+      Math.abs(Number.parseFloat(canvas.style.height) - host.clientHeight) <= 1;
+    if (!fitted) return false;
     return context
       .getImageData(0, 0, canvas.width, canvas.height)
       .data.some((value, index) => index % 4 === 3 && value > 0);
