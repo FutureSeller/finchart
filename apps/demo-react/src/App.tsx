@@ -11,8 +11,8 @@
  * type and indicator set are state here, while bars, feed and hover live inside
  * `FullChart`.
  *
- * The tape (`data`, `feed`), the formatting (`format`) and the icons are copies
- * of vanilla's. This edition also adapts its layout to narrow screens.
+ * The tape (`data`, `feed`), the formatting (`format`) and the icon markup are
+ * copies of vanilla's. This edition also adapts its layout to narrow screens.
  */
 import type { Plot, XDomainChangePayload } from "@finchart/core";
 import { SyncCrosshair, SyncX, usePluginState } from "@finchart/react";

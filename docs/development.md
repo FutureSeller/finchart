@@ -47,7 +47,8 @@ for indicators and history browsing; live ticks do not reset user zoom. Cases
 whose teaching point needs a specific range (such as session shading, the
 three-candle tutorial, and log-scale growth) retain that view.
 Run `pnpm --filter charts-e2e e2e:showcase` for the standalone and embedded mobile
-layout checks in Chromium and WebKit; this starts both local app servers.
+layout checks in Chromium and WebKit, plus a check that live updates leave the
+icon buttons in place; this starts both local app servers.
 
 ## Useful commands
 

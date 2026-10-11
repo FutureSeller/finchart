@@ -99,8 +99,8 @@ function RailButton({
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
-      // The SVG literals are assets, not code — our own files, which we trust.
-      dangerouslySetInnerHTML={{ __html: ICONS[icon] }}
+      // The SVG markup is an asset, not code — our own files, which we trust.
+      dangerouslySetInnerHTML={ICONS[icon]}
     />
   );
 }

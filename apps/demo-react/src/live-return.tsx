@@ -87,7 +87,7 @@ export function LiveReturn({
       title="Go live (keeps the zoom)"
       aria-label="Go live"
       onClick={returnToLive}
-      dangerouslySetInnerHTML={{ __html: ICONS.live }}
+      dangerouslySetInnerHTML={ICONS.live}
     />
   );
 }
