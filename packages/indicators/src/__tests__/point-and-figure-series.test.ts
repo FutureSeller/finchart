@@ -259,14 +259,29 @@ describe("pointAndFigureSeries", () => {
       const bars = rects(drawn);
       expect(bars.length).toBeGreaterThanOrEqual(1);
       expect(bars.length).toBeLessThanOrEqual(2);
-      // The glyph nearest the bottom edge sits above the pane's floor by a whole glyph — the box at zero drew nothing.
-      const lowest = Math.max(...strokes.flatMap((stroke) => stroke.points.map((pt) => pt.y)));
-      expect(lowest).toBeLessThanOrEqual(600);
+      // The glyph nearest the pane's floor (the domain's low end, at the bottom or the top) stays a whole glyph
+      // clear of it — the box at zero drew no glyph there.
+      const floor = y.scale(0.1);
+      const glyphs = strokes.filter((_, i) => i % 2 === 0).map((stroke) => stroke.points.map((pt) => pt.y));
+      const gaps = glyphs.map((ys) => ({
+        gap: Math.min(...ys.map((v) => Math.abs(v - floor))),
+        height: Math.max(...ys) - Math.min(...ys),
+      }));
+      const nearest = gaps.reduce((a, b) => (b.gap < a.gap ? b : a));
+      expect(nearest.height).toBeGreaterThan(0);
+      expect(nearest.gap).toBeGreaterThanOrEqual(nearest.height);
     }
-    // The pane's bottom inside the zero box (0.4 of a box): the box reaches in, but its price is not placed — a bar only.
+    // The pane's bottom inside the zero box (0.4 of a box): the zero box reaches in, but its price is not placed, so
+    // it is drawn as a bar only; the box at level 1 is the one glyph, an X of two strokes.
     const tight = drawDirect(pointAndFigureSeries({ boxSize: 1 }), [column(0, "up", -2, 1)], [0.4, 1.2], 1, new LogScale(0.4, 1.2, 600, 0));
-    for (const stroke of lines(tight)) for (const pt of stroke.points) expect(Math.abs(pt.y - 300)).toBeLessThan(600);
-    expect(lines(tight).length).toBe(2); // the one box at level 1, an X
+    for (const stroke of lines(tight)) {
+      for (const pt of stroke.points) {
+        expect(pt.y).toBeGreaterThanOrEqual(0);
+        expect(pt.y).toBeLessThanOrEqual(600);
+      }
+    }
+    expect(lines(tight).length).toBe(2);
+    expect(rects(tight)).toHaveLength(1);
   });
 
   it("a column of cells the axis places at no height at all is one bar, and the axis is not asked about every box", () => {

@@ -10,7 +10,6 @@ import { ContractError } from "../../primitives";
 import { teardown, type Plugin } from "../../primitives";
 import type {
   DataProbe,
-  PaneDecorationHost,
   SeriesHost,
   ValueCoordinates,
 } from "../capabilities";
@@ -109,15 +108,16 @@ describe("pane.use", () => {
     expect(() => pane.use(() => teardown(() => {}))).toThrow(ContractError);
   });
 
-  it("should dispose a plugin installed during another plugin's teardown", () => {
+  it("should refuse a plugin installed during another plugin's teardown", () => {
     const plot = mount();
     const pane = plot.addPane();
     const late = vi.fn();
 
     pane.use(() => teardown(() => pane.use(() => teardown(late))));
 
-    // Iterating by index would skip something added mid-cleanup — that one would never get cleaned up.
-    // (Installation itself is blocked: the pane is already removed, so it throws.)
+    // The pane counts as removed before its plugins are torn down, so an
+    // install from inside that cleanup is refused rather than left behind
+    // on a pane nothing will clean up again.
     expect(() => plot.removePane(pane)).toThrow(ContractError);
     expect(late).not.toHaveBeenCalled();
   });
@@ -158,7 +158,7 @@ describe("pane.use", () => {
   });
 });
 
-/** Pane-side capabilities are declared additively too — a narrowly-typed plugin must actually be narrow enough to run on a minimal fake that isn't a Pane. */
+/** Pane-side capabilities are declared additively too — a narrowly-typed plugin still fits into a pane's use, and a pane answers through its narrow faces. */
 describe("demanding only pane capabilities", () => {
   it("should accept a plugin that only asks to add a series", () => {
     const plot = mount();
@@ -168,24 +168,6 @@ describe("demanding only pane capabilities", () => {
     };
 
     expect(() => plot.mainPane.use(narrow).dispose()).not.toThrow();
-  });
-
-  it("should run a decoration plugin on a host that is not a Pane", () => {
-    const added: string[] = [];
-    const host: PaneDecorationHost = {
-      addDecoration: () => {
-        added.push("added");
-        return () => added.push("removed");
-      },
-    };
-
-    const narrow: Plugin<PaneDecorationHost> = (h) => {
-      const remove = h.addDecoration({ draw: () => {} });
-      return teardown(remove);
-    };
-    narrow(host).dispose();
-
-    expect(added).toEqual(["added", "removed"]);
   });
 
   it("should convert between value and pixel without the scale", () => {

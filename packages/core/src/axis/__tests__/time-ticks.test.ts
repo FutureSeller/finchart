@@ -835,17 +835,6 @@ describe("timeTicks — the cost of a jump", () => {
 });
 
 /**
- * **The cap bounds what a rung offers; spacing then chooses among it.** A
- * rung offers about `span / minTickSpacing` boundaries, so a thousand is
- * reached only by an axis asking for a thousand labels, and there the
- * offer stops — the spacing rule then keeps fewer, and a landing offered
- * last is judged only against what was offered with it. Counting only
- * what survives would need the offer to be resumable — asked for more as
- * room is found, with a later heavy boundary able to unseat an earlier
- * choice — which is more machinery than an axis asking for a thousand
- * labels is worth.
- */
-/**
  * **Which of two crowded equals is kept is a fact about time, not about
  * pixels.** A vertical axis usually runs its range downward, so a choice
  * made by pixel order would keep the later of every crowded pair there
@@ -867,6 +856,17 @@ describe("timeTicks — an axis that runs the other way", () => {
   });
 });
 
+/**
+ * **The cap bounds what a rung offers; spacing then chooses among it.** A
+ * rung offers about `span / minTickSpacing` boundaries, so a thousand is
+ * reached only by an axis asking for a thousand labels, and there the
+ * offer stops — the spacing rule then keeps fewer, and a landing offered
+ * last is judged only against what was offered with it. Counting only
+ * what survives would need the offer to be resumable — asked for more as
+ * room is found, with a later heavy boundary able to unseat an earlier
+ * choice — which is more machinery than an axis asking for a thousand
+ * labels is worth.
+ */
 describe("timeTicks — the thousand-boundary cap", () => {
   it("offers a thousand, and spacing keeps what fits", () => {
     const min = ms("2026-01-01T00:00Z");

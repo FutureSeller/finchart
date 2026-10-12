@@ -176,15 +176,6 @@ describe("the instants a bar start answers for", () => {
   });
 
   /**
-   * **At the very beginning of time a bar has no nameable start.** The bar
-   * holding the first instants began before them, outside the set these
-   * answers come from. Handing it back would make idempotence false in the
-   * one place nothing would look: asking again would land on an instant
-   * the producer does not answer for. The cache made this invisible for a
-   * while — a second call hit the stretch just written and never reached
-   * the guard at all.
-   */
-  /**
    * **A reader that has already answered must not answer more.** The
    * stretch a session cache holds used to be compared against before
    * anything was known about the instant, so one just past the reach fell
@@ -199,6 +190,14 @@ describe("the instants a bar start answers for", () => {
     expect(() => barStart(SESSION_REACH + 1)).toThrow(ContractError);
   });
 
+  /**
+   * **At the very beginning of time a bar has no nameable start.** The bar
+   * holding the first instants began before them, outside the set these
+   * answers come from. Handing it back would make idempotence false in the
+   * one place nothing would look: asking again would land on an instant
+   * the producer does not answer for. Each case asks twice, because a
+   * second call can be answered from the cache without reaching the guard.
+   */
   it.each([
     // A seven-minute grid does not divide the edge, so the bar holding the
     // first instant began before it.
@@ -282,15 +281,6 @@ describe("chokepoint 10 — sessionStart, the instant a session is stored under"
   });
 
   /**
-   * **A clock that moves back across midnight replays a date.** Casey put
-   * its clock back three hours at local 02:00 on 5 March 2010, so the
-   * reading returned to the 4th and ran through that evening a second
-   * time. Reading the date off the clock and taking its midnight would
-   * answer the 4th's session for an instant later than one already
-   * answered with the 5th's — the monotonic law, broken by the definition
-   * rather than by any bug in the walk. The session is the last one open.
-   */
-  /**
    * **A day that began before its own midnight.** Toronto's clocks went
    * from the 30th's 23:30 to the 31st's 00:30 in 1919, so the 31st's
    * midnight sits inside the jump rather than at its start. Resolving it
@@ -309,6 +299,15 @@ describe("chokepoint 10 — sessionStart, the instant a session is stored under"
     expect(warm(landed)).toBe(landed);
   });
 
+  /**
+   * **A clock that moves back across midnight replays a date.** Casey put
+   * its clock back three hours at local 02:00 on 5 March 2010, so the
+   * reading returned to the 4th and ran through that evening a second
+   * time. Reading the date off the clock and taking its midnight would
+   * answer the 4th's session for an instant later than one already
+   * answered with the 5th's — the monotonic law, broken by the definition
+   * rather than by any bug in the walk. The session is the last one open.
+   */
   it("keeps running the session that opened, when a clock replays a date", () => {
     const casey = sessionStart({ timeZone: "Antarctica/Casey" });
     const fifth = ms("2010-03-04T13:00Z"); // 2010-03-05 00:00 in Casey

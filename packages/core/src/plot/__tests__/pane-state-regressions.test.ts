@@ -312,11 +312,6 @@ describe("a detached handle cannot move the stage", () => {
 
     handle.dispose();
     expect(handle.attached).toBe(false);
-
-    // Checking first and branching away triggers nothing.
-    expect(() => {
-      if (handle.attached) handle.updateLast({ x: 9, y: 9 });
-    }).not.toThrow();
   });
 
   it("a replaced handle's attached is false too — a way to confirm a removal you never called", () => {

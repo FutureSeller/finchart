@@ -485,14 +485,3 @@ describe("ticks never leave the index stale", () => {
     expect(xScale.getDomain()).toEqual([-0.5, 5.5]);
   });
 });
-
-/**
- * A derived series can shift x — if toPoints drops points based on values
- * (conditional markers, etc.), the set of x's it draws changes. So the
- * derived branch is left "unknown" and always recounted.
- */
-
-/**
- * A derived series is judged by its output — build a discriminating test by
- * diffing toPoints' result against the previous one.
- */

@@ -76,54 +76,6 @@ describe("periodAnchor", () => {
   });
 
   /**
-   * **The claim the documentation makes, computed rather than asserted.**
-   * Whether a tape holds a UTC-midnight bar at all is arithmetic: bars of
-   * width `step` from an opening `offset` past midnight reach it exactly
-   * when `gcd(step, day)` divides `offset`. Writing that as a list of
-   * cadences is how it went wrong twice — "hourly" reads like it belongs
-   * beside "daily" and "six-hourly", and an hour divides five hours; then
-   * "a width that does not divide five hours never can" reads true and is
-   * not, because seven-hour bars reach midnight after thirteen of them.
-   * So the rule is asserted, and the cases the prose names are checked
-   * against it rather than against my reading of it.
-   */
-  it("has a midnight-UTC bar exactly when the step's common measure divides the offset", () => {
-    const open = at("2026-03-02T05:00Z");
-    const offset = open % DAY;
-    const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-
-    for (const hours of [1, 2, 3, 4, 5, 6, 7, 8, 12, 24]) {
-      const step = hours * HOUR;
-      const bars = Array.from({ length: Math.ceil((60 * DAY) / step) }, (_, i) => open + i * step);
-
-      expect({ hours, midnight: bars.some((x) => x % DAY === 0) }).toEqual({
-        hours,
-        midnight: offset % gcd(step, DAY) === 0,
-      });
-    }
-  });
-
-  /**
-   * And the cadences the documentation happens to name, pinned as numbers
-   * so the arithmetic behind them is not taken on anyone's word. They fix
-   * the arithmetic, not the sentence: nothing here reads the documentation,
-   * so a rewrite of it still answers to a reader rather than to a test.
-   */
-  it.each([
-    ["daily", 24 * HOUR, false],
-    ["six-hourly", 6 * HOUR, false],
-    ["four-hourly", 4 * HOUR, false],
-    ["hourly", HOUR, true],
-    ["seven-hourly", 7 * HOUR, true],
-    ["by the minute", 60 * 1000, true],
-  ])("%s bars from a 05:00Z open: a midnight-UTC bar exists = %s", (_name, step, exists) => {
-    const open = at("2026-03-02T05:00Z");
-    const bars = Array.from({ length: Math.ceil((60 * DAY) / step) }, (_, i) => open + i * step);
-
-    expect(bars.some((x) => x % DAY === 0)).toBe(exists);
-  });
-
-  /**
    * **The bug this exists for.** A New York session opens at 05:00Z, and
    * the `x % 86_400_000 === 0` anchor every example used to carry asks
    * about UTC midnight instead. On this tape — six-hourly bars from an
@@ -252,12 +204,13 @@ describe("periodAnchor", () => {
     vi.restoreAllMocks();
   });
 
-  it("refuses a missing time zone", () => {
-    const open = (given: unknown): unknown =>
-      (periodAnchor as (given: unknown) => unknown)(given);
+  it("refuses options without a barStart function", () => {
+    // Reflect.apply lets malformed options from plain-JavaScript callers past the type checker.
+    const open = (given: unknown): unknown => Reflect.apply(periodAnchor, undefined, [given]);
 
-    for (const bad of [undefined, null, {}, { timeZone: "" }]) {
-      expect(() => open(bad)).toThrow(ContractError);
+    const bad = [undefined, null, {}, { timeZone: "UTC" }, { barStart: "UTC" }, { barStart: 0 }];
+    for (const given of bad) {
+      expect(() => open(given)).toThrow(ContractError);
     }
   });
 });

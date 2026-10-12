@@ -13,11 +13,6 @@ function reading(zone: Zone, ms: number): string {
 const MIDNIGHT = { hour: 0, minute: 0, second: 0 } as const;
 
 /**
- * **A reading past the end of its month is the next month's.** `sessionStart`
- * asks for "the day after this one" by writing a day past the end of it, so
- * the encoder carrying that overflow is a contract, not a coincidence.
- */
-/**
  * **A name that is not a zone is a plain mistake, and it deserves the same
  * words as any other.** It arrives from a saved chart or a settings pane,
  * and `Intl` answers it with a bare `RangeError` that names neither the
@@ -139,6 +134,11 @@ describe("Zone — the earliest instant at or after a reading", () => {
   });
 });
 
+/**
+ * **A reading past the end of its month is the next month's.** `sessionStart`
+ * asks for "the day after this one" by writing a day past the end of it, so
+ * the encoder carrying that overflow is a contract, not a coincidence.
+ */
 describe("Zone — a day past the end of a month", () => {
   it.each([
     [{ year: 2026, month: 1, day: 32 }, "2026-02-01"],

@@ -1,15 +1,16 @@
 /**
- * The net under the landing-hitch surgery — set up BEFORE any fast path
- * exists, so every stage of it has to stay green underneath.
+ * The net under the history-landing fast paths — the deriveFirst door, the
+ * head-extension path a windowed derivation takes and a computation node that
+ * declines its calcFirst landing run in every case below; the mapping's head
+ * growth runs in the bar-index cases.
  *
  * Property: **page splitting is invisible.** A chart that received its
  * history as an arbitrary sequence of prepends draws exactly what the
- * same chart receiving that history as one prepend draws. Today both
- * sides take the full route, so this passes against current code; once
- * head-splice, headDelta, and the mapping's head fast path land, this is
- * what catches a silently-wrong body — the failure mode detection-based
- * designs can't see (a seeded recursion changes every body value while
- * length and x stay identical).
+ * same chart receiving that history as one prepend draws. Both sides go
+ * through the same landing routes, so a fast path that answers wrongly for
+ * some page split shows up as a difference — including a silently-wrong
+ * body, the failure mode detection-based designs can't see (a seeded
+ * recursion changes every body value while length and x stay identical).
  *
  * The reference is "one big prepend", not "one setData": under bar-index
  * x the index origin is anchored to the bars present at first fit — by
@@ -334,7 +335,7 @@ function runCase(seed: number, barIndexed: boolean): void {
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-describe("landing equivalence — prepends draw what one setData draws", () => {
+describe("landing equivalence — many prepends draw what one prepend draws", () => {
   it.each(SEEDS)("continuous x · seed %i", (seed) => runCase(seed, false));
   it.each(SEEDS)("bar-index x · seed %i", (seed) => runCase(seed, true));
 });

@@ -300,11 +300,17 @@ describe("indicator plugins", () => {
 
   it("should survive plot.destroy without a manual dispose", () => {
     const { model, price } = pricedModel();
-    model.plot.use(attachMacd({ source: price }));
+    const installed = model.plot.use(attachMacd({ source: price }));
+    const macdPane = model.plot.panes[1];
+    expect(model.plot.panes).toHaveLength(2);
 
     // Plugin cleanup is the Plot's destroy's responsibility — it must be
     // safe to call twice.
     expect(() => model.plot.destroy()).not.toThrow();
+    expect(() => model.plot.destroy()).not.toThrow();
+
+    expect(installed.disposed).toBe(true);
+    expect(model.plot.panes).not.toContain(macdPane);
   });
 });
 

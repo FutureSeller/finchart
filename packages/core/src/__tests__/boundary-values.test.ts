@@ -39,6 +39,9 @@ const HOSTILE_NUMBERS: readonly (readonly [string, number])[] = [
  * real measurement found 47 of 101 public functions threw a raw
  * `TypeError` (outside the error set the docs promise, and leaking
  * internal variable names).
+ *
+ * An empty array is not here — it is a legitimate value (a series with no
+ * data yet, a pane with no markers).
  */
 const HOSTILE_SHAPES: readonly (readonly [string, unknown])[] = [
   ["null", null],
@@ -47,8 +50,6 @@ const HOSTILE_SHAPES: readonly (readonly [string, unknown])[] = [
   ["number", 1],
   ["empty object", {}],
 ];
-
-/** An empty array is not here — it is a legitimate value (a series with no data yet, a pane with no markers). */
 
 /** Is it within the contract vocabulary? A raw `TypeError` is not. */
 function isContractual(error: unknown): boolean {
@@ -173,12 +174,6 @@ describe("chokepoint 1b — tickGeometry honors the TickGeometry contract", () =
   });
 });
 
-// Self-completeness — **the sixth door gets caught automatically**
-
-
-
-
-
 // Chokepoints 2 and 6
 
 /**
@@ -272,13 +267,6 @@ describe("chokepoint 6 — the live path passes through the data door too", () =
   });
 });
 
-/**
- * Counts every `number` field on the options types straight from their
- * declarations — a hand-written list tends to only list what a review
- * happened to report as a symptom, not what the type actually contains.
- * The same idiom as `module-boundaries.test.ts` walking the directory
- * tree.
- */
 /** Doors actually verified with hostile values. The three `describe.each` blocks below run through this. */
 const GUARDED_DOORS = new Set([
   "paneGap",
@@ -307,6 +295,13 @@ const EXEMPT_DOORS: Record<string, string> = {
   "style.grid.width": "canvas ignores a non-finite lineWidth — no amplifier",
 };
 
+/**
+ * Counts every `number` field on the options types straight from their
+ * declarations — a hand-written list tends to only list what a review
+ * happened to report as a symptom, not what the type actually contains.
+ * The same idiom as `module-boundaries.test.ts` walking the directory
+ * tree.
+ */
 function declaredNumberFields(source: string, name: string): string[] {
   // Some declarations (XAxisOptions) carry an `extends`, so the regex
   // reaches all the way to the opening brace. Looking for this spot by
@@ -671,21 +666,6 @@ describe("Z1 — the shape axis", () => {
    */
   describe("is the exemption reason true — if it says it does not throw, it must not throw", () => {
     /**
-     * Back when reason sentences were matched with a regex, even a
-     * slightly different word (`priceFormat` writing "the result shows up
-     * on the label immediately" while actually throwing) created a blind
-     * spot. Now the promise is not a word in prose but a `tag: "safe"`
-     * field — spell it however you like, tagging it is what makes this
-     * probe bite.
-     */
-
-    /**
-     * The promise is per-argument. What `applyColor` promised to demote is
-     * `color`, not `context` — if context is `null`, the renderer is
-     * broken, and that is not where a consumer value arrives. So when a
-     * reason says "does not throw," it also has to say which argument.
-     */
-    /**
      * A rejecting fake. Handing it a plain object would let the setter
      * accept anything as-is, so the guard returns early without ever
      * reaching the demotion branch — the whole check becomes free. Only
@@ -709,6 +689,12 @@ describe("Z1 — the shape axis", () => {
       };
     };
 
+    /**
+     * The promise is per-argument. What `applyColor` promised to demote is
+     * `color`, not `context` — if context is `null`, the renderer is
+     * broken, and that is not where a consumer value arrives. So when a
+     * reason says "does not throw," it also has to say which argument.
+     */
     const SAFE_ARG: Record<string, { index: number; rest: () => unknown[] }> = {
       // Two names that made the promise back in the regex days but sat outside the probe.
       isGap: { index: 0, rest: () => [] },
@@ -730,6 +716,11 @@ describe("Z1 — the shape axis", () => {
       },
     };
 
+    /**
+     * The promise is a `tag: "safe"` field, not a word in the reason
+     * sentence: matching prose would miss a reason worded slightly
+     * differently, and tagging is what makes this probe bite.
+     */
     const promised = Object.entries(SHAPE_EXEMPT)
       .filter(([, exemption]) => exemption.tag === "safe")
       .map(([name]) => name);

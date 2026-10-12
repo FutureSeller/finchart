@@ -33,7 +33,7 @@ describe("heikinAshi", () => {
     expect(out[1].close).toBeCloseTo(12);
   });
 
-  it("should widen high/low to cover both the raw range and the HA body", () => {
+  it("should keep the raw high/low when the HA body lies inside the raw range", () => {
     // HA open/close land inside the raw range here — high/low stay raw.
     const [bar] = heikinAshi([candle(0, 10, 20, 5, 12)]);
     expect(bar.high).toBe(20);

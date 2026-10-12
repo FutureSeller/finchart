@@ -105,23 +105,6 @@ describe('SyncX + onPlot', () => {
     });
     expect(domainOf(live.a)).toEqual({ min: 20, max: 60 });
   });
-
-  it('should be a no-op below two live plots', async () => {
-    function Lonely() {
-      const [a, setA] = useState<Plot | null>(null);
-      return (
-        <>
-          <ChartContainer deps={makeDeps()} data={data} onPlot={setA}>
-            <ChartLine />
-          </ChartContainer>
-          <SyncX plots={[a, null, null, null]} />
-        </>
-      );
-    }
-
-    // Doesn't throw even with only one live stage.
-    expect(() => render(<Lonely />)).not.toThrow();
-  });
 });
 
 

@@ -657,11 +657,12 @@ describe("infiniteHistory — cursor mode", () => {
     // The base interface asks for no cursor — a consumer's own loader or mock still is one.
     const mock: HistoryLoader = { status: () => "idle", statusChanges: { subscribe: () => () => undefined }, dispose: () => undefined };
     const loaders: HistoryLoader[] = [mock, byX, byToken];
-    expect(loaders).toHaveLength(3);
 
     const held: ReturnType<typeof infiniteHistory>[] = [byX, byToken];
     const call: Parameters<typeof infiniteHistory>[3] = { from: 100, cursor: "c1" };
-    expect(held).toHaveLength(2);
-    expect(call.cursor).toBe("c1");
+    // Checked by the compiler only — these assignments are the assertions.
+    void loaders;
+    void held;
+    void call;
   });
 });

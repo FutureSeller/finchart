@@ -191,8 +191,12 @@ export function resolveStyle<Spec>(
   return out as StyleOf<Spec>;
 }
 
-/** A bare number, or one with `px`. Both gates use the same one. */
-const NUMERIC_VALUE = /^\s*[+-]?(\d+\.?\d*|\.\d+)(px)?\s*$/;
+/**
+ * A bare number, or one with `px`. Both gates use the same one, and so does
+ * the repository check of documented assignments, which is why it is
+ * exported (it is not part of the package's public exports).
+ */
+export const NUMERIC_VALUE = /^\s*[+-]?(\d+\.?\d*|\.\d+)(px)?\s*$/;
 
 /**
  * Smooths out a leaf value that came in as an override, by the same rules

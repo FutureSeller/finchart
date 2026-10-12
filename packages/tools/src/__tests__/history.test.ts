@@ -480,14 +480,21 @@ describe("drawingTools history", () => {
       point: { x: grab.x, y: grab.y + 30 },
       pointerId: 1,
     });
+    const lowDrawing = low.read();
+    const seen: unknown[][] = [];
     let nested = false;
     tools.historyChanges.subscribe(() => {
+      seen.push(tools.list());
       if (nested) return;
       nested = true;
       low.remove();
     });
 
     target.remove();
+    // One notification per removal, and the first already sees the target
+    // gone: the drag's commit and the removal land as one step, never the
+    // commit on its own.
+    expect(seen).toEqual([[lowDrawing], []]);
     expect(tools.list()).toEqual([]);
   });
 

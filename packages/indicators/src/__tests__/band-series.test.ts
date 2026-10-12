@@ -40,7 +40,9 @@ describe("bandSeries", () => {
     expect(polygons).toHaveLength(1);
 
     const polygon = polygons[0];
-    if (polygon.type !== "drawShape" || polygon.shape.shape !== "polygon") return;
+    if (polygon.type !== "drawShape" || polygon.shape.shape !== "polygon") {
+      throw new Error("expected a polygon");
+    }
     // 8 points minus the two warmup ones, times upper/lower = a closed
     // outline of 16 vertices.
     expect(polygon.shape.points).toHaveLength(16);

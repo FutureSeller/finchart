@@ -46,14 +46,13 @@ const sma = (period: number) => (source: readonly OHLC[]): LineDataPoint[] => {
 const brick = (source: readonly OHLC[]): LineDataPoint[] =>
   source.filter((_, i) => i % 3 === 0).map((point, i) => ({ x: i, y: point.close }));
 
-function chart(options: { brick?: boolean; verify?: boolean } = {}) {
+function chart(options: { brick?: boolean } = {}) {
   const probe = { fullRebuilds: 0, onFullRebuild: () => void probe.fullRebuilds++ };
   const model = createPlotModel({
     size: { width: 800, height: 500 },
     series: null,
     deps: {
       createXMapping: (scale: Scale) => barIndexX(scale, probe),
-      verifyLandings: options.verify,
     },
   });
   const price = model.plot.mainPane.addSeries({ series: candleSeries(), data: bars(100, 300) });
@@ -81,6 +80,39 @@ describe("landing head path", () => {
     }
 
     expect(probe.fullRebuilds).toBe(walks);
+  });
+
+  it("should walk the retained tail only when verifyLandings is on", () => {
+    for (const verify of [false, true]) {
+      const model = createPlotModel({
+        size: { width: 800, height: 500 },
+        series: null,
+        deps: { verifyLandings: verify },
+      });
+      let output: LineDataPoint[] = [];
+      const derived = model.plot.mainPane.addSeries({
+        series: lineSeries(),
+        data: bars(100, 300),
+        derive: (source) => (output = sma(7)(source)),
+        deriveFirst: {
+          lookback: 6,
+          head: (previous, source, change) =>
+            sma(7)(source.slice(0, change.count + Math.min(6, previous.length))),
+        },
+      });
+      model.plot.render();
+      // The manager keeps the derivation's points by identity and the
+      // declared door retains them as the tail, so a derivation holding on
+      // to its own output can corrupt that tail behind the manager's back —
+      // only the dev flag walks it again.
+      output[150].y = Number.NaN;
+
+      const land = () => derived.prepend(bars(80, 100));
+
+      if (verify) expect(land).toThrow(DataError);
+      else expect(land).not.toThrow();
+      model.plot.destroy();
+    }
   });
 
   it("should keep the view still while pages land — old bars keep their pixels", () => {

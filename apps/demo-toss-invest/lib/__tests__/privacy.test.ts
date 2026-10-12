@@ -72,7 +72,14 @@ describe("public market-data boundary", () => {
     const { GET } = await import("../../app/api/candles/route");
     const response = await GET(new NextRequest("http://localhost/api/candles?symbol=005930"));
     expect(response.status).toBe(200);
-    expect(await response.text()).not.toContain("PRIVATE_");
+    const body = await response.text();
+    expect(body).not.toContain("PRIVATE_");
+    // The allowlisted fields still arrive: a route that dropped the candles would leak nothing too.
+    expect(JSON.parse(body)).toMatchObject({
+      source: "toss",
+      candles: [{ ...candle, timestamp: "2026-08-31T00:00:00.000Z" }],
+      nextBefore: "2026-08-31T00:00:00.000Z",
+    });
   });
 
   it("replaces candle service errors and malformed private cursors with fixed errors", async () => {

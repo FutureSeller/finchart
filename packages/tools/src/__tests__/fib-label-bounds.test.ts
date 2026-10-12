@@ -50,7 +50,9 @@ describe("Fibonacci level labels stay inside the pane", () => {
 
   it("keep their anchor and alignment — only the renderer moves what would spill", () => {
     for (const drawing of [fib(200), extension(200)]) {
-      for (const text of labels(drawing)) {
+      const texts = labels(drawing);
+      expect(texts.length).toBeGreaterThan(0);
+      for (const text of texts) {
         expect(text.at.x).toBe(196);
         expect(text.align).toBe("right");
       }
@@ -59,9 +61,14 @@ describe("Fibonacci level labels stay inside the pane", () => {
 
   it("leave a drawing that is wholly off the pane alone — no label is pulled in without its levels", () => {
     // The pane spans x 40..400. Far right, and far left.
-    for (const drawing of [fib(500), extension(500), fib(-400), extension(-400)]) {
-      for (const text of labels(drawing)) {
-        expect({ type: drawing.type, at: text.at.x, within: text.within }).toEqual({ type: drawing.type, at: text.at.x, within: undefined });
+    for (const left of [500, -400]) {
+      for (const drawing of [fib(left), extension(left)]) {
+        const texts = labels(drawing);
+        expect(texts.length).toBeGreaterThan(0);
+        // Still anchored just left of the levels, wherever they are.
+        for (const text of texts) {
+          expect({ type: drawing.type, at: text.at.x, within: text.within }).toEqual({ type: drawing.type, at: left - 4, within: undefined });
+        }
       }
     }
   });
@@ -69,7 +76,9 @@ describe("Fibonacci level labels stay inside the pane", () => {
   it("still bound a drawing that only reaches into the pane", () => {
     // Starts left of the pane, ends inside it.
     for (const drawing of [fib(-100), extension(-150)]) {
-      for (const text of labels(drawing)) expect(text.within).toEqual({ left: 40, right: 400 });
+      const texts = labels(drawing);
+      expect(texts.length).toBeGreaterThan(0);
+      for (const text of texts) expect(text.within).toEqual({ left: 40, right: 400 });
     }
   });
 });

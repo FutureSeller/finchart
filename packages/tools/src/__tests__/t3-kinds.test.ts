@@ -277,8 +277,9 @@ describe("three-anchor drafting through the real state machine", () => {
     });
     const [handle] = tools.handles();
     const before = handle.read();
+    if (before.type !== "pitchfork") throw new Error("expected a pitchfork");
     handle.update({ c: { x: 9, price: 101 } });
     expect(handle.read()).toMatchObject({ type: "pitchfork", c: { x: 9, price: 101 } });
-    expect(handle.read()).toMatchObject({ a: before.type === "pitchfork" ? before.a : {} });
+    expect(handle.read()).toMatchObject({ a: before.a, b: before.b });
   });
 });

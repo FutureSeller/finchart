@@ -145,18 +145,17 @@ describe("log axis — data with non-positive values mixed in", () => {
     const { model, pane } = stage([-50, -30, -10]);
     const before = model.commands().length;
     expect(before).toBeGreaterThan(0);
+    const oldScale = pane.yScale;
+    const oldDomain = oldScale.getDomain();
 
     expect(() => pane.setYScale(new LogScale())).toThrow();
 
     // The old axis must remain — a rejection changes nothing.
-    expect(pane.yScale.getDomain()).toEqual(
-      expect.arrayContaining([expect.any(Number)]),
-    );
+    expect(pane.yScale).toBe(oldScale);
+    expect(pane.yScale.getDomain()).toEqual(oldDomain);
+    // The second frame is where a permanent break would show up.
     expect(() => model.commands()).not.toThrow();
     expect(model.commands().length).toBe(before);
-
-    // The second frame must survive too — that's where a permanent break would show up.
-    expect(() => model.commands()).not.toThrow();
   });
   /**
    * One halted bar must not get to invent the axis. When expand's lower

@@ -153,12 +153,15 @@ describe("drawingTools selection", () => {
       point: { x: grab.x, y: grab.y + 40 },
       pointerId: 1,
     });
+    // The drag itself already reported "move", so only the count after
+    // Escape shows whether the undo was announced too.
+    const beforeEscape = seen.length;
     route({ type: "keydown", key: "Escape" });
 
     // A consumer only finds out by reading `list()` again, so this must
     // still fire once more after the undo -- otherwise the save side
     // (a debounced autosave) is left holding the stale value.
-    expect(seen[seen.length - 1]).toBe("move");
+    expect(seen.slice(beforeEscape)).toEqual(["move"]);
   });
 
   /** A drag that never moved has nothing to undo -- no notification either. */

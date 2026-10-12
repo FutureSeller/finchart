@@ -152,11 +152,3 @@ describe("decimation side — does not swallow the hole", () => {
     expect(holes).toHaveLength(1);
   });
 });
-
-describe("errors at the boundary — x has nowhere to degrade to", () => {
-  // DataError for an unparseable x is gone — x is a number by its type
-  // now. The compiler now enforces that it can never be missing.
-  it("should read a null value without complaining", () => {
-    expect(coordinates.getY({ x: 0, y: null })).toBeNull();
-  });
-});

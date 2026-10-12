@@ -98,7 +98,7 @@ describe("computation.calcLast", () => {
       calcLast: (previous, [data], [change]) => {
         counts.tail += 1;
         if (change.kind === "none") return previous;
-        const count = change.kind === "replace" ? change.count : change.count;
+        const count = change.count;
         const keep =
           previous.out.length - (change.kind === "replace" ? count : 0);
         return {
