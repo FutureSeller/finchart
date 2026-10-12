@@ -1,5 +1,4 @@
-import type { LineDataPoint, Point, TextParams } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
+import type { Point, TextParams } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import type { Drawing } from "../drawings";
 import { priceMeasureDelta } from "../drawings";
@@ -7,7 +6,7 @@ import { ellipseOutline, gripAt, rectangleOutline } from "../hit";
 import type { DrawingRenderContext } from "../render";
 import { drawOne } from "../render";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * T2 wave — rectangle · ellipse · priceMeasure · barMeasure. The area
@@ -198,67 +197,36 @@ describe("render draws what hit-testing checks", () => {
 });
 
 describe("placement and editing through the real state machine", () => {
-  const data: LineDataPoint[] = [
-    { x: 0, y: 100 },
-    { x: 5, y: 120 },
-    { x: 10, y: 110 },
-  ];
-
-  function mounted() {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
-    });
-    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-    const pane = model.plot.mainPane;
-    const route = (
-      type: "pointerdown" | "pointermove" | "pointerup",
-      point: { x: number; y: number },
-    ) => model.plot.routeInput({ type, point, pointerId: 1 });
-    const at = (x: number, price: number) => ({
-      x: model.plot.pixelAtX(x),
-      y: pane.yScale.scale(price),
-    });
-    return { model, tools, pane, route, at };
-  }
-
   it("a rectangle drawn by dragging finishes on release", () => {
-    const { tools, route, at } = mounted();
+    const { tools, drag } = drawingChart();
     tools.begin("rectangle");
-    route("pointerdown", at(2, 105));
-    route("pointermove", at(8, 115));
-    route("pointerup", at(8, 115));
+    drag({ x: 2, price: 105 }, { x: 8, price: 115 });
 
     expect(tools.mode()).toBeNull();
     expect(tools.list()[0]).toMatchObject({ type: "rectangle" });
   });
 
   it("dragging a rectangle's edge moves the whole thing — and Esc restores it", () => {
-    const { model, tools, route, at } = mounted();
+    const { plot, tools, at, press, key } = drawingChart();
     tools.add({ type: "rectangle", a: { x: 2, price: 105 }, b: { x: 8, price: 115 } });
     const [handle] = tools.handles();
     // Mid-left edge.
     const edge = at(2, 110);
 
-    route("pointerdown", edge);
-    route("pointermove", { x: edge.x + 40, y: edge.y });
+    press({ x: 2, price: 110 }).moveTo({ px: edge.x + 40, py: edge.y });
     const moved = handle.read();
     if (moved.type !== "rectangle") throw new Error("expected a rectangle");
-    expect(model.plot.pixelAtX(moved.a.x)).toBeCloseTo(edge.x + 40, 5);
+    expect(plot.pixelAtX(moved.a.x)).toBeCloseTo(edge.x + 40, 5);
     expect(moved.b.x - moved.a.x).toBeCloseTo(6, 5);
 
-    model.plot.routeInput({ type: "keydown", key: "Escape" });
+    key("Escape");
     const restored = handle.read();
     if (restored.type !== "rectangle") throw new Error("expected a rectangle");
     expect(restored.a.x).toBeCloseTo(2, 5);
   });
 
   it("handle.update patches a measure's anchor in place", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({ type: "barMeasure", a: { x: 2, price: 105 }, b: { x: 8, price: 115 } });
     const [handle] = tools.handles();
     handle.update({ b: { x: 9, price: 115 } });

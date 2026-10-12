@@ -1,12 +1,11 @@
-import type { LineDataPoint, Point } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
+import type { Point } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import type { Drawing } from "../drawings";
 import { ANCHOR_KEYS, channelParallel, pitchforkLines } from "../drawings";
 import { gripAt, infiniteEndpoints } from "../hit";
 import { drawOne } from "../render";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * T3 wave — three-anchor kinds (parallelChannel · pitchfork) and the
@@ -133,69 +132,35 @@ describe("render draws what hit-testing checks", () => {
 });
 
 describe("three-anchor drafting through the real state machine", () => {
-  const data: LineDataPoint[] = [
-    { x: 0, y: 100 },
-    { x: 5, y: 120 },
-    { x: 10, y: 110 },
-  ];
-
-  function mounted() {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
-    });
-    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-    const pane = model.plot.mainPane;
-    const route = (
-      type: "pointerdown" | "pointermove" | "pointerup",
-      point: { x: number; y: number },
-    ) => model.plot.routeInput({ type, point, pointerId: 1 });
-    const at = (x: number, price: number) => ({
-      x: model.plot.pixelAtX(x),
-      y: pane.yScale.scale(price),
-    });
-    const click = (point: { x: number; y: number }) => {
-      route("pointerdown", point);
-      route("pointerup", point);
-    };
-    return { model, tools, pane, route, at, click };
-  }
-
   it.each<"parallelChannel" | "pitchfork">(["parallelChannel", "pitchfork"])("%s is still drafting after two clicks", (kind) => {
-    const { tools, at, click } = mounted();
+    const { tools, click } = drawingChart();
     tools.begin(kind);
-    click(at(2, 105));
-    click(at(5, 115));
+    click({ x: 2, price: 105 });
+    click({ x: 5, price: 115 });
     expect(tools.mode()).toBe(kind);
     expect(tools.list()).toHaveLength(0);
   });
 
   it("the click boundary measures from the latest press — a click on b does not finish the draft", () => {
-    const { tools, at, click } = mounted();
+    const { tools, click } = drawingChart();
     tools.begin("parallelChannel");
-    click(at(2, 105));
+    click({ x: 2, price: 105 });
     // Second click far from a: a click boundary anchored on `a` would read
     // the release as "dragged" and stamp c on top of b.
-    click(at(8, 115));
+    click({ x: 8, price: 115 });
     expect(tools.mode()).toBe("parallelChannel");
     expect(tools.list()).toHaveLength(0);
   });
 
   it("dragging the first segment confirms b on release, and c keeps following", () => {
-    const { tools, route, at, click } = mounted();
+    const { tools, hover, click, drag } = drawingChart();
     tools.begin("parallelChannel");
-    route("pointerdown", at(2, 105));
-    route("pointermove", at(6, 112));
-    route("pointerup", at(6, 112));
+    drag({ x: 2, price: 105 }, { x: 6, price: 112 });
     expect(tools.mode()).toBe("parallelChannel");
     expect(tools.list()).toHaveLength(0);
 
-    route("pointermove", at(9, 100));
-    click(at(9, 100));
+    hover({ x: 9, price: 100 });
+    click({ x: 9, price: 100 });
     const [drawn] = tools.list();
     if (drawn.type !== "parallelChannel") throw new Error("expected a channel");
     expect(drawn.b.x).toBeCloseTo(6, 5);
@@ -203,14 +168,14 @@ describe("three-anchor drafting through the real state machine", () => {
   });
 
   it("while b is being placed, c trails with it — the draft is always a complete drawing", () => {
-    const { tools, route, at, click } = mounted();
+    const { tools, hover, click } = drawingChart();
     tools.begin("pitchfork");
-    click(at(2, 105));
-    route("pointermove", at(7, 110));
+    click({ x: 2, price: 105 });
+    hover({ x: 7, price: 110 });
     // Nothing is in the list yet; complete the fork and check c was
     // stamped where the last cursor position was, after b.
-    click(at(7, 110));
-    click(at(9, 100));
+    click({ x: 7, price: 110 });
+    click({ x: 9, price: 100 });
     const [drawn] = tools.list();
     if (drawn.type !== "pitchfork") throw new Error("expected a pitchfork");
     expect(drawn.b.x).toBeCloseTo(7, 5);
@@ -218,17 +183,17 @@ describe("three-anchor drafting through the real state machine", () => {
   });
 
   it("Esc mid-draft discards a three-anchor draft", () => {
-    const { model, tools, at, click } = mounted();
+    const { tools, click, key } = drawingChart();
     tools.begin("pitchfork");
-    click(at(2, 105));
-    click(at(5, 115));
-    model.plot.routeInput({ type: "keydown", key: "Escape" });
+    click({ x: 2, price: 105 });
+    click({ x: 5, price: 115 });
+    key("Escape");
     expect(tools.mode()).toBeNull();
     expect(tools.list()).toHaveLength(0);
   });
 
   it("dragging c moves only c; dragging the median moves all three — and Esc restores", () => {
-    const { model, tools, route, at } = mounted();
+    const { tools, drag, press, key } = drawingChart();
     tools.add({
       type: "parallelChannel",
       a: { x: 2, price: 105 },
@@ -237,22 +202,19 @@ describe("three-anchor drafting through the real state machine", () => {
     });
     const [handle] = tools.handles();
 
-    route("pointerdown", at(2, 100));
-    route("pointermove", at(3, 98));
-    route("pointerup", at(3, 98));
+    drag({ x: 2, price: 100 }, { x: 3, price: 98 });
     let read = handle.read();
     if (read.type !== "parallelChannel") throw new Error("expected a channel");
     expect(read.c.x).toBeCloseTo(3, 5);
     expect(read.a.x).toBeCloseTo(2, 5);
 
     // Mid-line of a–b.
-    route("pointerdown", at(5, 110));
-    route("pointermove", at(6, 110));
+    press({ x: 5, price: 110 }).moveTo({ x: 6, price: 110 });
     read = handle.read();
     if (read.type !== "parallelChannel") throw new Error("expected a channel");
     expect(read.a.x).toBeCloseTo(3, 5);
     expect(read.c.x).toBeCloseTo(4, 5);
-    model.plot.routeInput({ type: "keydown", key: "Escape" });
+    key("Escape");
     read = handle.read();
     if (read.type !== "parallelChannel") throw new Error("expected a channel");
     expect(read.a.x).toBeCloseTo(2, 5);
@@ -260,7 +222,7 @@ describe("three-anchor drafting through the real state machine", () => {
   });
 
   it("handle.update patches c in place", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({
       type: "pitchfork",
       a: { x: 2, price: 105 },

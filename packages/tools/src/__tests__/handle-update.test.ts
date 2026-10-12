@@ -1,44 +1,17 @@
-import type { LineDataPoint } from "@finchart/core";
-import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
+import { ContractError } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import type { DrawingsChange } from "../tools";
-import { drawingTools } from "../tools";
-
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
-function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-  const reasons: DrawingsChange["reason"][] = [];
-  tools.changes.subscribe((change) => reasons.push(change.reason));
-  const route = (
-    type: "pointerdown" | "pointermove" | "pointerup",
-    point: { x: number; y: number },
-  ) => model.plot.routeInput({ type, point, pointerId: 1 });
-  return { model, tools, pane, reasons, route };
-}
+import { drawingChart, record } from "./drawing-chart.fixture";
 
 describe("handle.update", () => {
   it("patches in place — every other door keeps working afterwards", () => {
-    const { tools, reasons } = mounted();
+    const { tools } = drawingChart();
+    const changes = record(tools.changes);
     const handle = tools.add({ type: "horizontal", price: 100 });
 
     handle.update({ price: 120 });
 
     expect(handle.read()).toMatchObject({ type: "horizontal", price: 120 });
-    expect(reasons).toEqual(["add", "update"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["add", "update"]);
     // Identity survived: the same handle still selects and removes.
     tools.select(handle);
     expect(tools.selection()).toMatchObject({ price: 120 });
@@ -47,7 +20,7 @@ describe("handle.update", () => {
   });
 
   it("keeps the id — update never re-identifies a drawing", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 100 });
     const before = handle.read().id;
     handle.update({ price: 120 });
@@ -55,7 +28,7 @@ describe("handle.update", () => {
   });
 
   it("style: undefined is the way back to the theme", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({
       type: "horizontal",
       price: 100,
@@ -66,7 +39,7 @@ describe("handle.update", () => {
   });
 
   it("patches a trend anchor in place — the other anchor untouched, identity kept", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({
       type: "trend",
       a: { x: 0, price: 100 },
@@ -86,7 +59,7 @@ describe("handle.update", () => {
   });
 
   it("levels: undefined reverts a fib to the conventional seven", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({
       type: "fib",
       a: { x: 0, price: 100 },
@@ -99,7 +72,7 @@ describe("handle.update", () => {
   });
 
   it("patches fib levels through the normalizer", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({
       type: "fib",
       a: { x: 0, price: 100 },
@@ -110,7 +83,7 @@ describe("handle.update", () => {
   });
 
   it("refuses a field the kind doesn't own", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({
       type: "trend",
       a: { x: 0, price: 100 },
@@ -122,7 +95,7 @@ describe("handle.update", () => {
   });
 
   it("refuses to patch type or id", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 100 });
     expect(() => handle.update({ type: "trend" } as never)).toThrow(
       ContractError,
@@ -133,22 +106,24 @@ describe("handle.update", () => {
   });
 
   it("an empty patch does nothing and announces nothing", () => {
-    const { tools, reasons } = mounted();
+    const { tools } = drawingChart();
+    const changes = record(tools.changes);
     const handle = tools.add({ type: "horizontal", price: 100 });
     handle.update({});
-    expect(reasons).toEqual(["add"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["add"]);
   });
 
   it("an unfit patch throws and leaves the drawing untouched", () => {
-    const { tools, reasons } = mounted();
+    const { tools } = drawingChart();
+    const changes = record(tools.changes);
     const handle = tools.add({ type: "horizontal", price: 100 });
     expect(() => handle.update({ price: Number.NaN })).toThrow(ContractError);
     expect(handle.read()).toMatchObject({ price: 100 });
-    expect(reasons).toEqual(["add"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["add"]);
   });
 
   it("throws on a removed drawing's handle", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 100 });
     handle.remove();
     expect(() => handle.update({ price: 120 })).toThrow(ContractError);
@@ -160,22 +135,21 @@ describe("handle.update", () => {
    * patch, and Esc must not resurrect the pre-patch position.
    */
   it("commits a mid-drag gesture, then applies — and the drag is over", () => {
-    const { model, tools, pane, route } = mounted();
+    const { tools, press, key, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 110 });
 
-    const grabX = (pane.area.left + pane.area.right) / 2;
-    const yOf = (price: number) => pane.yScale.scale(price);
-    expect(route("pointerdown", { x: grabX, y: yOf(110) })).toBe(true);
-    route("pointermove", { x: grabX, y: yOf(115) });
+    const gesture = press(onLine(110));
+    expect(gesture.down).toBe(true);
+    gesture.moveTo(onLine(115));
 
     handle.update({ price: 130 });
     expect(handle.read()).toMatchObject({ price: 130 });
 
     // The gesture ended: further movement no longer drags the line...
-    route("pointermove", { x: grabX, y: yOf(100) });
+    gesture.moveTo(onLine(100));
     expect(handle.read()).toMatchObject({ price: 130 });
     // ...and Esc can't restore the pre-patch position either.
-    model.plot.routeInput({ type: "keydown", key: "Escape" });
+    key("Escape");
     expect(handle.read()).toMatchObject({ price: 130 });
   });
 });

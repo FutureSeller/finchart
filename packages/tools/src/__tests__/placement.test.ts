@@ -1,52 +1,12 @@
-import type { LineDataPoint } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import { drawingTools } from "../tools";
-
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
-function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-  model.plot.render();
-
-  const route = (event: Parameters<typeof model.plot.routeInput>[0]) =>
-    model.plot.routeInput(event);
-
-  /**
-   * Domain (x, price) -> pixels, through the chart itself — the fit pads
-   * the data range (0-10) by half a bar at each end.
-   */
-  const at = (x: number, price: number) => ({
-    x: model.plot.pixelAtX(x),
-    y: pane.yScale.scale(price),
-  });
-
-  return { model, tools, pane, route, at };
-}
+import { drawingChart, record } from "./drawing-chart.fixture";
 
 describe("drawingTools placement", () => {
   it("should place a horizontal line at the pressed price", () => {
-    const { tools, route, at } = mounted();
+    const { tools, click } = drawingChart();
     tools.begin("horizontal");
 
-    const press = at(5, 110);
-    expect(route({ type: "pointerdown", point: press, pointerId: 1 })).toBe(
-      true,
-    );
-    route({ type: "pointerup", point: press, pointerId: 1 });
+    expect(click({ x: 5, price: 110 })).toBe(true);
 
     const [placed] = tools.list();
     expect(placed.type).toBe("horizontal");
@@ -58,12 +18,10 @@ describe("drawingTools placement", () => {
   });
 
   it("should draw a trend line with press-drag-release", () => {
-    const { tools, route, at } = mounted();
+    const { tools, drag } = drawingChart();
     tools.begin("trend");
 
-    route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
-    route({ type: "pointermove", point: at(8, 115), pointerId: 1 });
-    route({ type: "pointerup", point: at(8, 115), pointerId: 1 });
+    drag({ x: 2, price: 105 }, { x: 8, price: 115 });
 
     const [placed] = tools.list();
     expect(placed.type).toBe("trend");
@@ -95,7 +53,7 @@ describe("drawingTools placement", () => {
     ])(
       "should treat 5px of travel %s as a click, so the next click finishes the line",
       (_, dx, dy) => {
-        const { model, tools, pane, route } = mounted();
+        const { plot, pane, tools, route } = drawingChart();
         tools.begin("trend");
 
         const release = offsetFrom(press, dx, dy);
@@ -115,11 +73,10 @@ describe("drawingTools placement", () => {
         const [placed] = tools.list();
         expect(placed.type).toBe("trend");
         if (placed.type !== "trend") return;
-        expect(model.plot.pixelAtX(placed.a.x)).toBeCloseTo(press.x, 6);
+        expect(plot.pixelAtX(placed.a.x)).toBeCloseTo(press.x, 6);
         expect(pane.yScale.scale(placed.a.price)).toBeCloseTo(press.y, 6);
-        expect(model.plot.pixelAtX(placed.b.x)).toBeCloseTo(second.x, 6);
+        expect(plot.pixelAtX(placed.b.x)).toBeCloseTo(second.x, 6);
         expect(pane.yScale.scale(placed.b.price)).toBeCloseTo(second.y, 6);
-        model.plot.destroy();
       },
     );
 
@@ -133,7 +90,7 @@ describe("drawingTools placement", () => {
     ])(
       "should treat travel of %s as a drag and draw the whole line",
       (_, dx, dy) => {
-        const { model, tools, pane, route } = mounted();
+        const { plot, pane, tools, route } = drawingChart();
         tools.begin("trend");
 
         const release = offsetFrom(press, dx, dy);
@@ -144,31 +101,28 @@ describe("drawingTools placement", () => {
         const [placed] = tools.list();
         expect(placed.type).toBe("trend");
         if (placed.type !== "trend") return;
-        expect(model.plot.pixelAtX(placed.a.x)).toBeCloseTo(press.x, 6);
+        expect(plot.pixelAtX(placed.a.x)).toBeCloseTo(press.x, 6);
         expect(pane.yScale.scale(placed.a.price)).toBeCloseTo(press.y, 6);
-        expect(model.plot.pixelAtX(placed.b.x)).toBeCloseTo(release.x, 6);
+        expect(plot.pixelAtX(placed.b.x)).toBeCloseTo(release.x, 6);
         expect(pane.yScale.scale(placed.b.price)).toBeCloseTo(release.y, 6);
         expect(tools.mode()).toBeNull();
-        model.plot.destroy();
       },
     );
   });
 
   it("should draw a fib with click, move, click", () => {
-    const { tools, route, at } = mounted();
+    const { tools, hover, press, click } = drawingChart();
     tools.begin("fib");
 
-    const first = at(2, 105);
-    route({ type: "pointerdown", point: first, pointerId: 1 });
     // Released in place -- that's a click. Drawing continues.
-    route({ type: "pointerup", point: first, pointerId: 1 });
+    click({ x: 2, price: 105 });
     expect(tools.list()).toHaveLength(0);
     expect(tools.mode()).toBe("fib");
 
     // Hover movement drags b along.
-    route({ type: "pointermove", point: at(6, 112), pointerId: 1 });
+    hover({ x: 6, price: 112 });
     // The second click locks b in.
-    route({ type: "pointerdown", point: at(8, 115), pointerId: 1 });
+    press({ x: 8, price: 115 });
 
     const [placed] = tools.list();
     expect(placed.type).toBe("fib");
@@ -178,26 +132,23 @@ describe("drawingTools placement", () => {
   });
 
   it("should draw the line being drafted before it is finished", () => {
-    const { model, tools, route, at } = mounted();
+    const { model, tools, at, press } = drawingChart();
     const lines = () => model.commands().filter((command) => command.type === "drawLine");
     const before = lines().length;
 
     tools.begin("trend");
-    route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
-    route({ type: "pointermove", point: at(8, 115), pointerId: 1 });
+    press({ x: 2, price: 105 }).moveTo({ x: 8, price: 115 });
 
     const drawn = lines();
     expect(tools.list()).toHaveLength(0);
     expect(drawn).toHaveLength(before + 1);
     expect(drawn.at(-1)?.points).toEqual([at(2, 105), at(8, 115)]);
-    model.plot.destroy();
   });
 
   it("should keep the draft out of the list and serialization", () => {
-    const { tools, route, at } = mounted();
+    const { tools, press } = drawingChart();
     tools.begin("trend");
-    route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
-    route({ type: "pointermove", point: at(6, 112), pointerId: 1 });
+    press({ x: 2, price: 105 }).moveTo({ x: 6, price: 112 });
 
     expect(tools.list()).toHaveLength(0);
     expect(tools.serialize()).toBe(
@@ -206,54 +157,46 @@ describe("drawingTools placement", () => {
   });
 
   it("should throw the draft away on Escape", () => {
-    const { tools, route, at } = mounted();
-    const modes: Array<string | null> = [];
-    tools.modeChanges.subscribe(({ mode }) => modes.push(mode));
+    const { tools, press, key } = drawingChart();
+    const modes = record(tools.modeChanges);
 
     tools.begin("trend");
-    route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
-    expect(route({ type: "keydown", key: "Escape" })).toBe(true);
+    press({ x: 2, price: 105 });
+    expect(key("Escape")).toBe(true);
 
     expect(tools.list()).toHaveLength(0);
     expect(tools.mode()).toBeNull();
-    expect(modes).toEqual(["trend", null]);
+    expect(modes.map(({ mode }) => mode)).toEqual(["trend", null]);
   });
 
   it("should eat the gesture so placement never pans the chart", () => {
-    const { model, tools, route, at } = mounted();
-    const before = model.plot.getVisibleRange();
+    const { plot, tools, drag } = drawingChart();
+    const before = plot.getVisibleRange();
 
     tools.begin("trend");
-    route({ type: "pointerdown", point: at(2, 105), pointerId: 1 });
-    route({ type: "pointermove", point: at(8, 115), pointerId: 1 });
-    route({ type: "pointerup", point: at(8, 115), pointerId: 1 });
+    drag({ x: 2, price: 105 }, { x: 8, price: 115 });
 
-    expect(model.plot.getVisibleRange()).toEqual(before);
+    expect(plot.getVisibleRange()).toEqual(before);
   });
 
   it("should decline a press outside the pane while armed", () => {
-    const { tools, route, pane } = mounted();
+    const { pane, tools, press } = drawingChart();
+    const { area } = pane;
     tools.begin("horizontal");
 
-    const outside = { x: pane.area.left - 20, y: pane.area.top + 10 };
-    expect(route({ type: "pointerdown", point: outside, pointerId: 1 })).toBe(
-      false,
-    );
+    expect(press({ px: area.left - 20, py: area.top + 10 }).down).toBe(false);
     expect(tools.list()).toHaveLength(0);
     // The pending state is unchanged -- the next press still draws.
     expect(tools.mode()).toBe("horizontal");
   });
 
   it("should announce the finish so a toolbar can release its button", () => {
-    const { tools, route, at } = mounted();
-    const modes: Array<string | null> = [];
-    tools.modeChanges.subscribe(({ mode }) => modes.push(mode));
+    const { tools, click } = drawingChart();
+    const modes = record(tools.modeChanges);
 
     tools.begin("horizontal");
-    const press = at(5, 110);
-    route({ type: "pointerdown", point: press, pointerId: 1 });
-    route({ type: "pointerup", point: press, pointerId: 1 });
+    click({ x: 5, price: 110 });
 
-    expect(modes).toEqual(["horizontal", null]);
+    expect(modes.map(({ mode }) => mode)).toEqual(["horizontal", null]);
   });
 });

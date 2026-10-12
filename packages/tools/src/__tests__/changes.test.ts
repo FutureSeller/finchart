@@ -4,12 +4,11 @@
  * the result of a drag would vanish on refresh.
  */
 import { describe, expect, it, vi } from "vitest";
-import { createPlotModel, lineSeries } from "@finchart/core";
-import { drawingTools, type DrawingsChange } from "../tools";
+import { lineSeries } from "@finchart/core";
+import { drawingChart, record } from "./drawing-chart.fixture";
 
-const mount = () => {
-  const model = createPlotModel({
-    size: { width: 600, height: 400 },
+const mount = () =>
+  drawingChart({
     series: {
       series: lineSeries(),
       data: [
@@ -18,23 +17,18 @@ const mount = () => {
       ],
     },
   });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  model.plot.render();
-  return { model, tools };
-};
 
 describe("drawingTools.changes", () => {
   it("should say why the list changed", () => {
     const { tools } = mount();
-    const seen: DrawingsChange["reason"][] = [];
-    tools.changes.subscribe(({ reason }) => seen.push(reason));
+    const changes = record(tools.changes);
 
     const handle = tools.add({ type: "horizontal", price: 15 });
     handle.remove();
     tools.add({ type: "horizontal", price: 12 });
     tools.clear();
 
-    expect(seen).toEqual(["add", "remove", "add", "clear"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["add", "remove", "add", "clear"]);
   });
 
   it("should report a load", () => {
@@ -45,11 +39,10 @@ describe("drawingTools.changes", () => {
     })();
     tools.clear();
 
-    const seen: string[] = [];
-    tools.changes.subscribe(({ reason }) => seen.push(reason));
+    const changes = record(tools.changes);
 
     expect(tools.load(payload)).toBe(true);
-    expect(seen).toEqual(["load"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["load"]);
   });
 
   it("should not report a load that was refused", () => {
@@ -62,39 +55,30 @@ describe("drawingTools.changes", () => {
   });
 
   it("should report a drag as move", () => {
-    const { model, tools } = mount();
-    const seen: string[] = [];
+    const { plot, pane, tools, drag } = mount();
 
-    const price = model.plot.mainPane.valueAt(
-      (model.plot.mainPane.area.top + model.plot.mainPane.area.bottom) / 2,
-    );
+    const price = pane.valueAt((pane.area.top + pane.area.bottom) / 2);
     tools.add({ type: "horizontal", price });
-    model.plot.render();
-    tools.changes.subscribe(({ reason }) => seen.push(reason));
+    plot.render();
+    const changes = record(tools.changes);
 
-    const y = model.plot.mainPane.pixelAtValue(price);
-    const route = (
-      type: "pointerdown" | "pointermove" | "pointerup",
-      at: { x: number; y: number },
-    ) => model.plot.routeInput({ type, point: at, pointerId: 1 });
+    const y = pane.pixelAtValue(price);
 
-    route("pointerdown", { x: 300, y });
-    route("pointermove", { x: 300, y: y + 20 });
-    route("pointerup", { x: 300, y: y + 20 });
+    drag({ px: 300, py: y }, { px: 300, py: y + 20 });
 
     // This is why this channel exists -- a drag never goes through any
     // explicit call.
-    expect(seen).toEqual(["move"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["move"]);
   });
 });
 
 describe("drawingTools.applyOptions", () => {
   it("should restyle without losing the drawings", () => {
-    const { model, tools } = mount();
+    const { model, plot, tools } = mount();
     tools.add({ type: "horizontal", price: 15 });
 
     tools.applyOptions({ style: { color: "#00ff00", width: 3 } });
-    model.plot.render();
+    plot.render();
 
     // If it had been rebuilt from scratch, the list would be empty.
     expect(tools.list()).toHaveLength(1);
@@ -122,13 +106,12 @@ describe("drawingTools.applyOptions", () => {
 
     tools.applyOptions({ style: undefined });
     expect(colors()).toEqual(defaults);
-    model.plot.destroy();
   });
 });
 
 describe("a disposed toolbox", () => {
   it("should refuse to be used after dispose", () => {
-    const { model, tools } = mount();
+    const { tools } = mount();
     tools.dispose();
 
     expect(tools.disposed).toBe(true);
@@ -138,7 +121,6 @@ describe("a disposed toolbox", () => {
     expect(() => tools.cancel()).toThrow();
     // Reads are not blocked -- saving the last state is a normal path.
     expect(() => tools.serialize()).not.toThrow();
-    model.plot.destroy();
   });
 });
 
@@ -150,7 +132,7 @@ describe("a disposed toolbox", () => {
  */
 describe("replacing the list cuts an in-progress gesture", () => {
   it("should cancel an in-flight placement on clear", () => {
-    const { model, tools } = mount();
+    const { tools, click } = mount();
     tools.begin("trend");
     expect(tools.mode()).toBe("trend");
 
@@ -158,8 +140,7 @@ describe("replacing the list cuts an in-progress gesture", () => {
 
     expect(tools.mode()).toBe(null);
     // The next click must not draw a line on the canvas that was just cleared.
-    model.plot.routeInput({ type: "pointerdown", point: { x: 120, y: 120 }, pointerId: 1 });
-    model.plot.routeInput({ type: "pointerup", point: { x: 120, y: 120 }, pointerId: 1 });
+    click({ px: 120, py: 120 });
     expect(tools.list()).toHaveLength(0);
   });
 

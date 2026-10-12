@@ -9,15 +9,13 @@
  * drawings move by a common *factor* instead: 150 and 600, and the level is at
  * 300. Still only the anchors' prices and the cursor's — no scale is asked.
  */
-import type { LineDataPoint } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import type { Drawing, FibExtension, FibRetracement } from "../drawings";
 import { fibLevelPrice, serializeDrawings, toOwnedDrawing } from "../drawings";
 import type { DragState } from "../hit";
 import { gripOffsets, logGrab, moveGrip } from "../hit";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 const close = (actual: number, expected: number) => expect(Math.abs(actual / expected - 1)).toBeLessThan(1e-12);
 
@@ -254,51 +252,33 @@ describe("the drag that stays a difference", () => {
   });
 });
 
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
 function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-  const at = (price: number) => ({ x: (pane.area.left + pane.area.right) / 2, y: pane.yScale.scale(price) });
-  const route = (type: "pointerdown" | "pointermove" | "pointerup", price: number) =>
-    model.plot.routeInput({ type, point: at(price), pointerId: 1 });
+  const chart = drawingChart();
+  const { tools } = chart;
   const anchors = () => {
     const drawing = tools.list()[0];
     if (drawing.type !== "fib") throw new Error("unexpected kind");
     return drawing;
   };
-  return { tools, route, anchors };
+  return { ...chart, anchors };
 }
 
 describe("a routed body drag of a log fib", () => {
   const middle = Math.sqrt(101 * 119);
 
   it("leaves the grabbed level at the cursor's price", () => {
-    const { tools, route, anchors } = mounted();
+    const { tools, drag, onLine, anchors } = mounted();
     tools.add({ type: "fib", a: { x: 1, price: 101 }, b: { x: 9, price: 119 }, levels: [0.5], levelSpacing: "log" });
-    expect(route("pointerdown", middle)).toBe(true);
-    route("pointermove", 112);
-    route("pointerup", 112);
+    expect(drag(onLine(middle), onLine(112))).toBe(true);
     expect(fibLevelPrice(anchors(), 0.5)).toBeCloseTo(112, 8);
     // A difference would have kept the swing at 18; a factor scales it.
     expect(anchors().b.price - anchors().a.price).not.toBeCloseTo(18, 3);
   });
 
   it("records nothing when every move was refused", () => {
-    const { tools, route, anchors } = mounted();
+    const { tools, drag, onLine, anchors } = mounted();
     tools.add({ type: "fib", a: { x: 1, price: 101 }, b: { x: 9, price: 119 }, levels: [0.5], levelSpacing: "log" });
-    route("pointerdown", middle);
-    route("pointermove", -30);
-    route("pointerup", -30);
+    drag(onLine(middle), onLine(-30));
     expect(anchors()).toMatchObject({ a: { x: 1, price: 101 }, b: { x: 9, price: 119 } });
     // History, asked directly: the one thing there is to undo is the add.
     // (`changes` says "move" on every pointer move of a drag, moved or not.)
@@ -307,13 +287,13 @@ describe("a routed body drag of a log fib", () => {
   });
 
   it("records nothing when the cursor comes back to where it grabbed after a refused move", () => {
-    const { tools, route, anchors } = mounted();
+    const { tools, press, onLine, anchors } = mounted();
     tools.add({ type: "fib", a: { x: 1, price: 101 }, b: { x: 9, price: 119 }, levels: [0.5], levelSpacing: "log" });
-    route("pointerdown", middle);
-    route("pointermove", 112);
-    route("pointermove", -30);
-    route("pointermove", middle);
-    route("pointerup", middle);
+    const gesture = press(onLine(middle));
+    gesture.moveTo(onLine(112));
+    gesture.moveTo(onLine(-30));
+    gesture.moveTo(onLine(middle));
+    gesture.release();
     expect(anchors()).toMatchObject({ a: { x: 1, price: 101 }, b: { x: 9, price: 119 } });
     // History, asked directly: the one thing there is to undo is the add.
     // (`changes` says "move" on every pointer move of a drag, moved or not.)
@@ -322,12 +302,12 @@ describe("a routed body drag of a log fib", () => {
   });
 
   it("keeps the last accepted place when it ends on a refused move — one step to undo, one to redo", () => {
-    const { tools, route, anchors } = mounted();
+    const { tools, press, onLine, anchors } = mounted();
     tools.add({ type: "fib", a: { x: 1, price: 101 }, b: { x: 9, price: 119 }, levels: [0.5], levelSpacing: "log" });
-    route("pointerdown", middle);
-    route("pointermove", 112);
-    route("pointermove", -30);
-    route("pointerup", -30);
+    const gesture = press(onLine(middle));
+    gesture.moveTo(onLine(112));
+    gesture.moveTo(onLine(-30));
+    gesture.release();
     expect(fibLevelPrice(anchors(), 0.5)).toBeCloseTo(112, 8);
     const moved = toOwnedDrawing(anchors());
     tools.undo();

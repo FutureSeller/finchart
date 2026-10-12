@@ -1,33 +1,7 @@
-import { createPlotModel, lineSeries, manualScheduler } from "@finchart/core";
+import { createPlotModel, manualScheduler } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { drawingTools } from "../tools";
-
-function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: {
-      series: lineSeries(),
-      data: [
-        { x: 0, y: 100 },
-        { x: 10, y: 110 },
-      ],
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-  model.plot.render();
-  const route = (event: Parameters<typeof model.plot.routeInput>[0]) =>
-    model.plot.routeInput(event);
-  const onLine = (price: number) => ({
-    x: (pane.area.left + pane.area.right) / 2,
-    y: pane.yScale.scale(price),
-  });
-  const at = (x: number, price: number) => ({
-    x: model.plot.pixelAtX(x),
-    y: pane.yScale.scale(price),
-  });
-  return { model, tools, route, onLine, at };
-}
+import { drawingChart, record } from "./drawing-chart.fixture";
 
 describe("drawingTools history", () => {
   it.skipIf(process.env.FINCHART_SKIP_STRESS === "1")("replaces a large saved document without an argument-limit failure or stale history", { timeout: 30_000 }, () => {
@@ -60,7 +34,7 @@ describe("drawingTools history", () => {
   });
 
   it("undoes and redoes a selected add without losing its handle", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add(
       { type: "horizontal", price: 105 },
       { select: true },
@@ -78,7 +52,7 @@ describe("drawingTools history", () => {
   });
 
   it("redoes an unselected add without moving the selection", () => {
-    const { model, tools } = mounted();
+    const { tools } = drawingChart();
     const picked = tools.add({ type: "horizontal", price: 101 }, { select: true });
     tools.add({ type: "horizontal", price: 105 });
 
@@ -86,11 +60,10 @@ describe("drawingTools history", () => {
     expect(tools.redo()).toBe(true);
     expect(tools.list()).toHaveLength(2);
     expect(tools.selection()).toEqual(picked.read());
-    model.plot.destroy();
   });
 
   it("restores a selected removal at the same stacking index", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const low = tools.add({ type: "horizontal", price: 101 });
     const middle = tools.add({ type: "horizontal", price: 105 });
     const high = tools.add({ type: "horizontal", price: 109 });
@@ -110,7 +83,7 @@ describe("drawingTools history", () => {
   });
 
   it("replays an update onto the same drawing object", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({
       type: "fib",
       a: { x: 1, price: 101 },
@@ -139,26 +112,16 @@ describe("drawingTools history", () => {
   });
 
   it("records one drag command when the pointer is released", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const history: Array<{ canUndo: boolean; canRedo: boolean }> = [];
-    tools.historyChanges.subscribe((change) => history.push(change));
+    const history = record(tools.historyChanges);
 
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    const gesture = press(onLine(105));
+    gesture.moveTo(onLine(105, 30));
     expect(history).toEqual([]);
     const moved = handle.read();
 
-    route({
-      type: "pointerup",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    gesture.release();
     expect(history).toEqual([{ canUndo: true, canRedo: false }]);
 
     expect(tools.undo()).toBe(true);
@@ -168,15 +131,12 @@ describe("drawingTools history", () => {
   });
 
   it("does not record a pointer move that leaves the geometry unchanged", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, drag, onLine } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
-    const history: Array<{ canUndo: boolean; canRedo: boolean }> = [];
-    tools.historyChanges.subscribe((change) => history.push(change));
+    const history = record(tools.historyChanges);
 
     const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({ type: "pointermove", point: grab, pointerId: 1 });
-    route({ type: "pointerup", point: grab, pointerId: 1 });
+    drag(grab, grab);
 
     expect(history).toEqual([]);
     expect(tools.undo()).toBe(true);
@@ -184,15 +144,9 @@ describe("drawingTools history", () => {
   });
 
   it("cancels an unreleased drag without putting it in history", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
 
     tools.cancel();
     expect(handle.read()).toMatchObject({ price: 105 });
@@ -201,12 +155,10 @@ describe("drawingTools history", () => {
   });
 
   it("undoes a draft anchor before touching the command stack", () => {
-    const { tools, route, at } = mounted();
+    const { tools, click } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.begin("pitchfork");
-    const first = at(2, 102);
-    route({ type: "pointerdown", point: first, pointerId: 1 });
-    route({ type: "pointerup", point: first, pointerId: 1 });
+    click({ x: 2, price: 102 });
 
     expect(tools.undo()).toBe(true);
     expect(tools.mode()).toBe("pitchfork");
@@ -220,13 +172,11 @@ describe("drawingTools history", () => {
   });
 
   it("reports and announces undo availability for an in-flight draft", () => {
-    const { tools, route, at } = mounted();
-    const history: Array<{ canUndo: boolean; canRedo: boolean }> = [];
-    tools.historyChanges.subscribe((change) => history.push(change));
+    const { tools, press } = drawingChart();
+    const history = record(tools.historyChanges);
     tools.begin("trend");
-    const first = at(2, 102);
 
-    route({ type: "pointerdown", point: first, pointerId: 1 });
+    press({ x: 2, price: 102 });
     expect(tools.canUndo()).toBe(true);
     expect(tools.canRedo()).toBe(false);
 
@@ -239,14 +189,13 @@ describe("drawingTools history", () => {
   });
 
   it("hides redo while drafting and restores it when the draft is rewound", () => {
-    const { tools, route, at } = mounted();
+    const { tools, press } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.undo();
-    const history: Array<{ canUndo: boolean; canRedo: boolean }> = [];
-    tools.historyChanges.subscribe((change) => history.push(change));
+    const history = record(tools.historyChanges);
     tools.begin("trend");
 
-    route({ type: "pointerdown", point: at(2, 102), pointerId: 1 });
+    press({ x: 2, price: 102 });
     expect(tools.canUndo()).toBe(true);
     expect(tools.canRedo()).toBe(false);
     expect(tools.redo()).toBe(false);
@@ -263,16 +212,14 @@ describe("drawingTools history", () => {
   });
 
   it("reports drag cancellation as undoable while temporarily hiding redo", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.load(tools.serialize());
     tools.add({ type: "horizontal", price: 109 });
     tools.undo();
-    const history: Array<{ canUndo: boolean; canRedo: boolean }> = [];
-    tools.historyChanges.subscribe((change) => history.push(change));
-    const grab = onLine(105);
+    const history = record(tools.historyChanges);
 
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
+    press(onLine(105));
     expect(tools.canUndo()).toBe(true);
     expect(tools.canRedo()).toBe(false);
     expect(tools.redo()).toBe(false);
@@ -287,7 +234,7 @@ describe("drawingTools history", () => {
   });
 
   it("treats clear and a successful load as history boundaries", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.clear();
     expect(tools.canUndo()).toBe(false);
@@ -305,7 +252,7 @@ describe("drawingTools history", () => {
   });
 
   it("finishes stack movement before notifying a re-entrant subscriber", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({ type: "horizontal", price: 101 });
     tools.add({ type: "horizontal", price: 105 });
     const vias: string[] = [];
@@ -325,7 +272,7 @@ describe("drawingTools history", () => {
   });
 
   it("keeps at most one hundred committed commands", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     for (let price = 1; price <= 101; price++) {
       tools.add({ type: "horizontal", price });
     }
@@ -336,7 +283,7 @@ describe("drawingTools history", () => {
   });
 
   it("keeps history reads open after disposal but closes writes", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.dispose();
 
@@ -347,15 +294,9 @@ describe("drawingTools history", () => {
   });
 
   it("quietly restores an unreleased drag during disposal", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
 
     tools.dispose();
     expect(handle.read()).toMatchObject({ price: 105 });
@@ -363,15 +304,9 @@ describe("drawingTools history", () => {
   });
 
   it("commits a drag before an external update as two ordered commands", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
     const dragged = handle.read();
 
     handle.update({ price: 109 });
@@ -383,30 +318,23 @@ describe("drawingTools history", () => {
   });
 
   it("restores a drag quietly before clear crosses the history boundary", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
-    const reasons: string[] = [];
-    tools.changes.subscribe(({ reason }) => reasons.push(reason));
+    press(onLine(105)).moveTo(onLine(105, 30));
+    const changes = record(tools.changes);
 
     tools.clear();
     expect(handle.read()).toMatchObject({ price: 105 });
-    expect(reasons).toEqual(["clear"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["clear"]);
     expect(tools.canUndo()).toBe(false);
   });
 
   it("does not replay redo through an in-flight draft", () => {
-    const { tools, route, at } = mounted();
+    const { tools, press } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.undo();
     tools.begin("trend");
-    route({ type: "pointerdown", point: at(2, 102), pointerId: 1 });
+    press({ x: 2, price: 102 });
 
     expect(tools.redo()).toBe(false);
     expect(tools.list()).toEqual([]);
@@ -415,15 +343,9 @@ describe("drawingTools history", () => {
   });
 
   it("commits a drag before arming a new drawing tool", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
 
     tools.begin("trend");
     expect(tools.undo()).toBe(true);
@@ -432,33 +354,20 @@ describe("drawingTools history", () => {
   });
 
   it("keeps the dragged position when a new tool is armed mid-drag", () => {
-    const { model, tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
     const dragged = handle.read();
 
     tools.begin("trend");
     expect(handle.read()).toEqual(dragged);
     expect(dragged).not.toMatchObject({ price: 105 });
-    model.plot.destroy();
   });
 
   it("commits a drag before removing its drawing", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
     const dragged = handle.read();
 
     handle.remove();
@@ -470,16 +379,10 @@ describe("drawingTools history", () => {
   });
 
   it("does not expose a half-finished drag-and-remove to history subscribers", () => {
-    const { tools, route, onLine } = mounted();
+    const { tools, press, onLine } = drawingChart();
     const low = tools.add({ type: "horizontal", price: 101 });
     const target = tools.add({ type: "horizontal", price: 105 });
-    const grab = onLine(105);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 30 },
-      pointerId: 1,
-    });
+    press(onLine(105)).moveTo(onLine(105, 30));
     const lowDrawing = low.read();
     const seen: unknown[][] = [];
     let nested = false;
@@ -499,7 +402,7 @@ describe("drawingTools history", () => {
   });
 
   it("a clear from inside the deselect notification lands after the removal, in order", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add(
       { type: "horizontal", price: 105 },
       { select: true },
@@ -510,41 +413,39 @@ describe("drawingTools history", () => {
       crossedBoundary = true;
       tools.clear();
     });
-    const reasons: string[] = [];
-    tools.changes.subscribe(({ reason }) => reasons.push(reason));
+    const changes = record(tools.changes);
 
     handle.remove();
 
     // The subscriber's clear applied at once, but its notification lines
     // up behind the removal it interrupted — a mirror replays the same order.
     expect(tools.list()).toEqual([]);
-    expect(reasons).toEqual(["remove", "clear"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["remove", "clear"]);
     expect(tools.canUndo()).toBe(false);
     expect(tools.undo()).toBe(false);
   });
 
   it("a clear from inside the select notification lands after the add, in order", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     let crossedBoundary = false;
     tools.selectionChanges.subscribe(({ selection }) => {
       if (selection === null || crossedBoundary) return;
       crossedBoundary = true;
       tools.clear();
     });
-    const reasons: string[] = [];
-    tools.changes.subscribe(({ reason }) => reasons.push(reason));
+    const changes = record(tools.changes);
 
     tools.add({ type: "horizontal", price: 105 }, { select: true });
 
     expect(tools.list()).toEqual([]);
     expect(tools.selection()).toBeNull();
-    expect(reasons).toEqual(["add", "clear"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["add", "clear"]);
     expect(tools.canUndo()).toBe(false);
     expect(tools.undo()).toBe(false);
   });
 
   it("a clear from inside the mode notification lands after the placement, in order", () => {
-    const { tools, route, at } = mounted();
+    const { tools, click } = drawingChart();
     let crossedBoundary = false;
     tools.modeChanges.subscribe(({ mode }) => {
       if (mode !== null || crossedBoundary) return;
@@ -552,22 +453,19 @@ describe("drawingTools history", () => {
       tools.clear();
     });
     tools.begin("horizontal");
-    const point = at(5, 105);
-    const reasons: string[] = [];
-    tools.changes.subscribe(({ reason }) => reasons.push(reason));
+    const changes = record(tools.changes);
 
-    route({ type: "pointerdown", point, pointerId: 1 });
-    route({ type: "pointerup", point, pointerId: 1 });
+    click({ x: 5, price: 105 });
 
     expect(tools.list()).toEqual([]);
     expect(tools.selection()).toBeNull();
-    expect(reasons).toEqual(["add", "clear"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["add", "clear"]);
     expect(tools.canUndo()).toBe(false);
     expect(tools.undo()).toBe(false);
   });
 
   it("an undo from inside the deselect notification replays after the removal it interrupted", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 }, { select: true });
     let nested = false;
     tools.selectionChanges.subscribe(({ selection }) => {
@@ -575,8 +473,7 @@ describe("drawingTools history", () => {
       nested = true;
       tools.undo();
     });
-    const seen: string[] = [];
-    tools.changes.subscribe(({ reason, via }) => seen.push(`${reason}:${via}`));
+    const changes = record(tools.changes);
 
     handle.remove();
 
@@ -585,14 +482,14 @@ describe("drawingTools history", () => {
     expect(tools.list()).toHaveLength(1);
     expect(handle.read()).toMatchObject({ type: "horizontal", price: 105 });
     expect(tools.selection()).toMatchObject({ price: 105 });
-    expect(seen).toEqual(["remove:direct", "add:undo"]);
+    expect(changes.map(({ reason, via }) => `${reason}:${via}`)).toEqual(["remove:direct", "add:undo"]);
     // The original add is still undoable; the removal moved to redo.
     expect(tools.canUndo()).toBe(true);
     expect(tools.canRedo()).toBe(true);
   });
 
   it("passes an undo through the existing save echo guard", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const saved: string[] = [];
     tools.changes.subscribe(({ reason }) => {
       if (reason === "load" || reason === "clear") return;

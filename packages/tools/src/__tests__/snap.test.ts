@@ -1,9 +1,9 @@
 import { mountDrawingStage } from "./drawing-stage.fixture";
 import type { OHLC, SeriesSample } from "@finchart/core";
-import { candleSeries, createPlotModel, lineSeries } from "@finchart/core";
+import { candleSeries, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { barSampleAt } from "../snap";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * Snap (magnet) -- coordinates are aimed in screen pixels, because the
@@ -16,41 +16,16 @@ const candles: OHLC[] = [
   { x: 2, open: 112, high: 118, low: 108, close: 109 },
 ];
 
-function mounted(snapOptions: { snap?: boolean; snapRadius?: number } = {}) {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: candleSeries(), data: candles },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(
-    drawingTools({ plot: model.plot, ...snapOptions }),
-  );
-  const pane = model.plot.mainPane;
-
-  const pixelOf = (x: number, price: number) => ({
-    x: model.plot.pixelAtX(x),
-    y: pane.yScale.scale(price),
-  });
-
-  const route = (
-    type: "pointerdown" | "pointermove" | "pointerup",
-    point: { x: number; y: number },
-  ) => model.plot.routeInput({ type, point, pointerId: 1 });
-
-  return { model, tools, pane, pixelOf, route };
-}
+const candleChart = (snapOptions: { snap?: boolean; snapRadius?: number } = {}) =>
+  drawingChart({ series: { series: candleSeries(), data: candles }, tools: snapOptions });
 
 describe("drawing snap", () => {
   it("should snap a horizontal line to the wick high from 3px away", () => {
-    const { tools, pixelOf, route } = mounted({ snap: true });
+    const { tools, at, click } = candleChart({ snap: true });
     tools.begin("horizontal");
 
-    const at = pixelOf(1, 120); // high 120
-    route("pointerdown", { x: at.x, y: at.y - 3 });
-    route("pointerup", { x: at.x, y: at.y - 3 });
+    const high = at(1, 120); // high 120
+    click({ px: high.x, py: high.y - 3 });
 
     const [line] = tools.list();
     if (line.type !== "horizontal") throw new Error("unexpected");
@@ -58,12 +33,11 @@ describe("drawing snap", () => {
   });
 
   it("should stay free beyond the radius", () => {
-    const { tools, pixelOf, route } = mounted({ snap: true });
+    const { tools, at, click } = candleChart({ snap: true });
     tools.begin("horizontal");
 
-    const at = pixelOf(1, 120);
-    route("pointerdown", { x: at.x, y: at.y - 30 });
-    route("pointerup", { x: at.x, y: at.y - 30 });
+    const high = at(1, 120);
+    click({ px: high.x, py: high.y - 30 });
 
     const [line] = tools.list();
     if (line.type !== "horizontal") throw new Error("unexpected");
@@ -71,12 +45,11 @@ describe("drawing snap", () => {
   });
 
   it("should be off by default — free placement is the baseline", () => {
-    const { tools, pixelOf, route } = mounted();
+    const { tools, at, click } = candleChart();
     tools.begin("horizontal");
 
-    const at = pixelOf(1, 120);
-    route("pointerdown", { x: at.x, y: at.y - 3 });
-    route("pointerup", { x: at.x, y: at.y - 3 });
+    const high = at(1, 120);
+    click({ px: high.x, py: high.y - 3 });
 
     const [line] = tools.list();
     if (line.type !== "horizontal") throw new Error("unexpected");
@@ -84,13 +57,14 @@ describe("drawing snap", () => {
   });
 
   it("should snap a trend anchor to the bar point — x and price together", () => {
-    const { tools, pixelOf, route } = mounted({ snap: true });
+    const { tools, at, drag } = candleChart({ snap: true });
     tools.begin("trend");
 
-    const a = pixelOf(1, 120);
-    route("pointerdown", { x: a.x + 2, y: a.y - 3 }); // Euclidean sqrt(13) < 8
-    route("pointermove", { x: a.x + 120, y: a.y + 90 });
-    route("pointerup", { x: a.x + 120, y: a.y + 90 });
+    const a = at(1, 120);
+    drag(
+      { px: a.x + 2, py: a.y - 3 }, // Euclidean sqrt(13) < 8
+      { px: a.x + 120, py: a.y + 90 },
+    );
 
     const [trend] = tools.list();
     if (trend.type !== "trend") throw new Error("unexpected");
@@ -99,14 +73,13 @@ describe("drawing snap", () => {
   });
 
   it("should toggle at runtime via setSnap", () => {
-    const { model, tools, pixelOf, route } = mounted();
+    const { tools, at, click } = candleChart();
     tools.setSnap(true);
     expect(tools.snapping()).toBe(true);
     tools.begin("horizontal");
 
-    const at = pixelOf(2, 118);
-    route("pointerdown", { x: at.x, y: at.y - 3 });
-    route("pointerup", { x: at.x, y: at.y - 3 });
+    const high = at(2, 118);
+    click({ px: high.x, py: high.y - 3 });
 
     const [line] = tools.list();
     if (line.type !== "horizontal") throw new Error("unexpected");
@@ -116,19 +89,17 @@ describe("drawing snap", () => {
     tools.setSnap(false);
     expect(tools.snapping()).toBe(false);
     tools.begin("horizontal");
-    route("pointerdown", { x: at.x, y: at.y - 3 });
-    route("pointerup", { x: at.x, y: at.y - 3 });
+    click({ px: high.x, py: high.y - 3 });
 
     const [, free] = tools.list();
     if (free.type !== "horizontal") throw new Error("unexpected");
     expect(free.price).not.toBe(118);
-    model.plot.destroy();
   });
 });
 
 describe("drag snap", () => {
   it("should snap an anchor drag — the anchor lands on the value, not the fingertip", () => {
-    const { tools, pixelOf, route } = mounted({ snap: true });
+    const { tools, at, drag } = candleChart({ snap: true });
     tools.add({
       type: "trend",
       a: { x: 0, price: 100 },
@@ -136,11 +107,8 @@ describe("drag snap", () => {
     });
 
     // Grab the b anchor (on its handle) and drag it 3px beside the high of 120.
-    const b = pixelOf(2, 100);
-    const target = pixelOf(1, 120);
-    route("pointerdown", { x: b.x, y: b.y });
-    route("pointermove", { x: target.x + 2, y: target.y - 3 });
-    route("pointerup", { x: target.x + 2, y: target.y - 3 });
+    const target = at(1, 120);
+    drag({ x: 2, price: 100 }, { px: target.x + 2, py: target.y - 3 });
 
     const [trend] = tools.list();
     if (trend.type !== "trend") throw new Error("unexpected");
@@ -150,7 +118,7 @@ describe("drag snap", () => {
   });
 
   it("should not snap a whole-drawing move — relative placement survives", () => {
-    const { tools, pane, pixelOf, route } = mounted({ snap: true });
+    const { tools, pane, at, drag } = candleChart({ snap: true });
     tools.add({
       type: "trend",
       a: { x: 0, price: 100 },
@@ -160,12 +128,10 @@ describe("drag snap", () => {
     // Grab the middle of the line and drag the whole thing -- it doesn't
     // snap even when the destination lands near the high (120).
     const middle = {
-      x: (pixelOf(0, 100).x + pixelOf(2, 106).x) / 2,
-      y: (pixelOf(0, 100).y + pixelOf(2, 106).y) / 2,
+      px: (at(0, 100).x + at(2, 106).x) / 2,
+      py: (at(0, 100).y + at(2, 106).y) / 2,
     };
-    route("pointerdown", middle);
-    route("pointermove", { x: middle.x, y: middle.y - 40 });
-    route("pointerup", { x: middle.x, y: middle.y - 40 });
+    drag(middle, { px: middle.px, py: middle.py - 40 });
 
     const [trend] = tools.list();
     if (trend.type !== "trend") throw new Error("unexpected");
@@ -174,7 +140,7 @@ describe("drag snap", () => {
     const gapBefore = 106 - 100;
     expect(trend.b.price - trend.a.price).toBeCloseTo(gapBefore, 8);
     // It's a free 40px move, not a snap to a value.
-    const expected = pane.yScale.invert(pixelOf(0, 100).y - 40);
+    const expected = pane.yScale.invert(at(0, 100).y - 40);
     expect(trend.a.price).toBeCloseTo(expected, 8);
   });
 });
@@ -208,25 +174,18 @@ describe("the bar at an x — one rule for snapping and the bar measure", () => 
 
   it("counts a bar measure drawn on a real pane by bar index, not by x", () => {
     // Bars every 10 x, so x and bar index part ways: x 0..20 is two bars.
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const { model, tools } = drawingChart({
       series: {
         series: candleSeries(),
         data: candles.map((candle, index) => ({ ...candle, x: index * 10 })),
       },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
     });
-    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
     tools.add({ type: "barMeasure", a: { x: 0, price: 100 }, b: { x: 20, price: 110 } });
 
     const labels = model
       .commands()
       .flatMap((command) => (command.type === "drawText" ? [command.params.text] : []));
     expect(labels).toContain("2 bars");
-    model.plot.destroy();
   });
 });
 

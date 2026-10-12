@@ -6,12 +6,11 @@
  * gestures only take what nothing on the chart claimed.
  */
 import { describe, expect, it } from "vitest";
-import { createPlotModel, lineSeries, paneMaximize } from "@finchart/core";
-import { drawingTools } from "../tools";
+import { lineSeries, paneMaximize } from "@finchart/core";
+import { drawingChart } from "./drawing-chart.fixture";
 
 const mount = () => {
-  const model = createPlotModel({
-    size: { width: 600, height: 400 },
+  const chart = drawingChart({
     series: {
       series: lineSeries(),
       data: [
@@ -20,35 +19,31 @@ const mount = () => {
       ],
     },
   });
-  const { plot } = model;
-  const tools = plot.mainPane.use(drawingTools({ plot }));
   // Installed after the tools — the order that used to put it in front.
-  const max = plot.use(paneMaximize({ gestures: true }));
-  plot.render();
-  return { plot, tools, max };
+  const max = chart.plot.use(paneMaximize({ gestures: true }));
+  return { ...chart, max };
 };
 
 describe("paneMaximize under the drawing tools", () => {
   it("lets Esc cancel the drawing in progress before restoring the panes", () => {
-    const { plot, tools, max } = mount();
+    const { plot, tools, max, key } = mount();
     max.maximize(plot.mainPane);
     tools.begin("trend");
 
-    expect(plot.routeInput({ type: "keydown", key: "Escape" })).toBe(true);
+    expect(key("Escape")).toBe(true);
     expect(tools.mode()).toBeNull();
     expect(max.maximizedPane).toBe(plot.mainPane);
 
-    expect(plot.routeInput({ type: "keydown", key: "Escape" })).toBe(true);
+    expect(key("Escape")).toBe(true);
     expect(max.maximizedPane).toBeNull();
   });
 
   it("selects a drawing double-clicked instead of maximizing its pane", () => {
-    const { plot, tools, max } = mount();
+    const { plot, tools, max, dblclick } = mount();
     tools.add({ type: "horizontal", price: 15 });
     plot.render();
-    const point = { x: plot.pixelAtX(50), y: plot.mainPane.yScale.scale(15) };
 
-    expect(plot.routeInput({ type: "dblclick", point })).toBe(true);
+    expect(dblclick({ x: 50, price: 15 })).toBe(true);
     expect(tools.selection()).not.toBeNull();
     expect(max.maximizedPane).toBeNull();
   });
