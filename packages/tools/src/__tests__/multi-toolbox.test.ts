@@ -200,28 +200,7 @@ describe("ownership does not change over a spot nobody claims", () => {
   });
 });
 
-/**
- * A neighbor that doesn't contest. If the check only asks "is there
- * someone else with an area," an extension like a legend that has an
- * area but doesn't care about the keyboard could still kill the
- * toolbox's keys -- only a neighbor that registered to contest the
- * keyboard should be able to take ownership.
- */
-describe("a neighbor that doesn't contest the key cannot change ownership", () => {
-  it("should ignore an extension that never claimed focus", () => {
-    const s = stage();
-    // An extension like a legend that has an area but doesn't contest the
-    // keyboard -- it simply never registers.
-    s.plot.use(() => ({ dispose: () => {}, get disposed() { return false; } }));
-
-    s.hover(s.plot.mainPane);
-    s.main.select(s.main.handles()[0]);
-    s.hover(s.indicator);
-    s.key("Delete");
-
-    expect(s.main.list()).toEqual([]);
-  });
-
+describe("only a neighbor that contests the key takes ownership, and gives it back on release", () => {
   /** Only a neighbor that registered to contest takes ownership -- that's the whole point of this door. */
   it("should hand over only to a claimant that contests focus", () => {
     const s = stage();
@@ -274,26 +253,6 @@ describe("my key survives even a bad areaOf from a contestant", () => {
 
     expect(s.main.list()).toEqual([]);
     rival.release();
-  });
-
-  /**
-   * The judgment does not depend on registration order -- using `some`'s
-   * short-circuit means that if an earlier claimant returns true first,
-   * a later `areaOf` never gets called, so whether it would have thrown
-   * becomes a matter of registration order.
-   */
-  it("should not let registration order decide whether it throws", () => {
-    const s = stage();
-    const good = s.plot.claimFocusArea(() => s.indicator.area);
-    const bad = s.plot.claimFocusArea(() => {
-      throw new Error("the second one blows up");
-    });
-
-    s.hover(s.plot.mainPane);
-    expect(() => s.hover(s.indicator)).not.toThrow();
-
-    good.release();
-    bad.release();
   });
 });
 

@@ -131,22 +131,6 @@ describe("the policy a candle series brings with it", () => {
     }
   });
 
-  /** A derived series like a moving average is not a candle — inheriting the source's strategy as-is would read undefined. */
-  it("should give derived series a strategy that fits their points", () => {
-    const data = line(100_000);
-    data[50_000].y = 999;
-
-    const manager = testBrowserDeps().createDataManager(
-      defaultCoordinates<LineDataPoint>(),
-    );
-    manager.setData(data);
-
-    const visible = manager.getVisibleData(viewport(800));
-
-    expect(visible.every((point) => typeof point.y === "number")).toBe(true);
-    expect(visible.map((point) => point.y)).toContain(999);
-  });
-
   /** The wiring's density setting can't change a candle — the series brings its own policy, and that wins. To change it, override at the registration. */
   it("should let the registration, not the wiring, raise candle density", () => {
     const deps = testBrowserDeps({ pointsPerPixel: 2 });

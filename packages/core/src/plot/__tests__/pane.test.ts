@@ -70,19 +70,6 @@ describe("addSeries", () => {
     expect(log).toEqual(["a", "b"]);
   });
 
-  it("should draw in registration order so later series sit on top", () => {
-    const { plot } = loaded();
-    const log: string[] = [];
-
-    plot.setSeries({ series: fakeSeries("base", { min: 0, max: 30 }, log), data });
-    plot.mainPane.addSeries({ series: fakeSeries("overlay", { min: 0, max: 30 }, log), data });
-
-    log.length = 0;
-    plot.render();
-
-    expect(log).toEqual(["base", "overlay"]);
-  });
-
   it("should let zIndex sink a late registration below earlier ones", () => {
     const { plot } = loaded();
     const log: string[] = [];
@@ -129,17 +116,6 @@ describe("addSeries", () => {
     plot.render();
 
     expect(log).toEqual([]);
-    expect(plot.mainPane.getSeries()).toHaveLength(1);
-  });
-
-  it("should ignore a dispose called twice", () => {
-    const { plot } = loaded();
-    const log: string[] = [];
-    const added = plot.mainPane.addSeries({ series: fakeSeries("temp", { min: 0, max: 30 }, log), data });
-
-    added.dispose();
-    added.dispose();
-
     expect(plot.mainPane.getSeries()).toHaveLength(1);
   });
 

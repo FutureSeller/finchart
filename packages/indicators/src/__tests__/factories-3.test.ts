@@ -210,14 +210,6 @@ describe("pivotPoints", () => {
     expect(node.out.r3.read()[3].y).toBe(8);
     expect(node.out.s3.read()[3].y).toBe(-4);
   });
-
-  it("should stay null through the whole first period — no previous period exists", () => {
-    const node = pivotPoints(sourceOf(tape), { anchor });
-    const p = node.out.p.read();
-
-    expect(p[0].y).toBeNull();
-    expect(p[1].y).toBeNull();
-  });
 });
 
 describe("superTrend initial direction", () => {

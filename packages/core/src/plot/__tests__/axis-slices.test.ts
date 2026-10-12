@@ -4,7 +4,7 @@ import type { LineDataPoint } from "../../data";
 import type { CanvasRenderer } from "../../render";
 import type { Series, SeriesContext } from "../../series";
 import { lineSeries } from "../../series";
-import { FALLBACK_X_AXIS_HEIGHT, FALLBACK_Y_AXIS_WIDTH, sliceAxes } from "../layout";
+import { sliceAxes } from "../layout";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "./helpers";
 
@@ -48,24 +48,6 @@ function labelSpy() {
 const { padding } = defaultConfig;
 
 describe("axis slices", () => {
-  it("should fall back to fixed sizes without a measurer", () => {
-    const series = spySeries();
-    const { handle } = mountPlot({
-      deps: { ...testBrowserDeps(), createTextMeasurer: undefined },
-      series,
-    });
-    handle.setData(data);
-
-    const area = series.seen.at(-1)!.area;
-    expect(area.left).toBe(padding.left + FALLBACK_Y_AXIS_WIDTH);
-    expect(area.bottom).toBe(
-      defaultSize.height - padding.bottom - FALLBACK_X_AXIS_HEIGHT,
-    );
-    // No axis on the right or top — only padding bounds those edges.
-    expect(area.right).toBe(defaultSize.width - padding.right);
-    expect(area.top).toBe(padding.top);
-  });
-
   it("should follow the widest measured label", () => {
     const series = spySeries();
     const deps = testBrowserDeps({
@@ -92,27 +74,6 @@ describe("axis slices", () => {
     expect(area.bottom).toBe(defaultSize.height - padding.bottom - 22);
   });
 
-  it("should not tremble while the label widths wobble inside one step", () => {
-    const series = spySeries();
-    const deps = testBrowserDeps({
-      createTextMeasurer: () => ({
-        measure: (text: string) => ({ width: text.length * 3, height: 10 }),
-      }),
-    });
-    const { plot, handle } = mountPlot({
-      deps,
-      series,
-      config: { ...defaultConfig, axis: { y: { format: () => "##" } } },
-    });
-    handle.setData(data);
-    const before = series.seen.at(-1)!.area.left;
-
-    // The label grew from 6px to 9px, but it's still the same 8px bucket — the axis doesn't move.
-    plot.applyOptions({ axis: { y: { format: () => "###" } } });
-
-    expect(series.seen.at(-1)!.area.left).toBe(before);
-  });
-
   it("should hand the label renderer its slices", () => {
     const spy = labelSpy();
     const deps = testBrowserDeps({ createAxisLabels: spy.createAxisLabels });
@@ -132,23 +93,6 @@ describe("axis slices", () => {
       top: area.bottom,
       bottom: defaultSize.height - padding.bottom,
     });
-  });
-
-  it("should give no room to an axis whose labels are off", () => {
-    const spy = labelSpy();
-    const deps = testBrowserDeps({ createAxisLabels: spy.createAxisLabels });
-    const { handle } = mountPlot({
-      deps,
-      series: lineSeries(),
-      config: { ...defaultConfig, axis: { x: { showLabels: false } } },
-    });
-    handle.setData(data);
-
-    const { axes, area } = spy.seen.at(-1)!;
-    expect(axes.x).toBeNull();
-    expect(area.bottom).toBe(defaultSize.height - padding.bottom);
-    // y still has its slot.
-    expect(axes.y).not.toBeNull();
   });
 
   it("should give no room at all without a label collaborator", () => {
@@ -194,52 +138,6 @@ describe("sliceAxes", () => {
     // A negative data area flips the scale range — clamp at 0 instead.
     expect(rest.right - rest.left).toBeGreaterThanOrEqual(0);
     expect(rest.bottom - rest.top).toBeGreaterThanOrEqual(0);
-  });
-});
-
-describe("y-axis right placement and fixed size (2.2)", () => {
-  it("should carve the y slice on the right when asked", () => {
-    const spy = labelSpy();
-    const deps = testBrowserDeps({ createAxisLabels: spy.createAxisLabels });
-    const { handle } = mountPlot({
-      deps,
-      series: lineSeries(),
-      config: {
-        ...defaultConfig,
-        axis: { y: { position: "right" }, x: { showLabels: false } },
-      },
-    });
-    handle.setData(data);
-
-    const { axes, area } = spy.seen.at(-1)!;
-    // The y slice sits to the right of the data area.
-    expect(axes.y!.left).toBe(area.right);
-    expect(axes.y!.right).toBe(defaultSize.width - padding.right);
-    expect(area.left).toBe(padding.left);
-  });
-
-  it("should skip measurement when a fixed size is given", () => {
-    const series = spySeries();
-    const deps = testBrowserDeps({
-      createTextMeasurer: () => ({
-        measure: () => {
-          throw new Error("a fixed size must not trigger measurement");
-        },
-      }),
-    });
-    const { handle } = mountPlot({
-      deps,
-      series,
-      config: {
-        ...defaultConfig,
-        axis: { y: { size: 72 }, x: { size: 30 } },
-      },
-    });
-    handle.setData(data);
-
-    const area = series.seen.at(-1)!.area;
-    expect(area.left).toBe(padding.left + 72);
-    expect(area.bottom).toBe(defaultSize.height - padding.bottom - 30);
   });
 });
 

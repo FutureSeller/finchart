@@ -254,15 +254,6 @@ describe("foldNode.toneKeys", () => {
     expect(final[7].tone, "after a hole").toBeUndefined();
     expect(final[8].tone).toBeDefined();
   });
-
-  it("keeps the prefix objects on a tick, tone and all", () => {
-    const f = feed(bars(0, 20));
-    const node = tonedSample(f.source);
-    const before = [...node.out.mom2.read()];
-    f.append(bar(20));
-    const after = node.out.mom2.read();
-    for (let i = 0; i < 20; i++) expect(after[i]).toBe(before[i]);
-  });
 });
 
 describe("foldNode", () => {

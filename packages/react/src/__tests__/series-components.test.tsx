@@ -116,7 +116,7 @@ describe('<ChartLine>', () => {
 
     mount(
       <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartLine coordinates={new OHLCAccessor()} style={{ line: { color: "#f59e0b", width: 1.5 } }} />
+        <ChartLine coordinates={new OHLCAccessor()} style={{ line: { color: "#f59e0b", width: 1.5, dashArray: "4 2" } }} />
       </ChartContainer>,
     );
 
@@ -125,6 +125,8 @@ describe('<ChartLine>', () => {
     expect(drawnLines).toHaveLength(1);
     expect(drawnLines[0].style.color).toBe('#f59e0b');
     expect(drawnLines[0].style.width).toBe(1.5);
+    // A field the flat props never had is reachable too.
+    expect(drawnLines[0].style.dashArray).toBe('4 2');
   });
 
   it('should hide points when the radius is zero', () => {
@@ -142,22 +144,6 @@ describe('<ChartLine>', () => {
     );
 
     expect(circles).toHaveLength(0);
-  });
-
-  /**
-   * The `style` prop is the imperative lane's override shape, not a mirror
-   * of it — so a field the mirror never had (`dashArray`) is reachable.
-   */
-  it('should pass a style field that has no flat prop through — dashArray', () => {
-    const { deps, ref, drawn } = setup();
-
-    mount(
-      <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartLine coordinates={new OHLCAccessor()} style={{ line: { dashArray: '4 2' } }} />
-      </ChartContainer>,
-    );
-
-    expect(lines(drawn())[0].style.dashArray).toBe('4 2');
   });
 
   /** `color` used to feed the legend swatch as well as the stroke; the swatch now reads `style.line.color`. */
@@ -298,25 +284,6 @@ describe('<Crosshair>', () => {
     const dashed = lines(drawn()).filter((command) => command.style.dashArray);
 
     expect(dashed).toHaveLength(0);
-  });
-
-  it('should follow the cursor once it moves', () => {
-    const { deps, ref, plot, drawn } = setup();
-
-    mount(
-      <ChartContainer deps={deps} data={candles} plotRef={ref} showGrid={false}>
-        <ChartCandles />
-        <Crosshair />
-      </ChartContainer>,
-    );
-
-    // The pane's area isn't settled until a render has actually run once.
-    act(() => plot().render());
-    act(() => plot().crosshair({ x: 400, y: 300 }));
-
-    const dashed = lines(drawn()).filter((command) => command.style.dashArray);
-
-    expect(dashed.length).toBeGreaterThan(0);
   });
 
   it('should stop drawing when it unmounts', () => {

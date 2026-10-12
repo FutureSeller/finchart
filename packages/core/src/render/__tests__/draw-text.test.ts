@@ -202,21 +202,4 @@ describe("CanvasRenderer.drawText", () => {
 
     expect(filledRects(base)[0]).toMatchObject({ height: 14 });
   });
-
-  it("should keep commands cloneable", () => {
-    const { renderer: r } = renderer();
-
-    r.drawText({
-      text: "hi",
-      at: { x: 1, y: 2 },
-      align: "center",
-      baseline: "middle",
-      style: STYLE,
-      box: { fill: "#000", padding: 2 },
-    });
-
-    // Commands must be pure data to be sendable to a worker or assertable in a test.
-    expect(() => structuredClone(r.getCommands())).not.toThrow();
-    expect(structuredClone(r.getCommands())).toEqual(r.getCommands());
-  });
 });

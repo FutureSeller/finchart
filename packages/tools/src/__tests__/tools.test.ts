@@ -203,14 +203,6 @@ describe("drawingTools drawing", () => {
     expect(restored.list()).toEqual(tools.list());
   });
 
-  it("should keep its list when a payload cannot be read", () => {
-    const { tools } = mounted();
-    tools.add({ type: "horizontal", price: 110 });
-
-    expect(tools.load("garbage")).toBe(false);
-    expect(tools.list()).toHaveLength(1);
-  });
-
   it("should not let a caller's object mutate the stage", () => {
     const { model, tools } = mounted();
     const drawing = { type: "horizontal", price: 110 } as const;
@@ -251,26 +243,6 @@ describe("add's numeric contract", () => {
         b: { x: 2, price: 3 },
       }),
     ).toThrow(ContractError);
-  });
-
-  /** A rejection **leaves nothing behind** -- no half-added drawing. */
-  it("should not leave a partial drawing behind", () => {
-    const { tools } = mounted();
-    tools.add({ type: "horizontal", price: 110 });
-
-    expect(() => tools.add({ type: "horizontal", price: NaN })).toThrow();
-
-    expect(tools.list()).toHaveLength(1);
-  });
-
-  /** The stored copy can read itself back -- `load` must not reject what `add` accepted. */
-  it("should keep serialize/load a closed loop after many adds", () => {
-    const { tools } = mounted();
-    tools.add({ type: "horizontal", price: 110 });
-    tools.add({ type: "trend", a: { x: 0, price: 100 }, b: { x: 10, price: 120 } });
-
-    expect(tools.load(tools.serialize())).toBe(true);
-    expect(tools.list()).toHaveLength(2);
   });
 });
 

@@ -1,3 +1,5 @@
+import type { LineDataPoint } from "@finchart/core";
+import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import {
   ANCHOR_KEYS,
@@ -8,6 +10,7 @@ import {
   serializeDrawings,
   type Drawing,
 } from "../drawings";
+import { drawingTools } from "../tools";
 
 /**
  * The one table every kind must have a row in. `DRAWING_KINDS` is an
@@ -167,10 +170,6 @@ describe("the kind table", () => {
     ]);
   });
 
-  it.each(rows)("%s: the predicate accepts the sample", (_kind, spec) => {
-    expect(isDrawing(spec.sample)).toBe(true);
-  });
-
   it.each(rows)("%s: the anchor count agrees with ANCHOR_KEYS and the live enumeration", (kind, spec) => {
     expect(ANCHOR_KEYS[spec.sample.type]).toHaveLength(spec.anchors);
     expect(drawingAnchors(spec.sample)).toHaveLength(spec.anchors);
@@ -179,5 +178,50 @@ describe("the kind table", () => {
 
   it("the predicate rejects a kind outside the table", () => {
     expect(isDrawing({ type: "mystery", id: "m", price: 1 })).toBe(false);
+  });
+});
+
+describe("placement through the real state machine", () => {
+  const data: LineDataPoint[] = [
+    { x: 0, y: 100 },
+    { x: 5, y: 120 },
+    { x: 10, y: 110 },
+  ];
+  const presses = [
+    { x: 2, price: 105 },
+    { x: 5, price: 115 },
+    { x: 8, price: 108 },
+  ];
+
+  it.each(Object.entries(TABLE))("%s completes after its clicks, each anchor where its press landed", (kind, spec) => {
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: lineSeries(), data },
+      config: {
+        showGrid: false,
+        axis: { x: { showLabels: false }, y: { showLabels: false } },
+      },
+    });
+    const pane = model.plot.mainPane;
+    const tools = pane.use(drawingTools({ plot: model.plot }));
+    tools.begin(spec.sample.type);
+    for (const press of presses.slice(0, spec.clicks)) {
+      const point = { x: model.plot.pixelAtX(press.x), y: pane.yScale.scale(press.price) };
+      model.plot.routeInput({ type: "pointerdown", point, pointerId: 1 });
+      model.plot.routeInput({ type: "pointerup", point, pointerId: 1 });
+    }
+
+    expect(tools.mode()).toBeNull();
+    const drawn = tools.list();
+    expect(drawn).toHaveLength(1);
+    expect(drawn[0].type).toBe(kind);
+    const anchors = drawingAnchors(drawn[0]);
+    expect(anchors).toHaveLength(spec.anchors);
+    anchors.forEach((anchor, i) => {
+      expect(anchor.x).toBeCloseTo(presses[i].x, 5);
+      expect(anchor.price).toBeCloseTo(presses[i].price, 5);
+    });
+    if (drawn[0].type === "horizontal") expect(drawn[0].price).toBeCloseTo(presses[0].price, 5);
+    if (drawn[0].type === "vertical") expect(drawn[0].x).toBeCloseTo(presses[0].x, 5);
   });
 });

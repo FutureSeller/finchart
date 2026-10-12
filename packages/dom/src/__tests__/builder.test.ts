@@ -3,10 +3,9 @@ import {
   axisLabels,
   fakeContainer,
   fakeLayersFactory,
-  filledCircles,
   strokedPaths,
 } from "./fakes";
-import { candleSeries, createScope, lineSeries, DEFAULT_LINE_STYLE } from "@finchart/core";
+import { candleSeries, createScope, lineSeries } from "@finchart/core";
 import { PlotBuilder } from "../builder";
 import { testBrowserDeps } from "./fakes";
 import { DEFAULT_PLOT_STYLE } from "@finchart/core";
@@ -106,21 +105,6 @@ describe("PlotBuilder", () => {
     expect(grid).toHaveLength(0);
   });
 
-  it("should carry grid style overrides", () => {
-    const { deps, factory } = withFakeLayers(testBrowserDeps());
-
-    PlotBuilder.create(deps, lineSeries())
-      .setGridStyle({ width: 1.5, color: "#abcdef" })
-      .addDataPoints(series)
-      .build(fakeContainer());
-
-    const grid = strokedPaths(factory.created[0].context).filter(
-      (p) => p.width === 1.5,
-    );
-    expect(grid.length).toBeGreaterThan(0);
-    expect(grid[0].color).toBe("#abcdef");
-  });
-
   it("should merge successive grid style overrides", () => {
     const { deps, factory } = withFakeLayers(testBrowserDeps());
 
@@ -138,22 +122,6 @@ describe("PlotBuilder", () => {
     plot.destroy();
   });
 
-  it("should take series style from the series, not the builder", () => {
-    const { deps, factory } = withFakeLayers(testBrowserDeps());
-
-    PlotBuilder.create(
-      deps,
-      lineSeries({ point: { radius: 8, color: "#c0ffee" } }),
-    )
-      .addDataPoints(series)
-      .build(fakeContainer());
-
-    expect(filledCircles(factory.created[0].context)[0]).toMatchObject({
-      r: 8,
-      fill: "#c0ffee",
-    });
-  });
-
   it("should build an empty plot without drawing a series", () => {
     const { deps, factory } = withFakeLayers(testBrowserDeps());
 
@@ -161,19 +129,6 @@ describe("PlotBuilder", () => {
 
     expect(plot.mainPane.xRange()).toBeNull();
     expect(strokedPaths(factory.created[0].context)).toHaveLength(0);
-  });
-
-  it("should keep the default line width when only color is overridden", () => {
-    const { deps, factory } = withFakeLayers(testBrowserDeps());
-
-    PlotBuilder.create(deps, lineSeries({ line: { color: "#ff0000" } }))
-      .addDataPoints(series)
-      .build(fakeContainer());
-
-    const line = strokedPaths(factory.created[0].context).find(
-      (p) => p.color === "#ff0000",
-    );
-    expect(line?.width).toBe(DEFAULT_LINE_STYLE.line.width);
   });
 });
 

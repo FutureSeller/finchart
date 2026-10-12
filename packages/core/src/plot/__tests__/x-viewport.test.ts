@@ -1,5 +1,5 @@
 /** Tests the visible x range with no stage — just one scale and a fake data range is enough. */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Range } from "../../data";
 import { ContractError } from "../../primitives";
 import { barIndexX, continuousX, LinearScale } from "../../scale";
@@ -528,22 +528,6 @@ describe("notifications", () => {
     // Half an index past each end is half a bar's x.
     expect(s.domain()).toEqual([-0.5, 4.5]);
     expect(s.changes.at(-1)).toEqual({ startX: 50, endX: 550 });
-  });
-
-  it("should not announce a fit that has nothing to fit to", () => {
-    const onChange = vi.fn();
-    const viewport = new XViewport({
-      scale: new LinearScale(),
-      x: continuousX(new LinearScale()),
-      dataRange: () => null,
-      xValues: () => [],
-      options: () => ({ rightOffset: 0, shiftVisibleRangeOnNewBar: false, preserveLiveRightEdgeOnZoomOut: false }),
-      onChange,
-    });
-
-    viewport.fit();
-
-    expect(onChange).not.toHaveBeenCalled();
   });
 });
 

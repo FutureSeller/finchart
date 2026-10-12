@@ -226,26 +226,6 @@ describe("placement and editing through the real state machine", () => {
     return { model, tools, pane, route, at };
   }
 
-  it.each(["rectangle", "ellipse", "priceMeasure", "barMeasure"] as const)(
-    "%s takes two clicks, like a trend line",
-    (kind) => {
-      const { tools, route, at } = mounted();
-      tools.begin(kind);
-      route("pointerdown", at(2, 105));
-      route("pointerup", at(2, 105));
-      route("pointerdown", at(8, 115));
-      route("pointerup", at(8, 115));
-
-      expect(tools.mode()).toBeNull();
-      const [drawn] = tools.list();
-      expect(drawn).toMatchObject({ type: kind });
-      if ("a" in drawn) {
-        expect(drawn.a.x).toBeCloseTo(2, 5);
-        expect(drawn.b.x).toBeCloseTo(8, 5);
-      }
-    },
-  );
-
   it("a rectangle drawn by dragging finishes on release", () => {
     const { tools, route, at } = mounted();
     tools.begin("rectangle");

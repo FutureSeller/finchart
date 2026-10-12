@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { defaultCoordinates, LINE_COORDINATES, OHLCAccessor } from "../accessors";
 import { M4Decimation, SimpleDecimation } from "../decimation";
 import { SimpleDataManager } from "../data-manager";
-import { ContractError, DataError } from "../../primitives";
+import { DataError } from "../../primitives";
 import { createPlotDeps } from "../../plot/presets";
 import { createMemoryLayers } from "../../render/memory-layers";
 import { recordingRenderer } from "../../render/recording-renderer";
@@ -142,7 +142,9 @@ describe("a per-registration decimation policy also passes through the door", ()
    * `DecimationPolicy.pointsPerPixel` skipped that door and went straight
    * to the manager. `NaN` disables decimation entirely; `0` or `-1` turns
    * the chart into a straight line. `createDataManager(coords, policy)`
-   * measures against the door a registration actually passes through.
+   * measures against the door a registration actually passes through; the
+   * refusals themselves are checked in boundary-values.test.ts, through
+   * `addSeries`'s `decimation.pointsPerPixel`.
    */
   const deps = () =>
     createPlotDeps({
@@ -155,12 +157,6 @@ describe("a per-registration decimation policy also passes through the door", ()
     deps().createDataManager(defaultCoordinates<LineDataPoint>(), {
       pointsPerPixel,
     });
-
-  it("rejects NaN, 0, and negative values", () => {
-    expect(() => withPolicy(Number.NaN)).toThrow(ContractError);
-    expect(() => withPolicy(0)).toThrow(ContractError);
-    expect(() => withPolicy(-1)).toThrow(ContractError);
-  });
 
   it("passes a positive value through unchanged", () => {
     const manager = withPolicy(2);

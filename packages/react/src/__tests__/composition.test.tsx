@@ -116,7 +116,7 @@ describe('ChartPane', () => {
     expect(instance.mainPane.getSeries()).toContain(price);
   });
 
-  it('should stack a second pane below', () => {
+  it('should stack a second pane below, each with only its own series', () => {
     const { deps, ref, plot } = setup();
 
     mount(
@@ -132,53 +132,12 @@ describe('ChartPane', () => {
 
     const instance = plot();
     expect(instance.panes).toHaveLength(2);
+    expect(instance.panes[0].getSeries()).toContain(price);
     expect(instance.panes[1].getSeries()).toContain(indicator);
     expect(instance.panes[0].flex).toBe(3);
     expect(instance.panes[1].flex).toBe(1);
-  });
-
-  it('should send its children to its own pane', () => {
-    const { deps, ref, plot } = setup();
-
-    mount(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane>
-          <ChartSeries series={price} />
-        </ChartPane>
-        <ChartPane>
-          <ChartSeries series={indicator} />
-        </ChartPane>
-      </ChartContainer>,
-    );
-
-    const instance = plot();
     expect(instance.panes[0].getSeries()).not.toContain(indicator);
     expect(instance.panes[1].getSeries()).not.toContain(price);
-  });
-
-  it('should give the space back when it unmounts', () => {
-    const { deps, ref, plot } = setup();
-
-    const view = mount(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane>
-          <ChartSeries series={price} />
-        </ChartPane>
-        <ChartPane>
-          <ChartSeries series={indicator} />
-        </ChartPane>
-      </ChartContainer>,
-    );
-
-    view.rerender(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane>
-          <ChartSeries series={price} />
-        </ChartPane>
-      </ChartContainer>,
-    );
-
-    expect(plot().panes).toHaveLength(1);
   });
 
   it('should apply changed options without re-registering the series', () => {
@@ -228,20 +187,6 @@ describe('ChartPane', () => {
 });
 
 describe('axes', () => {
-  it('should apply x options to the plot', () => {
-    const { deps, ref, plot } = setup();
-    const format = (value: number) => `${value}!`;
-
-    mount(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <XAxis format={format} />
-        <ChartSeries series={price} />
-      </ChartContainer>,
-    );
-
-    expect(plot().getOptions().axis?.x?.format).toBe(format);
-  });
-
   it('should apply a changed x axis size', () => {
     const { deps, ref, plot } = setup();
     const ui = (size: number) => (
@@ -293,20 +238,6 @@ describe('axes', () => {
     const instance = plot();
     expect(instance.panes[1].axis.format).toBe(format);
     expect(instance.panes[0].axis.format).toBeUndefined();
-  });
-
-  it('should treat a YAxis outside every pane as the default', () => {
-    const { deps, ref, plot } = setup();
-    const format = (value: number) => `${value}?`;
-
-    mount(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <YAxis format={format} />
-        <ChartSeries series={price} />
-      </ChartContainer>,
-    );
-
-    expect(plot().getOptions().axis?.y?.format).toBe(format);
   });
 });
 
@@ -361,7 +292,7 @@ describe('render scheduling', () => {
     };
   }
 
-  it('should draw once the frame arrives, not during mount', async () => {
+  it('should draw once the frame arrives, not during mount, and collapse the mount into one frame', async () => {
     const { deps, ref } = setup();
     const spy = counter();
 
@@ -374,21 +305,6 @@ describe('render scheduling', () => {
     // Mount requests multiple renders (setData, pane options, series
     // registration), but the frame hasn't arrived yet.
     expect(spy.draws).toBe(0);
-
-    await waitFor(() => expect(spy.draws).toBeGreaterThan(0));
-  });
-
-  it('should collapse a whole mount into one frame', async () => {
-    const { deps, ref } = setup();
-    const spy = counter();
-
-    mount(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane>
-          <ChartSeries series={spy.series} />
-        </ChartPane>
-      </ChartContainer>,
-    );
 
     await waitFor(() => expect(spy.draws).toBeGreaterThan(0));
 

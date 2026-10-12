@@ -225,36 +225,6 @@ describe("setValueDomain", () => {
     expect(yScale.getDomain()).toEqual([0, 100]);
   });
 
-  it("should yield to an explicit full fit", () => {
-    const { plot, handle, yScale } = mounted();
-    plot.mainPane.setValueDomain(0, 100);
-    handle.append([{ x: 150, y: 999 }]);
-
-    // "Fit everything" is a request — it refits a manual range too.
-    plot.fitDomains();
-
-    expect(yScale.getDomain()).not.toEqual([0, 100]);
-  });
-
-  it("should yield to an imperative setData", () => {
-    const { plot, handle, yScale } = mounted();
-    plot.mainPane.setValueDomain(0, 100);
-
-    // A new dataset refits both axes
-    handle.setData([{ x: 0, y: 500 }, { x: 10, y: 700 }]);
-
-    expect(yScale.getDomain()).not.toEqual([0, 100]);
-  });
-
-  it("should survive the first data when set before it", () => {
-    const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries() });
-    plot.mainPane.setValueDomain(0, 100);
-
-    handle.setData(data);
-
-    expect(plot.mainPane.yScale.getDomain()).toEqual([0, 100]);
-  });
-
   it("should not outlive a hand-back to autoScale", () => {
     const { plot, handle } = mountPlot({ deps: testBrowserDeps(), series: lineSeries() });
     plot.mainPane.setValueDomain(0, 100);

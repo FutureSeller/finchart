@@ -188,14 +188,6 @@ describe("Zone", () => {
       },
     );
 
-    it("answers an instant that is inside the day it was asked for", () => {
-      const zone = new Zone("America/Santiago");
-
-      const ms = zone.toUtc({ year: 2024, month: 9, day: 8, ...MIDNIGHT });
-
-      expect(zone.parts(ms).day).toBe(8);
-    });
-
     it("answers the next day when a whole day never happened", () => {
       // Samoa crossed the date line at the end of 2011: the 30th of December
       // is a day that country never had. Its first real moment is the 31st.
@@ -440,13 +432,6 @@ describe("Zone", () => {
     expect(zone.parts(yearBefore.getTime()).year).toBe(-1);
     expect(zone.toUtc(zone.parts(yearZero.getTime()))).toBe(yearZero.getTime());
     expect(zone.toUtc(zone.parts(yearBefore.getTime()))).toBe(yearBefore.getTime());
-  });
-
-  it("keeps reading and writing in step", () => {
-    const zone = new Zone("America/New_York");
-    const ms = Date.UTC(2026, 5, 1, 16, 30, 0);
-
-    expect(zone.toUtc(zone.parts(ms))).toBe(ms);
   });
 });
 

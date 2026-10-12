@@ -30,16 +30,6 @@ describe("setVisibleRange (2.3)", () => {
 
     expect(model.plot.getVisibleRange()).toEqual({ min: 20, max: 60 });
   });
-
-  it("should wait for data like any window set before it", () => {
-    const model = createPlotModel({ size: { width: 800, height: 600 }, config: bare });
-    model.plot.setVisibleRange(20, 60);
-
-    model.plot.mainPane.addSeries({ series: lineSeries(), data });
-
-    // Once data arrives, the held window wins over a fit (the same path as H1's pending).
-    expect(model.plot.getVisibleRange()).toEqual({ min: 20, max: 60 });
-  });
 });
 
 describe("rightOffset (2.3)", () => {

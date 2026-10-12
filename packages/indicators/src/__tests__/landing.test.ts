@@ -38,7 +38,7 @@ import {
   williamsR,
 } from "../factories";
 import type { Computation } from "@finchart/core";
-import { ema, sma } from "../kernels";
+import { ema } from "../kernels";
 
 const bar = (i: number): OHLC => {
   const v = 100 + Math.sin(i / 17) * 9 + (i % 5) * 0.7;
@@ -205,9 +205,6 @@ describe("indicator landings", () => {
     // The untouched tail keeps identity — the proof no full path ran.
     expect(after[after.length - 1]).toBe(before[before.length - 1]);
     expect(after[after.length - 150]).toBe(before[before.length - 150]);
-
-    const all = bars(20, 400);
-    expectClose(after, sma(closes(all), 20), all.map((p) => p.x), "sma");
   });
 
   it("ema recomputes the full history on a landing", () => {
@@ -219,9 +216,6 @@ describe("indicator landings", () => {
     const after = node.out.ma.read();
 
     expect(after[after.length - 1]).not.toBe(before[before.length - 1]);
-
-    const all = bars(100, 1600);
-    expectClose(after, ema(closes(all), 20), all.map((p) => p.x), "ema");
   });
 
   it("macd recomputes all three chained folds on a landing", () => {

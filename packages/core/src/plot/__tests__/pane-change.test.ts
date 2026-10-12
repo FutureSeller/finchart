@@ -1,8 +1,9 @@
 /**
  * What PaneChange reporting exactly what changed makes possible. It used
  * to only tell Plot "something changed," so the x index got fully
- * recounted every single time. Three things to guarantee: encapsulation,
- * a cheap path, and a single notification channel.
+ * recounted every single time. This file guards the cheap path; pane
+ * options and pane notifications are covered in pane-options.test.ts and
+ * panes-change.test.ts.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { LineDataPoint } from "../../data";
@@ -50,39 +51,6 @@ function setup(panes = 0) {
   return { ...mounted, ...counter, added };
 }
 
-describe("pane state fields", () => {
-  it("should route every write through applyOptions", () => {
-    const { plot } = setup();
-    const pane = plot.mainPane;
-
-    // Reading is open.
-    expect(pane.flex).toBe(1);
-    expect(pane.autoScale).toBe(true);
-    expect(pane.minHeight).toBe(40);
-    expect(pane.invert).toBe(false);
-
-    pane.applyOptions({ flex: 3, autoScale: false, minHeight: 80, invert: true });
-
-    expect(pane.flex).toBe(3);
-    expect(pane.autoScale).toBe(false);
-    expect(pane.minHeight).toBe(80);
-    expect(pane.invert).toBe(true);
-  });
-
-  /** Axis settings merge field by field — giving just one leaves the rest in place. */
-  it("should merge axis options field by field", () => {
-    const { plot } = setup();
-
-    plot.mainPane.applyOptions({ axis: { showLabels: false } });
-    plot.mainPane.applyOptions({ axis: { minTickSpacing: 30 } });
-
-    expect(plot.mainPane.axis).toEqual({
-      showLabels: false,
-      minTickSpacing: 30,
-    });
-  });
-});
-
 describe("cheap path", () => {
   it("should not rebuild the x index when only options change", () => {
     const { plot, rebuilds } = setup();
@@ -126,19 +94,5 @@ describe("cheap path", () => {
     expect(draw).toHaveBeenCalledTimes(1);
     off();
     plot.destroy();
-  });
-});
-
-describe("pane notifications", () => {
-  it("should not announce the panes on data alone", () => {
-    const { plot, handle } = setup();
-    // A short history follows its feed until it fills the screen; an explicit fit settles the window.
-    plot.fitDomains();
-    const seen = vi.fn();
-    plot.on("panesChange", seen);
-
-    handle.append([{ x: 150, y: 25 }]);
-
-    expect(seen).not.toHaveBeenCalled();
   });
 });

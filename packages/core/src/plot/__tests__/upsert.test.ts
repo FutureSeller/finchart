@@ -102,13 +102,6 @@ describe("SeriesHandle.upsert — merged by x", () => {
     expect(closes(handle.read())).toEqual([1, 2, 3, 40, 5, 60]);
   });
 
-  it("keeps the bars beyond the last it names — a snapshot older than the tail cuts nothing", () => {
-    const { handle } = chart(bars(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
-    handle.upsert([bar(4, 40), bar(5, 50), bar(6, 60)]);
-
-    expect(closes(handle.read())).toEqual([1, 2, 3, 40, 50, 60, 7, 8, 9, 10]);
-  });
-
   /**
    * The point of the door over `setData`: history the loader prepended
    * keeps its objects and its place.

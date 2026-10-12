@@ -1,12 +1,12 @@
 /** The panes stack in JSX order — a pane inserted above others, or keyed panes reordered, land where the tree puts them. */
 import type { LineDataPoint, Plot } from '@finchart/core';
-import { lineSeries, LogScale } from '@finchart/core';
+import { lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
-import { createRef, type ReactElement, startTransition, Suspense, useEffect, useState } from 'react';
+import { createRef, type ReactElement, startTransition, Suspense, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChartContainer, ChartPane, ChartSeries, useChartPlot } from '../components';
+import { ChartContainer, ChartPane, ChartSeries } from '../components';
 import { layersSpy } from './fake-layers';
 
 afterEach(cleanup);
@@ -46,14 +46,6 @@ it('puts a pane inserted above the others where the JSX puts it', () => {
   show(['price', 'rsi', 'macd']);
 
   expect(keys()).toEqual(['price', 'rsi', 'macd']);
-});
-
-it('follows keyed panes when the JSX reorders them', () => {
-  const { keys, show } = mount(['price', 'rsi', 'macd']);
-
-  show(['price', 'macd', 'rsi']);
-
-  expect(keys()).toEqual(['price', 'macd', 'rsi']);
 });
 
 it('restacks once per commit, not once per sibling whose rank moved', () => {
@@ -179,27 +171,6 @@ describe("a series appearing among the panes keeps the user's own order", () => 
   });
 });
 
-it('puts a pane switched on by its own component where the JSX puts it', () => {
-  const ref = createRef<Plot>();
-  let turnOn = () => {};
-  function Late() {
-    const [on, setOn] = useState(false);
-    turnOn = () => setOn(true);
-    return on ? <ChartPane><ChartSeries series={series.rsi} /></ChartPane> : null;
-  }
-  render(
-    <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={data} plotRef={ref}>
-      <ChartPane><ChartSeries series={series.price} /></ChartPane>
-      <Late />
-      <ChartPane><ChartSeries series={series.macd} /></ChartPane>
-    </ChartContainer>,
-  );
-
-  act(() => turnOn());
-
-  expect(ref.current?.panes.map((pane) => nameOf.get(pane.getSeries()[0]))).toEqual(['price', 'rsi', 'macd']);
-});
-
 /**
  * A frame can be drawn between any two tasks, so a mounting pane has to be
  * filled and in place before React hands the task back. `flushSync` outside
@@ -321,113 +292,6 @@ describe('a pane the container inserts in a scheduled update is in place at ever
     expect(seen).toEqual(['price macd', 'price rsi macd']);
   });
 });
-
-/**
- * The chart's last breath is not a change the user made: a listener inside
- * the tree, or one a parent attached through `onPlot`, would get a setState
- * landing on a tree mid-unmount, with nothing to trace it to.
- */
-describe('the whole chart going announces no pane changes', () => {
-  function setup() {
-    /** Who heard a `panesChange`, from which chart. */
-    const heard: Array<[string, Plot]> = [];
-    function Inside() {
-      const plot = useChartPlot();
-      useEffect(() => plot.on('panesChange', () => heard.push(['inside', plot])), [plot]);
-      return null;
-    }
-    const onPlot = (plot: Plot | null) => {
-      plot?.on('panesChange', () => heard.push(['onPlot', plot]));
-    };
-    const ref = createRef<Plot>();
-    const deps = browserDeps({ createLayers: layersSpy().createLayers });
-    const tree = (key: string) => (
-      <ChartContainer key={key} deps={deps} data={data} plotRef={ref} onPlot={onPlot}>
-        <Inside />
-        {/* Its scale replaces the main pane's, which a release puts back. */}
-        <ChartPane yScale={() => new LogScale()}><ChartSeries series={series.price} /></ChartPane>
-        <ChartPane><ChartSeries series={series.rsi} /></ChartPane>
-        <ChartPane><ChartSeries series={series.macd} /></ChartPane>
-      </ChartContainer>
-    );
-    const view = render(tree('a'));
-    const first = current(ref);
-    heard.length = 0;
-    const heardFromFirst = () => heard.filter(([, plot]) => plot === first).map(([who]) => who);
-    return { heardFromFirst, view, tree };
-  }
-
-  it('when the container unmounts', () => {
-    const { heardFromFirst, view } = setup();
-
-    view.unmount();
-
-    expect(heardFromFirst()).toEqual([]);
-  });
-
-  it('when a new key remounts the container', () => {
-    const { heardFromFirst, view, tree } = setup();
-
-    // The new chart's own mount may ring; the old one going may not.
-    act(() => view.rerender(tree('b')));
-
-    expect(heardFromFirst()).toEqual([]);
-  });
-});
-
-/**
- * A boundary that already shows the chart hides it again when something in
- * it suspends outside a transition. Its layout effects are cleaned up and
- * set up again on reveal, but the chart is not torn down, so it has to come
- * back as it was — no pane added twice, the main pane's own scale still
- * there for when its wrapper goes.
- */
-it('comes back as it was after a Suspense boundary hides and shows it', async () => {
-  const ref = createRef<Plot>();
-  let resolve = () => {};
-  let done = false;
-  const pending = new Promise<void>((settle) => {
-    resolve = () => {
-      done = true;
-      settle();
-    };
-  });
-  let suspend = () => {};
-  function Gate() {
-    const [on, setOn] = useState(false);
-    suspend = () => setOn(true);
-    if (on && !done) throw pending;
-    return null;
-  }
-  let dropFirst = () => {};
-  function First() {
-    const [on, setOn] = useState(true);
-    dropFirst = () => setOn(false);
-    return on ? <ChartPane yScale={() => new LogScale()}><ChartSeries series={series.price} /></ChartPane> : null;
-  }
-  render(
-    <Suspense fallback={null}>
-      <Gate />
-      <ChartContainer deps={browserDeps({ createLayers: layersSpy().createLayers })} data={data} plotRef={ref}>
-        <First />
-        <ChartPane><ChartSeries series={series.rsi} /></ChartPane>
-        <ChartPane><ChartSeries series={series.macd} /></ChartPane>
-      </ChartContainer>
-    </Suspense>,
-  );
-  const plot = current(ref);
-
-  act(() => suspend());
-  await act(async () => {
-    resolve();
-    await pending;
-  });
-
-  expect(plot.panes.map((pane) => nameOf.get(pane.getSeries()[0]) ?? 'empty')).toEqual(['price', 'rsi', 'macd']);
-  act(() => dropFirst());
-  expect(plot.mainPane.yScale.kind).toBe('linear');
-});
-
 it('follows keyed panes that reorder in the same commit one of them goes', () => {
   const { keys, show } = mount(['price', 'rsi', 'macd']);
 

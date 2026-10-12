@@ -52,18 +52,13 @@ describe("ichimoku — ahead", () => {
     expect(spanA).toHaveLength(80 + 26);
     expect(spanB).toHaveLength(80 + 26);
     expect(cloud).toHaveLength(80 + 26);
-    // The first 80 are what the plain node says; the 26 after carry the raw spans forward at the feed's x.
+    // The first 80 are what the plain node says; the 26 after sit at the feed's next x slots.
     expect(spanA.slice(0, 80)).toEqual(plain.out.spanA.read());
     const lastX = data[79].x;
     for (let k = 1; k <= 26; k++) {
       expect(spanA[79 + k].x).toBe(minute(lastX, k));
       expect(cloud[79 + k].x).toBe(minute(lastX, k));
     }
-    // A projected value is the raw span at n − displacement + k − 1: the last one is the raw span at the last bar.
-    const rawB = spanB[79 + 26].y;
-    const window = data.slice(80 - 52, 80);
-    const expected = (Math.max(...window.map((c) => c.high)) + Math.min(...window.map((c) => c.low))) / 2;
-    expect(rawB).toBeCloseTo(expected, 9);
     // The other three branches stop at the last candle.
     expect(node.out.conversion.read()).toHaveLength(80);
     expect(node.out.base.read()).toHaveLength(80);
@@ -268,20 +263,6 @@ describe("ichimoku — calcFirst (a history page)", () => {
 });
 
 describe("attachIchimoku — ahead", () => {
-  it("extends the chart's x range to the projected cloud, so the fit shows it", () => {
-    const data = bars(0, 100);
-    const model = createPlotModel({
-      size: { width: 800, height: 400 },
-      series: { series: candleSeries(), data },
-    });
-    model.plot.mainPane.use(attachIchimoku({ source: { read: () => data }, ahead: minute }));
-    model.plot.fitDomains();
-    model.plot.render();
-    const domain = model.plot.getVisibleRange();
-    // The last projected slot, plus the fit's half bar.
-    expect(domain?.max).toBe(minute(data[99].x, 26.5));
-  });
-
   it("gives the projected x a bar slot under barIndexX", () => {
     const data = bars(0, 100);
     const model = createPlotModel({

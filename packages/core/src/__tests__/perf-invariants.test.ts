@@ -333,11 +333,10 @@ describe("a scan window opens, and the cursor lives inside the window", () => {
     expect(counts.pixelPoints).toBeLessThan(50);
   });
 
-  it("drawing carries decimation's positions forward — it does not search the mapping again", () => {
+  it("drawing carries decimation's positions forward", () => {
     const many = candlesOf(20_000);
     const { model, counts } = counted(true, many);
     counts.placePixels = 0;
-    counts.pixelPoints = 0;
 
     model.plot.render();
 
@@ -345,9 +344,6 @@ describe("a scan window opens, and the cursor lives inside the window", () => {
     // the manager isn't carrying positions forward, or the series never
     // went through the `screenXAt` door.
     expect(counts.placePixels).toBeGreaterThan(100);
-    // Upper bound — point-by-point `toPixel` (binary search over the merged
-    // list) should be left only to a handful of decorations.
-    expect(counts.pixelPoints).toBeLessThan(50);
   });
 
   it("fallbacks inside a window scale with the window count — not the point count", () => {

@@ -9,7 +9,6 @@ for (const width of [320, 390, 492, 768]) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     const stage = await page.locator("#stage").boundingBox();
     expect(stage!.width).toBeGreaterThanOrEqual(width - 2);
-    expect(stage!.height).toBeGreaterThanOrEqual(320);
     expect(stage!.height).toBeGreaterThanOrEqual(844 * 0.7);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(844);
     await expect(page.locator("[data-chart-legend]")).toBeAttached();

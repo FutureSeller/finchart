@@ -94,30 +94,19 @@ describe('<ChartContainer containerRef>', () => {
     expect(seen).toEqual([true, true]);
   });
 
-  it('stays null on the server', () => {
+  it('renders on the server without a warning, and stays null there', () => {
     const { deps } = setup();
     const containerRef = createRef<HTMLDivElement>();
-    expect(() =>
-      renderToString(
-        <ChartContainer deps={deps} data={candles} containerRef={containerRef}>
-          <ChartCandles />
-        </ChartContainer>,
-      ),
-    ).not.toThrow();
-    expect(containerRef.current).toBeNull();
-  });
-
-  it('renders on the server without a warning', () => {
-    const { deps } = setup();
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       renderToString(
-        <ChartContainer deps={deps} data={candles}>
+        <ChartContainer deps={deps} data={candles} containerRef={containerRef}>
           <ChartCandles />
         </ChartContainer>,
       );
 
       expect(error).not.toHaveBeenCalled();
+      expect(containerRef.current).toBeNull();
     } finally {
       error.mockRestore();
     }

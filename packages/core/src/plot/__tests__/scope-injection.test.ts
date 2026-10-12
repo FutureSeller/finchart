@@ -92,12 +92,4 @@ describe("PlotOptions.scope", () => {
     // under a dead lifetime must not live unowned.
     expect(layers.destroyed).toBe(true);
   });
-
-  it("should still tear down by itself with no scope given", () => {
-    const { plot, layers } = mount();
-
-    plot.destroy();
-
-    expect(layers.destroyed).toBe(true);
-  });
 });

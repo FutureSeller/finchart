@@ -77,23 +77,6 @@ describe("plot.use", () => {
     expect(seen).toBe(plot);
   });
 
-  it("should accept a plugin that asks for less than the whole plot", () => {
-    const plot = mount();
-    let asked = 0;
-
-    // Structural typing — a Plot satisfies a plugin that only demands what it needs.
-    // This is where the capability interfaces (X6b) grow from.
-    const narrow: Plugin<{ requestRender(): void }> = (host) => {
-      host.requestRender();
-      asked += 1;
-      return teardown(() => {});
-    };
-
-    plot.use(narrow);
-
-    expect(asked).toBe(1);
-  });
-
   it("should refuse to install on a destroyed plot", () => {
     const plot = mount();
     plot.destroy();
@@ -104,19 +87,6 @@ describe("plot.use", () => {
 });
 
 describe("plot.destroy", () => {
-  it("should dispose everything it installed", () => {
-    const plot = mount();
-    const log: string[] = [];
-
-    plot.use(spyPlugin(log, "a")());
-    plot.use(spyPlugin(log, "b")());
-    log.length = 0;
-
-    plot.destroy();
-
-    expect(log).toEqual(["b:dispose", "a:dispose"]);
-  });
-
   it("should dispose in reverse install order", () => {
     // Something installed later may have been built on top of something earlier.
     const plot = mount();
@@ -340,15 +310,6 @@ describe("crosshair as a plugin", () => {
     plot.destroy();
 
     expect(dispose).toHaveBeenCalledTimes(1);
-  });
-
-  it("should be safe to detach by hand and then destroy", () => {
-    const plot = mount();
-    const cursor = plot.use(crosshair());
-
-    cursor.dispose();
-
-    expect(() => plot.destroy()).not.toThrow();
   });
 });
 

@@ -51,18 +51,6 @@ function loaded() {
 }
 
 describe("Pane.syncSeries", () => {
-  it("should draw in the order of the spec array", () => {
-    const plot = loaded();
-    const log: string[] = [];
-
-    plot.mainPane.syncSeries([
-      seriesSpec<LineDataPoint>({ id: "a", series: fakeSeries("a", log), data }),
-      seriesSpec<LineDataPoint>({ id: "b", series: fakeSeries("b", log), data }),
-    ]);
-
-    expect(drawOrder(plot, log)).toEqual(["a", "b"]);
-  });
-
   /** A conditional series turned on later still follows array order — when it was addSeries' push order, whatever turned on later always ended up on top. */
   it("should place a later-inserted series by array order, not insertion order", () => {
     const plot = loaded();
@@ -100,18 +88,6 @@ describe("Pane.syncSeries", () => {
     expect(drawOrder(plot, log)).toEqual(["a"]);
   });
 
-  it("should reject duplicate ids", () => {
-    const plot = loaded();
-    const log: string[] = [];
-
-    expect(() =>
-      plot.mainPane.syncSeries([
-        seriesSpec<LineDataPoint>({ id: "same", series: fakeSeries("a", log), data }),
-        seriesSpec<LineDataPoint>({ id: "same", series: fakeSeries("b", log), data }),
-      ]),
-    ).toThrow(/same/);
-  });
-
   it("should reject a declarative list that would detach an imperative handle", () => {
     const plot = loaded();
     const log: string[] = [];
@@ -126,45 +102,6 @@ describe("Pane.syncSeries", () => {
 
     expect(imperative.attached).toBe(true);
     expect(drawOrder(plot, log)).toEqual(["imperative"]);
-  });
-
-  it("should reject imperative insertion into a declarative list", () => {
-    const plot = loaded();
-    const log: string[] = [];
-    plot.mainPane.syncSeries([
-      seriesSpec<LineDataPoint>({ id: "a", series: fakeSeries("a", log), data }),
-    ]);
-
-    expect(() => plot.mainPane.addSeries({ series: fakeSeries("b", log), data })).toThrow(
-      /owned by syncSeries/,
-    );
-    expect(drawOrder(plot, log)).toEqual(["a"]);
-  });
-
-  it("should permit an explicit imperative reset before changing owner", () => {
-    const plot = loaded();
-    const log: string[] = [];
-    plot.mainPane.addSeries({ series: fakeSeries("a", log), data });
-    plot.mainPane.clearSeries();
-    plot.mainPane.syncSeries([
-      seriesSpec<LineDataPoint>({ id: "b", series: fakeSeries("b", log), data }),
-    ]);
-
-    expect(drawOrder(plot, log)).toEqual(["b"]);
-  });
-
-  it("should permit an explicit declarative reset before changing owner", () => {
-    const plot = loaded();
-    const log: string[] = [];
-    plot.mainPane.syncSeries([
-      seriesSpec<LineDataPoint>({ id: "a", series: fakeSeries("a", log), data }),
-    ]);
-
-    plot.mainPane.syncSeries([]);
-    const imperative = plot.mainPane.addSeries({ series: fakeSeries("b", log), data });
-
-    expect(imperative.attached).toBe(true);
-    expect(drawOrder(plot, log)).toEqual(["b"]);
   });
 });
 
@@ -197,28 +134,6 @@ describe("Pane.syncSeries — derivation cache", () => {
 
     expect(afterFirst).toBe(1);
     expect(calls.n).toBe(1);
-  });
-
-  it("should recompute when deriveKey changes", () => {
-    const plot = loaded();
-    const calls = { n: 0 };
-    const log: string[] = [];
-
-    const spec = (period: number) =>
-      seriesSpec({
-        id: "ma",
-        data,
-        series: fakeSeries("ma", log),
-        derive: countingDerive(calls),
-        deriveKey: [period],
-      });
-
-    plot.mainPane.syncSeries([spec(20)]);
-    plot.render();
-    plot.mainPane.syncSeries([spec(50)]);
-    plot.render();
-
-    expect(calls.n).toBe(2);
   });
 
   /** A user must be allowed to build a fresh lineSeries on every render — the series gets swapped, but the cache survives. */

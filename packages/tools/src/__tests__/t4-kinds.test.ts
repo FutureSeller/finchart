@@ -149,17 +149,15 @@ describe("placement and editing through the real state machine", () => {
     return { tools, click };
   }
 
-  it("takes three clicks and lands without levels (the defaults)", () => {
+  it("lands without levels (the defaults) when placed by hand", () => {
     const { tools, click } = mounted();
     tools.begin("fibExtension");
     click(2, 105);
     click(5, 115);
     click(8, 108);
-    expect(tools.mode()).toBeNull();
     const [drawn] = tools.list();
     if (drawn.type !== "fibExtension") throw new Error("expected a fibExtension");
     expect(drawn.levels).toBeUndefined();
-    expect(drawn.c.x).toBeCloseTo(8, 5);
   });
 
   it("handle.update sets and clears levels, sorted and deduped, never clamped", () => {

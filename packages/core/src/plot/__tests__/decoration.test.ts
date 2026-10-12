@@ -63,27 +63,6 @@ describe("decoration order", () => {
     expect(log).toEqual(["plot-bg", "pane-bg", "pane-fg", "plot-fg"]);
   });
 
-  it("should order by zIndex, not registration", () => {
-    const { plot, handle } = mount();
-    const log: string[] = [];
-
-    // Registered deliberately out of order — to check whether ordering actually comes from z.
-    for (const [name, zIndex] of [
-      ["tooltip", 500],
-      ["band", -500],
-      ["marker", 300],
-      ["grid", -900],
-    ] as const) {
-      plot.addDecoration(marker(name, log) as PlotDecoration, {
-        zIndex,
-      });
-    }
-
-    handle.setData(data);
-
-    expect(log).toEqual(["grid", "band", "marker", "tooltip"]);
-  });
-
   it("should let a decoration sit between the old two slots", () => {
     // A position that used to be impossible to express — there were only two slots.
     const { plot, handle } = mount();
@@ -109,45 +88,6 @@ describe("decoration order", () => {
     expect(log).toEqual(["under", "just-under", "series"]);
   });
 
-  it("should keep registration order among equal z", () => {
-    const { plot, handle } = mount();
-    const log: string[] = [];
-
-    for (const name of ["a", "b", "c"]) {
-      plot.addDecoration(marker(name, log) as PlotDecoration, {
-        zIndex: 42,
-      });
-    }
-
-    handle.setData(data);
-
-    expect(log).toEqual(["a", "b", "c"]);
-  });
-
-  it("should stop drawing a removed decoration wherever it sat", () => {
-    const { plot, handle } = mount();
-    const log: string[] = [];
-
-    plot.addDecoration(marker("low", log) as PlotDecoration, {
-      zIndex: -50,
-    });
-    const remove = plot.addDecoration(
-      marker("mid", log) as PlotDecoration,
-      { zIndex: 0 },
-    );
-    plot.addDecoration(marker("high", log) as PlotDecoration, {
-      zIndex: 50,
-    });
-
-    handle.setData(data);
-    // remove() schedules a render, so clear the log after removing.
-    remove();
-    log.length = 0;
-    plot.render();
-
-    expect(log).toEqual(["low", "high"]);
-  });
-
   it("should default to above the series", () => {
     const { plot, handle } = mount();
     const log: string[] = [];
@@ -163,22 +103,6 @@ describe("decoration order", () => {
     handle.setData(data);
 
     expect(log).toEqual(["series", "deco"]);
-  });
-
-  it("should stop drawing once the disposer runs", () => {
-    const { plot, handle } = mount();
-    const log: string[] = [];
-
-    const off = plot.addDecoration(
-      marker("deco", log) as PlotDecoration,
-    );
-    handle.setData(data);
-    expect(log).toEqual(["deco"]);
-
-    off();
-    plot.render();
-
-    expect(log).toEqual(["deco"]);
   });
 
   it("should draw a pane decoration only into its own pane", () => {

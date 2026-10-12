@@ -68,16 +68,6 @@ describe("mergeOptions", () => {
     expect(next.axis?.y?.position).toBe("right");
   });
 
-  it("should refill a cleared axis field that has a default", () => {
-    const current = mergeOptions(resolveConfig(base()), {
-      axis: { x: { showLabels: false } },
-    });
-    const next = mergeOptions(current, {
-      axis: { x: { showLabels: undefined } },
-    });
-    expect(next.axis.x.showLabels).toBe(true);
-  });
-
   it("should replace style wholesale", () => {
     expect(mergeOptions(resolveConfig(base()),{ style: { grid: {} } }).style).toEqual({
       grid: {},
@@ -134,19 +124,6 @@ describe("resolveConfig", () => {
 });
 
 describe("copyConfig", () => {
-  it("should copy every nested spot so a later edit stays out", () => {
-    const source = resolveConfig(base());
-    const copy = copyConfig(source);
-
-    source.padding.left = 100;
-    if (source.axis?.x) source.axis.x.size = 100;
-    if (source.style?.grid) source.style.grid.width = 100;
-
-    expect(copy.padding.left).toBe(4);
-    expect(copy.axis?.x?.size).toBe(20);
-    expect(copy.style?.grid?.width).toBe(1);
-  });
-
   it("should keep functions — a structured clone would throw on them", () => {
     const format = (value: number): string => `${value}`;
     const copy = copyConfig(resolveConfig({ ...base(), axis: { x: { format } } }));

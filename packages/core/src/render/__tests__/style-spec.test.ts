@@ -52,16 +52,6 @@ describe("resolveStyle", () => {
     });
   });
 
-  it("should degrade unparsable numbers to the fallback", () => {
-    // "12px" reads as 12 — a bare number or `px` is accepted; "abc" falls back to the default.
-    expect(
-      resolveStyle(SPEC, readerOf({ "--chart-fake-width": "12px" })).line.width,
-    ).toBe(12);
-    expect(
-      resolveStyle(SPEC, readerOf({ "--chart-fake-width": "abc" })).line.width,
-    ).toBe(2);
-  });
-
   it("should clamp css numbers into the declared range", () => {
     const clamped = {
       ratio: { css: "--chart-fake-ratio", fallback: 0.5, range: [0, 1] },

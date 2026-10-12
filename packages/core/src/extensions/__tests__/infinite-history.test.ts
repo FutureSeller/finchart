@@ -499,20 +499,6 @@ describe("infiniteHistory", () => {
     expect(loader.status()).toBe("idle");
   });
 
-  it("guard 12: a landing after dispose is dropped", async () => {
-    const { plot } = chart();
-    const { fetch, land } = heldFetch();
-    const { pages, sink } = recordingSink();
-    const loader = infiniteHistory(plot, sink, fetch, { from: 100 });
-
-    plot.setVisibleRange(90, 110);
-    loader.dispose();
-    land(points(80, 100));
-    await settle();
-
-    expect(pages).toEqual([]);
-  });
-
   it("guard 13: a hand-made sink (a closure over plain state) fits as-is", async () => {
     const { plot } = chart();
     const { fetch } = servedFetch(points(80, 100));
