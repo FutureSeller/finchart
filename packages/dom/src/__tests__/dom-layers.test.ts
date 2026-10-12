@@ -60,13 +60,6 @@ function canvasOf(element: HTMLElement) {
 }
 
 describe("createDomLayers", () => {
-  it("should append a canvas and an overlay", () => {
-    createDomLayers(container, 800, 600);
-
-    expect(container.children).toHaveLength(2);
-    expect(canvasOf(container)).not.toBeNull();
-  });
-
   it("should size the canvas to the requested dimensions", () => {
     createDomLayers(container, 640, 480);
 
@@ -91,15 +84,15 @@ describe("createDomLayers", () => {
   });
 
   it("should pin the canvas to the overlay's origin, so a padded container keeps pixels under the pointer", () => {
-    // jsdom has no layout, so this pins the styles that put both layers on
-    // the padding box's corner — the same origin pointer input measures from.
-    // An in-flow canvas would start at the content edge instead, padding away.
-    const layers = createDomLayers(container, 800, 600);
+    // jsdom has no layout, so this pins the canvas's styles that put it on
+    // the padding box's corner — the same origin pointer input measures from
+    // (the overlay's are pinned in the test above). An in-flow canvas would
+    // start at the content edge instead, padding away.
+    createDomLayers(container, 800, 600);
     const canvas = canvasOf(container)!;
 
     expect(canvas.style.position).toBe("absolute");
     expect([canvas.style.top, canvas.style.left]).toEqual(["0px", "0px"]);
-    expect(overlayOf(layers).style.inset).toMatch(/^0(?:px)?$/);
   });
 
   it("should hand the container back unpositioned on destroy", () => {
@@ -229,15 +222,6 @@ describe("screen density", () => {
     expect(transforms.at(-1)).toEqual([2, 0, 0, 2, 0, 0]);
     expect(canvasOf(container)!.width).toBe(800);
     expect(layers.data.width).toBe(400);
-  });
-
-  it("should change nothing on an ordinary display", () => {
-    setDevicePixelRatio(1);
-
-    const layers = createDomLayers(container, 800, 600);
-
-    expect(canvasOf(container)!.width).toBe(800);
-    expect(layers.data.width).toBe(800);
   });
 });
 

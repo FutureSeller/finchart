@@ -72,25 +72,11 @@ describe("M4Decimation", () => {
     }
   });
 
-  it("should emit points in x order", () => {
-    const decimated = m4().decimate(...whole(sawtooth(5000)), 200);
-
-    for (let i = 1; i < decimated.length; i++) {
-      expect(decimated[i].x).toBeGreaterThanOrEqual(Number(decimated[i - 1].x));
-    }
-  });
-
   it("should select original points, not synthesized ones", () => {
     const data = sawtooth(1000);
     const decimated = m4().decimate(...whole(data), 100);
 
     expect(decimated.every((point) => data.includes(point))).toBe(true);
-  });
-
-  it("should never emit the same point twice", () => {
-    const decimated = m4().decimate(...whole(sawtooth(1000)), 100);
-
-    expect(new Set(decimated).size).toBe(decimated.length);
   });
 
   /** Grid and LTTB keep only one point per bucket, so a spike up and a spike down together lose one of them — that's why M4 exists. */

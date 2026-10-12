@@ -135,6 +135,7 @@ describe('prop removal = revert to default', () => {
       </ChartContainer>
     );
     const view = render(chart(true));
+    expect(plot().getOptions().axis.y.format).toBe(pct);
     expect(plot().getOptions().axis.y.position).toBe('right');
 
     view.rerender(chart(false));

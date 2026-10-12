@@ -85,16 +85,6 @@ describe("tooltip", () => {
     expect(box.textContent).toContain("5");
   });
 
-  it("should hide outside every pane", () => {
-    const { plot, tooltipBox, paneCenter } = mounted();
-    plot.use(tooltip());
-
-    plot.crosshair(paneCenter());
-    plot.crosshair({ x: 1, y: 1 });
-
-    expect(tooltipBox().style.display).toBe("none");
-  });
-
   it("should hide when the cursor leaves the chart", () => {
     const { plot, tooltipBox, paneCenter } = mounted();
     plot.use(tooltip());

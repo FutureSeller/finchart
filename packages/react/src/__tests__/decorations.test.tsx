@@ -81,38 +81,6 @@ function frameRequests() {
 }
 
 describe('decorations — equal values leave the decoration untouched', () => {
-  it('should not ask for a frame when an inline price line re-renders with equal values', async () => {
-    const { box, onPlot } = frameRequests();
-
-    function Harness() {
-      const [tick, setTick] = useState(0);
-      return (
-        <>
-          <button type="button" onClick={() => setTick(tick + 1)}>
-            tick
-          </button>
-          <ChartContainer deps={makeDeps()} data={data} onPlot={onPlot}>
-            {/* Inline — not requiring discipline from the consumer is the contract. */}
-            <PriceLine value={110} label="target" />
-          </ChartContainer>
-        </>
-      );
-    }
-
-    const screen = render(<Harness />);
-    const afterMount = box.requests;
-    expect(afterMount).toBeGreaterThan(0);
-
-    for (let i = 0; i < 5; i += 1) {
-      await act(async () => {
-        screen.getByText('tick').click();
-      });
-    }
-
-    // The value didn't change, so nothing is handed on and no frame is asked for.
-    expect(box.requests).toBe(afterMount);
-  });
-
   it('should apply a changed value in place — no reinstall, and the drawn line moves', async () => {
     const { box, onPlot } = counting();
     const renderer = rendererSpy();
@@ -191,13 +159,10 @@ describe('decorations — equal values leave the decoration untouched', () => {
   /**
    * **Nested options are values too.**
    *
-   * The tests above only ever passed `value` and `label`, so every value was
-   * a primitive — and that let `useStable`'s header comment's premise
-   * (*"decoration options are all primitive fields"*) stay **false without
-   * anyone noticing** — `PriceLineOptions.style` is `Partial<LineStyle>`.
-   * With that premise still false, the symptom this component claimed to
-   * have fixed was still there in the single most common usage: every
-   * re-render handed the line its options again and asked for a frame.
+   * `PriceLineOptions.style` is `Partial<LineStyle>`, so equal options must
+   * compare equal one level down. A top-level comparison would hand the
+   * most common usage (an inline `style={{…}}`) its options again on every
+   * re-render and ask for a frame.
    */
   it('should not ask for a frame when a price line with an inline style re-renders with equal values', async () => {
     const { box, onPlot } = frameRequests();

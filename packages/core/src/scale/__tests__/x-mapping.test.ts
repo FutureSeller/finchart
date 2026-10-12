@@ -429,28 +429,6 @@ describe("tail fast path of a rebuild", () => {
     }
   });
 
-  it("a new array forces a full walk — the shape of prepend/setData", () => {
-    let fulls = 0;
-    const mapping = barIndexX(new LinearScale(0, 10, 0, 1000), {
-      onFullRebuild: () => {
-        fulls += 1;
-      },
-    });
-    const a = [5, 6, 7];
-    mapping.rebuild?.([a]);
-
-    // prepend — a **new array** with a different front. If the fast path
-    // swallowed this, the newly prepended bars would never get an index.
-    const grown = [3, 4, 5, 6, 7];
-    mapping.rebuild?.([grown]);
-    expect(fulls).toBe(2);
-    // Anchor semantics: the existing bar (x=5) keeps index 0 and the past
-    // extends into negative indices — don't compare against a fresh mapping
-    // (that one has no anchor).
-    expect(mapping.toDomain(5)).toBe(0);
-    expect(mapping.toDomain(3)).toBe(-2);
-  });
-
   it("a mapping grown from an empty source also sets an anchor — a prepend doesn't shift the index", () => {
     const mapping = barIndexX(new LinearScale(0, 10, 0, 1000));
 

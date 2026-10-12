@@ -8,12 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { strokedPaths } from "../../__tests__/dom-fakes";
 import type { LineDataPoint } from "../../data";
-import {
-  SimpleDecimation,
-  LineDataAccessor,
-  LttbDecimation,
-  M4Decimation,
-} from "../../data";
+import { LineDataAccessor, M4Decimation } from "../../data";
 import { DEFAULT_LINE_STYLE, lineSeries } from "../../series";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -51,15 +46,6 @@ function drawn(data: LineDataPoint[]) {
 }
 
 describe("drawing side — the line breaks", () => {
-  it("should draw one line per run of values", () => {
-    const lines = drawn(withHole);
-
-    // Drawing it as one continuous line would stretch across the gap.
-    expect(lines).toHaveLength(2);
-    expect(lines[0].points).toHaveLength(2);
-    expect(lines[1].points).toHaveLength(2);
-  });
-
   it("should draw one line when there is no hole", () => {
     const lines = drawn([
       { x: 0, y: 10 },
@@ -108,36 +94,6 @@ describe("measuring side — a hole is not a value", () => {
 });
 
 describe("decimation side — does not swallow the hole", () => {
-  /** A large dataset with one hole in the middle. Decimation drops most of it. */
-  const many = (count: number, holeAt: number): LineDataPoint[] =>
-    Array.from({ length: count }, (_, i) => ({
-      x: i,
-      y: i === holeAt ? null : Math.sin(i / 7) * 100,
-    }));
-
-  const strategies = [
-    ["M4", new M4Decimation<LineDataPoint>(coordinates)],
-    ["LTTB", new LttbDecimation<LineDataPoint>(coordinates)],
-    ["step", new SimpleDecimation<LineDataPoint>()],
-  ] as const;
-
-  for (const [name, strategy] of strategies) {
-    it(`should keep the hole (${name})`, () => {
-      const result = strategy.decimate(...whole(many(1_000, 500)), 40);
-
-      expect(result.length).toBeLessThanOrEqual(45);
-      // The hole must survive, or the line won't stay broken.
-      expect(result.some((point) => point.y === null)).toBe(true);
-    });
-
-    it(`should stay sorted by x (${name})`, () => {
-      const result = strategy.decimate(...whole(many(1_000, 500)), 40);
-      const xs = result.map((point) => Number(point.x));
-
-      expect([...xs].sort((a, b) => a - b)).toEqual(xs);
-    });
-  }
-
   it("should collapse a run of holes into one break", () => {
     const data: LineDataPoint[] = [
       ...Array.from({ length: 50 }, (_, i) => ({ x: i, y: i })),

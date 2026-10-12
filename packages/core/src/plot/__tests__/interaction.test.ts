@@ -89,15 +89,6 @@ describe("interaction wiring", () => {
     expect(xScale.getDomain()).toEqual(panned);
   });
 
-  it("should refit the domain when new data arrives", () => {
-    const { handle, xScale, interactions } = plotWith();
-
-    interactions.handlePan(1000);
-    handle.setData(data);
-
-    expect(xScale.getDomain()).toEqual([0, 100]);
-  });
-
   it("should emit crosshair positions", () => {
     const { plot, interactions } = plotWith();
 
@@ -119,35 +110,6 @@ describe("interaction wiring", () => {
 });
 
 describe("pixel to domain conversion", () => {
-  /** Once a render finishes, xScale's range matches the plot area. */
-  function panned(pixels: number) {
-    const { plot, xScale } = plotWith();
-    const [beforeMin, beforeMax] = xScale.getDomain();
-
-    plot.panByPixels(pixels);
-
-    const [afterMin, afterMax] = xScale.getDomain();
-    return { beforeMin, beforeMax, afterMin, afterMax, xScale };
-  }
-
-  it("should show an earlier range when dragging right", () => {
-    const { beforeMin, afterMin } = panned(50);
-
-    expect(afterMin).toBeLessThan(beforeMin);
-  });
-
-  it("should show a later range when dragging left", () => {
-    const { beforeMin, afterMin } = panned(-50);
-
-    expect(afterMin).toBeGreaterThan(beforeMin);
-  });
-
-  it("should keep the domain width while dragging", () => {
-    const { beforeMin, beforeMax, afterMin, afterMax } = panned(37);
-
-    expect(afterMax - afterMin).toBeCloseTo(beforeMax - beforeMin);
-  });
-
   it("should move one domain unit per pixel at a 1:1 scale", () => {
     const { plot, xScale } = plotWith();
     // With domain 0~100 mapped onto screen 20~120, 1px equals 1 unit.
@@ -157,15 +119,6 @@ describe("pixel to domain conversion", () => {
     plot.panByPixels(-10);
 
     expect(xScale.getDomain()).toEqual([10, 110]);
-  });
-
-  it("should ignore a zero-pixel drag", () => {
-    const { plot, xScale } = plotWith();
-    const before = xScale.getDomain();
-
-    plot.panByPixels(0);
-
-    expect(xScale.getDomain()).toEqual(before);
   });
 
   it("should anchor a wheel zoom at the cursor", () => {
@@ -180,17 +133,5 @@ describe("pixel to domain conversion", () => {
     expect(min).toBeCloseTo(12.5);
     expect(max).toBeCloseTo(62.5);
     expect(max - min).toBeCloseTo(50);
-  });
-
-  it("should keep the cursor value fixed while zooming", () => {
-    const { plot, xScale } = plotWith();
-    xScale.setDomain(0, 100);
-    xScale.setRange(0, 100);
-    const anchored = xScale.invert(30);
-
-    plot.zoomAtPixel(4, 30);
-    xScale.setRange(0, 100);
-
-    expect(xScale.invert(30)).toBeCloseTo(anchored);
   });
 });

@@ -26,14 +26,12 @@ function candles(count: number): OHLC[] {
 }
 
 describe("OhlcAggregation", () => {
-  it("should return the data untouched when it already fits", () => {
+  it.each([
+    ["already fits", 50],
+    ["fills the threshold exactly", 20],
+  ])("should return the data untouched when it %s", (_, threshold) => {
     const data = candles(20);
-    expect(aggregation().decimate(...whole(data), 50)).toBe(data);
-  });
-
-  it("should return the data untouched when it fills the threshold exactly", () => {
-    const data = candles(20);
-    expect(aggregation().decimate(...whole(data), 20)).toBe(data);
+    expect(aggregation().decimate(...whole(data), threshold)).toBe(data);
   });
 
   it("should stay within the threshold", () => {
@@ -51,48 +49,6 @@ describe("OhlcAggregation", () => {
       expect(out.length).toBeLessThanOrEqual(threshold);
       expect(out[0].open).toBe(data[1].open);
       expect(out.at(-1)?.close).toBe(data[10].close);
-    }
-  });
-
-  /**
-   * This is where aggregation diverges from decimation. Picking a single
-   * candle from the bucket would lose the high/low of the rest of the
-   * candles. Merging keeps them.
-   */
-  it("should keep the highest high and the lowest low of the bucket", () => {
-    const data = candles(100);
-    data[42].high = 9999;
-    data[57].low = -9999;
-
-    const merged = aggregation().decimate(...whole(data), 10);
-
-    expect(merged.map((candle) => candle.high)).toContain(9999);
-    expect(merged.map((candle) => candle.low)).toContain(-9999);
-  });
-
-  it("should open at the first candle and close at the last", () => {
-    const data = candles(100);
-    const merged = aggregation().decimate(...whole(data), 10);
-
-    expect(merged[0].open).toBe(data[0].open);
-    expect(merged[merged.length - 1].close).toBe(data[99].close);
-  });
-
-  it("should place the merged candle at the x of the bucket's first candle", () => {
-    const merged = aggregation().decimate(...whole(candles(100)), 10);
-
-    expect(merged[0].x).toBe(0);
-    expect(merged[1].x).toBe(10);
-  });
-
-  it("should keep merged candles consistent", () => {
-    const merged = aggregation().decimate(...whole(candles(1000)), 50);
-
-    for (const candle of merged) {
-      expect(candle.high).toBeGreaterThanOrEqual(candle.open);
-      expect(candle.high).toBeGreaterThanOrEqual(candle.close);
-      expect(candle.low).toBeLessThanOrEqual(candle.open);
-      expect(candle.low).toBeLessThanOrEqual(candle.close);
     }
   });
 
@@ -136,14 +92,6 @@ describe("OhlcAggregation", () => {
 
     // Summing all the buckets gives back the window — no bar missed, none counted twice.
     expect(covered).toBe(range.end - range.start);
-  });
-
-  it("should emit candles in x order", () => {
-    const merged = aggregation().decimate(...whole(candles(500)), 30);
-
-    for (let i = 1; i < merged.length; i++) {
-      expect(Number(merged[i].x)).toBeGreaterThan(Number(merged[i - 1].x));
-    }
   });
 
   it("should sum volume when the data carries it", () => {

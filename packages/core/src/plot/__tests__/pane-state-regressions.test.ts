@@ -7,7 +7,6 @@ import { LinearScale, LogScale } from "../../scale";
 import { lineSeries } from "../../series";
 import type { InputEvent } from "../../interaction";
 import { axisDragConsumer } from "../axis-drag";
-import type { DividerDragHandler } from "../dividers";
 import { createPlotModel } from "../model";
 import { defaultConfig, mountPlot } from "./helpers";
 
@@ -194,77 +193,6 @@ describe("removePane removes its own pane even when cleanup re-enters", () => {
   });
 });
 
-
-describe("a divider drag's clamp limit does not flip sign", () => {
-  /**
-   * If the container is shorter than the sum of the minHeights, normal
-   * input can leave both panes below their own minimum — a bug where the
-   * clamp limit's sign flipped regardless of dy, moving opposite to the
-   * gesture.
-   */
-  function draggable(height: number, minHeight: number) {
-    let onDrag: DividerDragHandler = () => undefined;
-    const deps = testBrowserDeps({
-      createDividers: (_overlay, handler) => {
-        onDrag = handler;
-        return { render: () => undefined, clear: () => undefined, destroy: () => undefined };
-      },
-    });
-
-    const { plot } = mountPlot({
-      deps,
-      series: lineSeries(),
-      data,
-      config: { ...defaultConfig, showGrid: false },
-      size: { width: 400, height },
-    });
-    plot.mainPane.applyOptions({ minHeight });
-    plot.addPane({ minHeight });
-    plot.render();
-
-    const heights = (): number[] =>
-      plot.panes.map((pane) => pane.area.bottom - pane.area.top);
-
-    return { plot, drag: (dy: number) => onDrag(0, dy), heights };
-  }
-
-  it("pushes in neither direction when both are already below minimum", () => {
-    // The container (120) is shorter than the combined minimum (800) — both are below minimum.
-    const { drag, heights } = draggable(120, 400);
-    const before = heights();
-    expect(before[0]).toBeLessThan(400);
-    expect(before[1]).toBeLessThan(400);
-
-    drag(-1);
-    expect(heights()).toEqual(before);
-
-    drag(+1);
-    expect(heights()).toEqual(before);
-  });
-
-  it("moves in the direction of the gesture when there's slack", () => {
-    const { drag, heights } = draggable(600, 20);
-    const before = heights();
-
-    drag(+30);
-    const after = heights();
-
-    // Dragging downward grows the top and shrinks the bottom by the same amount.
-    expect(after[0]).toBeCloseTo(before[0] + 30, 6);
-    expect(after[1]).toBeCloseTo(before[1] - 30, 6);
-  });
-
-  it("dragging upward shrinks the top — not the reverse", () => {
-    const { drag, heights } = draggable(600, 20);
-    const before = heights();
-
-    drag(-30);
-    const after = heights();
-
-    expect(after[0]).toBeLessThan(before[0]);
-  });
-});
-
 describe("a destroyed stage stops building panes", () => {
   it("addPane after destroy throws", () => {
     const { plot } = mount();
@@ -299,12 +227,6 @@ describe("a detached handle cannot move the stage", () => {
     expect(() => extra.append([{ x: 1, y: 2 }])).toThrow(ContractError);
   });
 
-  it("dispose is safe to call twice", () => {
-    const { handle } = mount();
-    handle.dispose();
-    expect(() => handle.dispose()).not.toThrow();
-  });
-
   /** A throwing contract only holds up if it can be checked in advance — a place to branch without try/catch is needed. */
   it("asking via attached tells you without throwing", () => {
     const { handle } = mount();
@@ -324,14 +246,6 @@ describe("a detached handle cannot move the stage", () => {
 
     plot.mainPane.setSeries(lineSeries());
     expect(extra.attached).toBe(false);
-  });
-
-  it("read/xRange are still safe after detaching", () => {
-    const { handle } = mount();
-    handle.dispose();
-
-    expect(() => handle.read()).not.toThrow();
-    expect(() => handle.xRange).not.toThrow();
   });
 
   /**

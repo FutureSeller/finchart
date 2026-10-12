@@ -10,10 +10,6 @@ describe("serialization", () => {
     { type: "fib", id: "f1", a: { x: 1, price: 90 }, b: { x: 7, price: 140 } },
   ];
 
-  it("should round-trip", () => {
-    expect(parseDrawings(serializeDrawings(drawings))).toEqual(drawings);
-  });
-
   /**
    * Only the current format is read. Nothing was ever published in an
    * earlier one, so an old `version` is refused like any unknown one.

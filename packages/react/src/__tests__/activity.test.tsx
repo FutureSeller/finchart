@@ -36,7 +36,12 @@ const activity = isActivity(found) ? found : undefined;
 const Activity = activity ?? (() => { throw new Error('Activity is unavailable'); });
 const activityTest = activity ? it : it.skip;
 
-activityTest('re-attaches every pane and series after Activity hides and shows the chart', () => {
+activityTest('re-attaches every pane, series and pane child to the rebuilt chart after Activity hides and shows it', () => {
+  const installedOn: Pane[] = [];
+  const counted = (pane: Pane): PluginApi => {
+    installedOn.push(pane);
+    return { disposed: false, dispose() {} };
+  };
   const spy = layersSpy();
   const deps = browserDeps({ createLayers: spy.createLayers });
   const ref = React.createRef<Plot>();
@@ -48,6 +53,7 @@ activityTest('re-attaches every pane and series after Activity hides and shows t
         </ChartPane>
         <ChartPane>
           <ChartSeries series={indicator} />
+          <Plugin install={(_plot, pane) => pane.use(counted)} />
         </ChartPane>
       </ChartContainer>
     </Activity>
@@ -63,6 +69,8 @@ activityTest('re-attaches every pane and series after Activity hides and shows t
   expect(plot).not.toBe(first);
   expect(plot?.panes).toHaveLength(2);
   expect(plot?.panes.map((pane) => pane.probe(50).length)).toEqual([1, 1]);
+  // Never the old chart's pane: installing on one its teardown detached throws.
+  expect(installedOn.at(-1)).toBe(plot?.panes[1]);
 });
 
 activityTest('usePlugin nulls its api while Activity hides the consumer, so no render sees a disposed api', () => {
@@ -193,40 +201,6 @@ activityTest('a pane Activity hides leaves the chart and comes back in place wit
   expect(back.getSeries()).toEqual([indicator]);
   expect(installedOn.at(-1)).toBe(back);
   expect(installedOn.filter((pane) => pane !== first && pane !== back)).toEqual([]);
-});
-
-/**
- * Showing again rebuilds the chart; a wrapper still holding the old chart's
- * pane must not hand it to its children for that commit — installing on a
- * pane its chart's teardown detached throws.
- */
-activityTest('hands the children of a pane only the rebuilt chart’s pane after Activity shows the chart', () => {
-  const installedOn: Pane[] = [];
-  const counted = (pane: Pane): PluginApi => {
-    installedOn.push(pane);
-    return { disposed: false, dispose() {} };
-  };
-  const ref = React.createRef<Plot>();
-  const deps = browserDeps({ createLayers: layersSpy().createLayers });
-  const ui = (mode: 'visible' | 'hidden') => (
-    <Activity mode={mode}>
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane><ChartSeries series={price} /></ChartPane>
-        <ChartPane>
-          <ChartSeries series={indicator} />
-          <Plugin install={(_plot, pane) => pane.use(counted)} />
-        </ChartPane>
-      </ChartContainer>
-    </Activity>
-  );
-  const { rerender } = render(ui('visible'));
-
-  act(() => rerender(ui('hidden')));
-  act(() => rerender(ui('visible')));
-
-  const plot = ref.current;
-  expect(plot?.panes).toHaveLength(2);
-  expect(installedOn.at(-1)).toBe(plot?.panes[1]);
 });
 
 activityTest('builds a pane that arrived while Activity hid the chart on the chart it shows again', () => {

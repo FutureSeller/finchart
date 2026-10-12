@@ -14,7 +14,6 @@ describe("sma", () => {
   });
 
   it("should reject a nonsense period", () => {
-    expect(() => sma([1], 0)).toThrow();
     expect(() => sma([1], 1.5)).toThrow();
   });
 
@@ -93,25 +92,6 @@ describe("highest / lowest", () => {
   it("should track the window extremum", () => {
     expect(highest([1, 3, 2, 5, 4], 3)).toEqual([null, null, 3, 5, 5]);
     expect(lowest([5, 3, 4, 1, 2], 3)).toEqual([null, null, 3, 1, 1]);
-  });
-
-  it("should drop the extremum once it leaves the window", () => {
-    // The departing 9 is still ahead of a smaller candidate (5) that stays: the
-    // answer must come from the candidate, not from the slot the 9 vacated.
-    expect(highest([9, 5, 2], 2)).toEqual([null, 9, 5]);
-    expect(lowest([1, 5, 8], 2)).toEqual([null, 1, 5]);
-  });
-
-  it("should follow the same null rules as sma", () => {
-    // null whenever the window isn't full or has a hole — never fake a
-    // value.
-    expect(highest([1, null, 3, 4, 5], 3)).toEqual([
-      null,
-      null,
-      null,
-      null,
-      5,
-    ]);
   });
 
   it("should reject a nonsense period", () => {

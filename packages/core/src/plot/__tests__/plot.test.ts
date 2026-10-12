@@ -294,15 +294,6 @@ describe("config updates", () => {
     expect(layers.data).toBe(surface);
   });
 
-  it("should keep drawing the series after a grid toggle", () => {
-    const { plot, handle, layers } = mount();
-    handle.setData(data);
-
-    plot.applyOptions({ showGrid: false });
-
-    expect(dataLine(layers).points).toHaveLength(data.length);
-  });
-
   it("should keep the pan position across a config change", () => {
     const { deps, xScale } = testBrowserDepsWithScales();
     const { plot } = mountPlot({ deps, series: lineSeries(), data });

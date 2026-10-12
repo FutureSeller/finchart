@@ -62,41 +62,19 @@ describe("visible data cache", () => {
     expect(second).toBe(first);
   });
 
-  it("should recompute when the window moves", () => {
-    const { dataManager, decimation } = setup();
-
-    dataManager.getVisibleData(viewport());
-    dataManager.getVisibleData(viewport({ startX: 100, endX: 5100 }));
-
-    expect(decimation.calls).toBe(2);
-  });
-
-  it("should recompute when the window zooms", () => {
-    const { dataManager, decimation } = setup();
-
-    dataManager.getVisibleData(viewport());
-    dataManager.getVisibleData(viewport({ endX: 2500 }));
-
-    expect(decimation.calls).toBe(2);
-  });
-
-  it("should recompute when the plot gets wider", () => {
-    const { dataManager, decimation } = setup();
-
-    dataManager.getVisibleData(viewport());
-    dataManager.getVisibleData(viewport({ width: 1600 }));
-
-    expect(decimation.calls).toBe(2);
-  });
-
-  it("should not recompute when only the height changes", () => {
-    const { dataManager, decimation } = setup();
-
-    dataManager.getVisibleData(viewport());
-    dataManager.getVisibleData(viewport({ height: 300 }));
-
+  it.each<[string, Partial<Viewport>, number]>([
+    ["should recompute when the window moves", { startX: 100, endX: 5100 }, 2],
+    ["should recompute when the window zooms", { endX: 2500 }, 2],
+    ["should recompute when the plot gets wider", { width: 1600 }, 2],
     // Height doesn't factor into slicing or the point budget.
-    expect(decimation.calls).toBe(1);
+    ["should not recompute when only the height changes", { height: 300 }, 1],
+  ])("%s", (_name, overrides, calls) => {
+    const { dataManager, decimation } = setup();
+
+    dataManager.getVisibleData(viewport());
+    dataManager.getVisibleData(viewport(overrides));
+
+    expect(decimation.calls).toBe(calls);
   });
 
   it("should recompute after the data changes", () => {

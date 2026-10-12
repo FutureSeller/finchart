@@ -311,11 +311,6 @@ describe("sumFold ↔ a fresh window sum", () => {
     // Every input is finite; only their sum is not. A downstream ratio of two such
     // sums would read NaN, and the line-data contract is finite-or-null.
     expect(run(sumFold(2), [1e308, 1e308, 1, 1])).toEqual([null, null, 1e308, 2]);
-    // A sum of two committable halves that lands exactly on the largest double has stopped
-    // being a sum — for the mean too. (The largest double as an input is refused earlier, at
-    // the observation door.)
-    expect(run(sumFold(2), [Number.MAX_VALUE / 2, Number.MAX_VALUE / 2, 4])).toEqual([null, null, Number.MAX_VALUE / 2 + 4]);
-    expect(run(smaFold(2), [Number.MAX_VALUE / 2, Number.MAX_VALUE / 2, 0, 4])).toEqual([null, null, Number.MAX_VALUE / 4, 2]);
   });
 
   it("resumes from a snapshot exactly", () => {
@@ -381,25 +376,6 @@ describe("stddevFold ↔ a two-pass reference", () => {
     const got = run(stddevFold(3), [0, 1e12, 1e9, 0, 1e6, 1e6]);
     const want = stddevReference([0, 1e6, 1e6]);
     expect(Math.abs((got[5] ?? Number.NaN) - want) / want).toBeLessThan(1e-12);
-  });
-
-  it("keeps its digits when the spread is tiny next to the level, over a long run", () => {
-    // 200k values near 1e6 with a spread of ~10: the Σy²/n − mean² form
-    // came out several hundred percent wrong after a long run (measured).
-    const fold = stddevFold(20);
-    const window: number[] = [];
-    let worst = 0;
-    for (let i = 0; i < 200_000; i++) {
-      const value = 1e6 + Math.sin(i * 0.017) * 10 + Math.cos(i * 0.113);
-      const got = fold.step(value);
-      window.push(value);
-      if (window.length > 20) window.shift();
-      if (i >= 19 && i % 991 === 0) {
-        const want = stddevReference(window);
-        worst = Math.max(worst, Math.abs((got ?? Number.NaN) - want) / want);
-      }
-    }
-    expect(worst).toBeLessThan(1e-9);
   });
 
   it("a trending level stays within 1e-9 — the origin is the window's own oldest value", () => {

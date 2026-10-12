@@ -217,22 +217,6 @@ describe("PointerInteractions wheel", () => {
       new WheelEvent("wheel", { deltaY, clientX, cancelable: true }),
     );
 
-  it("should zoom in when scrolling up", () => {
-    new PointerInteractions(element).connect(target.target);
-
-    wheel(-100);
-
-    expect(target.pixelZooms[0].factor).toBeGreaterThan(1);
-  });
-
-  it("should zoom out when scrolling down", () => {
-    new PointerInteractions(element).connect(target.target);
-
-    wheel(100);
-
-    expect(target.pixelZooms[0].factor).toBeLessThan(1);
-  });
-
   it("should anchor the zoom at the cursor, in element coordinates", () => {
     new PointerInteractions(element).connect(target.target);
 
@@ -248,15 +232,6 @@ describe("PointerInteractions wheel", () => {
     wheel(-100);
 
     expect(target.pixelZooms[0].factor).toBe(2);
-  });
-
-  it("should prevent the page from scrolling", () => {
-    new PointerInteractions(element).connect(target.target);
-    const event = new WheelEvent("wheel", { deltaY: -100, cancelable: true });
-
-    element.dispatchEvent(event);
-
-    expect(event.defaultPrevented).toBe(true);
   });
 
   it("should ignore the wheel when zooming is disabled", () => {
@@ -365,6 +340,13 @@ describe("PointerInteractions teardown", () => {
     expect(element.style.touchAction).toBeFalsy();
   });
 
+  /**
+   * The escape hatch for removing an element from tab order — used when an
+   * accessibility audit demands `tabindex="-1"` on a focusable but unnamed
+   * element. `element.tabIndex < 0` can't distinguish "no attribute" from
+   * "explicit -1" (a `div`'s default is `-1`), which could paper over this
+   * escape hatch — this test pins down that distinction.
+   */
   it("should keep a caller's own tabindex and touch-action", () => {
     element.setAttribute("tabindex", "-1");
     element.style.touchAction = "none";
@@ -483,28 +465,6 @@ describe("PointerInteractions lifecycle", () => {
     // A pan is horizontal; `none` swallowed the vertical swipe that should
     // have scrolled the page a chart sits in.
     expect(element.style.touchAction).toBe("pan-y");
-  });
-
-  it("should stop responding after disconnect", () => {
-    const interactions = new PointerInteractions(element);
-    interactions.connect(target.target);
-
-    interactions.disconnect();
-    down(100);
-    move(200);
-
-    expect(target.pixelPans).toEqual([]);
-  });
-
-  it("should drop document listeners left over from a drag", () => {
-    const interactions = new PointerInteractions(element);
-    interactions.connect(target.target);
-
-    down(100);
-    interactions.disconnect();
-    move(200);
-
-    expect(target.pixelPans).toEqual([]);
   });
 
   it("should replace the previous connection instead of stacking", () => {
@@ -729,18 +689,6 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     expect(target.fits).toHaveLength(1);
   });
 
-  it("should let a consumer eat the double click first", () => {
-    const eaten = {
-      ...target.target,
-      routeInput: (event: InputEvent) => event.type === "dblclick",
-    };
-    new PointerInteractions(element).connect(eaten);
-
-    element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-
-    expect(target.fits).toHaveLength(0);
-  });
-
   /** An axis double-click (the y-axis reset) is a consumer's — the public event and the whole-chart fit must both stay quiet. */
   it("should keep an eaten double click from the public doubleClick as well as the fit", () => {
     const doubleClicks: Point[] = [];
@@ -826,13 +774,6 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     expect(target.pixelPans).not.toEqual([]);
   });
 
-  /**
-   * The escape hatch for removing an element from tab order — used when an
-   * accessibility audit demands `tabindex="-1"` on a focusable but unnamed
-   * element. `element.tabIndex < 0` can't distinguish "no attribute" from
-   * "explicit -1" (a `div`'s default is `-1`), which could paper over this
-   * escape hatch — the test below pins down that distinction.
-   */
   describe("tabindex", () => {
     function connected(): void {
       vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
@@ -843,21 +784,10 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
       new PointerInteractions(element).connect(target.target);
     }
 
-    it("should keep an explicit tabindex=-1 out of the tab order", () => {
-      element.setAttribute("tabindex", "-1");
-      connected();
-      expect(element.getAttribute("tabindex")).toBe("-1");
-    });
-
     it("should respect an explicit positive tabindex", () => {
       element.setAttribute("tabindex", "5");
       connected();
       expect(element.getAttribute("tabindex")).toBe("5");
-    });
-
-    it("control group: with no attribute, it becomes a tab stop", () => {
-      connected();
-      expect(element.getAttribute("tabindex")).toBe("0");
     });
   });
 
@@ -941,7 +871,8 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     interactions.disconnect();
   });
 
-  it("should leave Alt combos to the browser", () => {
+  type Modifier = "altKey" | "metaKey" | "ctrlKey";
+  it.each<Modifier>(["altKey", "metaKey", "ctrlKey"])("should leave %s combos to the browser", (modifier) => {
     const routed: string[] = [];
     const spying = {
       ...target.target,
@@ -953,24 +884,14 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     const interactions = new PointerInteractions(element);
     interactions.connect(spying);
 
-    // Alt+← is the browser's back navigation.
-    const event = new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true, cancelable: true });
+    // Alt+← is the browser's back navigation; Ctrl and Meta combos are browser shortcuts.
+    const event = new KeyboardEvent("keydown", { key: "ArrowLeft", [modifier]: true, bubbles: true, cancelable: true });
     element.dispatchEvent(event);
 
     expect(routed).toEqual([]);
     expect(target.pixelPans).toEqual([]);
     expect(event.defaultPrevented).toBe(false);
     interactions.disconnect();
-  });
-
-  it("should leave modifier combos to the browser", () => {
-    new PointerInteractions(element).connect(target.target);
-
-    element.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowLeft", metaKey: true, bubbles: true }),
-    );
-
-    expect(target.pixelPans).toEqual([]);
   });
 
   it("should offer keys to the stack before panning", () => {
@@ -1001,41 +922,9 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
     expect(routed).toEqual(["Delete", "ArrowLeft"]);
     expect(target.pixelPans).toEqual([40]);
   });
-
-  it("should not route modifier combos to the stack", () => {
-    const routed: string[] = [];
-    const spying = {
-      ...target.target,
-      routeInput: (event: InputEvent) => {
-        if (event.type === "keydown") routed.push(event.key);
-        return false;
-      },
-    };
-    new PointerInteractions(element).connect(spying);
-
-    element.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Delete", ctrlKey: true, bubbles: true }),
-    );
-
-    expect(routed).toEqual([]);
-  });
 });
 
 describe("PointerInteractions kinetic scroll (2.4)", () => {
-  it("should keep flowing after release when enabled", async () => {
-    // jsdom has rAF — this actually waits out a few frames.
-    new PointerInteractions(element, { kineticScroll: true }).connect(target.target);
-
-    down(100);
-    move(160);
-    up();
-
-    const panned = target.pixelPans.length;
-    await new Promise((resolve) => setTimeout(resolve, 80));
-
-    expect(target.pixelPans.length).toBeGreaterThan(panned);
-  });
-
   /**
    * A cancellation is not a release — and neither is kinetic scrolling.
    * If a pan reclaimed by palm rejection or a browser gesture handoff

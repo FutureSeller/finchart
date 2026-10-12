@@ -6,7 +6,7 @@ import type {
   DecimationStrategy,
   LineDataPoint,
 } from "../../data";
-import { LttbDecimation, SimpleDataManager } from "../../data";
+import { LttbDecimation } from "../../data";
 import { lineSeries, type Series } from "../../series";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import { defaultConfig, mountPlot } from "./helpers";
@@ -162,17 +162,5 @@ describe("each registration gets its own manager", () => {
 
     // The cap applies to derived points too. The default of 1000 used to just pass through.
     expect(seen.at(-1)!.length).toBeLessThanOrEqual(11);
-  });
-
-  it("should reuse the source policy through createDataManager", () => {
-    const deps = testBrowserDeps();
-    const manager = deps.createDataManager(
-      new (class {
-        getX = (point: LineDataPoint) => Number(point.x);
-        getY = (point: LineDataPoint) => point.y;
-      })(),
-    );
-
-    expect(manager).toBeInstanceOf(SimpleDataManager);
   });
 });

@@ -14,10 +14,7 @@ import {
   type CanvasBrush,
   type CanvasColorChannels,
 } from "../canvas-renderer";
-import type {
-  CanvasGradientLike,
-  DrawSurface,
-} from "../types";
+import type { DrawSurface } from "../types";
 
 function renderer(width = 400, height = 300) {
   const context = fakeCanvasContext();
@@ -442,20 +439,5 @@ describe("applyColor — verdict cache", () => {
     applyColor(context, "fillStyle", "nope");
 
     expect(context.fillStyle).toBe(TRANSPARENT);
-  });
-
-  /**
-   * A gradient is an object — it never goes through parsing, so it can't
-   * be rejected, and it can't be cached under a string key either. If the
-   * cache swallowed that branch, a face that should be filled wouldn't be.
-   */
-  it("should pass a non-string brush straight through", () => {
-    const context = rejectingColors();
-    const verdicts = new ColorVerdicts();
-    const gradient: CanvasGradientLike = { addColorStop: () => {} };
-
-    applyColor(context, "fillStyle", gradient, verdicts);
-
-    expect(context.fillStyle).toBe(gradient);
   });
 });

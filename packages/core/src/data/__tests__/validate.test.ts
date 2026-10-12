@@ -68,25 +68,6 @@ describe("equivalence with setData", () => {
 });
 
 describe("issues", () => {
-  it("should return null for clean data", () => {
-    expect(
-      validateSeriesData([
-        { x: 0, y: 1 },
-        { x: 1, y: null },
-        { x: 2, y: 3 },
-      ]),
-    ).toBeNull();
-  });
-
-  it("should accept repeated x in a row on line data (no uniqueX)", () => {
-    expect(
-      validateSeriesData([
-        { x: 1, y: 1 },
-        { x: 1, y: 2 },
-      ]),
-    ).toBeNull();
-  });
-
   it("should name the code and the index", () => {
     const issues = validateSeriesData([
       { x: 0, y: 1 },

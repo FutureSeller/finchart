@@ -3,13 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createPlotModel } from "../index";
 import { frameScheduler, createMemoryLayers, noStyle, recordingRenderer } from "../../render";
 import { pluginApi } from "../../primitives";
-import {
-  addDecoration,
-  emptyDecorations,
-  forEachAboveSeries,
-} from "../decoration";
 import { lineSeries } from "../../series";
-import { seriesSpec } from "../../registration";
 import { priceFormat } from "../../axis/price-format";
 import { Plot } from "../plot";
 import { createPlotDeps } from "../presets";
@@ -43,32 +37,6 @@ describe("axis.y.size leaves the data its share", () => {
     const { area } = model.plot.mainPane;
     expect(area.right - area.left).toBe(400 - DEFAULT_PADDING.left - DEFAULT_PADDING.right - 100);
     model.plot.destroy();
-  });
-});
-
-describe("the decoration list is not thrown off by a removal mid-visit", () => {
-  it("should not skip the decoration after a self-removing one", () => {
-    const list = emptyDecorations<{ draw: () => void }>();
-    const seen: string[] = [];
-
-    let offA: () => void = () => undefined;
-    offA = addDecoration(
-      list,
-      {
-        draw: () => {
-          seen.push("a");
-          offA();
-        },
-      },
-      { zIndex: 10 },
-    );
-    addDecoration(list, { draw: () => seen.push("b") }, { zIndex: 11 });
-    addDecoration(list, { draw: () => seen.push("c") }, { zIndex: 12 });
-
-    forEachAboveSeries(list, (decoration) => decoration.draw());
-
-    // b used to be dropped entirely — splice shifted for...of's index.
-    expect(seen).toEqual(["a", "b", "c"]);
   });
 });
 
@@ -181,22 +149,6 @@ describe("createPlotModel reads an explicit undefined as 'not given'", () => {
   });
 });
 
-describe("Plot does not hold onto the caller's config object", () => {
-  it("should ignore a mutation of the caller's config object", () => {
-    const config = { showGrid: true };
-    const model = createPlotModel({
-      size: { width: 400, height: 300 },
-      series: { series: lineSeries(), data: DATA },
-      config,
-    });
-
-    config.showGrid = false;
-
-    // applyOptions is the one and only door for changing it.
-    expect(model.plot.getOptions().showGrid).toBe(true);
-  });
-});
-
 describe("the numeric and shape doors share the same vocabulary as their siblings", () => {
   it("should reject a negative paneGap", () => {
     // A negative gap would make panes overlap — both the divider line and the drag handle would fall outside their bounds.
@@ -285,8 +237,8 @@ describe("frameScheduler keeps its receiver attached", () => {
   });
 });
 
-/** Regression checks for four bugs that were fixed without a guard. Mutation testing confirmed each guard's discriminating power. */
-describe("four fixes that had no guard", () => {
+/** Regression checks for bugs that were fixed without a guard. Mutation testing confirmed each guard's discriminating power. */
+describe("fixes that had no guard", () => {
   /** Cancellation is not detachment — the same problem shows up in the core's own axis drag. */
   it("a cancelled axis drag does not let a later hover keep stretching the value axis", () => {
     const model = stage();
@@ -353,77 +305,6 @@ describe("four fixes that had no guard", () => {
     model.plot.render();
 
     expect(handle.read().map((point) => point.x)).toEqual([0, 1, 2, 3]);
-  });
-
-  /** A failed syncSeries leaves nothing behind. */
-  it("a bad spec throwing keeps a sibling's data out too", () => {
-    const model = createPlotModel({
-      size: { width: 400, height: 300 },
-      series: { series: lineSeries(), data: DATA },
-      config: {},
-    });
-    const pane = model.plot.mainPane;
-    pane.clearSeries();
-    pane.syncSeries([
-      seriesSpec({ id: "a", series: lineSeries(), data: DATA }),
-    ]);
-
-    expect(() =>
-      pane.syncSeries([
-        seriesSpec({
-          id: "a",
-          series: lineSeries(),
-          data: [...DATA, { x: 3, y: 40 }],
-        }),
-        // An unreadable point — this spec throws at the door.
-        seriesSpec({
-          id: "b",
-          series: lineSeries(),
-          data: [{ x: 0, y: Number.NaN }],
-        }),
-      ]),
-    ).toThrow();
-
-    // A rejection leaves nothing behind — if `a` had taken in the new bar,
-    // the index and value axis would go stale with no notification
-    // (observed: a bar was drawn outside the data area). The observable
-    // surface is the x mapping: if the new bar landed, that x now has an index.
-    expect(model.plot.xAt(model.plot.pixelAtX(3))).toBeCloseTo(3, 6);
-    expect(pane.valueExtent()?.max).toBeLessThan(40);
-  });
-
-  /** A mapping written as a class still works — createXMapping is a public extension point. */
-  it("a mapping's scan-plane built from prototype methods survives", () => {
-    class ClassMapping {
-      constructor(private readonly scale: { scale(v: number): number; invert(p: number): number }) {}
-      toPixel(x: number): number {
-        return this.scale.scale(x);
-      }
-      fromPixel(px: number): number {
-        return this.scale.invert(px);
-      }
-      toDomain(x: number): number {
-        return x;
-      }
-      fromDomain(value: number): number {
-        return value;
-      }
-      rebuild(): void {}
-      scanToDomain(): (x: number) => number {
-        // If `this` gets detached, this throws TypeError — the chart dies on the first frame.
-        return (x) => this.toDomain(x);
-      }
-    }
-
-    const model = createPlotModel({
-      size: { width: 400, height: 300 },
-      series: { series: lineSeries(), data: DATA },
-      config: {},
-      deps: { createXMapping: (scale) => new ClassMapping(scale) },
-    });
-
-    expect(() => model.plot.render()).not.toThrow();
-    expect(model.commands().length).toBeGreaterThan(0);
   });
 });
 

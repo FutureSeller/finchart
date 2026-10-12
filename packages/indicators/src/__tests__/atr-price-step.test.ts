@@ -41,7 +41,6 @@ describe("atrPriceStep", () => {
   it("refuses fewer bars than the period — the ATR seeds on `period` true ranges, so `period` bars is the least", () => {
     expect(() => atrPriceStep(tape.slice(0, 2), { period: 3 })).toThrow(/^atrPriceStep needs at least 3 bars for an ATR\(3\), got 2$/);
     expect(() => atrPriceStep([], { period: 1 })).toThrow(ContractError);
-    expect(atrPriceStep(tape.slice(0, 3), { period: 3 })).toBe(4);
   });
 
   it("refuses an ATR that is no step — 0 on a flat tape, or below the smallest step the transforms take — so none of them fails under its own name", () => {

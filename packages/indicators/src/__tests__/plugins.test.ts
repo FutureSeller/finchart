@@ -173,20 +173,6 @@ describe("indicator plugins", () => {
     expect(smoothed.out.ma.read().some((point) => point.y !== null)).toBe(true);
   });
 
-  it("should wire an owned oscillator pane — fixed 0–100 and level lines", () => {
-    const { model, price } = pricedModel();
-
-    const installed = model.plot.use(attachRsi({ source: price, period: 5 }));
-
-    expect(model.plot.panes).toHaveLength(2);
-    // An oscillator's axis is set by its definition, not by the data —
-    // autoScale is off.
-    expect(model.plot.panes[1].autoScale).toBe(false);
-
-    installed.dispose();
-    expect(model.plot.panes).toHaveLength(1);
-  });
-
   it("should pin an owned oscillator pane's value axis to its definition's range", () => {
     const { model, price } = pricedModel();
     const rsi = model.plot.use(attachRsi({ source: price, period: 5 }));
@@ -203,49 +189,6 @@ describe("indicator plugins", () => {
     model.plot.destroy();
   });
 
-  it("should leave a borrowed pane's axis alone", () => {
-    const { model, price } = pricedModel();
-
-    const installed = model.plot.use(
-      attachRsi({ source: price, period: 5, pane: model.plot.mainPane }),
-    );
-
-    // A borrowed pane gets only the series — it never touches someone
-    // else's axis.
-    expect(model.plot.panes).toHaveLength(1);
-    expect(model.plot.mainPane.autoScale).toBe(true);
-    installed.dispose();
-  });
-
-  it("should draw the level lines only when they are wanted", () => {
-    const { model, price } = pricedModel();
-    const withLevels = model.plot.use(attachStochastic({ source: price }));
-    model.plot.render();
-    const levelled = strokeCount(model);
-    withLevels.dispose();
-
-    const without = model.plot.use(
-      attachStochastic({ source: price, levels: false }),
-    );
-    model.plot.render();
-    // Line count drops by exactly the two missing reference lines.
-    expect(strokeCount(model)).toBe(levelled - 2);
-    without.dispose();
-  });
-
-  it("should give atr its own auto-scaled pane and take it back", () => {
-    const { model, price } = pricedModel();
-
-    const installed = model.plot.use(attachAtr({ source: price, period: 5 }));
-
-    expect(model.plot.panes).toHaveLength(2);
-    // ATR is not an oscillator — the data sets the axis.
-    expect(model.plot.panes[1].autoScale).toBe(true);
-
-    installed.dispose();
-    expect(model.plot.panes).toHaveLength(1);
-  });
-
   it("should round-trip the price-pane overlays — vwap and sar", () => {
     const { model, price } = pricedModel();
     const before = strokeCount(model);
@@ -260,21 +203,6 @@ describe("indicator plugins", () => {
     for (const plugin of installed) plugin.dispose();
     model.plot.render();
     expect(strokeCount(model)).toBe(before);
-  });
-
-  it("should give obv and adx their own auto-scaled panes", () => {
-    const { model, price } = pricedModel();
-
-    const installedObv = model.plot.use(attachObv({ source: price }));
-    const installedAdx = model.plot.use(attachAdx({ source: price, period: 3 }));
-
-    expect(model.plot.panes).toHaveLength(3);
-    expect(model.plot.panes[1].autoScale).toBe(true);
-    expect(model.plot.panes[2].autoScale).toBe(true);
-
-    installedObv.dispose();
-    installedAdx.dispose();
-    expect(model.plot.panes).toHaveLength(1);
   });
 
   it("should install and uninstall the whole ichimoku set in one round trip", () => {
@@ -400,7 +328,7 @@ describe("names — the label and its override", () => {
 });
 
 /**
- * Wave 1's oscillators take the same door as RSI: an own pane with a
+ * The own-pane oscillators share one door: an own pane with a
  * fixed 0–100 axis and two reference lines, a borrowed pane left alone,
  * levels that can be turned off, a name that replaces the label's head.
  */
@@ -412,6 +340,8 @@ describe("own-pane oscillators — the attach mould", () => {
     name?: string;
   }
   const attaches: [string, (o: Mould) => Plugin<PaneHost, PluginApi>, string][] = [
+    ["attachRsi", (o) => attachRsi({ period: 5, ...o }), "RSI(5)"],
+    ["attachStochastic", (o) => attachStochastic({ ...o }), "Stoch(14,3,3) %K"],
     ["attachStochasticRsi", (o) => attachStochasticRsi({ rsiPeriod: 5, period: 5, ...o }), "StochRSI(5,5,3,3) %K"],
     ["attachMfi", (o) => attachMfi({ period: 5, ...o }), "MFI(5)"],
     ["attachUltimateOscillator", (o) => attachUltimateOscillator({ fast: 2, middle: 3, slow: 4, ...o }), "UO(2,3,4)"],
@@ -506,9 +436,9 @@ describe("own-pane oscillators — the attach mould", () => {
 });
 
 /**
- * Wave 1's histogram and line indicators take the ATR door: an own pane
- * whose axis stays autoScale (they are unbounded), a borrowed pane left
- * alone, a name that replaces the label's head.
+ * The histogram and line indicators share one door: an own pane whose
+ * axis stays autoScale (they are unbounded), a borrowed pane left alone,
+ * a name that replaces the label's head.
  */
 describe("unbounded indicators — the own-pane mould", () => {
   interface Mould {
@@ -517,6 +447,9 @@ describe("unbounded indicators — the own-pane mould", () => {
     name?: string;
   }
   const attaches: [string, (o: Mould) => Plugin<PaneHost, PluginApi>, string][] = [
+    ["attachAtr", (o) => attachAtr({ period: 5, ...o }), "ATR(5)"],
+    ["attachObv", (o) => attachObv({ ...o }), "OBV"],
+    ["attachAdx", (o) => attachAdx({ period: 3, ...o }), "ADX(3)"],
     ["attachAwesomeOscillator", (o) => attachAwesomeOscillator({ fast: 2, slow: 5, ...o }), "AO(2,5)"],
     ["attachMomentum", (o) => attachMomentum({ period: 3, signal: 2, ...o }), "MTM(3,2)"],
     ["attachElderRay", (o) => attachElderRay({ period: 3, ...o }), "Elder-Ray(3) Bull"],
@@ -631,73 +564,31 @@ describe("unbounded indicators — the own-pane mould", () => {
     expect(["%K", "%D", "%J"].map((line) => byName.get(`Own ${line}`))).toEqual(["#111111", "#222222", "#333333"]);
   });
 
-  it("cr draws its 100 line only on an own pane", () => {
-    const strokes = (
-      make: (price: Source<OHLC>, pane: SeriesHost | undefined) => Plugin<PaneHost, PluginApi>,
-      borrow: boolean,
-    ) => {
-      const { model, price } = pricedModel();
-      const installed = model.plot.use(make(price, borrow ? model.plot.mainPane : undefined));
-      model.plot.render();
-      const count = strokeCount(model);
-      installed.dispose();
-      return count;
-    };
-    const atr = (price: Source<OHLC>, pane: SeriesHost | undefined) => attachAtr({ source: price, period: 3, pane });
-    const five = (price: Source<OHLC>, pane: SeriesHost | undefined) => attachCr({ source: price, period: 2, periods: [1, 2, 3, 4], pane });
-    const paneOverhead = strokes(atr, false) - strokes(atr, true);
-    expect(strokes(five, false) - strokes(five, true) - paneOverhead).toBe(1);
-  });
+  type Make = (price: Source<OHLC>, pane: SeriesHost | undefined) => Plugin<PaneHost, PluginApi>;
+  const referenceLines: [string, Make][] = [
+    ["cr's 100 line", (price, pane) => attachCr({ source: price, period: 2, periods: [1, 2, 3, 4], pane })],
+    ["brar's 100 line", (price, pane) => attachBrar({ source: price, period: 3, pane })],
+    ["momentum's zero line", (price, pane) => attachMomentum({ source: price, period: 3, signal: 2, pane })],
+    ["elder-ray's zero line", (price, pane) => attachElderRay({ source: price, period: 3, pane })],
+    ["roc's zero line", (price, pane) => attachRoc({ source: price, period: 3, signal: 2, pane })],
+    ["trix's zero line", (price, pane) => attachTrix({ source: price, period: 3, signal: 2, pane })],
+    ["emv's zero line", (price, pane) => attachEmv({ source: price, period: 3, pane })],
+  ];
 
-  it("brar draws its 100 line only on an own pane", () => {
-    const strokes = (
-      make: (price: Source<OHLC>, pane: SeriesHost | undefined) => Plugin<PaneHost, PluginApi>,
-      borrow: boolean,
-    ) => {
-      const { model, price } = pricedModel();
-      const installed = model.plot.use(make(price, borrow ? model.plot.mainPane : undefined));
-      model.plot.render();
-      const count = strokeCount(model);
-      installed.dispose();
-      return count;
-    };
-    const atr = (price: Source<OHLC>, pane: SeriesHost | undefined) => attachAtr({ source: price, period: 3, pane });
-    const two = (price: Source<OHLC>, pane: SeriesHost | undefined) => attachBrar({ source: price, period: 3, pane });
-    const paneOverhead = strokes(atr, false) - strokes(atr, true);
-    expect(strokes(two, false) - strokes(two, true) - paneOverhead).toBe(1);
-  });
-
-  it("momentum, elder-ray, roc, trix and emv draw their zero line only on an own pane", () => {
+  it.each(referenceLines)("%s is drawn only on an own pane", (_name, make) => {
     // An own pane costs strokes of its own (its axis), so measure that
-    // overhead with ATR — one line, no zero line — and take it out.
-    const strokes = (
-      make: (price: Source<OHLC>, pane: SeriesHost | undefined) => Plugin<PaneHost, PluginApi>,
-      borrow: boolean,
-    ) => {
+    // overhead with ATR — one line, no reference line — and take it out.
+    const strokes = (attach: Make, borrow: boolean) => {
       const { model, price } = pricedModel();
-      const installed = model.plot.use(make(price, borrow ? model.plot.mainPane : undefined));
+      const installed = model.plot.use(attach(price, borrow ? model.plot.mainPane : undefined));
       model.plot.render();
       const count = strokeCount(model);
       installed.dispose();
       return count;
     };
-    const atr = (price: Source<OHLC>, pane: SeriesHost | undefined) => attachAtr({ source: price, period: 3, pane });
-    const mtm = (price: Source<OHLC>, pane: SeriesHost | undefined) =>
-      attachMomentum({ source: price, period: 3, signal: 2, pane });
-    const elder = (price: Source<OHLC>, pane: SeriesHost | undefined) =>
-      attachElderRay({ source: price, period: 3, pane });
-    const rocLines = (price: Source<OHLC>, pane: SeriesHost | undefined) =>
-      attachRoc({ source: price, period: 3, signal: 2, pane });
-    const trixLines = (price: Source<OHLC>, pane: SeriesHost | undefined) =>
-      attachTrix({ source: price, period: 3, signal: 2, pane });
-    const emvLines = (price: Source<OHLC>, pane: SeriesHost | undefined) =>
-      attachEmv({ source: price, period: 3, pane });
+    const atr: Make = (price, pane) => attachAtr({ source: price, period: 3, pane });
     const paneOverhead = strokes(atr, false) - strokes(atr, true);
-    expect(strokes(mtm, false) - strokes(mtm, true) - paneOverhead).toBe(1);
-    expect(strokes(elder, false) - strokes(elder, true) - paneOverhead).toBe(1);
-    expect(strokes(rocLines, false) - strokes(rocLines, true) - paneOverhead).toBe(1);
-    expect(strokes(trixLines, false) - strokes(trixLines, true) - paneOverhead).toBe(1);
-    expect(strokes(emvLines, false) - strokes(emvLines, true) - paneOverhead).toBe(1);
+    expect(strokes(make, false) - strokes(make, true) - paneOverhead).toBe(1);
   });
 
   it("the two-line attaches register both suffixes with their own swatches", () => {

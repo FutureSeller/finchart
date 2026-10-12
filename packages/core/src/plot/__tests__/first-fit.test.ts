@@ -7,7 +7,6 @@
 import { describe, expect, it } from "vitest";
 import type { OHLC } from "../../data";
 import { seriesSpec } from "../../registration";
-import { barIndexX } from "../../scale";
 import { candleSeries, lineSeries } from "../../series";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { mountPlot } from "./helpers";
@@ -34,19 +33,6 @@ describe("a chart fed bar by bar from empty", () => {
     const [min, max] = xScale.getDomain();
     expect(min).toBeLessThanOrEqual(T0);
     expect(max).toBeGreaterThanOrEqual(T0 + 49 * MINUTE);
-    plot.destroy();
-  });
-
-  it("keeps every streamed bar in view under bar-index x", () => {
-    const { deps, xScale } = testBrowserDepsWithScales({ createXMapping: barIndexX });
-    const { plot } = mountPlot({ deps });
-    const handle = plot.mainPane.addSeries({ series: candleSeries(), data: [] });
-
-    for (const point of bars(50)) handle.append([point]);
-
-    const [min, max] = xScale.getDomain();
-    expect(min).toBeLessThanOrEqual(0);
-    expect(max).toBeGreaterThanOrEqual(49);
     plot.destroy();
   });
 

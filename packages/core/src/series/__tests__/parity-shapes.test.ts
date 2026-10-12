@@ -18,7 +18,7 @@ import type { StyleReader } from "../../render";
 import { CanvasRenderer } from "../../render";
 import { continuousX, LinearScale } from "../../scale";
 import { candleSeries } from "../candle-series";
-import { lineSeries, stepLineSeries } from "../line-series";
+import { stepLineSeries } from "../line-series";
 import type { SeriesContext } from "../types";
 
 const area: PlotArea = { left: 20, right: 780, top: 20, bottom: 580 };
@@ -52,14 +52,6 @@ const candles: OHLC[] = [
 ];
 
 describe("hollow candle body (hollow)", () => {
-  it("defaults to filled — today's behavior stays if the option isn't given", () => {
-    const { context, renderer } = surface();
-    candleSeries().draw(renderer, contextFor(candles, 90, 115));
-    renderer.commit();
-
-    expect(filledRects(context)).toHaveLength(2);
-  });
-
   it("with hollow, an up candle gets an outline while a down candle stays filled", () => {
     const { context, renderer } = surface();
     candleSeries(undefined, { hollow: true }).draw(
@@ -106,14 +98,6 @@ const line: LineDataPoint[] = [
 ];
 
 describe("step line (step)", () => {
-  it("defaults to a straight line — three points stay three points", () => {
-    const { context, renderer } = surface();
-    lineSeries().draw(renderer, contextFor(line, 0, 40));
-    renderer.commit();
-
-    expect(strokedPaths(context)[0].points).toHaveLength(3);
-  });
-
   it("with step, the value holds until the next x — three points become five", () => {
     const { context, renderer } = surface();
     stepLineSeries().draw(
@@ -139,9 +123,5 @@ describe("step line (step)", () => {
     renderer.commit();
 
     expect(filledCircles(context)).toHaveLength(3);
-  });
-
-  it("the door's rules match its sibling", () => {
-    expect(() => stepLineSeries(42 as never)).toThrow();
   });
 });

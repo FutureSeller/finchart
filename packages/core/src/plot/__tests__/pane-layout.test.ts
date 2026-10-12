@@ -157,14 +157,6 @@ describe("removePane", () => {
 
     expect(gone.seen).toHaveLength(0);
   });
-
-  it("should ignore a pane that was already removed", () => {
-    const { plot } = loaded();
-    const pane = plot.addPane();
-    plot.removePane(pane);
-
-    expect(() => plot.removePane(pane)).not.toThrow();
-  });
 });
 
 describe("single pane", () => {

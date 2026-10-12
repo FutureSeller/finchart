@@ -105,20 +105,6 @@ describe('<ChartContainer followTheme>', () => {
     document.body.removeAttribute('data-theme');
   });
 
-  it('honours a custom attribute filter — it replaces the default one', async () => {
-    const { deps, ref, counter } = setup();
-    render(<ChartContainer deps={deps} data={data} plotRef={ref} followTheme={{ attributes: ['data-theme'] }} />);
-    let before = counter.requests;
-    await mutate(() => document.body.classList.add('light'));
-    expect(counter.requests - before).toBe(0);
-
-    before = counter.requests;
-    await mutate(() => document.body.setAttribute('data-theme', 'dark'));
-    expect(counter.requests - before).toBe(1);
-    document.body.classList.remove('light');
-    document.body.removeAttribute('data-theme');
-  });
-
   it('does not resubscribe for an inline filter with the same value, and does for a different one', () => {
     const { deps, ref } = setup();
     const observers = countObservers();

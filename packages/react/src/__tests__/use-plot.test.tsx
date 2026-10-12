@@ -56,25 +56,17 @@ function setup() {
 }
 
 describe('usePlot lifecycle', () => {
-  it('should create the plot once on mount', () => {
+  // Recreation would swap out the canvas, wiping out pan position and annotations.
+  it.each([
+    ['the grid is toggled', { showGrid: true }, { showGrid: false }],
+    ['the series is swapped', {}, { series: lineSeries() }],
+    ['new data is pushed', {}, { data: [...data, { x: 150, y: 5 }] }],
+  ])('should NOT recreate the plot when %s', (_change, before, after) => {
     const { spy, deps, series } = setup();
+    const { rerender } = render(<Harness deps={deps} series={series} data={data} {...before} />);
 
-    render(<Harness deps={deps} series={series} data={data} />);
+    rerender(<Harness deps={deps} series={series} data={data} {...after} />);
 
-    expect(spy.created).toHaveLength(1);
-  });
-
-  it('should NOT recreate the plot when the grid is toggled', () => {
-    const { spy, deps, series } = setup();
-    const { rerender } = render(
-      <Harness deps={deps} series={series} data={data} showGrid />,
-    );
-
-    rerender(
-      <Harness deps={deps} series={series} data={data} showGrid={false} />,
-    );
-
-    // Recreation would swap out the canvas, wiping out pan position and annotations.
     expect(spy.created).toHaveLength(1);
     expect(spy.destroyed).toHaveLength(0);
   });
@@ -104,30 +96,6 @@ describe('usePlot lifecycle', () => {
     );
 
     expect(spy.resizes).toContainEqual({ width: 800, height: 300 });
-  });
-
-  it('should swap the series without recreating the plot', () => {
-    const { spy, deps, series } = setup();
-    const { rerender } = render(
-      <Harness deps={deps} series={series} data={data} />,
-    );
-
-    rerender(<Harness deps={deps} series={lineSeries()} data={data} />);
-
-    expect(spy.created).toHaveLength(1);
-  });
-
-  it('should push new data without recreating the plot', () => {
-    const { spy, deps, series } = setup();
-    const { rerender } = render(
-      <Harness deps={deps} series={series} data={data} />,
-    );
-
-    rerender(
-      <Harness deps={deps} series={series} data={[...data, { x: 150, y: 5 }]} />,
-    );
-
-    expect(spy.created).toHaveLength(1);
   });
 
   it('should destroy the plot on unmount', () => {

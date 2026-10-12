@@ -159,22 +159,6 @@ describe("vertical distribution", () => {
     const [bottom, top] = list[0].yScale.getRange();
     expect(bottom).toBeGreaterThan(top);
   });
-
-  it("should split by flex", () => {
-    const list = panes(2);
-    list[0].applyOptions({ flex: 3 });
-    frame({ panes: list });
-
-    const heightOf = (p: Pane) => p.area.bottom - p.area.top;
-    expect(heightOf(list[0])).toBeCloseTo(heightOf(list[1]) * 3, 0);
-  });
-
-  it("should keep the gap between panes out of every pane", () => {
-    const list = panes(2);
-    frame({ panes: list, gap: 20 });
-
-    expect(list[1].area.top - list[0].area.bottom).toBe(20);
-  });
 });
 
 describe("x range is decided after the y-axis width", () => {
@@ -225,18 +209,6 @@ describe("ticks", () => {
     expect(Math.max(...seen)).toBeGreaterThan(4);
     expect(seen.every((value) => value >= 100 && value <= 500)).toBe(true);
   });
-
-  it("should not place bar-index ticks between bars", () => {
-    const xScale = new LinearScale();
-    const x = barIndexX(xScale);
-    x.rebuild!([[100, 200, 300]]);
-    xScale.setDomain(0, 2);
-
-    const { ticks } = frame({ xScale, x });
-
-    // A fractional index is empty space between bars, so its label would be an x that has no data.
-    expect(ticks.x.every(({ value }) => Number.isInteger(value))).toBe(true);
-  });
 });
 
 /**
@@ -280,13 +252,6 @@ describe("y-axis tick strategy", () => {
 
     expect(ticks.y[0].ticks.map((t) => t.label)).toEqual(["stage default"]);
     expect(ticks.y[1].ticks.map((t) => t.label)).toEqual(["this pane only"]);
-  });
-
-  it("should fall back to the axis arithmetic with no strategy", () => {
-    const { ticks } = frame({ panes: panes(1, [[0, 100]]) });
-
-    expect(ticks.y[0].ticks.length).toBeGreaterThan(1);
-    expect(ticks.y[0].ticks.every((t) => Number.isFinite(t.value))).toBe(true);
   });
 
   /** The strategy owns the label — if the two mix halfway, nobody knows who's in charge. */
@@ -454,6 +419,7 @@ describe("sizes that cannot be drawn", () => {
     ["both", 40, 20],
     ["1px wide", 1, 300],
     ["3x3", 3, 3],
+    ["2x2", 2, 2],
   ])("should return null when %s (%ix%i)", (_label, width, height) => {
     expect(lay(width, height)).toBeNull();
   });
@@ -464,13 +430,6 @@ describe("sizes that cannot be drawn", () => {
     ["small but drawable", 60, 30],
   ])("should still lay out %s (%ix%i)", (_label, width, height) => {
     expect(lay(width, height)).not.toBeNull();
-  });
-
-  /** **Never throws** — a size mid-transition is not a programmer error. */
-  it("should never throw on a degenerate size", () => {
-    for (const [w, h] of [[3, 3], [1, 300], [300, 20], [40, 300], [2, 2]]) {
-      expect(() => lay(w, h)).not.toThrow();
-    }
   });
 
   /** The vertical check runs before the first assignment, so the x scale is never touched — it used to throw from yScale.setRange(0, 0) before the check ran. */

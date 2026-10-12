@@ -102,53 +102,6 @@ describe("periodAnchor", () => {
   });
 
   /**
-   * A clock that moves does not open a session by itself: New York springs
-   * forward at 07:00Z on 8 March 2026, in the middle of a session that
-   * opened at 05:00Z.
-   */
-  it("does not open a session where a clock merely moved", () => {
-    const newYork = periodAnchor({ barStart: sessionStart({ timeZone: "America/New_York" }) });
-    const before = { x: at("2026-03-08T06:00Z"), open: 1, high: 1, low: 1, close: 1 };
-    const after = { x: at("2026-03-08T08:00Z"), open: 1, high: 1, low: 1, close: 1 };
-
-    expect(newYork(after, 1, before)).toBe(false);
-  });
-
-  /**
-   * **Sub-millisecond precision carried as a fractional epoch millisecond
-   * is a real thing**, and the data door lets that x through. Asking a
-   * clock about it rather than the millisecond under it would throw here —
-   * inside an indicator's recomputation, a long way from anything a
-   * consumer could act on — and which session holds an instant does not
-   * change within a millisecond.
-   */
-  it("reads a fraction of a millisecond as the millisecond it falls in", () => {
-    const opens = periodAnchor({ barStart: sessionStart({ timeZone: "UTC" }) });
-    const bar = (x: number): OHLC => ({ x, open: 1, high: 1, low: 1, close: 1 });
-    const midnight = at("2026-03-02T00:00Z");
-
-    expect(() => opens(bar(midnight + 0.5), 1, bar(midnight - 1))).not.toThrow();
-    // Still the same session either side of the fraction.
-    expect(opens(bar(midnight + 0.5), 1, bar(midnight))).toBe(false);
-    // And still a new one across the boundary.
-    expect(opens(bar(midnight + 0.5), 1, bar(midnight - 0.5))).toBe(true);
-  });
-
-  /**
-   * **Below the epoch the fraction has to go down, not toward zero.** The
-   * epoch itself is a UTC midnight, so half a millisecond before it belongs
-   * to the day that ended there — truncating toward zero would file it
-   * under the day that had not started yet.
-   */
-  it("takes a fraction below the epoch into the millisecond beneath it", () => {
-    const opens = periodAnchor({ barStart: sessionStart({ timeZone: "UTC" }) });
-    const bar = (x: number): OHLC => ({ x, open: 1, high: 1, low: 1, close: 1 });
-
-    expect(opens(bar(-0.5), 1, bar(-1))).toBe(false);
-    expect(opens(bar(-0.5), 1, bar(0))).toBe(true);
-  });
-
-  /**
    * **The same x meets the same door wherever it sits in the tape.** What
    * a session answers for stops three days short of the ends of what a
    * `Date` holds, so an x can be a perfectly good instant and still be

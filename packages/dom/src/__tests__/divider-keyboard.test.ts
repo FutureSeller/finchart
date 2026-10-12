@@ -154,21 +154,6 @@ describe("a divider as a separator", () => {
     expect(heightOf(lower)).toBe(lower.minHeight);
   });
 
-  it("goes to the limits with Home and End, and stops there", () => {
-    const { plot, heightOf, press } = setup();
-    const [upper, lower] = plot.panes;
-    const total = heightOf(upper) + heightOf(lower);
-
-    press("Home");
-    expect(heightOf(upper)).toBe(upper.minHeight);
-    press("ArrowUp");
-    expect(heightOf(upper)).toBe(upper.minHeight);
-
-    press("End");
-    expect(heightOf(lower)).toBe(lower.minHeight);
-    expect(heightOf(upper)).toBe(total - lower.minHeight);
-  });
-
   it("keeps the keys it handles away from the input stack and the container", () => {
     const { routed, press } = setup();
     const heard = vi.fn();

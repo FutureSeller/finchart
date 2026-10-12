@@ -1298,12 +1298,12 @@ describe("Z1 — the shape axis", () => {
      * 7140px red bar in a 600px pane — about the worst failure a financial
      * chart can produce.
      *
-     * The field list is derived from the same source as the accessor's —
-     * a hand-written one leaks one field.
+     * Every field is fed non-finite, string, null and absent values at the
+     * accessor in ohlc-fields.test.ts; here the refusal is checked through
+     * setData.
      */
     describe("a point's fields also throw a contract error", () => {
       const CANDLE = { x: 0, open: 100, high: 105, low: 95, close: 101 };
-      const OHLC_FIELDS = Object.keys(CANDLE).filter((f) => f !== "x");
 
       const feedCandle = (index: number, field: string, bad: unknown) => {
         const stage = twoSeriesStage().main;
@@ -1311,26 +1311,6 @@ describe("Z1 — the shape axis", () => {
         (data[index] as Record<string, unknown>)[field] = bad;
         stage.setData(data);
       };
-
-      /**
-       * Excludes `number` — a number in a price slot is legitimate. The
-       * shape axis's hostile list was built targeting a top-level
-       * argument (a spot expecting an object), so for a numeric field
-       * that one entry's meaning flips. The numeric side of hostility is
-       * fed separately, by `HOSTILE_NUMBERS` (NaN, Infinity).
-       */
-      const HOSTILE_FIELD_SHAPES = HOSTILE_SHAPES.filter(
-        ([label]) => label !== "number",
-      );
-
-      describe.each(OHLC_FIELDS)("candle %s", (field) => {
-        it.each([...HOSTILE_FIELD_SHAPES, ...HOSTILE_NUMBERS])(
-          "should refuse %s",
-          (_label, bad) => {
-            expect(() => feedCandle(1, field, bad)).toThrow(publicApi.DataError);
-          },
-        );
-      });
 
       /** Also checks the last bar — exactly where a live tick attaches. */
       it("should refuse a bad field on the newest bar", () => {

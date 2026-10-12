@@ -45,23 +45,6 @@ function overlay() {
 }
 
 describe("createDomAxisLabels", () => {
-  it("should keep its labels in an isolated container", () => {
-    const target = overlay();
-
-    createDomAxisLabels({ overlay: target, target: noopTarget });
-
-    expect(axisLabelRoot(target)).toBeDefined();
-  });
-
-  it("should render one element per tick", () => {
-    const target = overlay();
-    const labels = createDomAxisLabels({ overlay: target, target: noopTarget });
-
-    labels.render({ x: xTicks, y: yTicks, badges: [], area, axes, readStyle });
-
-    expect(axisLabels(target)).toHaveLength(4);
-  });
-
   it("should use the formatted tick text", () => {
     const target = overlay();
     const labels = createDomAxisLabels({ overlay: target, target: noopTarget });

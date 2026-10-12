@@ -1180,26 +1180,18 @@ describe("timeTicks — boundaries at the window's own edges and weights", () =>
    * exactly that much closer than asked is kept, a pair two millionths of a
    * pixel closer is not.
    */
-  it("keeps a pair standing a millionth of a pixel closer than asked", () => {
+  it.each([
+    ["keeps a pair standing a millionth of a pixel closer than asked", 1e-6, ["3/2", "3/3"]],
+    ["drops a pair standing two millionths of a pixel closer than asked", 2e-6, ["3/2"]],
+  ])("%s", (_name, closer, labels) => {
     const DAY_MS = 24 * 60 * 60 * 1000;
     const min = ms("2026-03-02T00:00Z");
     const ticks = timeTicks(UTC).ticks({
       ...context(min, min + DAY_MS, 80, 80),
-      positionOf: (value) => ((value - min) / DAY_MS) * (80 - 1e-6),
+      positionOf: (value) => ((value - min) / DAY_MS) * (80 - closer),
     });
 
-    expect(ticks.map((tick) => tick.label)).toEqual(["3/2", "3/3"]);
-  });
-
-  it("drops a pair standing two millionths of a pixel closer than asked", () => {
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    const min = ms("2026-03-02T00:00Z");
-    const ticks = timeTicks(UTC).ticks({
-      ...context(min, min + DAY_MS, 80, 80),
-      positionOf: (value) => ((value - min) / DAY_MS) * (80 - 2e-6),
-    });
-
-    expect(ticks.map((tick) => tick.label)).toEqual(["3/2"]);
+    expect(ticks.map((tick) => tick.label)).toEqual(labels);
   });
 
   it("opens on the month a window starts exactly at", () => {

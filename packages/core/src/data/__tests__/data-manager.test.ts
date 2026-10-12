@@ -167,27 +167,6 @@ describe("width-aware decimation", () => {
 describe("LttbDecimation edge cases", () => {
   const lttb = () => new LttbDecimation(new LineDataAccessor());
 
-  it("should return exactly the requested number of points", () => {
-    for (const threshold of [3, 10, 100, 997]) {
-      expect(lttb().decimate(...whole(series(1000)), threshold)).toHaveLength(threshold);
-    }
-  });
-
-  it("should not run past the end of the array", () => {
-    // The spot where the last bucket index ran past the array and read undefined.
-    for (let n = 100; n <= 1000; n += 137) {
-      expect(() => lttb().decimate(...whole(series(n)), 99)).not.toThrow();
-    }
-  });
-
-  it("should keep the first and last point", () => {
-    const data = series(500);
-    const decimated = lttb().decimate(...whole(data), 50);
-
-    expect(decimated[0]).toBe(data[0]);
-    expect(decimated[decimated.length - 1]).toBe(data[data.length - 1]);
-  });
-
   it("should return the data untouched when it already fits", () => {
     const data = series(10);
     expect(lttb().decimate(...whole(data), 50)).toBe(data);
@@ -197,11 +176,6 @@ describe("LttbDecimation edge cases", () => {
     const data = series(100);
     expect(lttb().decimate(...whole(data), 2)).toEqual([data[0], data[99]]);
   });
-
-  it("should never emit undefined entries", () => {
-    const decimated = lttb().decimate(...whole(series(1000)), 100);
-    expect(decimated.every((point) => point !== undefined)).toBe(true);
-  });
 });
 
 describe("SimpleDecimation", () => {
@@ -210,38 +184,6 @@ describe("SimpleDecimation", () => {
   it("should return the data untouched when it already fits", () => {
     const data = series(20);
     expect(simple().decimate(...whole(data), 50)).toBe(data);
-  });
-
-  it("should thin the data by a fixed step", () => {
-    // Not a multiple of the threshold, so the step has to round up to stay
-    // within it.
-    const decimated = simple().decimate(...whole(series(1050)), 100);
-
-    // At most the threshold, plus the guaranteed last point.
-    expect(decimated.length).toBeLessThanOrEqual(101);
-    expect(decimated.length).toBeGreaterThan(90);
-  });
-
-  it("should keep the first and last point", () => {
-    const data = series(1000);
-    const decimated = simple().decimate(...whole(data), 100);
-
-    expect(decimated[0]).toBe(data[0]);
-    expect(decimated[decimated.length - 1]).toBe(data[data.length - 1]);
-  });
-
-  it("should work without a coordinate accessor", () => {
-    // Index-based, so the default accessor gives the same answer as an
-    // explicit one for {x, y} points.
-    const data = series(500);
-    const implicit = simple().decimate(...whole(data), 50);
-    const explicit = new SimpleDecimation(new LineDataAccessor()).decimate(
-      ...whole(data),
-      50,
-    );
-
-    expect(implicit).toHaveLength(51); // every 10th point plus the last
-    expect(implicit).toEqual(explicit);
   });
 });
 

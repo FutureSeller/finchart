@@ -224,35 +224,6 @@ describe("placement and drag through the real state machine", () => {
     return { model, tools, pane, route };
   }
 
-  it("vertical completes on a single click, like its horizontal dual", () => {
-    const { model, tools, pane, route } = mounted();
-    tools.begin("vertical");
-    const px = model.plot.pixelAtX(5);
-    const mid = (pane.area.top + pane.area.bottom) / 2;
-    route("pointerdown", { x: px, y: mid });
-    route("pointerup", { x: px, y: mid });
-
-    expect(tools.mode()).toBeNull();
-    const [drawn] = tools.list();
-    expect(drawn.type).toBe("vertical");
-    if (drawn.type === "vertical") {
-      expect(model.plot.pixelAtX(drawn.x)).toBeCloseTo(px, 5);
-    }
-  });
-
-  it("ray takes two clicks, like a trend line", () => {
-    const { model, tools, pane, route } = mounted();
-    tools.begin("ray");
-    const y = (price: number) => pane.yScale.scale(price);
-    route("pointerdown", { x: model.plot.pixelAtX(2), y: y(105) });
-    route("pointerup", { x: model.plot.pixelAtX(2), y: y(105) });
-    route("pointerdown", { x: model.plot.pixelAtX(8), y: y(115) });
-    route("pointerup", { x: model.plot.pixelAtX(8), y: y(115) });
-
-    expect(tools.mode()).toBeNull();
-    expect(tools.list()[0]).toMatchObject({ type: "ray" });
-  });
-
   it("dragging a vertical line moves its x — and Esc restores it", () => {
     const { model, tools, pane, route } = mounted();
     tools.add({ type: "vertical", x: 5 });

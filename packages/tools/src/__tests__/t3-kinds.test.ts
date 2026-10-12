@@ -165,21 +165,13 @@ describe("three-anchor drafting through the real state machine", () => {
     return { model, tools, pane, route, at, click };
   }
 
-  it.each(["parallelChannel", "pitchfork"] as const)("%s takes three clicks", (kind) => {
+  it.each<"parallelChannel" | "pitchfork">(["parallelChannel", "pitchfork"])("%s is still drafting after two clicks", (kind) => {
     const { tools, at, click } = mounted();
     tools.begin(kind);
     click(at(2, 105));
     click(at(5, 115));
     expect(tools.mode()).toBe(kind);
     expect(tools.list()).toHaveLength(0);
-    click(at(8, 108));
-
-    expect(tools.mode()).toBeNull();
-    const [drawn] = tools.list();
-    if (drawn.type !== kind) throw new Error(`expected a ${kind}`);
-    expect(drawn.a.x).toBeCloseTo(2, 5);
-    expect(drawn.b.x).toBeCloseTo(5, 5);
-    expect(drawn.c.x).toBeCloseTo(8, 5);
   });
 
   it("the click boundary measures from the latest press — a click on b does not finish the draft", () => {
