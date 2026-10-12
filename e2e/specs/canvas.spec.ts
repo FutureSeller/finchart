@@ -47,9 +47,10 @@ const DOWN = "220,38,38"; // #dc2626 — DEFAULT_CANDLE_STYLE.down
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("bars loaded")).toBeVisible();
-  // The first frame arrives on a rAF — give it a moment to get painted. A frame can be painted at the
-  // default size before the chart is fitted to its container; the fit clears the canvas, so wait for
-  // the fitted size as well as for ink, or "before" readings are taken from that default-size picture.
+  // The first frame arrives on a rAF — give it a moment to get painted. A refit after the first frame
+  // (a container not laid out when the chart was built, or the observer correcting the first
+  // measurement) clears the canvas, so wait for the fitted size as well as for ink, or "before"
+  // readings are taken from a picture about to be cleared.
   await page.waitForFunction(() => {
     const canvas = document.querySelector("canvas");
     const context = canvas?.getContext("2d");

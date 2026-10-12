@@ -114,7 +114,11 @@ export interface PlotOptions {
   deps: PlotDeps;
   /** May be left out — every static default is filled at this door (`resolveConfig`). */
   config?: PlotConfig;
-  /** Initial size of the layers. Changed afterward with `setViewport`. */
+  /**
+   * Initial size of the layers. Changed afterward with `setViewport`, or by
+   * `observeSize` whenever it reports — including while the plot is built,
+   * before the first frame.
+   */
   size: ViewportDimensions;
   /**
    * A parent lifetime to live under. When the given scope is disposed, this
@@ -829,16 +833,18 @@ export class Plot
   /**
    * When the container reports a change.
    *
-   * Two things need filtering out. **Zero is not accepted** — that's what
-   * arrives for `display: none`, and passing it through collapses the
-   * scale's range to a single point. And **the same size is not accepted**
-   * either — `ResizeObserver` calls once with the current size when
-   * observation starts, so without this filter, every mount adds one wasted
-   * render.
+   * Two things need filtering out. **Only a positive, finite size is
+   * accepted** — zero is what arrives for `display: none`, and passing it
+   * through collapses the scale's range to a single point; a negative, NaN
+   * or infinite size reported while the plot is built would fail the
+   * build. And **the same size is not accepted** either — `ResizeObserver`
+   * calls once with the current size when observation starts, after an
+   * observer may already have reported it, so without this filter every
+   * mount adds one wasted render.
    */
   private followContainer(width: number, height: number): void {
     if (this.destroyed) return;
-    if (width === 0 || height === 0) return;
+    if (!(width > 0 && height > 0 && width + height < Infinity)) return;
 
     const current = this.viewport;
     if (width === current.width && height === current.height) return;

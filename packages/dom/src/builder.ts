@@ -96,7 +96,11 @@ export class PlotBuilder<T extends BaseDataPoint> {
     return this;
   }
 
-  /** Initial size of the layers. Change it later with plot.setViewport(). */
+  /**
+   * Initial size of the layers. Change it later with plot.setViewport().
+   * With `autoSize`, a container that is already laid out replaces it
+   * before the first frame.
+   */
   setSize(width: number, height: number): this {
     this.size = { width, height };
     return this;

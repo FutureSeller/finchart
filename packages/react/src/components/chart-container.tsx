@@ -61,8 +61,10 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
   data: T[];
   /**
    * Falls back to the container deciding when omitted — turn on
-   * `autoSize: true` in `deps` and the core's `ResizeObserver` follows
-   * along. Given explicitly, that wins instead.
+   * `autoSize: true` in `deps` and `@finchart/dom`'s `ResizeObserver` follows
+   * along. Given explicitly, it sets the size; with `autoSize` also on, the
+   * container's size takes over from the first `ResizeObserver` callback, a
+   * frame after mount.
    */
   width?: number;
   height?: number;
