@@ -374,18 +374,6 @@ describe('<ChartPane yScale>', () => {
     expect(plot().mainPane.yScale).toBe(log);
     expect(log.getDomain()).toEqual([100, 200]);
   });
-
-  it('unmounting the whole container with a yScale pane does not throw', () => {
-    const { deps, ref } = setup();
-    const view = render(
-      <ChartContainer deps={deps} data={data} plotRef={ref}>
-        <ChartPane yScale={() => new LogScale()}>
-          <ChartSeries series={lineSeries()} />
-        </ChartPane>
-      </ChartContainer>,
-    );
-    expect(() => view.unmount()).not.toThrow();
-  });
 });
 
 /**

@@ -194,9 +194,15 @@ describe("fibonacci", () => {
       .commands()
       .filter((c) => c.type === "drawText")
       .map((c) => (c.type === "drawText" ? c.params.text : ""));
-    for (const label of ["0.0%", "23.6%", "50.0%", "100.0%"]) {
-      expect(texts).toContain(label);
-    }
+    expect(texts.filter((text) => text.endsWith("%"))).toEqual([
+      "0.0%",
+      "23.6%",
+      "38.2%",
+      "50.0%",
+      "61.8%",
+      "78.6%",
+      "100.0%",
+    ]);
   });
 
   it("should move as one body when a level line is grabbed", () => {

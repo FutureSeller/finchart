@@ -36,8 +36,13 @@ describe("axis.y.size leaves the data its share", () => {
   });
 
   it("should still honor a size that fits", () => {
-    const wide = stage({ axis: { y: { size: 100 } } }).commands().length;
-    expect(wide).toBeGreaterThan(0);
+    const model = stage({ axis: { y: { size: 100 } } });
+    expect(model.commands().length).toBeGreaterThan(0);
+
+    // The y slice takes exactly the 100px asked for; the data keeps the rest.
+    const { area } = model.plot.mainPane;
+    expect(area.right - area.left).toBe(400 - DEFAULT_PADDING.left - DEFAULT_PADDING.right - 100);
+    model.plot.destroy();
   });
 });
 

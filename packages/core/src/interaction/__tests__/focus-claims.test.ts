@@ -71,7 +71,7 @@ describe("focusClaims", () => {
     claims.claim(() => box);
     claims.claim(() => {
       asked += 1;
-      return null;
+      throw new Error("a neighbor's areaOf broke");
     });
     const mine = claims.claim(() => null);
 

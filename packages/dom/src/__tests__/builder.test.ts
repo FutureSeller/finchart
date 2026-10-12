@@ -232,7 +232,9 @@ describe("PlotBuilder config", () => {
 
     const plot = PlotBuilder.create(deps, lineSeries()).build(fakeContainer());
 
+    // Unset falls through to the chart's default, which is on.
     expect(plot.getOptions().axis?.x?.showLabels ?? true).toBe(true);
+    expect(plot.getOptions().axis?.y?.showLabels ?? true).toBe(true);
   });
 });
 

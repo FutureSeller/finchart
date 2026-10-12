@@ -41,11 +41,19 @@ describe("replantScale", () => {
     expect(next.getDomain()).toEqual(before);
   });
 
-  it("should refuse a scale whose kind is empty", () => {
+  it("should refuse a scale whose kind is empty or missing at the door", () => {
     const blank = Object.assign(new LinearScale(), { kind: "" });
     expect(() => replantScale(blank, new LinearScale(), null, 0.1, noHints)).toThrow(
       /nonempty kind/,
     );
+
+    // A plain JS caller can hand over an object with no kind at all — that
+    // must be the same contract error, not a TypeError from reading it.
+    const kindless = new LinearScale();
+    Reflect.deleteProperty(kindless, "kind");
+    const replant = () => replantScale(kindless, new LinearScale(), null, 0.1, noHints);
+    expect(replant).toThrow(ContractError);
+    expect(replant).toThrow(/nonempty kind/);
   });
 
   it("should not swallow anything but a contract violation", () => {
@@ -89,11 +97,5 @@ describe("formatOnAxis", () => {
 
     expect(text).toBe("42");
     expect(seen[0]).toBeGreaterThan(0);
-  });
-
-  it("should reject a scale that is not one at the door", () => {
-    expect(() => replantScale({} as never, new LinearScale(), null, 0, noHints)).toThrow(
-      ContractError,
-    );
   });
 });

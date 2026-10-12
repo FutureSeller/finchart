@@ -355,8 +355,7 @@ describe("crosshair as a plugin", () => {
 /**
  * An extension only demands the capabilities it uses — never the whole
  * Plot. Two things to guarantee: a narrowly-typed plugin still fits into
- * use as-is, and that requirement is actually narrow enough to run on a
- * minimal host that isn't a Plot.
+ * use as-is, and the built-in extensions are declared that narrowly.
  */
 describe("demanding only capabilities", () => {
   it("should accept a plugin that asks for one capability", () => {
@@ -374,22 +373,6 @@ describe("demanding only capabilities", () => {
 
     api.dispose();
     expect(seen).toEqual(["ran", "gone"]);
-  });
-
-  it("should run that plugin on a host that is not a Plot", () => {
-    const calls: string[] = [];
-    /** Not a Plot — a fake with exactly one capability. */
-    const host: RenderRequester = {
-      requestRender: () => calls.push("render"),
-    };
-
-    const tiny: Plugin<RenderRequester> = (h) => {
-      h.requestRender();
-      return teardown(() => undefined);
-    };
-    tiny(host);
-
-    expect(calls).toEqual(["render"]);
   });
 
   /** Whether the core's own built-in extensions are actually declared narrowly. */

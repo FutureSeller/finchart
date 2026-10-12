@@ -126,8 +126,8 @@ describe("the tick after a declared landing is a full computation", () => {
     const log: string[] = [];
     let failOnce = false;
     const f = feed(pts(100, 130));
-    const inner = runningSum(f.source, log);
-    // Wrap the same increment in a node whose calc can fail once on the recovery run.
+    // A node whose calc maps each point to the data length, and can fail
+    // once on the recovery run.
     let atEnd: number | null = null;
     const node = computation({
       inputs: [f.source],
@@ -147,7 +147,6 @@ describe("the tick after a declared landing is a full computation", () => {
         return { n: previous.n.concat(data.slice(-change.count).map((p) => ({ x: p.x, y: atEnd }))) };
       },
     });
-    inner.out.line.read();
     node.out.n.read();
     f.prepend(pts(0, 100));
     node.out.n.read();

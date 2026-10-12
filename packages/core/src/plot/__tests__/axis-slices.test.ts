@@ -318,6 +318,7 @@ describe("axis drag scaling (2.2)", () => {
     const { model, route } = await dragModel();
     const pane = model.plot.mainPane;
     const before = pane.yScale.getDomain();
+    const xBefore = model.plot.getVisibleRange();
     const grab = { x: 10, y: (pane.area.top + pane.area.bottom) / 2 };
 
     expect(route("pointerdown", grab)).toBe(true);
@@ -329,9 +330,10 @@ describe("axis drag scaling (2.2)", () => {
     expect(after[1] - after[0]).toBeGreaterThan(before[1] - before[0]);
     expect(pane.autoScale).toBe(false);
     // x domain is unchanged — this isn't a pan.
+    expect(model.plot.getVisibleRange()).toEqual(xBefore);
   });
 
-  it("should zoom x from the x slice and leave tools first", async () => {
+  it("should zoom x from the x slice", async () => {
     const { model, route } = await dragModel();
     const xBefore = model.plot.getVisibleRange()!;
     const { area } = model.plot.mainPane;
@@ -344,6 +346,28 @@ describe("axis drag scaling (2.2)", () => {
     const xAfter = model.plot.getVisibleRange()!;
     // Dragged to the right — the window narrows (zooms in).
     expect(xAfter.max - xAfter.min).toBeLessThan(xBefore.max - xBefore.min);
+  });
+
+  it("should leave the x slice to a tool mounted at default priority", async () => {
+    const { model, route } = await dragModel();
+    const seen: string[] = [];
+    model.plot.addInputConsumer({
+      handle: (event) => {
+        seen.push(event.type);
+        return true;
+      },
+    });
+    const xBefore = model.plot.getVisibleRange();
+    const { area } = model.plot.mainPane;
+    const grab = { x: (area.left + area.right) / 2, y: 595 };
+
+    expect(route("pointerdown", grab)).toBe(true);
+    route("pointermove", { x: grab.x + 80, y: 595 });
+    route("pointerup", { x: grab.x + 80, y: 595 });
+
+    // The tool took the whole drag, so the axis never zoomed.
+    expect(seen).toEqual(["pointerdown", "pointermove", "pointerup"]);
+    expect(model.plot.getVisibleRange()).toEqual(xBefore);
   });
 });
 

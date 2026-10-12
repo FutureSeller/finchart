@@ -53,7 +53,7 @@ describe("resolveStyle", () => {
   });
 
   it("should degrade unparsable numbers to the fallback", () => {
-    // "12px" reads as 12 — parseFloat's leniency. Only "abc" falls back to the default.
+    // "12px" reads as 12 — a bare number or `px` is accepted; "abc" falls back to the default.
     expect(
       resolveStyle(SPEC, readerOf({ "--chart-fake-width": "12px" })).line.width,
     ).toBe(12);

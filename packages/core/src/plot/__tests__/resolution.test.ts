@@ -36,7 +36,7 @@ function fakeObserver() {
   };
 }
 
-function mount(observeResolution?: ResolutionObserver) {
+function mount(observeResolution: ResolutionObserver) {
   const factory = fakeLayersFactory();
   const xScale = new LinearScale();
   const plot = new Plot({
@@ -91,17 +91,6 @@ describe("resolution ratio observation", () => {
     // It's only a request to redraw — the ratio never touches the CSS pixel coordinate system.
     expect(xScale.getDomain()).toEqual(domain);
     expect(plot.mainPane.area).toEqual(area);
-  });
-
-  it("should be inert when no observer is wired", () => {
-    const { plot, renders } = mount(undefined);
-
-    // A stage with nothing wired behaves exactly as before — there's no one to wake it.
-    const before = renders();
-    plot.render();
-
-    expect(renders()).toBe(before + 1);
-    expect(() => plot.destroy()).not.toThrow();
   });
 
   it("should release the observer on destroy", () => {

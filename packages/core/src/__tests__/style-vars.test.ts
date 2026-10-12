@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { styleVars } from "../render";
+import { NUMERIC_VALUE } from "../render/style-spec";
 import { AXIS_LABEL_SPEC } from "../axis/labels";
 import { PLOT_STYLE_SPEC } from "../plot/style";
 import {
@@ -415,7 +416,9 @@ describe("the set of style variables", () => {
     // If this is 0, this check guards nothing.
     expect(numericVars.size).toBeGreaterThan(5);
 
-    const ASSIGNMENT = /(--chart-[a-z0-9-]+)\s*:\s*([^;{}\n]+)/g;
+    // Markdown shows assignments as inline code: a backtick may open the
+    // value, and one ends it.
+    const ASSIGNMENT = /(--chart-[a-z0-9-]+)\s*:\s*`?([^;{}\n`]+)/g;
     const ROOT = resolve(SRC, "../../..");
     /**
      * **Takes the target list out of human hands** (the trigger for this
@@ -458,8 +461,8 @@ describe("the set of style variables", () => {
       }
       if (!numericVars.has(name)) return;
       const value = raw.trim();
-      // Same check as `readVar` — if parseFloat fails, it falls back.
-      if (Number.isNaN(Number.parseFloat(value))) {
+      // The resolver's own rule — anything else falls back at draw time.
+      if (!NUMERIC_VALUE.test(value)) {
         wrong.push(`${relPath}: ${name}: ${value} (this is a numeric leaf)`);
       }
     };

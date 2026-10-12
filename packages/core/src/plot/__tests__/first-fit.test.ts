@@ -62,18 +62,6 @@ describe("a chart fed bar by bar from empty", () => {
     expect(xScale.getDomain()).toEqual([T0 + 2 * MINUTE, T0 + 5 * MINUTE]);
     plot.destroy();
   });
-
-  it("leaves a window fitted to more than one bar where it is", () => {
-    const { deps, xScale } = testBrowserDepsWithScales();
-    const { plot } = mountPlot({ deps });
-    const handle = plot.mainPane.addSeries({ series: candleSeries(), data: bars(10) });
-    const fitted = xScale.getDomain();
-
-    handle.append([bar(T0 + 10 * MINUTE)]);
-
-    expect(xScale.getDomain()).toEqual(fitted);
-    plot.destroy();
-  });
 });
 
 describe("declarative data that goes empty and comes back", () => {

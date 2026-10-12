@@ -13,7 +13,12 @@
 import type { LineDataPoint } from "@finchart/core";
 import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import { drawingTools, type DrawingSelectionChange } from "../tools";
+import {
+  drawingTools,
+  type DrawingHandle,
+  type DrawingSelectionChange,
+  type DrawingToolsApi,
+} from "../tools";
 
 const data: LineDataPoint[] = Array.from({ length: 20 }, (_, i) => ({
   x: i,
@@ -104,13 +109,18 @@ describe("selection notifications -- all six paths", () => {
     expect(seen.map((c) => c.selection === null)).toEqual([false, true]);
   });
 
-  it("notifies deselect on remove, clear, and load", () => {
+  const deselectPaths: Array<[string, (tools: DrawingToolsApi, handle: DrawingHandle) => void]> = [
+    ["remove", (_tools, handle) => handle.remove()],
+    ["clear", (tools) => tools.clear()],
+    ["load", (tools) => expect(tools.load(tools.serialize())).toBe(true)],
+  ];
+  it.each(deselectPaths)("notifies deselect on %s", (_path, act) => {
     const { tools, seen } = setup();
     const handle = tools.add({ type: "horizontal", price: 110 });
     tools.select(handle);
     seen.length = 0;
 
-    handle.remove();
+    act(tools, handle);
 
     expect(seen).toHaveLength(1);
     expect(seen[0].selection).toBeNull();

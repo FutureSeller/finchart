@@ -200,7 +200,13 @@ describe("an extension's primitive and command purity", () => {
     drawCustom(renderer, heatmap(3));
     renderer.commit();
 
-    expect(() => structuredClone(recorder.commands())).not.toThrow();
+    const commands = recorder.commands();
+
+    // Without the custom command in the list, the round trip proves nothing about it.
+    expect(commands).toContainEqual(
+      expect.objectContaining({ type: "custom", name: HEATMAP, params: { cells: 3 } }),
+    );
+    expect(structuredClone(commands)).toEqual(commands);
   });
 });
 

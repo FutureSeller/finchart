@@ -12,6 +12,7 @@ import {
 import { crosshairLine } from "../../extensions/crosshair";
 import { markers, priceLine, span, watermark } from "../../extensions/standard";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { createPlotModel } from "../model";
 import { defaultConfig, mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -91,10 +92,18 @@ describe("style reading", () => {
   });
 
   it("should draw without a reader of its own in a DOM-less environment", () => {
-    const { layers } = mountPlot({ deps: testBrowserDeps(), series: lineSeries(), data });
+    // No `createStyleReader` given, and no DOM to read computed style from.
+    const model = createPlotModel({
+      size: { width: 800, height: 600 },
+      series: { series: lineSeries(), data },
+    });
 
-    // Without getComputedStyle, it draws using the defaults.
-    expect(layers.context.calls.length).toBeGreaterThan(0);
+    // The line falls back to its code default color.
+    const colors = model
+      .commands()
+      .flatMap((command) => (command.type === "drawLine" ? [command.style.color] : []));
+    expect(colors).toContain("#3b82f6");
+    model.plot.destroy();
   });
 
   /**

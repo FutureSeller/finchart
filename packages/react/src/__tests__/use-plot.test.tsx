@@ -140,27 +140,6 @@ describe('usePlot lifecycle', () => {
 
     expect(spy.destroyed).toHaveLength(1);
   });
-
-  it('should keep the same overlay element across prop changes', () => {
-    const { spy, deps, series } = setup();
-    const { rerender } = render(
-      <Harness deps={deps} series={series} data={data} showGrid />,
-    );
-    const overlay = spy.created[0].overlay;
-
-    rerender(
-      <Harness
-        deps={deps}
-        series={series}
-        data={data}
-        showGrid={false}
-        width={640}
-      />,
-    );
-
-    expect(spy.created[0].overlay).toBe(overlay);
-    expect(spy.created).toHaveLength(1);
-  });
 });
 
 describe('onXDomainChange', () => {

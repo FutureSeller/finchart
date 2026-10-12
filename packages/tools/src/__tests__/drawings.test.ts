@@ -41,21 +41,19 @@ describe("serialization", () => {
 
   it("should refuse garbage without throwing", () => {
     expect(parseDrawings("not json")).toBeNull();
-    expect(parseDrawings('{"version":1}')).toBeNull();
+    // At the version serializeDrawings writes, so each of these is refused
+    // for its contents rather than at the version check.
+    const { version } = JSON.parse(serializeDrawings([]));
+    const payload = (rest: object) => JSON.stringify({ version, ...rest });
+    expect(parseDrawings(payload({}))).toBeNull();
+    expect(parseDrawings(payload({ drawings: [{ type: "horizontal", id: "h1" }] }))).toBeNull();
     expect(
-      parseDrawings('{"version":1,"drawings":[{"type":"horizontal"}]}'),
+      parseDrawings(payload({ drawings: [{ type: "mystery", id: "m1", price: 1 }] })),
     ).toBeNull();
+    // An id is required — a payload without one is not ours.
+    expect(parseDrawings(payload({ drawings: [{ type: "horizontal", price: 1 }] }))).toBeNull();
     expect(
-      parseDrawings('{"version":1,"drawings":[{"type":"mystery","price":1}]}'),
-    ).toBeNull();
-    // v2 requires an id — a payload without one is not ours.
-    expect(
-      parseDrawings('{"version":2,"drawings":[{"type":"horizontal","price":1}]}'),
-    ).toBeNull();
-    expect(
-      parseDrawings(
-        '{"version":2,"drawings":[{"type":"horizontal","id":"","price":1}]}',
-      ),
+      parseDrawings(payload({ drawings: [{ type: "horizontal", id: "", price: 1 }] })),
     ).toBeNull();
   });
 });

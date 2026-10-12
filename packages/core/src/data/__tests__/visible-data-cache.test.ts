@@ -53,13 +53,13 @@ describe("visible data cache", () => {
     expect(decimation.calls).toBe(1);
   });
 
-  it("should give the same answer from the cache", () => {
+  it("should hand back the cached array itself for the same viewport", () => {
     const { dataManager } = setup();
 
     const first = dataManager.getVisibleData(viewport());
     const second = dataManager.getVisibleData(viewport());
 
-    expect(second).toEqual(first);
+    expect(second).toBe(first);
   });
 
   it("should recompute when the window moves", () => {

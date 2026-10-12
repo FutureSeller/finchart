@@ -93,10 +93,17 @@ describe("frameScheduler", () => {
 
   it("should do nothing when cancelling with no frame pending", () => {
     const frames = fakeFrames();
+    const cancelFrame = vi.spyOn(frames.view, "cancelAnimationFrame");
     const scheduler = frameScheduler(frames.view)(() => undefined);
 
-    expect(() => scheduler.cancel()).not.toThrow();
-    expect(frames.scheduled).toBe(0);
+    scheduler.cancel();
+    // A frame that already ran leaves nothing to cancel either — its stale
+    // handle must not reach cancelAnimationFrame.
+    scheduler.request();
+    frames.flush();
+    scheduler.cancel();
+
+    expect(cancelFrame).not.toHaveBeenCalled();
   });
 
   /** node/SSR has no frame to coalesce into — it falls back to running immediately. */

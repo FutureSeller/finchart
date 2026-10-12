@@ -195,15 +195,11 @@ describe("indicator landings", () => {
     const node = movingAverage(f.source, { period: 20 });
     node.out.ma.read();
 
-    let fulls = 0;
-    // A full computation reads nothing extra — count via a wrapped kernel
-    // instead: track by timing the only observable, the reused tail.
     const before = node.out.ma.read();
     for (const page of [bars(60, 100), bars(59, 60), bars(20, 59)]) {
       f.prepend(page);
       node.out.ma.read();
     }
-    void fulls;
     const after = node.out.ma.read();
 
     // The untouched tail keeps identity — the proof no full path ran.

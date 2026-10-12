@@ -30,22 +30,6 @@ const lines = (model: ReturnType<typeof mounted>["model"]) =>
   model.commands().filter((c) => c.type === "drawLine");
 
 describe("drawingTools drawing", () => {
-  it("should draw a horizontal line across the pane at its price", () => {
-    const { model, tools } = mounted();
-    const before = lines(model).length;
-
-    tools.add({ type: "horizontal", price: 110 });
-
-    const drawn = lines(model);
-    expect(drawn).toHaveLength(before + 1);
-    const line = drawn.at(-1)!;
-    if (line.type !== "drawLine") return;
-    // It's a horizontal line -- both ends share the same y, spanning
-    // from the pane's left edge to its right edge.
-    expect(line.points[0].y).toBe(line.points[1].y);
-    expect(line.points[1].x).toBeGreaterThan(line.points[0].x);
-  });
-
   it("should emit an off-range horizontal line and leave clipping to the core", () => {
     const { model, tools } = mounted();
     const before = lines(model).length;

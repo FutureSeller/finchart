@@ -10,7 +10,8 @@ import {
   type PlotDecorationContext,
 } from "../decoration";
 import { crosshair } from "../../extensions/crosshair";
-import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { strokedPaths, testBrowserDeps } from "../../__tests__/dom-fakes";
+import { DEFAULT_PLOT_STYLE } from "../style";
 import { defaultConfig, mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -271,12 +272,33 @@ describe("decoration context", () => {
 
 describe("grid as a built-in decoration", () => {
   it("should draw into every pane's own slice", () => {
-    const { plot, handle } = mount();
+    const { plot, handle, layers } = mountPlot({
+      deps: testBrowserDeps(),
+      series: lineSeries(),
+      config: { ...defaultConfig, paneGap: 12 },
+    });
     plot.addPane();
     handle.setData(data);
 
-    const areas = plot.panes.map((pane) => pane.area);
-    expect(areas[0].bottom).toBeLessThanOrEqual(areas[1].top);
+    const grid = strokedPaths(layers.context).filter(
+      (path) => path.width === DEFAULT_PLOT_STYLE.grid.width,
+    );
+    for (const { area } of plot.panes) {
+      // Each pane gets its own vertical lines, running top to bottom of that pane and no further.
+      const verticals = grid.filter(({ points: [from, to] }) => {
+        if (from.x !== to.x) return false;
+        const [top, bottom] = [from.y, to.y].sort((a, b) => a - b);
+        return Math.abs(top - area.top) <= 1 && Math.abs(bottom - area.bottom) <= 1;
+      });
+      const horizontals = grid.filter(
+        ({ points: [from, to] }) =>
+          from.y === to.y && from.y >= area.top - 1 && from.y <= area.bottom + 1,
+      );
+
+      expect(verticals.length).toBeGreaterThan(0);
+      expect(horizontals.length).toBeGreaterThan(0);
+    }
+    plot.destroy();
   });
 
   it("should follow showGrid without re-registering", () => {

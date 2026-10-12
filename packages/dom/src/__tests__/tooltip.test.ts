@@ -260,8 +260,8 @@ describe("legend", () => {
 
     const box = overlay.querySelector("[data-chart-legend]") as HTMLElement;
     // Only the one with a name (BTC).
-    expect(box.textContent).not.toBeNull();
     expect(box.children).toHaveLength(1);
+    expect(box.children[0]?.textContent).toContain("BTC");
   });
 
   it("should read in the page's text color until a theme sets one", () => {

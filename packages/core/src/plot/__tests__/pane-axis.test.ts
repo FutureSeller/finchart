@@ -66,12 +66,21 @@ describe("y axis per pane", () => {
   });
 
   it("should thin the ticks of the shorter pane", () => {
-    const { plot, lower } = twoPanes();
+    const { plot, lower, axisSpy } = twoPanes();
+    // The same values in both panes, so only the height differs between them.
+    lower.addSeries({ series: lineSeries(), data });
+    plot.fitDomains();
 
-    // mainPane is 3x taller, so it should have more ticks too.
-    expect(plot.mainPane.area.bottom - plot.mainPane.area.top).toBeGreaterThan(
-      lower.area.bottom - lower.area.top,
-    );
+    const ticksIn = ({ area }: { area: { top: number; bottom: number } }) =>
+      axisSpy
+        .input()
+        .y.filter((tick) => tick.position >= area.top - 1 && tick.position <= area.bottom + 1)
+        .length;
+
+    // mainPane is 3x taller, so it keeps more ticks than the shorter pane.
+    expect(ticksIn(lower)).toBeGreaterThan(0);
+    expect(ticksIn(plot.mainPane)).toBeGreaterThan(ticksIn(lower));
+    plot.destroy();
   });
 
   it("should let a pane format its own values", () => {

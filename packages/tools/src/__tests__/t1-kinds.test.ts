@@ -270,9 +270,8 @@ describe("placement and drag through the real state machine", () => {
 
     model.plot.routeInput({ type: "keydown", key: "Escape" });
     const restored = line.read();
-    if (restored.type === "vertical") {
-      expect(model.plot.pixelAtX(restored.x)).toBeCloseTo(px, 5);
-    }
+    if (restored.type !== "vertical") throw new Error("expected a vertical");
+    expect(model.plot.pixelAtX(restored.x)).toBeCloseTo(px, 5);
   });
 
   it('snap "x": a drafted vertical sticks to a bar\'s x, price-free', () => {
