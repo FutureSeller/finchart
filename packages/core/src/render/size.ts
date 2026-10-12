@@ -12,6 +12,13 @@
  * element is being watched isn't in the contract — the implementation knows
  * that ahead of time. Size is passed as two numbers rather than an object
  * because `render` must not know about `plot`'s `ViewportDimensions`.
+ *
+ * An implementation that can measure right away may call `onResize` once
+ * before returning: the plot takes that size before its first frame,
+ * instead of drawing it at the size it was built with. That call comes
+ * while the plot is being built — with a scheduler that draws at once, the
+ * frame is drawn right then — and a size that isn't positive and finite is
+ * ignored.
  */
 export type SizeObserver = (
   onResize: (width: number, height: number) => void,

@@ -83,7 +83,11 @@ export interface UsePlotOptions<T extends BaseDataPoint> {
   onXDomainChange?: (change: XDomainChangePayload) => void;
 }
 
-/** The initial size when neither a size prop nor `autoSize` is given. */
+/**
+ * The size the plot is built at, per axis, when no size prop is given. With
+ * `autoSize`, a container that is already laid out replaces it before the
+ * first frame.
+ */
 const FALLBACK_SIZE = { width: 800, height: 600 };
 
 /**
@@ -201,7 +205,7 @@ export function usePlot<T extends BaseDataPoint>({
    * Pushes size in only when it's given as a prop.
    *
    * Pushing a default unconditionally would undo, right after mount,
-   * whatever the core's `autoSize` had just fit to the container's size.
+   * whatever `autoSize` had just fit to the container's size.
    * **Size can't have two owners** — the prop owns it when given, the
    * container owns it otherwise.
    */

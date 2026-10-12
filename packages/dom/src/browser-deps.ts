@@ -29,9 +29,11 @@ export interface BrowserDepsOptions extends PlotDepsOptions {
   /**
    * Follows the container's size. Off by default.
    *
-   * Turn it on and `size` becomes just the initial size — the container
-   * decides afterward, so it needs a size of its own from CSS (a height,
-   * at least: an empty block is 0 px tall, and a zero size is ignored).
+   * Turn it on and `size` is only what the chart is built at — a container
+   * that is already laid out replaces it before the first frame, and the
+   * container decides from then on, so it needs a size of its own from CSS
+   * (a height, at least: an empty block is 0 px tall, and a zero size is
+   * ignored).
    * To change how it's observed, pass `observeSize` directly.
    */
   autoSize?: boolean;

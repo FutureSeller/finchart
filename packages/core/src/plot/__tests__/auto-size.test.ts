@@ -84,6 +84,77 @@ describe("autoSize", () => {
     expect(layers.data.height).toBe(768);
   });
 
+  /**
+   * An observer that knows the size up front reports it while the plot is
+   * being built. The first frame must be drawn at that size: drawn at the
+   * size the plot was built with, it shows the wrong picture until the fit.
+   */
+  it("should draw the first frame at a size reported while it is built", () => {
+    const observeSize: SizeObserver = (onResize) => {
+      onResize(1024, 768);
+      return () => undefined;
+    };
+    const { plot, layers } = mount(observeSize, heldScheduler());
+    const resized: number[][] = [];
+    const original = layers.resize.bind(layers);
+    layers.resize = (w: number, h: number) => {
+      resized.push([w, h]);
+      original(w, h);
+    };
+
+    plot.render();
+
+    expect(resized).toEqual([[1024, 768]]);
+  });
+
+  /**
+   * The default scheduler draws at once — the frame is drawn while the plot
+   * is still being built.
+   */
+  it("should draw at a size reported while it is built, without a scheduler", () => {
+    const factory = fakeLayersFactory();
+    new Plot({
+      deps: {
+        ...testBrowserDeps(),
+        createLayers: factory.createLayers,
+        observeSize: (onResize) => {
+          onResize(1024, 768);
+          return () => undefined;
+        },
+      },
+      config: defaultConfig,
+      size: defaultSize,
+    });
+
+    const [layers] = factory.created;
+    expect(layers?.data.width).toBe(1024);
+    expect(layers?.data.height).toBe(768);
+  });
+
+  /**
+   * A size that isn't positive and finite — zero on either axis, negative,
+   * NaN or Infinity — is not a size to follow. Reported while the plot is
+   * built, it must not fail the build.
+   */
+  it.each([
+    [0, 300],
+    [500, 0],
+    [500, -1],
+    [Number.NaN, 300],
+    [Number.POSITIVE_INFINITY, 300],
+    [300, Number.POSITIVE_INFINITY],
+  ])("should ignore a size that is not positive and finite: %s x %s", (width, height) => {
+    const observeSize: SizeObserver = (onResize) => {
+      onResize(width, height);
+      return () => undefined;
+    };
+
+    const { layers } = mount(observeSize);
+
+    expect(layers.data.width).toBe(defaultSize.width);
+    expect(layers.data.height).toBe(defaultSize.height);
+  });
+
   it("should ignore a repeat of the size it already has", () => {
     const observer = fakeObserver();
     const { plot, layers } = mount(observer.observeSize);
