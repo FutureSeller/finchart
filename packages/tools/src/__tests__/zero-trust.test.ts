@@ -10,30 +10,13 @@ import { mountDrawingStage, space } from "./drawing-stage.fixture";
  * This file pins that round-trip invariant down against hostile input.
  */
 import { describe, expect, it } from "vitest";
-import {
-  barIndexX,
-  ContractError,
-  createPlotModel,
-  lineSeries,
-} from "@finchart/core";
+import { ContractError } from "@finchart/core";
 import { drawingTools, type DrawingStage } from "../tools";
-
-const mount = () => {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    deps: { createXMapping: barIndexX },
-    config: { showGrid: false },
-  });
-  model.plot.mainPane.addSeries({
-    series: lineSeries(),
-    data: [{ x: 0, y: 100 }, { x: 1, y: 110 }],
-  });
-  return model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-};
+import { drawingChart } from "./drawing-chart.fixture";
 
 describe("add builds an owned copy, not the argument itself", () => {
   it("should survive a round trip when the argument uses getters", () => {
-    const tools = mount();
+    const { tools } = drawingChart();
     class HorizontalLine {
       get type() {
         return "horizontal" as const;
@@ -51,13 +34,13 @@ describe("add builds an owned copy, not the argument itself", () => {
   });
 
   it("should survive a round trip when the argument has a prototype", () => {
-    const tools = mount();
+    const { tools } = drawingChart();
     tools.add(Object.create({ type: "horizontal", price: 7 }));
     expect(tools.load(tools.serialize())).toBe(true);
   });
 
   it("should not choke on a function field", () => {
-    const tools = mount();
+    const { tools } = drawingChart();
     // This used to throw `DOMException: () => {} could not be cloned` --
     // outside the contract's vocabulary.
     expect(() =>
@@ -67,7 +50,7 @@ describe("add builds an owned copy, not the argument itself", () => {
   });
 
   it("should not let a cyclic argument poison serialize()", () => {
-    const tools = mount();
+    const { tools } = drawingChart();
     const cyclic: Record<string, unknown> = { type: "horizontal", price: 2 };
     cyclic.self = cyclic;
 
@@ -87,11 +70,11 @@ describe("the remaining doors are also blocked in the contract's vocabulary", ()
   ];
 
   it.each(SHAPES)("begin(%s)", (_label, bad) => {
-    expect(() => mount().begin(bad as never)).toThrow(ContractError);
+    expect(() => drawingChart().tools.begin(bad as never)).toThrow(ContractError);
   });
 
   it("should refuse an unknown kind", () => {
-    expect(() => mount().begin("no-such-kind" as never)).toThrow(ContractError);
+    expect(() => drawingChart().tools.begin("no-such-kind" as never)).toThrow(ContractError);
   });
 
   /**
@@ -99,11 +82,11 @@ describe("the remaining doors are also blocked in the contract's vocabulary", ()
    * turn on the magnet you meant to turn off.
    */
   it.each(SHAPES)("setSnap(%s)", (_label, bad) => {
-    expect(() => mount().setSnap(bad as never)).toThrow(ContractError);
+    expect(() => drawingChart().tools.setSnap(bad as never)).toThrow(ContractError);
   });
 
   it.each(SHAPES)("applyOptions(%s)", (_label, bad) => {
-    expect(() => mount().applyOptions(bad as never)).toThrow(ContractError);
+    expect(() => drawingChart().tools.applyOptions(bad as never)).toThrow(ContractError);
   });
 
   it("should refuse assembly without a plot", () => {
@@ -113,20 +96,8 @@ describe("the remaining doors are also blocked in the contract's vocabulary", ()
 });
 
 describe("assembly is held to the same rule", () => {
-  const mountWith = (opts: Record<string, unknown>) => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      deps: { createXMapping: barIndexX },
-      config: { showGrid: false },
-    });
-    model.plot.mainPane.addSeries({
-      series: lineSeries(),
-      data: [{ x: 0, y: 100 }, { x: 1, y: 110 }],
-    });
-    return model.plot.mainPane.use(
-      drawingTools({ plot: model.plot, ...opts } as never),
-    );
-  };
+  const mountWith = (opts: Record<string, unknown>) =>
+    drawingChart({ tools: opts as never }).tools;
 
   /**
    * Not just `setSnap` -- `drawingTools({ snap })` at assembly time must
@@ -168,19 +139,6 @@ describe("assembly is held to the same rule", () => {
 });
 
 describe("validation and storage see the same object", () => {
-  const mount2 = () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      deps: { createXMapping: barIndexX },
-      config: { showGrid: false },
-    });
-    model.plot.mainPane.addSeries({
-      series: lineSeries(),
-      data: [{ x: 0, y: 100 }, { x: 1, y: 110 }],
-    });
-    return model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  };
-
   /**
    * If the two predicates each read the argument separately, a single
    * getter whose value changes between calls could make validation and
@@ -189,7 +147,7 @@ describe("validation and storage see the same object", () => {
    * principle.
    */
   it("should survive a getter that changes between reads", () => {
-    const tools = mount2();
+    const { tools } = drawingChart();
     let reads = 0;
     tools.add({
       type: "horizontal",
@@ -207,7 +165,7 @@ describe("validation and storage see the same object", () => {
    * that one branch.
    */
   it("should stay consistent when a getter switches the variant", () => {
-    const tools = mount2();
+    const { tools } = drawingChart();
     let reads = 0;
     tools.add({
       get type() {
@@ -222,7 +180,7 @@ describe("validation and storage see the same object", () => {
 
   /** Even a getter that throws from a consumer's store gets translated into the contract's vocabulary. */
   it("should translate a throwing getter", () => {
-    const tools = mount2();
+    const { tools } = drawingChart();
     expect(() =>
       tools.add({
         type: "horizontal",
@@ -241,10 +199,10 @@ describe("validation and storage see the same object", () => {
    * separately that both doors produced one.
    */
   it("should store the same shape through add and load", () => {
-    const viaAdd = mount2();
+    const { tools: viaAdd } = drawingChart();
     viaAdd.add({ type: "horizontal", price: 100, junk: "x" } as never);
 
-    const viaLoad = mount2();
+    const { tools: viaLoad } = drawingChart();
     viaLoad.load(
       '{"version":2,"drawings":[{"type":"horizontal","id":"h","price":100,"junk":"x"}]}',
     );

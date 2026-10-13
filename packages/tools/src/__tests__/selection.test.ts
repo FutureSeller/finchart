@@ -1,52 +1,14 @@
-import type { LineDataPoint } from "@finchart/core";
-import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
+import { ContractError } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import { drawingTools } from "../tools";
-
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
-function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-  model.plot.render();
-
-  const route = (event: Parameters<typeof model.plot.routeInput>[0]) =>
-    model.plot.routeInput(event);
-
-  /** A point on the horizontal line -- screen center x, y at that price. */
-  const onLine = (price: number) => ({
-    x: (pane.area.left + pane.area.right) / 2,
-    y: pane.yScale.scale(price),
-  });
-
-  /** Press and release -- leaves only a selection. */
-  const pick = (point: { x: number; y: number }) => {
-    route({ type: "pointerdown", point, pointerId: 1 });
-    route({ type: "pointerup", point, pointerId: 1 });
-  };
-
-  return { model, tools, pane, route, onLine, pick };
-}
+import { drawingChart, record } from "./drawing-chart.fixture";
 
 describe("drawingTools selection", () => {
   it("should select what was grabbed and expose a copy", () => {
-    const { tools, onLine, pick } = mounted();
+    const { tools, onLine, click } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
     expect(tools.selection()).toBeNull();
-    pick(onLine(110));
+    click(onLine(110));
 
     const picked = tools.selection();
     expect(picked).toMatchObject({ type: "horizontal", price: 110 });
@@ -56,64 +18,58 @@ describe("drawingTools selection", () => {
   });
 
   it("should deselect on a press in empty space without eating it", () => {
-    const { tools, route, onLine, pick, pane } = mounted();
+    const { tools, onLine, press, click } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
-    pick(onLine(110));
+    click(onLine(110));
 
-    const empty = {
-      x: (pane.area.left + pane.area.right) / 2,
-      y: pane.yScale.scale(110) + 40,
-    };
+    const empty = onLine(110, 40);
     // A press in empty space is not consumed -- pan must still be free
     // to start.
-    expect(route({ type: "pointerdown", point: empty, pointerId: 1 })).toBe(
-      false,
-    );
+    expect(press(empty).down).toBe(false);
     expect(tools.selection()).toBeNull();
   });
 
   it("should delete the selected drawing with Delete", () => {
-    const { tools, onLine, pick, route } = mounted();
+    const { tools, onLine, click, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
-    const reasons: string[] = [];
-    tools.changes.subscribe(({ reason }) => reasons.push(reason));
+    const changes = record(tools.changes);
 
-    pick(onLine(110));
-    expect(route({ type: "keydown", key: "Delete" })).toBe(true);
+    click(onLine(110));
+    expect(key("Delete")).toBe(true);
 
     expect(tools.list()).toHaveLength(0);
     expect(tools.selection()).toBeNull();
-    expect(reasons).toEqual(["remove"]);
+    expect(changes.map(({ reason }) => reason)).toEqual(["remove"]);
   });
 
   it("should treat Backspace like Delete", () => {
-    const { tools, onLine, pick, route } = mounted();
+    const { tools, onLine, click, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    pick(onLine(110));
-    expect(route({ type: "keydown", key: "Backspace" })).toBe(true);
+    click(onLine(110));
+    expect(key("Backspace")).toBe(true);
 
     expect(tools.list()).toHaveLength(0);
   });
 
   it("should decline Delete when nothing is selected", () => {
-    const { tools, route } = mounted();
+    const { tools, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    expect(route({ type: "keydown", key: "Delete" })).toBe(false);
+    expect(key("Delete")).toBe(false);
     expect(tools.list()).toHaveLength(1);
   });
 
   it("should release the selection with Escape", () => {
-    const { tools, onLine, pick, route } = mounted();
+    const { tools, onLine, click, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
-    pick(onLine(110));
+    click(onLine(110));
 
-    expect(route({ type: "keydown", key: "Escape" })).toBe(true);
+    expect(key("Escape")).toBe(true);
     expect(tools.selection()).toBeNull();
     // Declines when there's nothing to release -- so a consumer below
     // can use it.
-    expect(route({ type: "keydown", key: "Escape" })).toBe(false);
+    expect(key("Escape")).toBe(false);
   });
 
   /**
@@ -122,58 +78,44 @@ describe("drawingTools selection", () => {
    * already slid in place (no undo).
    */
   it("should undo the drag on Escape, not commit it", () => {
-    const { tools, onLine, route } = mounted();
+    const { tools, onLine, press, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const grab = onLine(110);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 40 },
-      pointerId: 1,
-    });
+    press(onLine(110)).moveTo(onLine(110, 40));
     // It has already moved by this point -- cancel has something to undo.
     expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 110 });
 
-    expect(route({ type: "keydown", key: "Escape" })).toBe(true);
+    expect(key("Escape")).toBe(true);
     expect(tools.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
   });
 
   it("should tell the consumer that the drag was undone", () => {
-    const { tools, onLine, route } = mounted();
+    const { tools, onLine, press, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const seen: string[] = [];
-    tools.changes.subscribe(({ reason }) => seen.push(reason));
+    const seen = record(tools.changes);
 
-    const grab = onLine(110);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 40 },
-      pointerId: 1,
-    });
+    press(onLine(110)).moveTo(onLine(110, 40));
     // The drag itself already reported "move", so only the count after
     // Escape shows whether the undo was announced too.
     const beforeEscape = seen.length;
-    route({ type: "keydown", key: "Escape" });
+    key("Escape");
 
     // A consumer only finds out by reading `list()` again, so this must
     // still fire once more after the undo -- otherwise the save side
     // (a debounced autosave) is left holding the stale value.
-    expect(seen.slice(beforeEscape)).toEqual(["move"]);
+    expect(seen.slice(beforeEscape).map(({ reason }) => reason)).toEqual(["move"]);
   });
 
   /** A drag that never moved has nothing to undo -- no notification either. */
   it("should stay quiet when the drag never moved", () => {
-    const { tools, onLine, route } = mounted();
+    const { tools, onLine, press, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const seen: string[] = [];
-    tools.changes.subscribe(({ reason }) => seen.push(reason));
+    const seen = record(tools.changes);
 
-    route({ type: "pointerdown", point: onLine(110), pointerId: 1 });
-    route({ type: "keydown", key: "Escape" });
+    press(onLine(110));
+    key("Escape");
 
     expect(seen).toEqual([]);
   });
@@ -185,19 +127,14 @@ describe("drawingTools selection", () => {
    * shape even though the user never lifted a finger.
    */
   it("should undo the drag when the system cancels the pointer", () => {
-    const { tools, onLine, route } = mounted();
+    const { tools, route, onLine, press } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const grab = onLine(110);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 40 },
-      pointerId: 1,
-    });
+    const moved = onLine(110, 40);
+    press(onLine(110)).moveTo(moved);
     route({
       type: "pointercancel",
-      point: { x: grab.x, y: grab.y + 40 },
+      point: { x: moved.px, y: moved.py },
       pointerId: 1,
     });
 
@@ -206,54 +143,38 @@ describe("drawingTools selection", () => {
 
   /** A release still commits -- only a cancel undoes it. */
   it("should still commit the drag on pointerup", () => {
-    const { tools, onLine, route } = mounted();
+    const { tools, onLine, drag } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const grab = onLine(110);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 40 },
-      pointerId: 1,
-    });
-    route({
-      type: "pointerup",
-      point: { x: grab.x, y: grab.y + 40 },
-      pointerId: 1,
-    });
+    drag(onLine(110), onLine(110, 40));
 
     expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("should end a drag with Escape but keep the selection", () => {
-    const { tools, onLine, route } = mounted();
+    const { tools, onLine, press, key } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const grab = onLine(110);
-    route({ type: "pointerdown", point: grab, pointerId: 1 });
-    expect(route({ type: "keydown", key: "Escape" })).toBe(true);
+    const gesture = press(onLine(110));
+    expect(key("Escape")).toBe(true);
     // The drag is over -- subsequent movement cannot move the drawing.
-    route({
-      type: "pointermove",
-      point: { x: grab.x, y: grab.y + 40 },
-      pointerId: 1,
-    });
-    route({ type: "pointerup", point: { x: grab.x, y: grab.y + 40 }, pointerId: 1 });
+    gesture.moveTo(onLine(110, 40));
+    gesture.release();
 
     expect(tools.list()).toMatchObject([{ type: "horizontal", price: 110 }]);
     expect(tools.selection()).not.toBeNull();
   });
 
   it("should drop the selection when the list is replaced", () => {
-    const { tools, onLine, pick } = mounted();
+    const { tools, onLine, click } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
-    pick(onLine(110));
+    click(onLine(110));
     const payload = tools.serialize();
 
     tools.load(payload);
     expect(tools.selection()).toBeNull();
 
-    pick(onLine(110));
+    click(onLine(110));
     expect(tools.selection()).not.toBeNull();
     tools.clear();
     expect(tools.selection()).toBeNull();
@@ -262,7 +183,7 @@ describe("drawingTools selection", () => {
 
 describe("drawingTools select and keyboard traversal", () => {
   it("should open selection to programs through the handle", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const low = tools.add({ type: "horizontal", price: 105 });
     tools.add({ type: "horizontal", price: 115 });
 
@@ -274,7 +195,7 @@ describe("drawingTools select and keyboard traversal", () => {
   });
 
   it("should refuse to select a removed drawing", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     const handle = tools.add({ type: "horizontal", price: 105 });
     handle.remove();
 
@@ -282,52 +203,50 @@ describe("drawingTools select and keyboard traversal", () => {
   });
 
   it("should reach Delete with the keyboard alone", () => {
-    const { tools, route } = mounted();
+    const { tools, key } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.add({ type: "horizontal", price: 115 });
 
     // ] grabs the first drawing initially, and the next one on repeat
     // presses. [ goes the other way.
-    expect(route({ type: "keydown", key: "]" })).toBe(true);
+    expect(key("]")).toBe(true);
     expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
-    route({ type: "keydown", key: "]" });
+    key("]");
     expect(tools.selection()).toMatchObject({ type: "horizontal", price: 115 });
     // Wraps around at the end.
-    route({ type: "keydown", key: "]" });
+    key("]");
     expect(tools.selection()).toMatchObject({ type: "horizontal", price: 105 });
-    route({ type: "keydown", key: "[" });
+    key("[");
     expect(tools.selection()).toMatchObject({ type: "horizontal", price: 115 });
 
     // Completes the pointer-free editing flow -- grab by traversal,
     // delete with Delete.
-    route({ type: "keydown", key: "Delete" });
+    key("Delete");
     expect(tools.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
   });
 
   it("should start [ from the last drawing when nothing is selected", () => {
-    const { model, tools, route } = mounted();
+    const { tools, key } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     tools.add({ type: "horizontal", price: 110 });
     tools.add({ type: "horizontal", price: 115 });
 
-    expect(route({ type: "keydown", key: "[" })).toBe(true);
+    expect(key("[")).toBe(true);
     expect(tools.selection()).toMatchObject({ type: "horizontal", price: 115 });
-    model.plot.destroy();
   });
 
   it("should keep the selection when a different drawing is removed", () => {
-    const { model, tools } = mounted();
+    const { tools } = drawingChart();
     const kept = tools.add({ type: "horizontal", price: 105 }, { select: true });
     const other = tools.add({ type: "horizontal", price: 115 });
 
     other.remove();
     expect(tools.selection()).toEqual(kept.read());
-    model.plot.destroy();
   });
 
   it("should not eat the bracket keys when there is nothing to select", () => {
-    const { tools, route } = mounted();
-    expect(route({ type: "keydown", key: "]" })).toBe(false);
+    const { tools, key } = drawingChart();
+    expect(key("]")).toBe(false);
     expect(tools.selection()).toBeNull();
   });
 });

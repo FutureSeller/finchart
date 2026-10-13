@@ -8,9 +8,10 @@
  * drag.
  */
 import type { LineDataPoint } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
+import { lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 const data: LineDataPoint[] = Array.from({ length: 20 }, (_, i) => ({
   x: i,
@@ -18,44 +19,31 @@ const data: LineDataPoint[] = Array.from({ length: 20 }, (_, i) => ({
 }));
 
 function twoToolboxes() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
+  const chart = drawingChart({ series: { series: lineSeries(), data } });
+  const { model } = chart;
   const lower = model.plot.addPane({ flex: 1 });
   lower.addSeries({ series: lineSeries(), data });
-  const main = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
   const other = lower.use(drawingTools({ plot: model.plot }));
   model.plot.render();
 
-  const route = (event: Parameters<typeof model.plot.routeInput>[0]) =>
-    model.plot.routeInput(event);
   const middleOf = (area: { left: number; right: number; top: number; bottom: number }) => ({
     x: (area.left + area.right) / 2,
     y: (area.top + area.bottom) / 2,
   });
 
-  return { model, main, other, route, middleOf };
+  return { ...chart, main: chart.tools, other, middleOf };
 }
 
 describe("(1) drawing is inside the pane (closed) -- it doesn't leak into pan at boundary y", () => {
   it("an armed pointerdown at the bottom edge y starts drawing", () => {
-    const { model, main, route } = (() => {
+    const { model, main, press } = (() => {
       const t = twoToolboxes();
       return t;
     })();
     const area = model.plot.mainPane.area;
 
     main.begin("trend");
-    const consumed = route({
-      type: "pointerdown",
-      point: { x: (area.left + area.right) / 2, y: area.bottom },
-      pointerId: 1,
-    });
+    const consumed = press({ px: (area.left + area.right) / 2, py: area.bottom }).down;
 
     // Same rule as hit-testing (closed) -- the old half-open version
     // returned false here and leaked into pan.
@@ -65,38 +53,26 @@ describe("(1) drawing is inside the pane (closed) -- it doesn't leak into pan at
 
 describe("(2) another toolbox's contested area is its own business -- selection is not tied to registration order", () => {
   it("a miss-down on another toolbox's pane does not clear my selection", () => {
-    const { model, main, route, middleOf } = twoToolboxes();
+    const { model, main, click, onLine, middleOf } = twoToolboxes();
     main.add({ type: "horizontal", price: 110 });
-    const line = {
-      x: middleOf(model.plot.mainPane.area).x,
-      y: model.plot.mainPane.yScale.scale(110),
-    };
-    route({ type: "pointerdown", point: line, pointerId: 1 });
-    route({ type: "pointerup", point: line, pointerId: 1 });
+    click(onLine(110));
     expect(main.selection()).not.toBeNull();
 
     // Press an empty spot in the pane below (the area another toolbox contests).
     const below = middleOf(model.plot.panes[1].area);
-    route({ type: "pointerdown", point: below, pointerId: 1 });
-    route({ type: "pointerup", point: below, pointerId: 1 });
+    click({ px: below.x, py: below.y });
 
     expect(main.selection()).not.toBeNull();
   });
 
   it("a pointerdown on the axis/margin (an area nobody contests) still clears selection as before", () => {
-    const { model, main, route } = twoToolboxes();
+    const { main, click, onLine } = twoToolboxes();
     main.add({ type: "horizontal", price: 110 });
-    const line = {
-      x: (model.plot.mainPane.area.left + model.plot.mainPane.area.right) / 2,
-      y: model.plot.mainPane.yScale.scale(110),
-    };
-    route({ type: "pointerdown", point: line, pointerId: 1 });
-    route({ type: "pointerup", point: line, pointerId: 1 });
+    click(onLine(110));
     expect(main.selection()).not.toBeNull();
 
     // Outside the plot (right margin) -- nobody contests this.
-    route({ type: "pointerdown", point: { x: 799, y: 5 }, pointerId: 1 });
-    route({ type: "pointerup", point: { x: 799, y: 5 }, pointerId: 1 });
+    click({ px: 799, py: 5 });
 
     expect(main.selection()).toBeNull();
   });

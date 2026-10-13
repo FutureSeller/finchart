@@ -8,8 +8,10 @@
 import type { LineDataPoint } from "@finchart/core";
 import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
+import type { Drawing } from "../drawings";
 import type { DrawingToolsOptions } from "../tools";
 import { drawingTools } from "../tools";
+import { drawingChart, type Spot } from "./drawing-chart.fixture";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 100 },
@@ -25,33 +27,18 @@ const spread: LineDataPoint[] = [
 ];
 
 function mounted(defaults: DrawingToolsOptions["defaults"], series: LineDataPoint[] = data) {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data: series },
-    config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot, defaults }));
-  const pane = model.plot.mainPane;
-  model.plot.render();
-  const at = (x: number, price: number) => ({
-    x: model.plot.pixelAtX(x),
-    y: pane.yScale.scale(price),
-  });
-  /** Press at the first point, drag to the second, release — then click any further anchors. */
-  const draw = (kind: "fib" | "fibExtension" | "trend", points: [number, number][]) => {
-    tools.begin(kind);
-    const [first, second, ...rest] = points.map(([x, price]) => at(x, price));
-    model.plot.routeInput({ type: "pointerdown", point: first, pointerId: 1 });
-    model.plot.routeInput({ type: "pointermove", point: second, pointerId: 1 });
-    model.plot.routeInput({ type: "pointerup", point: second, pointerId: 1 });
-    for (const point of rest) {
-      model.plot.routeInput({ type: "pointermove", point, pointerId: 1 });
-      model.plot.routeInput({ type: "pointerdown", point, pointerId: 1 });
-      model.plot.routeInput({ type: "pointerup", point, pointerId: 1 });
+  const chart = drawingChart({ series: { series: lineSeries(), data: series }, tools: { defaults } });
+  /** Arms `kind`, drags from the first anchor to the second, then moves to and clicks each one after. */
+  const place = (kind: Drawing["type"], first: Spot, second: Spot, ...rest: Spot[]) => {
+    chart.tools.begin(kind);
+    chart.drag(first, second);
+    for (const spot of rest) {
+      chart.hover(spot);
+      chart.click(spot);
     }
-    return tools.list().at(-1);
+    return chart.tools.list().at(-1);
   };
-  return { tools, draw };
+  return { ...chart, place };
 }
 
 /** A value the type forbids, the way an untyped caller would hand it over. */
@@ -59,21 +46,23 @@ const untyped = (value: unknown): DrawingToolsOptions["defaults"] => JSON.parse(
 
 describe("what a hand-drawn Fibonacci is born with", () => {
   it("is the kind's defaults — spacing and levels", () => {
-    const { draw } = mounted({
+    const { place } = mounted({
       fib: { levelSpacing: "log", levels: [0, 0.5, 1] },
       fibExtension: { levelSpacing: "log" },
     });
-    expect(draw("fib", [[2, 105], [8, 115]])).toMatchObject({ type: "fib", levelSpacing: "log", levels: [0, 0.5, 1] });
-    const extension = draw("fibExtension", [[1, 102], [4, 114], [8, 108]]);
+    expect(place("fib", { x: 2, price: 105 }, { x: 8, price: 115 })).toMatchObject({
+      type: "fib", levelSpacing: "log", levels: [0, 0.5, 1],
+    });
+    const extension = place("fibExtension", { x: 1, price: 102 }, { x: 4, price: 114 }, { x: 8, price: 108 });
     expect(extension).toMatchObject({ type: "fibExtension", levelSpacing: "log" });
     expect(extension).not.toHaveProperty("levels");
   });
 
   it("is nothing extra without them, and nothing for a kind that has none", () => {
     const plain = mounted(undefined);
-    expect(plain.draw("fib", [[2, 105], [8, 115]])).not.toHaveProperty("levelSpacing");
-    const { draw } = mounted({ fib: { levelSpacing: "log" } });
-    expect(draw("trend", [[2, 105], [8, 115]])).not.toHaveProperty("levelSpacing");
+    expect(plain.place("fib", { x: 2, price: 105 }, { x: 8, price: 115 })).not.toHaveProperty("levelSpacing");
+    const { place } = mounted({ fib: { levelSpacing: "log" } });
+    expect(place("trend", { x: 2, price: 105 }, { x: 8, price: 115 })).not.toHaveProperty("levelSpacing");
   });
 
   it("does not touch what `add` is told — the caller said what it meant", () => {
@@ -89,8 +78,10 @@ describe("what a hand-drawn Fibonacci is born with", () => {
   // until the prices are positive. The default still holds there: a drawing that
   // silently came out price-linear is what this must not do.
   it("still applies where the anchors' prices are not positive", () => {
-    const { draw } = mounted({ fib: { levelSpacing: "log" } }, spread);
-    expect(draw("fib", [[2, -40], [8, -10]])).toMatchObject({ levelSpacing: "log", a: { price: expect.closeTo(-40, 6) } });
+    const { place } = mounted({ fib: { levelSpacing: "log" } }, spread);
+    expect(place("fib", { x: 2, price: -40 }, { x: 8, price: -10 })).toMatchObject({
+      levelSpacing: "log", a: { price: expect.closeTo(-40, 6) },
+    });
   });
 });
 
@@ -179,7 +170,7 @@ describe("the defaults option itself", () => {
 
   it("keeps the first read — the drawing a hand finishes carries it", () => {
     let reads = 0;
-    const { draw } = mounted({
+    const { place } = mounted({
       fib: {
         get levels() {
           reads += 1;
@@ -187,22 +178,22 @@ describe("the defaults option itself", () => {
         },
       },
     });
-    expect(draw("fib", [[2, 105], [8, 115]])).toMatchObject({ levels: [0, 0.5, 1] });
+    expect(place("fib", { x: 2, price: 105 }, { x: 8, price: 115 })).toMatchObject({ levels: [0, 0.5, 1] });
   });
 
   it("is owned — changing the caller's object afterwards changes no later drawing", () => {
     const levels = [0, 0.5, 1];
     const defaults: DrawingToolsOptions["defaults"] = { fib: { levelSpacing: "log", levels } };
-    const { draw } = mounted(defaults);
+    const { place } = mounted(defaults);
     levels.push(9);
     delete defaults.fib?.levelSpacing;
-    expect(draw("fib", [[2, 105], [8, 115]])).toMatchObject({ levelSpacing: "log", levels: [0, 0.5, 1] });
+    expect(place("fib", { x: 2, price: 105 }, { x: 8, price: 115 })).toMatchObject({ levelSpacing: "log", levels: [0, 0.5, 1] });
   });
 
   it("hands each drawing its own copy of the levels", () => {
-    const { tools, draw } = mounted({ fib: { levels: [0, 0.5, 1] } });
-    draw("fib", [[2, 105], [8, 115]]);
-    draw("fib", [[3, 106], [7, 112]]);
+    const { tools, place } = mounted({ fib: { levels: [0, 0.5, 1] } });
+    place("fib", { x: 2, price: 105 }, { x: 8, price: 115 });
+    place("fib", { x: 3, price: 106 }, { x: 7, price: 112 });
     tools.handles()[0].update({ levels: [0, 1] });
     expect(tools.list().map((drawing) => "levels" in drawing && drawing.levels)).toEqual([[0, 1], [0, 0.5, 1]]);
   });

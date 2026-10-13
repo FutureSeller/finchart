@@ -1,37 +1,19 @@
 import { space } from "./drawing-stage.fixture";
-import type { DrawTarget, LineDataPoint } from "@finchart/core";
-import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
+import type { DrawTarget } from "@finchart/core";
+import { ContractError } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import type { Drawing } from "../drawings";
 import { drawOne } from "../render";
 import { drawingTools } from "../tools";
 import type { DrawingPane, DrawingStage } from '../tools';
+import { drawingChart } from "./drawing-chart.fixture";
 
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
-export function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  return { model, tools };
-}
-
-const lines = (model: ReturnType<typeof mounted>["model"]) =>
+const lines = (model: ReturnType<typeof drawingChart>["model"]) =>
   model.commands().filter((c) => c.type === "drawLine");
 
 describe("drawingTools drawing", () => {
   it("should emit an off-range horizontal line and leave clipping to the core", () => {
-    const { model, tools } = mounted();
+    const { model, tools } = drawingChart();
     const before = lines(model).length;
 
     tools.add({ type: "horizontal", price: 10_000 });
@@ -53,8 +35,7 @@ describe("drawingTools drawing", () => {
   });
 
   it("should show grab handles only while the trend line is selected", () => {
-    const { model, tools } = mounted();
-    const pane = model.plot.mainPane;
+    const { model, tools, click } = drawingChart();
 
     tools.add({
       type: "trend",
@@ -77,9 +58,7 @@ describe("drawingTools drawing", () => {
     expect(handles()).toHaveLength(0);
 
     // Grab endpoint a to select it — half a bar inside the left edge.
-    const a = { x: model.plot.pixelAtX(0), y: pane.yScale.scale(100) };
-    model.plot.routeInput({ type: "pointerdown", point: a, pointerId: 1 });
-    model.plot.routeInput({ type: "pointerup", point: a, pointerId: 1 });
+    click({ x: 0, price: 100 });
 
     expect(handles()).toHaveLength(2);
   });
@@ -177,7 +156,7 @@ describe("drawingTools drawing", () => {
   });
 
   it("should take a drawing back through its handle", () => {
-    const { model, tools } = mounted();
+    const { model, tools } = drawingChart();
     const before = lines(model).length;
 
     const handle = tools.add({ type: "horizontal", price: 110 });
@@ -188,7 +167,7 @@ describe("drawingTools drawing", () => {
   });
 
   it("should round-trip its drawings through serialize/load", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
     tools.add({
       type: "trend",
@@ -197,14 +176,14 @@ describe("drawingTools drawing", () => {
     });
 
     const payload = tools.serialize();
-    const { tools: restored } = mounted();
+    const { tools: restored } = drawingChart();
 
     expect(restored.load(payload)).toBe(true);
     expect(restored.list()).toEqual(tools.list());
   });
 
   it("should not let a caller's object mutate the stage", () => {
-    const { model, tools } = mounted();
+    const { model, plot, tools } = drawingChart();
     const drawing = { type: "horizontal", price: 110 } as const;
 
     tools.add(drawing);
@@ -212,13 +191,13 @@ describe("drawingTools drawing", () => {
 
     // Mutating the outside object has no effect on the stage -- add copied it.
     (drawing as { price: number }).price = 50;
-    model.plot.render();
+    plot.render();
 
     expect(lines(model).at(-1)).toEqual(line);
   });
 
   it("should erase everything on dispose", () => {
-    const { model, tools } = mounted();
+    const { model, tools } = drawingChart();
     const before = lines(model).length;
     tools.add({ type: "horizontal", price: 110 });
 
@@ -231,7 +210,7 @@ describe("drawingTools drawing", () => {
 /** `add` rejects the same things the parser (`parseDrawings`) rejects. */
 describe("add's numeric contract", () => {
   it("should throw on a non-finite coordinate instead of storing it", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
 
     expect(() => tools.add({ type: "horizontal", price: NaN })).toThrow(
       ContractError,
@@ -260,7 +239,7 @@ describe("handles() -- a restored drawing can be targeted too", () => {
   ];
 
   it("should hand out handles in list() order", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     for (const drawing of two) tools.add(drawing);
 
     const handles = tools.handles();
@@ -269,22 +248,22 @@ describe("handles() -- a restored drawing can be targeted too", () => {
   });
 
   it("should hand out handles for drawings that came from load", () => {
-    const source = mounted();
+    const source = drawingChart();
     for (const drawing of two) source.tools.add(drawing);
     const payload = source.tools.serialize();
 
     // A fresh session -- add was never called.
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     expect(tools.load(payload)).toBe(true);
     expect(tools.handles()).toHaveLength(2);
   });
 
   it("should let a restored handle drive select and remove", () => {
-    const source = mounted();
+    const source = drawingChart();
     for (const drawing of two) source.tools.add(drawing);
     const payload = source.tools.serialize();
 
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.load(payload);
 
     const [first, second] = tools.handles();
@@ -297,7 +276,7 @@ describe("handles() -- a restored drawing can be targeted too", () => {
 
   /** The contract is what it points at, not object identity -- this must work even though every call produces a fresh object. */
   it("should work even though each call makes fresh handle objects", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add(two[0]);
 
     const [a] = tools.handles();
@@ -311,7 +290,7 @@ describe("handles() -- a restored drawing can be targeted too", () => {
   });
 
   it("should be empty before anything is drawn", () => {
-    expect(mounted().tools.handles()).toEqual([]);
+    expect(drawingChart().tools.handles()).toEqual([]);
   });
 });
 
@@ -323,37 +302,29 @@ describe("handles() -- a restored drawing can be targeted too", () => {
  */
 describe("double-click on a shape", () => {
   function withLine() {
-    const harness = mounted();
+    const harness = drawingChart();
     harness.tools.add({ type: "horizontal", price: 110 });
-    const pane = harness.model.plot.mainPane;
-    return {
-      ...harness,
-      x: (pane.area.left + pane.area.right) / 2,
-      y: pane.yScale.scale(110),
-    };
+    return harness;
   }
 
-  const dbl = (model: ReturnType<typeof mounted>["model"], point: { x: number; y: number }) =>
-    model.plot.routeInput({ type: "dblclick", point });
-
   it("should eat the double click that lands on a drawing", () => {
-    const { model, x, y } = withLine();
-    expect(dbl(model, { x, y: y + 3 })).toBe(true);
+    const { dblclick, onLine } = withLine();
+    expect(dblclick(onLine(110, 3))).toBe(true);
   });
 
   it("should select what it was double clicked on", () => {
-    const { model, tools, x, y } = withLine();
+    const { dblclick, tools, onLine } = withLine();
     expect(tools.selection()).toBeNull();
 
-    dbl(model, { x, y: y + 3 });
+    dblclick(onLine(110, 3));
 
     expect(tools.selection()).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   /** Empty space is **let through** -- the fit-all reset still belongs to the shell. */
   it("should let an empty-space double click through", () => {
-    const { model, x, y } = withLine();
-    expect(dbl(model, { x, y: y + 200 })).toBe(false);
+    const { dblclick, onLine } = withLine();
+    expect(dblclick(onLine(110, 200))).toBe(false);
   });
 });
 

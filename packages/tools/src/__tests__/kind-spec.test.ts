@@ -1,5 +1,3 @@
-import type { LineDataPoint } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import {
   ANCHOR_KEYS,
@@ -10,7 +8,7 @@ import {
   serializeDrawings,
   type Drawing,
 } from "../drawings";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * The one table every kind must have a row in. `DRAWING_KINDS` is an
@@ -182,11 +180,6 @@ describe("the kind table", () => {
 });
 
 describe("placement through the real state machine", () => {
-  const data: LineDataPoint[] = [
-    { x: 0, y: 100 },
-    { x: 5, y: 120 },
-    { x: 10, y: 110 },
-  ];
   const presses = [
     { x: 2, price: 105 },
     { x: 5, price: 115 },
@@ -194,22 +187,9 @@ describe("placement through the real state machine", () => {
   ];
 
   it.each(Object.entries(TABLE))("%s completes after its clicks, each anchor where its press landed", (kind, spec) => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
-    });
-    const pane = model.plot.mainPane;
-    const tools = pane.use(drawingTools({ plot: model.plot }));
+    const { tools, click } = drawingChart();
     tools.begin(spec.sample.type);
-    for (const press of presses.slice(0, spec.clicks)) {
-      const point = { x: model.plot.pixelAtX(press.x), y: pane.yScale.scale(press.price) };
-      model.plot.routeInput({ type: "pointerdown", point, pointerId: 1 });
-      model.plot.routeInput({ type: "pointerup", point, pointerId: 1 });
-    }
+    for (const press of presses.slice(0, spec.clicks)) click(press);
 
     expect(tools.mode()).toBeNull();
     const drawn = tools.list();

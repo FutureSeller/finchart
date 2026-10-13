@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DrawTarget } from "@finchart/core";
-import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
+import { ContractError, lineSeries } from "@finchart/core";
 import {
   FIB_LEVELS,
   fibLevels,
@@ -12,7 +12,7 @@ import {
 import { gripAt } from "../hit";
 import { drawOne } from "../render";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * Commit 2 of the schema-v2 day: per-drawing `style` (the same
@@ -115,8 +115,7 @@ describe("fib levels", () => {
  */
 describe("a drawing's own style over the toolbox's", () => {
   it("wins on the leaves it sets and inherits the rest", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const { model, tools } = drawingChart({
       series: {
         series: lineSeries(),
         data: [
@@ -124,14 +123,8 @@ describe("a drawing's own style over the toolbox's", () => {
           { x: 10, y: 20 },
         ],
       },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
+      tools: { style: { color: "#00ff00", width: 3 } },
     });
-    const tools = model.plot.mainPane.use(
-      drawingTools({ plot: model.plot, style: { color: "#00ff00", width: 3 } }),
-    );
     tools.add({ type: "horizontal", price: 12 });
     tools.add({ type: "horizontal", price: 18, style: { color: "#ff0000" } });
 
@@ -145,7 +138,6 @@ describe("a drawing's own style over the toolbox's", () => {
     const at = (price: number) => model.plot.mainPane.yScale.scale(price);
     expect(styles).toContainEqual({ y: at(12), color: "#00ff00", width: 3 });
     expect(styles).toContainEqual({ y: at(18), color: "#ff0000", width: 3 });
-    model.plot.destroy();
   });
 });
 

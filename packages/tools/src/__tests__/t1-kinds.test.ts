@@ -1,11 +1,10 @@
-import type { LineDataPoint, Point } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
+import type { Point } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import type { Drawing } from "../drawings";
 import { gripAt, infiniteEndpoints } from "../hit";
 import { drawOne } from "../render";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * T1 wave — ray · extended · arrow · vertical. Placement, hit, render,
@@ -200,61 +199,35 @@ describe("render draws what hit-testing checks", () => {
 });
 
 describe("placement and drag through the real state machine", () => {
-  const data: LineDataPoint[] = [
-    { x: 0, y: 100 },
-    { x: 5, y: 120 },
-    { x: 10, y: 110 },
-  ];
-
-  function mounted() {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
-    });
-    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-    const pane = model.plot.mainPane;
-    const route = (
-      type: "pointerdown" | "pointermove" | "pointerup",
-      point: { x: number; y: number },
-    ) => model.plot.routeInput({ type, point, pointerId: 1 });
-    return { model, tools, pane, route };
-  }
-
   it("dragging a vertical line moves its x — and Esc restores it", () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, pane, press, key } = drawingChart();
     tools.add({ type: "vertical", x: 5 });
     const line = tools.handles()[0];
-    const px = model.plot.pixelAtX(5);
+    const px = plot.pixelAtX(5);
     const mid = (pane.area.top + pane.area.bottom) / 2;
 
-    route("pointerdown", { x: px, y: mid });
-    route("pointermove", { x: px + 40, y: mid });
+    press({ px, py: mid }).moveTo({ px: px + 40, py: mid });
     const movedX = line.read();
     expect(movedX.type).toBe("vertical");
     if (movedX.type === "vertical") {
-      expect(model.plot.pixelAtX(movedX.x)).toBeCloseTo(px + 40, 5);
+      expect(plot.pixelAtX(movedX.x)).toBeCloseTo(px + 40, 5);
     }
 
-    model.plot.routeInput({ type: "keydown", key: "Escape" });
+    key("Escape");
     const restored = line.read();
     if (restored.type !== "vertical") throw new Error("expected a vertical");
-    expect(model.plot.pixelAtX(restored.x)).toBeCloseTo(px, 5);
+    expect(plot.pixelAtX(restored.x)).toBeCloseTo(px, 5);
   });
 
   it('snap "x": a drafted vertical sticks to a bar\'s x, price-free', () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, pane, click } = drawingChart();
     tools.setSnap(true);
     tools.begin("vertical");
-    const barPx = model.plot.pixelAtX(5);
+    const barPx = plot.pixelAtX(5);
     const mid = (pane.area.top + pane.area.bottom) / 2;
     // 4px off the bar — inside the default 8px snap radius, at a y far
     // from the bar's value (the old "xy" Euclidean gate would refuse).
-    route("pointerdown", { x: barPx + 4, y: mid });
-    route("pointerup", { x: barPx + 4, y: mid });
+    click({ px: barPx + 4, py: mid });
 
     const [drawn] = tools.list();
     if (drawn.type === "vertical") {

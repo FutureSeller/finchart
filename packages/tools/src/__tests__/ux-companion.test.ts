@@ -1,10 +1,10 @@
 import type { OHLC, Point } from "@finchart/core";
-import { candleSeries, createPlotModel } from "@finchart/core";
+import { candleSeries } from "@finchart/core";
 import { describe, expect, it, vi } from "vitest";
 import type { Drawing } from "../drawings";
 import { gripAt } from "../hit";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * The UX that rides along with thirteen kinds: the crosshair keeps
@@ -21,50 +21,35 @@ const candles: OHLC[] = [
 ];
 
 function mounted(snap = false) {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
+  const chart = drawingChart({
     series: { series: candleSeries(), data: candles },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
+    tools: { snap },
   });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot, snap }));
-  const pane = model.plot.mainPane;
-  const at = (x: number, price: number) => ({
-    x: model.plot.pixelAtX(x),
-    y: pane.yScale.scale(price),
-  });
-  const route = (
-    type: "pointerdown" | "pointermove" | "pointerup",
-    point: Point,
-  ) => model.plot.routeInput({ type, point, pointerId: 1 });
-  const lines = () => model.commands().filter((c) => c.type === "drawLine");
-  return { model, tools, pane, at, route, lines };
+  const lines = () => chart.model.commands().filter((c) => c.type === "drawLine");
+  return { ...chart, lines };
 }
 
 describe("the crosshair keeps reading while a gesture is in flight", () => {
   it("fires on every move while drafting", () => {
-    const { model, tools, at, route } = mounted();
+    const { model, tools, at, click, hover } = mounted();
     const seen = vi.fn();
     model.plot.on("crosshair", seen);
     tools.begin("trend");
-    route("pointerdown", at(0, 100));
-    route("pointerup", at(0, 100));
+    click({ x: 0, price: 100 });
     seen.mockClear();
-    route("pointermove", at(1, 110));
+    hover({ x: 1, price: 110 });
     expect(seen).toHaveBeenCalledTimes(1);
     expect(seen.mock.calls[0][0].position).toEqual(at(1, 110));
   });
 
   it("fires on every move while dragging a drawing", () => {
-    const { model, tools, at, route } = mounted();
+    const { model, tools, press } = mounted();
     tools.add({ type: "horizontal", price: 105 });
     const seen = vi.fn();
     model.plot.on("crosshair", seen);
-    route("pointerdown", at(1, 105));
+    const gesture = press({ x: 1, price: 105 });
     seen.mockClear();
-    route("pointermove", at(1, 108));
+    gesture.moveTo({ x: 1, price: 108 });
     expect(seen).toHaveBeenCalledTimes(1);
   });
 });
@@ -100,33 +85,26 @@ function ringAround(commands: Commands, center: Point): boolean {
 
 describe("a snapped anchor shows a ring", () => {
   it("draws the ring at the bar value it stuck to, and only while snapped", () => {
-    const { tools, at, route, lines } = mounted(true);
+    const { tools, at, press, lines } = mounted(true);
     tools.begin("horizontal");
     // 3px off the close — inside the 8px radius, so the price snaps.
-    const near = { x: at(1, 112).x, y: at(1, 112).y + 3 };
-    route("pointerdown", near);
+    const near = { px: at(1, 112).x, py: at(1, 112).y + 3 };
+    const gesture = press(near);
     expect(ringAround(lines(), at(1, 112))).toBe(true);
     // Move far from any bar value — the ring goes away.
-    route("pointermove", { x: near.x, y: at(1, 112).y + 40 });
+    gesture.moveTo({ px: near.px, py: at(1, 112).y + 40 });
     expect(rings(lines())).toEqual([]);
   });
 
   /** The ring is a marker, not part of the drawing — it keeps a thin solid stroke whatever the drawing's style. */
   it("draws the ring one pixel wide and undashed under a heavy dashed style", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const { model, tools, at, press } = drawingChart({
       series: { series: candleSeries(), data: candles },
-      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
+      tools: { snap: true, style: { width: 3, dashArray: "4 2" } },
     });
-    const pane = model.plot.mainPane;
-    const tools = pane.use(drawingTools({
-      plot: model.plot,
-      snap: true,
-      style: { width: 3, dashArray: "4 2" },
-    }));
     tools.begin("horizontal");
-    const close = { x: model.plot.pixelAtX(1), y: pane.yScale.scale(112) };
-    model.plot.routeInput({ type: "pointerdown", point: { x: close.x, y: close.y + 3 }, pointerId: 1 });
+    const close = at(1, 112);
+    press({ px: close.x, py: close.y + 3 });
 
     const ringStrokes = model
       .commands()
@@ -135,20 +113,17 @@ describe("a snapped anchor shows a ring", () => {
       );
     expect(ringStrokes).toHaveLength(1);
     expect(ringStrokes[0]).toMatchObject({ width: 1, dashArray: "" });
-    model.plot.destroy();
   });
 
   it("no ring with snapping off, and none once the drawing is placed", () => {
     const off = mounted(false);
     off.tools.begin("horizontal");
-    off.route("pointerdown", { x: off.at(1, 112).x, y: off.at(1, 112).y + 3 });
+    off.press({ px: off.at(1, 112).x, py: off.at(1, 112).y + 3 });
     expect(rings(off.lines())).toEqual([]);
 
     const on = mounted(true);
     on.tools.begin("horizontal");
-    const near = { x: on.at(1, 112).x, y: on.at(1, 112).y + 3 };
-    on.route("pointerdown", near);
-    on.route("pointerup", near);
+    on.click({ px: on.at(1, 112).x, py: on.at(1, 112).y + 3 });
     expect(on.tools.list()).toHaveLength(1);
     expect(rings(on.lines())).toEqual([]);
   });

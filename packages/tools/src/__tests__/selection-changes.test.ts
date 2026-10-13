@@ -11,87 +11,59 @@
  * touched could get deleted.
  */
 import type { LineDataPoint } from "@finchart/core";
-import { ContractError, createPlotModel, lineSeries } from "@finchart/core";
+import { ContractError, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import {
-  drawingTools,
-  type DrawingHandle,
-  type DrawingSelectionChange,
-  type DrawingToolsApi,
-} from "../tools";
+import type { DrawingHandle, DrawingToolsApi } from "../tools";
+import { drawingChart, record } from "./drawing-chart.fixture";
 
 const data: LineDataPoint[] = Array.from({ length: 20 }, (_, i) => ({
   x: i,
   y: 100 + i,
 }));
-
-function setup() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  model.plot.render();
-
-  const seen: DrawingSelectionChange[] = [];
-  tools.selectionChanges.subscribe((change) => seen.push(change));
-
-  const route = (event: Parameters<typeof model.plot.routeInput>[0]) =>
-    model.plot.routeInput(event);
-  const at = (price: number) => ({
-    x:
-      (model.plot.mainPane.area.left + model.plot.mainPane.area.right) / 2,
-    y: model.plot.mainPane.yScale.scale(price),
-  });
-  const click = (price: number) => {
-    route({ type: "pointerdown", point: at(price), pointerId: 1 });
-    route({ type: "pointerup", point: at(price), pointerId: 1 });
-  };
-
-  return { model, tools, seen, route, at, click };
-}
+const series = () => ({ series: lineSeries(), data });
 
 describe("selection notifications -- all six paths", () => {
   it("notifies on a pointer hit", () => {
-    const { tools, seen, click } = setup();
+    const { tools, onLine, click } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     tools.add({ type: "horizontal", price: 110 });
 
-    click(110);
+    click(onLine(110));
 
     expect(seen).toHaveLength(1);
     expect(seen[0].selection).toMatchObject({ type: "horizontal", price: 110 });
   });
 
   it("notifies on a double-click -- this is the reason this door exists", () => {
-    const { tools, seen, route, at } = setup();
+    const { tools, onLine, dblclick } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     tools.add({ type: "horizontal", price: 110 });
 
-    route({ type: "dblclick", point: at(110) });
+    dblclick(onLine(110));
 
     expect(seen).toHaveLength(1);
     expect(seen[0].selection).not.toBeNull();
   });
 
   it("notifies on a right-click", () => {
-    const { tools, seen, route, at } = setup();
+    const { tools, route, onLine } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     tools.add({ type: "horizontal", price: 110 });
 
-    route({ type: "contextmenu", point: at(110) });
+    const { px, py } = onLine(110);
+    route({ type: "contextmenu", point: { x: px, y: py } });
 
     expect(seen).toHaveLength(1);
   });
 
   it("notifies on keyboard traversal -- the spot an app couldn't hook", () => {
-    const { tools, seen, route } = setup();
+    const { tools, key } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     tools.add({ type: "horizontal", price: 110 });
     tools.add({ type: "horizontal", price: 105 });
 
-    route({ type: "keydown", key: "]" });
-    route({ type: "keydown", key: "]" });
+    key("]");
+    key("]");
 
     expect(seen.map((c) => c.selection)).toMatchObject([
       { type: "horizontal", price: 110 },
@@ -100,7 +72,8 @@ describe("selection notifications -- all six paths", () => {
   });
 
   it("notifies on select() and on deselect", () => {
-    const { tools, seen } = setup();
+    const { tools } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     const handle = tools.add({ type: "horizontal", price: 110 });
 
     tools.select(handle);
@@ -115,7 +88,8 @@ describe("selection notifications -- all six paths", () => {
     ["load", (tools) => expect(tools.load(tools.serialize())).toBe(true)],
   ];
   it.each(deselectPaths)("notifies deselect on %s", (_path, act) => {
-    const { tools, seen } = setup();
+    const { tools } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     const handle = tools.add({ type: "horizontal", price: 110 });
     tools.select(handle);
     seen.length = 0;
@@ -127,17 +101,19 @@ describe("selection notifications -- all six paths", () => {
   });
 
   it("stays quiet when re-picking the same thing", () => {
-    const { tools, seen, click } = setup();
+    const { tools, onLine, click } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     tools.add({ type: "horizontal", price: 110 });
 
-    click(110);
-    click(110);
+    click(onLine(110));
+    click(onLine(110));
 
     expect(seen).toHaveLength(1);
   });
 
   it("disposal is quiet -- a toolbox being torn down must not fire a final notification", () => {
-    const { tools, seen } = setup();
+    const { tools } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     const handle = tools.add({ type: "horizontal", price: 110 });
     tools.select(handle);
     seen.length = 0;
@@ -150,14 +126,15 @@ describe("selection notifications -- all six paths", () => {
 
 describe("the notification carries identity", () => {
   it("with two equal values, the handle for **the one the cursor actually pointed at** comes through", () => {
-    const { tools, seen, click } = setup();
+    const { tools, onLine, click } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     // Two with the same value -- value comparison alone cannot tell them apart.
     tools.add({ type: "horizontal", price: 105 });
     tools.add({ type: "horizontal", price: 105 });
     const handles = tools.handles();
 
     // The one drawn on top (the later one) gets grabbed -- `gripAt`'s contract.
-    click(105);
+    click(onLine(105));
     const picked = seen[0].handle;
     expect(picked).not.toBeNull();
 
@@ -173,7 +150,8 @@ describe("the notification carries identity", () => {
   });
 
   it("on deselect, the handle is null too", () => {
-    const { tools, seen } = setup();
+    const { tools } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
     const handle = tools.add({ type: "horizontal", price: 110 });
     tools.select(handle);
     tools.select(null);
@@ -184,7 +162,8 @@ describe("the notification carries identity", () => {
 
 describe("add(drawing, { select })", () => {
   it("defaults to not selecting -- a programmatic add is not user intent", () => {
-    const { tools, seen } = setup();
+    const { tools } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
 
     tools.add({ type: "horizontal", price: 110 });
 
@@ -193,7 +172,8 @@ describe("add(drawing, { select })", () => {
   });
 
   it("with select: true, it ends up in the same state as something drawn by hand", () => {
-    const { tools, seen } = setup();
+    const { tools } = drawingChart({ series: series() });
+    const seen = record(tools.selectionChanges);
 
     tools.add({ type: "horizontal", price: 110 }, { select: true });
 
@@ -202,9 +182,9 @@ describe("add(drawing, { select })", () => {
   });
 
   it("not stealing an in-progress edit's selection is why this is the default", () => {
-    const { tools, click } = setup();
+    const { tools, onLine, click } = drawingChart({ series: series() });
     tools.add({ type: "horizontal", price: 110 });
-    click(110);
+    click(onLine(110));
 
     // As if a server push just arrived -- the user is mid-edit on 110.
     tools.add({ type: "horizontal", price: 90 });
@@ -213,7 +193,7 @@ describe("add(drawing, { select })", () => {
   });
 
   it("the options are a door too -- rejects anything that isn't the right shape", () => {
-    const { tools } = setup();
+    const { tools } = drawingChart({ series: series() });
 
     expect(() =>
       tools.add({ type: "horizontal", price: 110 }, { select: "yes" } as never),

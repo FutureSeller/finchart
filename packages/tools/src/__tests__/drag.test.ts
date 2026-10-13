@@ -1,63 +1,23 @@
-import type { LineDataPoint } from "@finchart/core";
 import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import { drawingTools } from "../tools";
 import { moveGrip } from '../hit';
 import { parseDrawings, toOwnedDrawing } from '../drawings';
 import type { Drawing } from '../drawings';
-
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
-function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-
-  /**
-   * Domain coordinates to pixels — how a test aims at a drawing.
-   *
-   * **x is deliberately unused.** Every drawing in this suite is a horizontal
-   * line, so aiming needs only the price and the middle of the pane will do
-   * horizontally. It used to take the argument and multiply it away with
-   * `+ 0 * x`, which is what `oxc(erasing-op)` bit as "always evaluates to
-   * zero". What isn't used is now written as unused.
-   */
-  const pixelOf = (_x: number, price: number) => ({
-    x: (pane.area.left + pane.area.right) / 2,
-    y: pane.yScale.scale(price),
-  });
-
-  const route = (
-    type: "pointerdown" | "pointermove" | "pointerup",
-    point: { x: number; y: number },
-  ) => model.plot.routeInput({ type, point, pointerId: 1 });
-
-  return { model, tools, pane, pixelOf, route };
-}
+import { drawingChart } from "./drawing-chart.fixture";
 
 describe("drawingTools drag", () => {
   it("should eat the drag so pan cannot move — and follow the cursor", () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, pane, press, onLine } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
-    const xDomainBefore = model.plot.getVisibleRange();
+    const xDomainBefore = plot.getVisibleRange();
 
-    const grabX = (pane.area.left + pane.area.right) / 2;
     const grabY = pane.yScale.scale(110);
     // 3px onto the line -- inside the 4px tolerance.
-    expect(route("pointerdown", { x: grabX, y: grabY + 3 })).toBe(true);
-    expect(route("pointermove", { x: grabX, y: grabY + 43 })).toBe(true);
-    expect(route("pointerup", { x: grabX, y: grabY + 43 })).toBe(true);
+    const gesture = press(onLine(110, 3));
+    expect(gesture.down).toBe(true);
+    expect(gesture.moveTo(onLine(110, 43))).toBe(true);
+    expect(gesture.release()).toBe(true);
 
     // The grabbed point sticks to the cursor -- a 40px change in price.
     const moved = tools.list()[0];
@@ -67,38 +27,30 @@ describe("drawingTools drag", () => {
 
     // Consumed, so pan never gets to run -- the x domain is unchanged
     // (the invariant this locks in).
-    expect(model.plot.getVisibleRange()).toEqual(xDomainBefore);
+    expect(plot.getVisibleRange()).toEqual(xDomainBefore);
   });
 
   it("should decline a press away from every drawing", () => {
-    const { pane, tools, route } = mounted();
+    const { tools, press, onLine } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
 
-    const missY = pane.yScale.scale(110) + 20;
-    expect(
-      route("pointerdown", {
-        x: (pane.area.left + pane.area.right) / 2,
-        y: missY,
-      }),
-    ).toBe(false);
+    expect(press(onLine(110, 20)).down).toBe(false);
   });
 
   it("should move only the grabbed endpoint of a trend line", () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, at, drag } = drawingChart();
     const handle = tools.add({
       type: "trend",
       a: { x: 2, price: 105 },
       b: { x: 8, price: 115 },
     });
-    model.plot.render();
+    plot.render();
 
     // Data x -> pixels, through the chart — the fit pads the data range
     // (0-10) by half a bar at each end.
-    const grab = { x: model.plot.pixelAtX(2), y: pane.yScale.scale(105) };
+    const grab = at(2, 105);
 
-    expect(route("pointerdown", grab)).toBe(true);
-    route("pointermove", { x: grab.x, y: grab.y - 30 });
-    route("pointerup", { x: grab.x, y: grab.y - 30 });
+    expect(drag({ x: 2, price: 105 }, { px: grab.x, py: grab.y - 30 })).toBe(true);
 
     const after = handle.read();
     if (after.type !== "trend") throw new Error("unexpected");
@@ -108,13 +60,13 @@ describe("drawingTools drag", () => {
   });
 
   it("should move the whole trend line when grabbed by its body", () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, pane, drag } = drawingChart();
     const handle = tools.add({
       type: "trend",
       a: { x: 2, price: 105 },
       b: { x: 8, price: 115 },
     });
-    model.plot.render();
+    plot.render();
 
     const frameX = (x: number) => {
       const { left, right } = pane.area;
@@ -126,9 +78,7 @@ describe("drawingTools drag", () => {
       y: pane.yScale.scale(110),
     };
 
-    expect(route("pointerdown", mid)).toBe(true);
-    route("pointermove", { x: mid.x, y: mid.y - 20 });
-    route("pointerup", { x: mid.x, y: mid.y - 20 });
+    expect(drag({ px: mid.x, py: mid.y }, { px: mid.x, py: mid.y - 20 })).toBe(true);
 
     const after = handle.read();
     if (after.type !== "trend") throw new Error("unexpected");
@@ -140,18 +90,12 @@ describe("drawingTools drag", () => {
   });
 
   it("should grab the drawing on top when two overlap", () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, drag, onLine } = drawingChart();
     tools.add({ type: "horizontal", price: 110 });
     const top = tools.add({ type: "horizontal", price: 110 });
-    model.plot.render();
+    plot.render();
 
-    const grab = {
-      x: (pane.area.left + pane.area.right) / 2,
-      y: pane.yScale.scale(110),
-    };
-    route("pointerdown", grab);
-    route("pointermove", { x: grab.x, y: grab.y + 30 });
-    route("pointerup", { x: grab.x, y: grab.y + 30 });
+    drag(onLine(110), onLine(110, 30));
 
     // The one added later (on top) moved, and the first one stayed put.
     const [bottomAfter, topAfter] = tools.list();
@@ -182,7 +126,7 @@ describe("drawingTools drag", () => {
 
 describe("fibonacci", () => {
   it("should draw seven levels with ratio labels", () => {
-    const { model, tools } = mounted();
+    const { model, tools } = drawingChart();
 
     tools.add({
       type: "fib",
@@ -206,13 +150,13 @@ describe("fibonacci", () => {
   });
 
   it("should move as one body when a level line is grabbed", () => {
-    const { model, tools, pane, route } = mounted();
+    const { plot, tools, pane, drag } = drawingChart();
     const handle = tools.add({
       type: "fib",
       a: { x: 1, price: 118 },
       b: { x: 9, price: 102 },
     });
-    model.plot.render();
+    plot.render();
 
     const frameX = (x: number) => {
       const { left, right } = pane.area;
@@ -222,9 +166,7 @@ describe("fibonacci", () => {
     // the level line.
     const grab = { x: frameX(5), y: pane.yScale.scale(110) };
 
-    expect(route("pointerdown", grab)).toBe(true);
-    route("pointermove", { x: grab.x, y: grab.y + 15 });
-    route("pointerup", { x: grab.x, y: grab.y + 15 });
+    expect(drag({ px: grab.x, py: grab.y }, { px: grab.x, py: grab.y + 15 })).toBe(true);
 
     const after = handle.read();
     if (after.type !== "fib") throw new Error("unexpected");
@@ -242,16 +184,12 @@ it('rejects a complete additive drag candidate before writing any anchor', () =>
 });
 
 it('keeps saving and history valid after an out-of-range finite pixel drag', () => {
-  const model = createPlotModel({ size: { width: 800, height: 600 }, series: { series: lineSeries(), data: [{ x: 0, y: 1e307 }, { x: 10, y: 2e307 }] } });
-  const api = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
+  const { pane, tools: api, drag } = drawingChart({ series: { series: lineSeries(), data: [{ x: 0, y: 1e307 }, { x: 10, y: 2e307 }] } });
   const handle = api.add({ type: 'horizontal', price: 1.5e307 });
   const before = handle.read();
-  model.plot.routeInput({ type: 'pointerdown', point: { x: 400, y: model.plot.mainPane.pixelAtValue(1.5e307) }, pointerId: 1 });
-  model.plot.routeInput({ type: 'pointermove', point: { x: 400, y: -10000 }, pointerId: 1 });
-  model.plot.routeInput({ type: 'pointerup', point: { x: 400, y: -10000 }, pointerId: 1 });
+  drag({ px: 400, py: pane.pixelAtValue(1.5e307) }, { px: 400, py: -10000 });
   expect(handle.read()).toEqual(before);
   expect(parseDrawings(api.serialize())).toEqual([before]);
   api.undo(); // Only the add was committed.
   expect(api.list()).toEqual([]);
-  model.plot.destroy();
 });

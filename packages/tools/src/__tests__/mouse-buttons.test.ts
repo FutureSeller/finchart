@@ -1,7 +1,5 @@
-import type { LineDataPoint } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
 import { describe, expect, it } from "vitest";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 type Area = { left: number; right: number; top: number; bottom: number };
 
@@ -13,53 +11,26 @@ type Area = { left: number; right: number; top: number; bottom: number };
  * an edit the user never intended.
  */
 
-const data: LineDataPoint[] = [
-  { x: 0, y: 100 },
-  { x: 5, y: 120 },
-  { x: 10, y: 110 },
-];
-
-function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series: { series: lineSeries(), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
-  const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-  const pane = model.plot.mainPane;
-  model.plot.render();
-
-  const at = (x: number, price: number) => ({
-    x: model.plot.pixelAtX(x),
-    y: pane.yScale.scale(price),
-  });
-
-  return { model, tools, pane, at };
-}
-
 describe("the secondary button does not grab a drawing", () => {
   it("should not drag a drawing with the secondary button", () => {
-    const { model, tools, at } = mounted();
+    const { route, tools, at } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
     const before = tools.list();
 
     // Right-click on the line -- and the hand wobbles while it's held down.
     const on = at(5, 105);
-    model.plot.routeInput({
+    route({
       type: "pointerdown",
       point: on,
       pointerId: 1,
       button: 2,
     });
-    model.plot.routeInput({
+    route({
       type: "pointermove",
       point: { x: on.x, y: on.y + 14 },
       pointerId: 1,
     });
-    model.plot.routeInput({
+    route({
       type: "pointerup",
       point: { x: on.x, y: on.y + 14 },
       pointerId: 1,
@@ -69,22 +40,22 @@ describe("the secondary button does not grab a drawing", () => {
   });
 
   it("should still drag with the primary button", () => {
-    const { model, tools, at } = mounted();
+    const { route, tools, at } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
 
     const on = at(5, 105);
-    model.plot.routeInput({
+    route({
       type: "pointerdown",
       point: on,
       pointerId: 1,
       button: 0,
     });
-    model.plot.routeInput({
+    route({
       type: "pointermove",
       point: { x: on.x, y: on.y + 14 },
       pointerId: 1,
     });
-    model.plot.routeInput({
+    route({
       type: "pointerup",
       point: { x: on.x, y: on.y + 14 },
       pointerId: 1,
@@ -95,12 +66,12 @@ describe("the secondary button does not grab a drawing", () => {
 
   /** Synthetic input that omits `button` must mean the same thing as today. */
   it("should treat a missing button as primary", () => {
-    const { model, tools, at } = mounted();
+    const { route, tools, at } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
 
     const on = at(5, 105);
-    model.plot.routeInput({ type: "pointerdown", point: on, pointerId: 1 });
-    model.plot.routeInput({
+    route({ type: "pointerdown", point: on, pointerId: 1 });
+    route({
       type: "pointermove",
       point: { x: on.x, y: on.y + 14 },
       pointerId: 1,
@@ -111,9 +82,9 @@ describe("the secondary button does not grab a drawing", () => {
 
   /** If `"right"` came through, `!== 0` would be true for everything, and selection would break entirely. */
   it("should reject a non-numeric button at the door", () => {
-    const { model, at } = mounted();
+    const { route, at } = drawingChart();
     expect(() =>
-      model.plot.routeInput({
+      route({
         type: "pointerdown",
         point: at(5, 105),
         pointerId: 1,
@@ -142,18 +113,18 @@ describe("a right click selects but doesn't consume", () => {
     ["the left margin", (p: Area) => ({ x: Math.max(p.left - 3, 0), y: (p.top + p.bottom) / 2 })],
   ])("all three buttons agree at %s", (_label, at) => {
     const answers = (["left", "right", "double"] as const).map((button) => {
-      const { model, tools, pane } = mounted();
+      const { route, tools, pane } = drawingChart();
       const handle = tools.add({ type: "horizontal", price: 105 });
       tools.select(handle);
       const point = at(pane.area);
 
       if (button === "left") {
-        model.plot.routeInput({ type: "pointerdown", point, pointerId: 1 });
-        model.plot.routeInput({ type: "pointerup", point, pointerId: 1 });
+        route({ type: "pointerdown", point, pointerId: 1 });
+        route({ type: "pointerup", point, pointerId: 1 });
       } else if (button === "right") {
-        model.plot.routeInput({ type: "contextmenu", point });
+        route({ type: "contextmenu", point });
       } else {
-        model.plot.routeInput({ type: "dblclick", point });
+        route({ type: "dblclick", point });
       }
       return tools.selection();
     });
@@ -170,17 +141,17 @@ describe("a right click selects but doesn't consume", () => {
   /** Control -- on the line, all three buttons point at that line. */
   it("all three buttons agree on the line", () => {
     const answers = (["left", "right", "double"] as const).map((button) => {
-      const { model, tools, at } = mounted();
+      const { route, tools, at } = drawingChart();
       tools.add({ type: "horizontal", price: 105 });
       const point = at(5, 105);
 
       if (button === "left") {
-        model.plot.routeInput({ type: "pointerdown", point, pointerId: 1 });
-        model.plot.routeInput({ type: "pointerup", point, pointerId: 1 });
+        route({ type: "pointerdown", point, pointerId: 1 });
+        route({ type: "pointerup", point, pointerId: 1 });
       } else if (button === "right") {
-        model.plot.routeInput({ type: "contextmenu", point });
+        route({ type: "contextmenu", point });
       } else {
-        model.plot.routeInput({ type: "dblclick", point });
+        route({ type: "dblclick", point });
       }
       return tools.selection();
     });
@@ -194,10 +165,10 @@ describe("a right click selects but doesn't consume", () => {
 
   /** If this consumed the event, `plot.contextMenu(point)` wouldn't fire, and the app couldn't open its own menu. */
   it("should let the app open its own menu", () => {
-    const { model, tools, at } = mounted();
+    const { route, tools, at } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });
 
-    const eaten = model.plot.routeInput({
+    const eaten = route({
       type: "contextmenu",
       point: at(5, 105),
     });

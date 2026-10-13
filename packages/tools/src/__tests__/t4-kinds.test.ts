@@ -1,5 +1,4 @@
-import type { LineDataPoint, Point, TextParams } from "@finchart/core";
-import { createPlotModel, lineSeries } from "@finchart/core";
+import type { Point, TextParams } from "@finchart/core";
 import { describe, expect, it } from "vitest";
 import type { Drawing } from "../drawings";
 import {
@@ -11,7 +10,7 @@ import {
 import { gripAt } from "../hit";
 import { drawOne } from "../render";
 import type { DrawingSpace } from "../space";
-import { drawingTools } from "../tools";
+import { drawingChart } from "./drawing-chart.fixture";
 
 /**
  * T4 wave — fibExtension. A three-anchor Fibonacci whose levels project
@@ -124,44 +123,19 @@ describe("render draws what hit-testing checks", () => {
 });
 
 describe("placement and editing through the real state machine", () => {
-  const data: LineDataPoint[] = [
-    { x: 0, y: 100 },
-    { x: 5, y: 120 },
-    { x: 10, y: 110 },
-  ];
-
-  function mounted() {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
-    });
-    const tools = model.plot.mainPane.use(drawingTools({ plot: model.plot }));
-    const pane = model.plot.mainPane;
-    const click = (x: number, price: number) => {
-      const point = { x: model.plot.pixelAtX(x), y: pane.yScale.scale(price) };
-      model.plot.routeInput({ type: "pointerdown", point, pointerId: 1 });
-      model.plot.routeInput({ type: "pointerup", point, pointerId: 1 });
-    };
-    return { tools, click };
-  }
-
   it("lands without levels (the defaults) when placed by hand", () => {
-    const { tools, click } = mounted();
+    const { tools, click } = drawingChart();
     tools.begin("fibExtension");
-    click(2, 105);
-    click(5, 115);
-    click(8, 108);
+    click({ x: 2, price: 105 });
+    click({ x: 5, price: 115 });
+    click({ x: 8, price: 108 });
     const [drawn] = tools.list();
     if (drawn.type !== "fibExtension") throw new Error("expected a fibExtension");
     expect(drawn.levels).toBeUndefined();
   });
 
   it("handle.update sets and clears levels, sorted and deduped, never clamped", () => {
-    const { tools } = mounted();
+    const { tools } = drawingChart();
     tools.add({
       type: "fibExtension",
       a: { x: 2, price: 105 },
