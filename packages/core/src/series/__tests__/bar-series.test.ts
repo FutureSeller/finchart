@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OHLC } from "../../data";
-import { createPlotModel } from "../../plot";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import type { Point } from "../../primitives";
 import type { LineStyle } from "../../render";
 import { barSeries, DEFAULT_BAR_STYLE } from "../bar-series";
@@ -16,20 +16,14 @@ interface Line {
 }
 
 function drawnLines(): Line[] {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
+  const model = headlessModel({
     series: { series: barSeries(), data: bars },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
   });
 
   const lines: Line[] = [];
   for (const command of model.commands()) {
     if (command.type === "drawLine") lines.push(command);
   }
-  model.plot.destroy();
   return lines;
 }
 

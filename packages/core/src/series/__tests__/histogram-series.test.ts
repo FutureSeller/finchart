@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HistogramPoint, HistogramSeriesStyleOverrides } from "../histogram-series";
 import { DEFAULT_HISTOGRAM_STYLE, histogramSeries } from "../histogram-series";
-import { createPlotModel } from "../../plot";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 
 const volume: HistogramPoint[] = [
   { x: 0, y: 100 },
@@ -11,13 +11,8 @@ const volume: HistogramPoint[] = [
 ];
 
 function mounted(baseline?: number, data = volume) {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
+  const model = headlessModel({
     series: { series: histogramSeries({ baseline }), data },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
   });
 
   const bars = model
@@ -87,7 +82,7 @@ describe("histogramSeries", () => {
   });
 
   it("should keep a bar that sits on the baseline one pixel tall", () => {
-    const { model, bars } = mounted(undefined, [
+    const { bars } = mounted(undefined, [
       { x: 0, y: 0 },
       { x: 1, y: 5 },
     ]);
@@ -95,7 +90,6 @@ describe("histogramSeries", () => {
     const [flat] = bars;
     if (flat.type !== "drawShape" || flat.shape.shape !== "rect") throw new Error("no bar drawn");
     expect(flat.shape.height).toBe(1);
-    model.plot.destroy();
   });
 
   it("should centre each bar on its point's x", () => {
@@ -107,7 +101,6 @@ describe("histogramSeries", () => {
       if (bar.type !== "drawShape" || bar.shape.shape !== "rect") throw new Error("no bar drawn");
       expect(bar.shape.x + bar.shape.width / 2).toBeCloseTo(model.plot.pixelAtX(drawn[i].x), 6);
     }
-    model.plot.destroy();
   });
 
   it("should say nothing when everything is a hole", () => {
@@ -140,13 +133,8 @@ describe("histogramSeries", () => {
       variables: Record<string, string> = vars,
       data = toned,
     ) {
-      const model = createPlotModel({
-        size: { width: 800, height: 600 },
+      const model = headlessModel({
         series: { series: histogramSeries({ style }), data },
-        config: {
-          showGrid: false,
-          axis: { x: { showLabels: false }, y: { showLabels: false } },
-        },
         deps: { createStyleReader: () => (name) => variables[name] ?? "" },
       });
       return model

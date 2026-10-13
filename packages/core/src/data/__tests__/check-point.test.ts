@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../types";
 import { candleSeries, histogramSeries, lineSeries } from "../../series";
-import { createPlotModel } from "../../plot/model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import { LineDataAccessor, OHLCAccessor } from "../accessors";
 import { checkPoint } from "../validate";
 
@@ -20,10 +20,7 @@ const line: LineDataPoint[] = [
 ];
 
 function mountedLine() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-  });
+  const model = headlessModel();
   return model.plot.mainPane.addSeries({ series: lineSeries(), data: line });
 }
 
@@ -33,10 +30,7 @@ const bars: OHLC[] = [
 ];
 
 function mountedCandles() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-  });
+  const model = headlessModel();
   return model.plot.mainPane.addSeries({ series: candleSeries(), data: bars });
 }
 
@@ -98,10 +92,7 @@ describe("updateLast names its door and the bar it replaces", () => {
 
 describe("every built-in accessor names the door", () => {
   it("a histogram tick with a NaN value says updateLast(point)", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-    });
+    const model = headlessModel();
     const handle = model.plot.mainPane.addSeries({
       series: histogramSeries(),
       data: [{ x: 1, y: 1 }, { x: 2, y: 2 }],

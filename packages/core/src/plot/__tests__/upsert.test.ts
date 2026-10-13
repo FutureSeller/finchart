@@ -12,6 +12,7 @@ import { DataError } from "../../primitives";
 import { createEntry } from "../../registration";
 import { candleSeries, lineSeries } from "../../series";
 import { createPlotModel } from "../model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 
 const bar = (x: number, close = x, volume = 1): OHLC => ({
   x,
@@ -32,10 +33,7 @@ const sma3 = (source: DataView<OHLC>): LineDataPoint[] =>
   }));
 
 function chart(data: OHLC[]) {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-  });
+  const model = headlessModel();
   const handle = model.plot.mainPane.addSeries({ series: candleSeries(), data });
   // The derivation reads the handle the way an indicator does — through a
   // computation node, so a tail change is seen as one by identity.

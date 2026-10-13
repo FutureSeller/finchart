@@ -8,23 +8,17 @@
  */
 import { describe, expect, it } from "vitest";
 import type { DataView, LineDataPoint, Range } from "../../data";
-import { createPlotModel } from "../../plot/model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import type { Series } from "../types";
 import { lineSeries } from "..";
 
-const config = {
-  showGrid: false,
-  axis: { x: { showLabels: false }, y: { showLabels: false } },
-};
-
-function linesOf(model: ReturnType<typeof createPlotModel>) {
+function linesOf(model: ReturnType<typeof headlessModel>) {
   return model.commands().flatMap((command) => (command.type === "drawLine" ? [command.points] : []));
 }
 
 describe("drawing reaches the off-screen neighbour on each side", () => {
   it("draws the segments of a single visible point out to both plot edges", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: {
         series: lineSeries(),
         data: [
@@ -33,7 +27,6 @@ describe("drawing reaches the off-screen neighbour on each side", () => {
           { x: 100, y: 15 },
         ],
       },
-      config,
     });
     model.plot.setVisibleRange(20, 80);
     model.plot.render();
@@ -58,13 +51,11 @@ describe("drawing reaches the off-screen neighbour on each side", () => {
         drawn.push(context.data.map((point) => point.x));
       },
     };
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: {
         series: spy,
         data: [0, 10, 20, 30, 40, 50].map((x) => ({ x, y: x })),
       },
-      config,
     });
     model.plot.setVisibleRange(15, 35);
     drawn.length = 0;
@@ -76,8 +67,7 @@ describe("drawing reaches the off-screen neighbour on each side", () => {
   });
 
   it("draws the segment across a view that holds no point", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: {
         series: lineSeries(),
         data: [
@@ -85,7 +75,6 @@ describe("drawing reaches the off-screen neighbour on each side", () => {
           { x: 100, y: 20 },
         ],
       },
-      config,
     });
     model.plot.setVisibleRange(40, 60);
     model.plot.render();
