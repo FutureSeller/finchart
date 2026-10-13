@@ -158,6 +158,25 @@ describe("macd", () => {
     expect(histogram.at(-1)!.y).toBeCloseTo(0, 3);
   });
 
+  it("should run the signal line as an EMA of its own period over the macd line", () => {
+    const source = sourceOf([candle(0, 0), candle(1, 6), candle(2, 3), candle(3, 9), candle(4, 3)]);
+    // A signal period unlike slow's, so a signal run at slow's period fails too.
+    const node = macd(source, { fast: 1, slow: 2, signal: 3 });
+
+    // fast(1) is the close itself; slow(2) seeds at (0+6)/2 = 3, then
+    // 3·2/3 + 3/3 = 3, 9·2/3 + 3/3 = 7 and 3·2/3 + 7/3 = 13/3 — so macd is
+    // [-, 3, 0, 2, -4/3].
+    const line = node.out.macd.read().map((point) => point.y);
+    expect(line.slice(0, 4)).toEqual([null, 3, 0, 2]);
+    expect(line[4]).toBeCloseTo(-4 / 3, 12);
+    // signal(3) seeds on the first three macd values, (3+0+2)/3 = 5/3, then
+    // -4/3·2/4 + 5/3·2/4 = 1/6.
+    const signal = node.out.signal.read().map((point) => point.y);
+    expect(signal.slice(0, 3)).toEqual([null, null, null]);
+    expect(signal[3]).toBeCloseTo(5 / 3, 12);
+    expect(signal[4]).toBeCloseTo(1 / 6, 12);
+  });
+
   it("should keep the same branch keys before data arrives", () => {
     const node = macd(sourceOf([]));
 

@@ -127,6 +127,17 @@ describe("a snapped anchor shows a ring", () => {
     expect(on.tools.list()).toHaveLength(1);
     expect(rings(on.lines())).toEqual([]);
   });
+
+  it("does not carry a placed drawing's ring over to the next tool", () => {
+    const { plot, tools, at, click, lines } = mounted(true);
+    tools.begin("horizontal");
+    click({ px: at(1, 112).x, py: at(1, 112).y + 3 });
+    expect(tools.list()).toMatchObject([{ price: 112 }]);
+
+    tools.begin("trend");
+    plot.render();
+    expect(rings(lines())).toEqual([]);
+  });
 });
 
 describe("a selected drawing is drawn heavier", () => {

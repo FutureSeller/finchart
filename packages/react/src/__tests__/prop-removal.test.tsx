@@ -72,6 +72,21 @@ describe('prop removal = revert to default', () => {
     expect(gapOf()).toBe(0);
   });
 
+  it('showGrid follows the prop after mount and turns back on when removed', () => {
+    const { deps, ref, plot } = setup();
+    const view = render(<ChartContainer deps={deps} data={data} plotRef={ref} />);
+    expect(plot().getOptions().showGrid).toBe(true);
+
+    view.rerender(
+      <ChartContainer deps={deps} data={data} plotRef={ref} showGrid={false} />,
+    );
+    expect(plot().getOptions().showGrid).toBe(false);
+
+    view.rerender(<ChartContainer deps={deps} data={data} plotRef={ref} />);
+
+    expect(plot().getOptions().showGrid).toBe(true);
+  });
+
   it('removing ChartPane flex reverts to the core default', () => {
     const { deps, ref, plot } = setup();
     const view = render(

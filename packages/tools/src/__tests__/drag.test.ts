@@ -5,6 +5,7 @@ import { moveGrip } from '../hit';
 import { parseDrawings, toOwnedDrawing } from '../drawings';
 import type { Drawing } from '../drawings';
 import { drawingChart } from "./drawing-chart.fixture";
+import { mountDrawingStage } from "./drawing-stage.fixture";
 
 describe("drawingTools drag", () => {
   it("should eat the drag so pan cannot move — and follow the cursor", () => {
@@ -28,6 +29,22 @@ describe("drawingTools drag", () => {
     // Consumed, so pan never gets to run -- the x domain is unchanged
     // (the invariant this locks in).
     expect(plot.getVisibleRange()).toEqual(xDomainBefore);
+  });
+
+  it("should claim a drag's release on a stage that has no pointer capture", () => {
+    // A custom stage hands every event to the consumer and trusts its
+    // answer; the chart's own router would claim the release regardless.
+    const { api, route } = mountDrawingStage();
+    api.add({ type: "horizontal", price: 50 });
+
+    expect(route("pointerdown", 50, 50)).toBe(true);
+    expect(route("pointermove", 50, 60)).toBe(true);
+    expect(route("pointerup", 50, 60)).toBe(true);
+    expect(api.list()).toMatchObject([{ price: 60 }]);
+    // A release that moved nothing is still the drag's to claim.
+    expect(route("pointerdown", 50, 60)).toBe(true);
+    expect(route("pointerup", 50, 60)).toBe(true);
+    api.dispose();
   });
 
   it("should decline a press away from every drawing", () => {

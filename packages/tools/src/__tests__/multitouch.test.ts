@@ -78,6 +78,45 @@ describe("drawingTools pointer ownership", () => {
     expect(placed.b.price).toBeCloseTo(115, 6);
   });
 
+  it("should hand the drag to whichever pointer grabbed it", () => {
+    const { tools, routeAs, pane } = mounted();
+    const handle = tools.add({ type: "horizontal", price: 105 });
+
+    const midX = (pane.area.left + pane.area.right) / 2;
+    const yOf = (price: number) => pane.yScale.scale(price);
+    const price = () => {
+      const line = handle.read();
+      return line.type === "horizontal" ? Math.round(line.price) : null;
+    };
+
+    // Finger 2 grabs the line, so finger 2 moves it.
+    expect(routeAs("pointerdown", { x: midX, y: yOf(105) }, 2)).toBe(true);
+    routeAs("pointermove", { x: midX, y: yOf(109) }, 2);
+    expect(price()).toBe(109);
+
+    // Pointer 1 never touched it -- its move goes nowhere.
+    routeAs("pointermove", { x: midX, y: yOf(113) }, 1);
+    expect(price()).toBe(109);
+
+    routeAs("pointerup", { x: midX, y: yOf(109) }, 2);
+  });
+
+  it("should not let a second finger's move pull the line being drawn", () => {
+    const { model, plot, tools, routeAs, at } = mounted();
+    tools.begin("trend");
+
+    routeAs("pointerdown", at(2, 105), 1);
+    routeAs("pointermove", at(5, 110), 1);
+    expect(routeAs("pointermove", at(9, 118), 2)).toBe(true);
+
+    // Draw a fresh frame, so a draft changed without asking for one shows too.
+    plot.render();
+    const lines = model
+      .commands()
+      .filter((command) => command.type === "drawLine");
+    expect(lines.at(-1)?.points).toEqual([at(2, 105), at(5, 110)]);
+  });
+
   it("should accept the second tap from a new pointerId (touch taps)", () => {
     const { tools, routeAs, at } = mounted();
     tools.begin("trend");
