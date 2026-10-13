@@ -11,11 +11,12 @@ import { candleSeries, immediateScheduler } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { attachRsi } from '@finchart/indicators';
 import { act, cleanup, render } from '@testing-library/react';
-import { createRef, StrictMode, useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartPane } from '../components';
 import { usePlugin } from '../hooks';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -32,17 +33,9 @@ function setup() {
   const deps = browserDeps({
     createLayers: layersSpy().createLayers,
     createScheduler: immediateScheduler,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
   return { deps, ref, plot };
 }
 

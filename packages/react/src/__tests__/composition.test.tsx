@@ -1,8 +1,8 @@
-import type { DataView, LineDataPoint, Plot, Series, TickStrategy } from '@finchart/core';
+import type { DataView, LineDataPoint, Series, TickStrategy } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
-import { createRef, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ChartContainer,
@@ -12,6 +12,7 @@ import {
   YAxis,
 } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -28,18 +29,9 @@ function setup() {
   const spy = layersSpy();
   const deps = browserDeps({
     createLayers: spy.createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
 
   return { spy, deps, ref, plot };
 }

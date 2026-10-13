@@ -14,6 +14,7 @@ import { createRef, StrictMode } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -32,11 +33,7 @@ function setup() {
   const deps = browserDeps({
     createLayers: spy.createLayers,
     createScheduler,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
   const ref = createRef<Plot>();
   return { deps, ref, counter };

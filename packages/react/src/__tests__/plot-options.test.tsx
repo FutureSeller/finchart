@@ -24,6 +24,7 @@ import { ChartContainer, ChartSeries } from '../components';
 import type { PlotOptions } from '../components';
 import { shallowEqual } from '../shallow-equal';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -38,17 +39,9 @@ function setup() {
   const deps = browserDeps({
     createLayers: spy.createLayers,
     createScheduler: immediateScheduler,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
   return { deps, ref, plot };
 }
 
@@ -102,11 +95,7 @@ describe('<ChartContainer options>', () => {
     const deps = browserDeps({
       createLayers: spy.createLayers,
       createScheduler: immediateScheduler,
-      createAxisLabels: () => ({
-        render: () => undefined,
-        clear: () => undefined,
-        destroy: () => undefined,
-      }),
+      createAxisLabels: noAxisLabels,
     });
     const ref = createRef<Plot>();
     const caught: unknown[] = [];

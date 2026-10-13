@@ -26,6 +26,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartData, ChartLine, ChartPane, ChartSeries } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -59,18 +60,9 @@ function setup() {
   // Feed the recipe an inspectable div to get the finished wiring.
   const deps = browserDeps({
     createLayers: spy.createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   })(document.createElement("div"));
-  const ref = createRef<Plot>();
-
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
 
   return { deps, ref, plot };
 }

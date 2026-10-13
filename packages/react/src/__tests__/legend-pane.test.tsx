@@ -6,11 +6,12 @@
 import type { LineDataPoint, Pane, Plot } from '@finchart/core';
 import { browserDeps, legend, tooltip } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
-import { createRef, StrictMode, type ReactElement } from 'react';
+import { StrictMode, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartContainer, ChartLine, ChartPane, Legend, Tooltip } from '../components';
 import { PaneProvider } from '../components/chart-context';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 // The real plugins, watched — what an install was handed is otherwise
 // indistinguishable from the options applied right after it.
@@ -39,17 +40,9 @@ function setup() {
   const spy = layersSpy();
   const deps = browserDeps({
     createLayers: spy.createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
   const overlay = () => {
     const layers = spy.created[spy.created.length - 1];
     const element = layers?.overlay;
