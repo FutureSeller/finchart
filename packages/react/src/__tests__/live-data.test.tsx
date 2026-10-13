@@ -24,6 +24,7 @@ import { createRef, useEffect } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartLine, useChartPlot } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -39,11 +40,7 @@ function bars(count: number): LineDataPoint[] {
 function makeDeps() {
   return browserDeps({
     createLayers: layersSpy().createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
 }
 

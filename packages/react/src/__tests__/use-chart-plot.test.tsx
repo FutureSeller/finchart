@@ -16,6 +16,7 @@ import { createRef, type RefObject, StrictMode, useEffect, useState } from 'reac
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, useChartPlot } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -27,11 +28,7 @@ const data: LineDataPoint[] = [
 function makeDeps() {
   return browserDeps({
     createLayers: layersSpy().createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
 }
 

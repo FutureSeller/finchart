@@ -22,6 +22,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartContainer, ChartSeries, InfiniteHistory } from '../components';
 import { type InfiniteHistoryState, useInfiniteHistory } from '../hooks/use-infinite-history';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -39,11 +40,7 @@ function makeDeps() {
   return browserDeps({
     createLayers: layersSpy().createLayers,
     createScheduler: immediateScheduler,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
 }
 

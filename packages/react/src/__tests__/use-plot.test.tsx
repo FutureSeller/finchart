@@ -12,6 +12,7 @@ import { browserDeps } from '@finchart/dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { usePlot, type UsePlotOptions } from '../hooks/use-chart';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 /** Only the hook is under test, so this renders just one container. `expose` hands out the live plot for a test that reads its state. */
 function Harness<T extends BaseDataPoint>({
@@ -44,11 +45,7 @@ function setup() {
      * frame there'd be nothing to observe.
      */
     createScheduler: immediateScheduler,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
     // Feed the recipe an inspectable div to get the finished wiring.
   })(document.createElement("div"));
 

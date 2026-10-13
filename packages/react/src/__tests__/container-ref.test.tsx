@@ -12,6 +12,7 @@ import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartCandles, ChartContainer } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -24,7 +25,7 @@ function setup() {
   const spy = layersSpy();
   const deps = browserDeps({
     createLayers: spy.createLayers,
-    createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+    createAxisLabels: noAxisLabels,
   });
   return { deps };
 }

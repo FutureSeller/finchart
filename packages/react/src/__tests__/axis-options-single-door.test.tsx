@@ -15,14 +15,14 @@
  * compilation fails there. This is the **behavior lock** that checks the
  * one remaining door actually holds up under that scenario.
  */
-import type { LineDataPoint, Plot } from '@finchart/core';
+import type { LineDataPoint } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { cleanup, render } from '@testing-library/react';
-import { createRef } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartPane, ChartSeries, YAxis } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -36,17 +36,9 @@ function setup() {
   const spy = layersSpy();
   const deps = browserDeps({
     createLayers: spy.createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
   return { deps, ref, plot };
 }
 

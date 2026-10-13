@@ -24,6 +24,7 @@ import { PaneProvider } from '../components/chart-context';
 import type { LineDataPoint } from '@finchart/core';
 import { lineSeries } from '@finchart/core';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 import { rendererSpy } from './recording-renderer';
 
 afterEach(() => {
@@ -40,11 +41,7 @@ const data: LineDataPoint[] = [
 function makeDeps() {
   return browserDeps({
     createLayers: layersSpy().createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
 }
 
@@ -87,9 +84,9 @@ describe('decorations — equal values leave the decoration untouched', () => {
     const deps = browserDeps({
       createLayers: layersSpy().createLayers,
       createRenderer: renderer.createRenderer,
-      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+      createAxisLabels: noAxisLabels,
     });
-    const ref = createRef<Plot>();
+    const { ref, plot } = plotRef();
     function Harness() {
       const [value, setValue] = useState(110);
       return (
@@ -104,10 +101,6 @@ describe('decorations — equal values leave the decoration untouched', () => {
         </>
       );
     }
-    const plot = () => {
-      if (!ref.current) throw new Error('plot is not mounted');
-      return ref.current;
-    };
     const screen = render(<Harness />);
     const afterMount = box.installs;
     const lineYs = () => {
@@ -202,9 +195,9 @@ describe('decorations — equal values leave the decoration untouched', () => {
     const deps = browserDeps({
       createLayers: layersSpy().createLayers,
       createRenderer: renderer.createRenderer,
-      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+      createAxisLabels: noAxisLabels,
     });
-    const ref = createRef<Plot>();
+    const { ref, plot } = plotRef();
 
     function Harness() {
       const [width, setWidth] = useState(1);
@@ -220,10 +213,6 @@ describe('decorations — equal values leave the decoration untouched', () => {
         </>
       );
     }
-    const plot = () => {
-      if (!ref.current) throw new Error('plot is not mounted');
-      return ref.current;
-    };
     const redWidths = () => {
       act(() => plot().render());
       return renderer.committed
@@ -357,7 +346,7 @@ describe('decorations — one live registration per mounted component', () => {
     const deps = browserDeps({
       createLayers: layersSpy().createLayers,
       createRenderer: renderer.createRenderer,
-      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+      createAxisLabels: noAxisLabels,
     });
     const ref = createRef<Plot>();
     const INK = '#123456';
@@ -404,12 +393,8 @@ describe('decorations — one live registration per mounted component', () => {
         destroy: () => undefined,
       }),
     });
-    const ref = createRef<Plot>();
+    const { ref, plot } = plotRef();
     const INK = '#123456';
-    const plot = () => {
-      if (!ref.current) throw new Error('plot is not mounted');
-      return ref.current;
-    };
     /** A new pane with its own series (so its axis covers the values), its registrations counted. */
     function newTarget() {
       const added = plot().addPane();
@@ -519,7 +504,7 @@ describe('decorations — a remounting decoration draws once, and not after it g
     const deps = browserDeps({
       createLayers: layersSpy().createLayers,
       createRenderer: renderer.createRenderer,
-      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+      createAxisLabels: noAxisLabels,
     });
     const ref = createRef<Plot>();
     const commands = () => {

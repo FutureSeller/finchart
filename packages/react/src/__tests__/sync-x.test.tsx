@@ -14,6 +14,7 @@ import { StrictMode, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartContainer, ChartLine, SyncCrosshair, SyncX } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 import { type RendererSpy, rendererSpy } from './recording-renderer';
 
 afterEach(cleanup);
@@ -27,11 +28,7 @@ const data: LineDataPoint[] = [
 function makeDeps() {
   return browserDeps({
     createLayers: layersSpy().createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
 }
 
@@ -193,7 +190,7 @@ describe('SyncCrosshair', () => {
     const depsB = browserDeps({
       createLayers: layersSpy().createLayers,
       createRenderer: drawnB.createRenderer,
-      createAxisLabels: () => ({ render: () => undefined, clear: () => undefined, destroy: () => undefined }),
+      createAxisLabels: noAxisLabels,
     });
     const live: { a: Plot | null; b: Plot | null } = { a: null, b: null };
     function Linked({ linked }: { linked: boolean }) {

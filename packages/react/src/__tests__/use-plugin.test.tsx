@@ -16,6 +16,7 @@ import { ChartContainer, ChartPane } from '../components';
 import { PaneProvider } from '../components/chart-context';
 import { usePlugin } from '../hooks';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -27,11 +28,7 @@ const data: LineDataPoint[] = [
 function makeDeps() {
   return browserDeps({
     createLayers: layersSpy().createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
 }
 

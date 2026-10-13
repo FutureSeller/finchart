@@ -3,13 +3,13 @@
  * the DOM plugins — install and later change. A candle describes its rows,
  * so the overlay text is the observable.
  */
-import type { OHLC, Plot } from '@finchart/core';
+import type { OHLC } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { act, cleanup, render } from '@testing-library/react';
-import { createRef } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChartCandles, ChartContainer, Legend, Tooltip } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 
 afterEach(cleanup);
 
@@ -23,17 +23,9 @@ function setup() {
   const spy = layersSpy();
   const deps = browserDeps({
     createLayers: spy.createLayers,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
   const overlay = () => {
     const layers = spy.created[spy.created.length - 1];
     const element = layers?.overlay;

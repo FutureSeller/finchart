@@ -20,6 +20,7 @@ import {
   Crosshair,
 } from '../components';
 import { layersSpy } from './fake-layers';
+import { noAxisLabels, plotRef } from './chart.fixture';
 import { rendererSpy } from './recording-renderer';
 
 afterEach(cleanup);
@@ -36,18 +37,9 @@ function setup() {
   const deps = browserDeps({
     createLayers: layers.createLayers,
     createRenderer: renderer.createRenderer,
-    createAxisLabels: () => ({
-      render: () => undefined,
-      clear: () => undefined,
-      destroy: () => undefined,
-    }),
+    createAxisLabels: noAxisLabels,
   });
-  const ref = createRef<Plot>();
-
-  const plot = () => {
-    if (!ref.current) throw new Error('plot is not mounted');
-    return ref.current;
-  };
+  const { ref, plot } = plotRef();
 
   /** Draws once from the current state and returns the resulting commands. */
   const drawn = (): readonly DrawCommand[] => {
