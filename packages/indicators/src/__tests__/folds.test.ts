@@ -420,6 +420,17 @@ describe("stddevFold ↔ a two-pass reference", () => {
       expect(Math.abs((got[end] ?? Number.NaN) - want) / want, `[${end}]`).toBeLessThan(1e-9);
     }
   });
+
+  it("a spread of 0.1 at a level of 1e12, reached by a jump, stays within 1e-9 — the sums are taken from a value inside the window", () => {
+    // Summed from zero, or from a value before the jump, the mean
+    // rounds at the level's size and the error lands near 1e-5.
+    const values = Array.from({ length: 60 }, (_, i) => (i < 20 ? i : 1e12 + Math.sin(i * 0.31) * 0.1));
+    const got = run(stddevFold(20), values);
+    for (let end = 39; end < values.length; end++) {
+      const want = stddevReference(values.slice(end - 19, end + 1));
+      expect(Math.abs((got[end] ?? Number.NaN) - want) / want, `[${end}]`).toBeLessThan(1e-9);
+    }
+  });
 });
 
 describe("lagFold", () => {

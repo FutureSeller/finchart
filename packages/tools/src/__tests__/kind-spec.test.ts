@@ -205,3 +205,62 @@ describe("placement through the real state machine", () => {
     if (drawn[0].type === "vertical") expect(drawn[0].x).toBeCloseTo(presses[0].x, 5);
   });
 });
+
+describe("snapping through the real state machine", () => {
+  /**
+   * The default line passes through (5, 120), the only value near that
+   * pixel. The first press lands a few pixels off it; the others land far
+   * from every point, so only the first anchor can snap.
+   */
+  const later = [
+    { x: 2, price: 105 },
+    { x: 8, price: 108 },
+  ];
+  type Axes = KindSpec["snapAxes"];
+  interface Probe {
+    near: string;
+    /** Pixel offset of the press from the point. */
+    dx: number;
+    dy: number;
+    /** Whether each coordinate should stick, given the kind's axes. */
+    x: (axes: Axes) => boolean;
+    price: (axes: Axes) => boolean;
+  }
+  const probes: Probe[] = [
+    // Inside the radius either way, so each listed axis sticks.
+    { near: "both axes", dx: 3, dy: 3, x: (axes) => axes !== "y", price: (axes) => axes !== "x" },
+    // Too far for a point-wise snap; only a price-only snap still sticks.
+    { near: "price only", dx: 20, dy: 3, x: () => false, price: (axes) => axes === "y" },
+    // Too far for a point-wise snap; only a time-only snap still sticks.
+    { near: "time only", dx: 3, dy: 20, x: (axes) => axes === "x", price: () => false },
+  ];
+
+  it.each(Object.entries(TABLE))("%s snaps its first anchor on exactly its snapAxes", (_kind, spec) => {
+    for (const probe of probes) {
+      const { tools, at, click } = drawingChart({ tools: { snap: true } });
+      tools.begin(spec.sample.type);
+      const point = at(5, 120);
+      click({ px: point.x + probe.dx, py: point.y + probe.dy });
+      for (const press of later.slice(0, spec.clicks - 1)) click(press);
+
+      const [drawn] = tools.list();
+      // Read only the coordinates the kind stores: a horizontal line has
+      // no x and a vertical one no price.
+      const first =
+        drawn.type === "horizontal"
+          ? { price: drawn.price }
+          : drawn.type === "vertical"
+            ? { x: drawn.x }
+            : drawingAnchors(drawn)[0];
+      const snapped = {
+        ...("x" in first ? { x: first.x === 5 } : {}),
+        ...("price" in first ? { price: first.price === 120 } : {}),
+      };
+      const expected = {
+        ...("x" in first ? { x: probe.x(spec.snapAxes) } : {}),
+        ...("price" in first ? { price: probe.price(spec.snapAxes) } : {}),
+      };
+      expect({ near: probe.near, ...snapped }).toEqual({ near: probe.near, ...expected });
+    }
+  });
+});

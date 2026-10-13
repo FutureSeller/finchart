@@ -48,3 +48,25 @@ describe("paneMaximize under the drawing tools", () => {
     expect(max.maximizedPane).toBeNull();
   });
 });
+
+describe("the toolbox's input priority", () => {
+  it("defaults to the router's default of 0 when left out", () => {
+    const { plot, tools, key } = drawingChart();
+    const asked: string[] = [];
+    const consumer = (name: string) => ({
+      handle: () => {
+        asked.push(name);
+        return false;
+      },
+    });
+    // A tie goes to the later registration, so a default consumer added
+    // now is asked first; one just below the default is never reached.
+    plot.addInputConsumer(consumer("below"), { priority: -1 });
+    plot.addInputConsumer(consumer("default"));
+    tools.begin("trend");
+
+    expect(key("Escape")).toBe(true);
+    expect(tools.mode()).toBeNull();
+    expect(asked).toEqual(["default"]);
+  });
+});

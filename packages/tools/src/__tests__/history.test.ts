@@ -130,6 +130,20 @@ describe("drawingTools history", () => {
     expect(handle.read()).toEqual(moved);
   });
 
+  it("reports the undo and redo of a drag as a move", () => {
+    const { tools, drag, onLine } = drawingChart();
+    tools.add({ type: "horizontal", price: 105 });
+    drag(onLine(105), onLine(105, 30));
+    const changes = record(tools.changes);
+
+    tools.undo();
+    tools.redo();
+    expect(changes).toEqual([
+      { reason: "move", via: "undo" },
+      { reason: "move", via: "redo" },
+    ]);
+  });
+
   it("does not record a pointer move that leaves the geometry unchanged", () => {
     const { tools, drag, onLine } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });

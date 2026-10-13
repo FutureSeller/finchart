@@ -95,6 +95,20 @@ describe("M4Decimation", () => {
     expect(ys).toContain(-999);
   });
 
+  /** With neither spike on a column edge, the column alone decides which extreme comes first. */
+  it("should keep both inner spikes of a column in time order", () => {
+    const data: LineDataPoint[] = sawtooth(1000).map((point) => ({
+      ...point,
+      y: 0,
+    }));
+    data[510].y = 999;
+    data[520].y = -999;
+
+    const decimated = m4().decimate(...whole(data), 40);
+
+    expect(decimated.filter((point) => point.y !== 0)).toEqual([data[510], data[520]]);
+  });
+
   it("should keep the extremes of every pixel column", () => {
     // One spike per column. Missing even one fails the test.
     const data: LineDataPoint[] = Array.from({ length: 1000 }, (_, i) => ({
