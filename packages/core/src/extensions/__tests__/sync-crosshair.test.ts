@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import { createPlotModel } from "../../plot/model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import { timeCursor } from "../crosshair";
 import { syncCrosshair } from "../sync";
 
@@ -19,23 +19,13 @@ const data: LineDataPoint[] = [
   { x: 100, y: 110 },
 ];
 
-const bare = {
-  showGrid: false,
-  axis: { x: { showLabels: false as const }, y: { showLabels: false as const } },
-};
-
 function trio() {
-  const make = () =>
-    createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: bare,
-    });
+  const make = () => headlessModel({ series: { series: lineSeries(), data } });
   return { a: make(), b: make(), c: make() };
 }
 
 /** A line spanning the full height — the fingerprint of a ghost cursor. */
-function fullHeightVerticals(model: ReturnType<typeof createPlotModel>) {
+function fullHeightVerticals(model: ReturnType<typeof headlessModel>) {
   const area = model.plot.mainPane.area;
   return model
     .commands()
@@ -73,9 +63,6 @@ describe("syncCrosshair", () => {
     a.plot.render();
     expect(fullHeightVerticals(a).length).toBe(0);
     release();
-    a.plot.destroy();
-    b.plot.destroy();
-    c.plot.destroy();
   });
 
   it("should clear ghosts when the cursor leaves and on release", () => {
@@ -102,11 +89,7 @@ describe("syncCrosshair", () => {
 
 describe("timeCursor", () => {
   function ghostLinesAt(x: number) {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: bare,
-    });
+    const model = headlessModel({ series: { series: lineSeries(), data } });
     model.plot.setVisibleRange(20, 60);
     const ghost = timeCursor();
     model.plot.addDecoration(ghost);

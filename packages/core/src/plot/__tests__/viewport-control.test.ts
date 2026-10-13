@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
-import { createPlotModel } from "../model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import type { PlotEventSource, ViewportControl } from "../capabilities";
 import type { PlotEvents } from "../events";
 import { eventChannel } from "../../primitives";
@@ -13,18 +13,9 @@ const data: LineDataPoint[] = [
   { x: 100, y: 110 },
 ];
 
-const bare = {
-  showGrid: false,
-  axis: { x: { showLabels: false as const }, y: { showLabels: false as const } },
-};
-
 describe("setVisibleRange (2.3)", () => {
   it("should frame the given data window", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      series: { series: lineSeries(), data },
-      config: bare,
-    });
+    const model = headlessModel({ series: { series: lineSeries(), data } });
 
     model.plot.setVisibleRange(20, 60);
 
@@ -34,10 +25,9 @@ describe("setVisibleRange (2.3)", () => {
 
 describe("rightOffset (2.3)", () => {
   it("should leave room after the last bar on refit", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: { series: lineSeries(), data },
-      config: { ...bare, rightOffset: 10 },
+      config: { rightOffset: 10 },
     });
 
     expect(model.plot.getVisibleRange()!.max).toBe(110);
@@ -47,10 +37,9 @@ describe("rightOffset (2.3)", () => {
   });
 
   it("can keep a live view's existing right edge on zoom-out without changing history zoom", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: { series: lineSeries(), data },
-      config: { ...bare, rightOffset: 10, preserveLiveRightEdgeOnZoomOut: true },
+      config: { rightOffset: 10, preserveLiveRightEdgeOnZoomOut: true },
     });
 
     model.plot.zoom(0.5, 50);
@@ -64,10 +53,9 @@ describe("rightOffset (2.3)", () => {
 
 describe("barSpacing limits (2.3)", () => {
   it("should stop zooming in at maxBarSpacing", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: { series: lineSeries(), data },
-      config: { ...bare, maxBarSpacing: 40 },
+      config: { maxBarSpacing: 40 },
     });
     const width = 800 - 4 - 16; // left/right padding (no labels — zero slice)
 
@@ -76,14 +64,12 @@ describe("barSpacing limits (2.3)", () => {
 
     const { min, max } = model.plot.getVisibleRange()!;
     expect(width / (max - min)).toBeLessThanOrEqual(40 + 1e-9);
-    model.plot.destroy();
   });
 
   it("should stop zooming out at minBarSpacing", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: { series: lineSeries(), data },
-      config: { ...bare, minBarSpacing: 2 },
+      config: { minBarSpacing: 2 },
     });
     const width = 800 - 4 - 16;
 
@@ -96,12 +82,7 @@ describe("barSpacing limits (2.3)", () => {
 
 describe("syncX (2.3)", () => {
   function pair() {
-    const make = () =>
-      createPlotModel({
-        size: { width: 800, height: 600 },
-        series: { series: lineSeries(), data },
-        config: bare,
-      });
+    const make = () => headlessModel({ series: { series: lineSeries(), data } });
     return { a: make().plot, b: make().plot };
   }
 
@@ -179,9 +160,8 @@ describe("syncX (2.3)", () => {
 
   it("should not double-shift on new bars when every synced plot follows", () => {
     const make = () => {
-      const model = createPlotModel({
-        size: { width: 800, height: 600 },
-        config: { ...bare, shiftVisibleRangeOnNewBar: true },
+      const model = headlessModel({
+        config: { shiftVisibleRangeOnNewBar: true },
       });
       const handle = model.plot.mainPane.addSeries({
         series: lineSeries(),

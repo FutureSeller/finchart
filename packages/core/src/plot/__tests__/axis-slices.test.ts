@@ -6,6 +6,7 @@ import type { Series, SeriesContext } from "../../series";
 import { lineSeries } from "../../series";
 import { sliceAxes } from "../layout";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import { defaultConfig, defaultSize, mountPlot } from "./helpers";
 
 const data: LineDataPoint[] = [
@@ -142,16 +143,10 @@ describe("sliceAxes", () => {
 });
 
 describe("value axis toggle (2.2)", () => {
-  it("should flip the picture when inverted", async () => {
-    const { createPlotModel } = await import("../model");
+  it("should flip the picture when inverted", () => {
     const series = spySeries();
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: { series, data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
     });
     model.plot.render();
     const normal = model.plot.mainPane.yScale.scale(20);
@@ -168,15 +163,9 @@ describe("value axis toggle (2.2)", () => {
   });
 
   it("should carry the viewing domain across a scale swap", async () => {
-    const { createPlotModel } = await import("../model");
     const { LogScale } = await import("../../scale");
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: { series: lineSeries(), data },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
     });
     model.plot.render();
     const viewing = model.plot.mainPane.yScale.getDomain();

@@ -1,20 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
-import { createPlotModel } from "../../plot";
+import type { PlotModelOptions } from "../../plot";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import { LogScale } from "../../scale";
 import { isLinearGradientParams, LINEAR_GRADIENT } from "../../render";
 import { areaSeries } from "../area-series";
 import { baselineSeries, splitAtBaseline } from "../baseline-series";
 
-function mounted(series: Parameters<typeof createPlotModel>[0]["series"]) {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    series,
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
+function mounted(series: PlotModelOptions["series"]) {
+  const model = headlessModel({ series });
 
   return {
     model,
@@ -70,7 +64,6 @@ describe("areaSeries", () => {
         { x: first.x, y: bottom },
       ]);
     }
-    model.plot.destroy();
   });
 
   it("should stay a flat fill without fillBottom — no custom command", () => {
@@ -137,13 +130,8 @@ describe("areaSeries", () => {
     });
 
     it("should read --chart-area-bottom like any other token", () => {
-      const model = createPlotModel({
-        size: { width: 800, height: 600 },
+      const model = headlessModel({
         series: { series: areaSeries(), data },
-        config: {
-          showGrid: false,
-          axis: { x: { showLabels: false }, y: { showLabels: false } },
-        },
         deps: {
           createStyleReader: () => (name) =>
             name === "--chart-area-bottom" ? "rgba(0, 0, 0, 0)" : "",
@@ -181,7 +169,6 @@ describe("baselineSeries", () => {
     expect(lines[0].points.at(-1)).toEqual(lines[1].points[0]);
     expect(lines[1].points.at(-1)).toEqual(lines[2].points[0]);
     expect(lines[0].points.at(-1)?.y).toBeCloseTo(model.plot.mainPane.yScale.scale(10), 6);
-    model.plot.destroy();
   });
 
   it("should keep a baseline-only run on the same side after inversion", () => {
@@ -191,7 +178,6 @@ describe("baselineSeries", () => {
     const expected = colors();
     model.plot.mainPane.applyOptions({ invert: true });
     expect(colors()).toEqual(expected);
-    model.plot.destroy();
   });
 
   it("should change color exactly at the crossing, not at a bar", () => {
@@ -220,7 +206,6 @@ describe("baselineSeries", () => {
     expect(seam.x).toBeCloseTo(startX + (endX - startX) * 0.75, 6);
     // The colors differ.
     expect(above.style.color).not.toBe(below.style.color);
-    model.plot.destroy();
   });
 
   it("should keep a graze on the baseline in one segment", () => {

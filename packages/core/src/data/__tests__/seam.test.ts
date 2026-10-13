@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DataError } from "../../primitives";
 import { candleSeries, lineSeries } from "../../series";
-import { createPlotModel } from "../../plot/model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import { LineDataAccessor, OHLCAccessor } from "../accessors";
 import { SimpleDataManager } from "../data-manager";
 import { SimpleDecimation } from "../decimation";
@@ -85,10 +85,7 @@ describe("validateSeriesPoint with an accessor whose getX is not point.x", () =>
   };
 
   function mountedTimed() {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-    });
+    const model = headlessModel();
     const data: Timed[] = [{ x: 1, t: 10, y: 1 }, { x: 2, t: 20, y: 1 }];
     return model.plot.mainPane.addSeries({ series: lineSeries(), data, coordinates: byT });
   }
@@ -238,10 +235,7 @@ describe("seam equivalence", () => {
   ];
 
   it.each(ticks)("updateLast ⟺ validateSeriesPoint(p, acc, { lastX }) — $label", ({ point }) => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-    });
+    const model = headlessModel();
     const handle = model.plot.mainPane.addSeries({
       series: lineSeries(),
       data: [{ x: 1, y: 1 }, { x: 5, y: 1 }] satisfies LineDataPoint[],
@@ -253,10 +247,7 @@ describe("seam equivalence", () => {
 
   it("holds for OHLC through the accessor too", () => {
     const acc = new OHLCAccessor();
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      config: { showGrid: false, axis: { x: { showLabels: false }, y: { showLabels: false } } },
-    });
+    const model = headlessModel();
     const bars: OHLC[] = [
       { x: 1, open: 1, high: 2, low: 0.5, close: 1.5 },
       { x: 5, open: 1.5, high: 2.5, low: 1, close: 2 },

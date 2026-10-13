@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DataView, LineDataPoint } from "../../data";
 import { DEFAULT_LINE_STYLE, lineSeries } from "../../series";
-import { createPlotModel } from "../model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 
 const data: LineDataPoint[] = [
   { x: 0, y: 100 },
@@ -10,13 +10,7 @@ const data: LineDataPoint[] = [
 ];
 
 function mounted() {
-  const model = createPlotModel({
-    size: { width: 800, height: 600 },
-    config: {
-      showGrid: false,
-      axis: { x: { showLabels: false }, y: { showLabels: false } },
-    },
-  });
+  const model = headlessModel();
   const handle = model.plot.mainPane.addSeries({
     series: lineSeries(),
     data,
@@ -128,13 +122,8 @@ describe("incremental append/prepend", () => {
 
 describe("shiftVisibleRangeOnNewBar", () => {
   function streaming(shift: boolean) {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
-      config: {
-        showGrid: false,
-        shiftVisibleRangeOnNewBar: shift,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
-      },
+    const model = headlessModel({
+      config: { shiftVisibleRangeOnNewBar: shift },
     });
     const handle = model.plot.mainPane.addSeries({
       series: lineSeries(),

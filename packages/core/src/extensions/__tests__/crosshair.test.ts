@@ -12,6 +12,7 @@ import type { LineDataPoint } from "../../data";
 import { lineSeries } from "../../series";
 import type { CrosshairPayload } from "../../plot";
 import { createPlotModel } from "../../plot/model";
+import { headlessModel } from "../../__tests__/headless-model.fixture";
 import { testBrowserDepsWithScales } from "../../__tests__/dom-fakes";
 import { defaultConfig, defaultSize, mountPlot } from "../../plot/__tests__/helpers";
 import { crosshair as attach, crosshairLine } from "../crosshair";
@@ -228,18 +229,13 @@ describe("crosshairLine — a position outside the area", () => {
 
 describe("crosshair plugin — magnet", () => {
   it("should snap the vertical line to the bar under the cursor", () => {
-    const model = createPlotModel({
-      size: { width: 800, height: 600 },
+    const model = headlessModel({
       series: {
         series: lineSeries(),
         data: [
           { x: 0, y: 100 },
           { x: 10, y: 120 },
         ],
-      },
-      config: {
-        showGrid: false,
-        axis: { x: { showLabels: false }, y: { showLabels: false } },
       },
     });
     model.plot.use(attach({ magnet: true, horizontal: false }));
@@ -265,6 +261,5 @@ describe("crosshair plugin — magnet", () => {
     // It lands on the pixel of the nearest bar (x=0), not the cursor position.
     expect(vertical.points[0].x).toBeCloseTo(area.left, 6);
     expect(vertical.points[0].x).not.toBeCloseTo(hover, 6);
-    model.plot.destroy();
   });
 });
