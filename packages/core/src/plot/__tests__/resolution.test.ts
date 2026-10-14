@@ -1,7 +1,7 @@
 /**
- * Follows the resolution ratio. The old rationale ("stays blurry until a
- * resize happens") assumed a chart that has some reason to redraw, but a
- * sparkline with no axis and no input never gets that trigger. How to
+ * Follows the resolution ratio. Waiting for a resize ("stays blurry until
+ * a resize happens") assumes a chart that has some reason to redraw, but
+ * a sparkline with no axis and no input never gets that trigger. How to
  * observe is injected — the core's tests run under node, so there is no
  * matchMedia.
  */

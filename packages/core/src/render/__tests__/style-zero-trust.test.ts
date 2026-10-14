@@ -1,9 +1,9 @@
 /**
  * Style values also come from the outside — this is zero trust's style
- * axis. There was a spot where a value like `--chart-candle-up: nope`
- * painted a candle with whatever color the previous drawing command had
- * left set, instead of falling back — the promise that "a parse failure
- * falls back to the default" was a lie.
+ * axis. A value like `--chart-candle-up: nope` must fall back, not paint
+ * a candle with whatever color the previous drawing command left set —
+ * otherwise the promise that "a parse failure falls back to the default"
+ * is a lie.
  *
  * CSS variables are a zero-trust surface by definition — `getComputedStyle`
  * hands back a string no matter what, and we have no control over what a
@@ -23,7 +23,7 @@ const SPEC = {
 const read = (values: Record<string, string>) => (name: string) =>
   values[name] ?? "";
 
-describe("Z2 — a numeric leaf only accepts a bare number or px", () => {
+describe("a numeric leaf only accepts a bare number or px", () => {
   it.each([
     ["0.5rem", 1.5],
     ["60%", 1.5],
@@ -53,7 +53,7 @@ describe("Z2 — a numeric leaf only accepts a bare number or px", () => {
   });
 });
 
-describe("Z2 — a color leaf passes the string through untouched (the renderer judges it)", () => {
+describe("a color leaf passes the string through untouched (the renderer judges it)", () => {
   /**
    * The core has no CSS parser — a color's validity is judged
    * by the canvas, and `applyColor` drops a rejected assignment to

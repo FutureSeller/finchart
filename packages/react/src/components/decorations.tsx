@@ -114,9 +114,8 @@ export function PriceLine(props: PriceLineProps) {
 /**
  * `<Markers>`'s props — **named.**
  *
- * The only public component whose props type used to be anonymous, which
- * meant a wrapper couldn't name its own props type. Its siblings
- * (`ChartPaneProps`, `ChartSeriesProps`) all have names.
+ * Named so a wrapper can name its own props type, like its siblings
+ * (`ChartPaneProps`, `ChartSeriesProps`).
  */
 export interface MarkersProps {
   items: readonly Marker[];

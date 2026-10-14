@@ -186,10 +186,10 @@ export interface ViewportControl {
 /**
  * Converts between screen x and **data x**.
  *
- * Hit testing was the first thing a third party needed, and there was no
- * door for it here. What `@finchart/tools` did instead was **stash the
- * draw context into a variable** — no hit test was possible before the
- * first render, and the stashed context went stale on the next frame.
+ * Hit testing is the first thing a third party needs, and this is its
+ * door. Without it, an extension would have to **stash the draw context
+ * into a variable** — no hit test possible before the first render, and
+ * the stashed context stale on the next frame.
  *
  * `XMapping` isn't handed over as-is because it has `rebuild` on it —
  * rebuilding the index is the chart's job, not an extension's. Only the

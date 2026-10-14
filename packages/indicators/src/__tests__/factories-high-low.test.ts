@@ -1,6 +1,7 @@
 /**
- * CCI, Williams %R, Donchian, Keltner, SuperTrend. Pin exact values with
- * small scripts that can be checked by hand.
+ * CCI (and its mean absolute deviation), Williams %R, Donchian, Keltner,
+ * SuperTrend and pivot points. Pin exact values with small scripts that can
+ * be checked by hand.
  */
 import type { OHLC, Source } from "@finchart/core";
 import { describe, expect, it } from "vitest";

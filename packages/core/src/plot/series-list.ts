@@ -375,14 +375,14 @@ export class SeriesList {
       /**
        * **This is delegation, not copying.**
        *
-       * It used to be `{ ...context.x, toPixel }`. A spread carries over
-       * **only its own enumerable properties**, so a mapping written as a
-       * class (`createXMapping` is a legitimate public extension point and
-       * arrives that way) reached the series with only `toPixel` left on
-       * it. A third-party series calling `context.x.fromPixel` — legal by
+       * Not `{ ...context.x, toPixel }`. A spread carries over **only its
+       * own enumerable properties**, so a mapping written as a class
+       * (`createXMapping` is a legitimate public extension point and
+       * arrives that way) would reach the series with only `toPixel` left
+       * on it. A third-party series calling `context.x.fromPixel` — legal by
        * the declared type — would throw forever inside the render loop, and
        * `screenXAt` would also fail to find `domainToPixel` and quietly
-       * fall off the O(1) fast path — exactly the path this spread was
+       * fall off the O(1) fast path — exactly the path the override is
        * meant to open.
        *
        * `Object.create` keeps the original as a **prototype**, so nothing

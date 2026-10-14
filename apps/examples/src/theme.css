@@ -1,8 +1,8 @@
 /**
- * The dark palette, in one place — cases.html and trading.html each kept a
- * hand-copied second version of it. The core reads CSS variables every frame,
- * so a class toggle plus one requestRender() is the whole change of clothes;
- * the recipe is in the theming guide.
+ * The dark palette, in one place, so cases.html and trading.html don't each
+ * carry a hand-copied second version of it. The core reads CSS variables
+ * every frame, so a class toggle plus one requestRender() is the whole
+ * change of clothes; the recipe is in the theming guide.
  *
  * Both selectors live in one file because the id of the stage differs per page
  * (#stage in the gallery, #chart on the trading screen) — the selector that

@@ -10,10 +10,10 @@
  * const dark: Partial<Record<StyleVarName, string>> = { … };
  * ```
  *
- * A misspelt key there is now a compile error that suggests the real name.
+ * A misspelt key there is a compile error that suggests the real name.
  * (No example of one is written out: this file is scraped for `--chart-*`
  * literals like every other, and a fake name in a comment would read as a
- * real declaration — which is how that check earned its keep here.)
+ * real declaration.)
  *
  * Nothing here is written by hand. `styleSpec` keeps each `css` as a literal
  * type and `StyleVarNamesOf` reads them back out, so this file is the list of

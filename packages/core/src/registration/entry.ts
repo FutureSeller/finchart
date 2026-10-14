@@ -131,8 +131,8 @@ interface DerivedRegistration<
 
   /**
    * **Tail increment.** Without it, every change is a full re-derivation —
-   * this door is optional and additive. It folds what used to be a full
-   * reload on every tick (re-derive, full validation, re-mapping) into the
+   * this door is optional and additive. It folds what would otherwise be a
+   * full reload on every tick (re-derive, full validation, re-mapping) into the
    * manager's tail operation, for derivations that can say "only the last
    * `count` changed."
    *
@@ -812,7 +812,7 @@ function entryOf<
    * manager-owned tail of a declared door can skip a full validation.
    *
    * A derivation that reshapes history instead (bricks renumber, spans
-   * shift) fails the x comparison and takes today's full route — with the
+   * shift) fails the x comparison and takes the full route — with the
    * output already in hand, not a second derivation.
    */
   const commitDerivedHead = (older: TSource[]): void => {
@@ -1021,9 +1021,9 @@ function entryOf<
       return;
     }
     manager.append([...newer] as unknown as TPoint[]);
-    // The manager appends (one copy) and the entry aliases the result — the
-    // second copy used to be here (`source.concat`). Every new bar on a
-    // tick copied the entire history twice.
+    // The manager appends (one copy) and the entry aliases the result — a
+    // second copy here (`source.concat`) would copy the entire history
+    // twice on every new bar on a tick.
     const previous = points;
     points = manager.read();
     source = points as unknown as TSource[];

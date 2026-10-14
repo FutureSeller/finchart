@@ -8,10 +8,9 @@ export interface RendererSpy {
 }
 
 /**
- * Wraps core's recording renderer (now first-class) in the shape of a spy.
- * This used to be a hand-rolled fake, but once the same renderer became the
- * official headless output, these tests started exercising the real path
- * instead of an imitation.
+ * Wraps core's recording renderer in the shape of a spy. It is the same
+ * renderer as the official headless output, so these tests exercise the
+ * real path instead of an imitation.
  */
 export function rendererSpy(): RendererSpy {
   const recorder = recordingRenderer();

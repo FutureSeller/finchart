@@ -227,12 +227,12 @@ function outranks(a: Placed, b: Placed): boolean {
 
 /**
  * **A window is three readings of itself, and they are not
- * interchangeable.** Four bare numbers used to go into the grid arithmetic
- * and the code was correct only while everyone remembered which gave
- * phase, which gave membership, and which the density came from. Three
- * defects came from that: a narrowed edge chose the anchor's day and moved
- * a whole grid, measured the pixels and shrank the caller's spacing, and
- * judged emptiness and threw away a window holding one instant.
+ * interchangeable.** Passed as four bare numbers, the grid arithmetic is
+ * correct only while everyone remembers which gives phase, which gives
+ * membership, and which the density comes from. Mixing them up fails three
+ * ways: a narrowed edge chooses the anchor's day and moves a whole grid,
+ * measures the pixels and shrinks the caller's spacing, and judges
+ * emptiness and throws away a window holding one instant.
  *
  * So each reading is named, and each helper is handed only the one it
  * needs. This makes the roles legible; it does not make them unmixable,
@@ -245,9 +245,9 @@ function outranks(a: Placed, b: Placed): boolean {
  * millisecond before a midnight belongs to the day before it.
  *
  * It is a shape rather than a number so that a membership bound cannot be
- * handed to a grid as its origin: that substitution moved a whole grid by
- * a day once, and read as ordinary code both times it was written. What
- * this cannot do is check that the origin was *derived* right — only
+ * handed to a grid as its origin: that substitution moves a whole grid by
+ * a day, and reads as ordinary code where it is written. What this
+ * cannot do is check that the origin was *derived* right — only
  * `windowOf` builds one, and tests are what hold it to that.
  */
 interface PhaseOrigin {

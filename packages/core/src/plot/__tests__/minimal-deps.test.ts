@@ -1,6 +1,6 @@
 /**
- * Collaborators are optional. Turning one off means not supplying it — the
- * four collaborators on PlotDeps used to be mandatory, so there was no
+ * Collaborators are optional. Turning one off means not supplying it —
+ * were the four collaborators on PlotDeps mandatory, there would be no
  * path at all that ran without axis labels or a divider. This is the
  * baseline that establishes: a stage that runs on a single surface.
  */

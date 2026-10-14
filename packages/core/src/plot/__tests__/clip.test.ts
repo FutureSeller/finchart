@@ -1,10 +1,10 @@
 /**
- * Drawing never leaks outside its own slot. The bug: when a manual value
- * range was narrower than the data, a line would stretch beyond its pane
- * and cover the pane below — invisible only because the value axis
- * happened to follow the data in the default wiring. Clipping doesn't
- * change coordinates — a command can still carry an off-screen y, it's
- * just not drawn when replayed. Cropping is the job of whoever handed out
+ * Drawing never leaks outside its own slot. Unclipped, when a manual value
+ * range is narrower than the data, a line stretches beyond its pane and
+ * covers the pane below — invisible in the default wiring only because
+ * the value axis follows the data there. Clipping doesn't change
+ * coordinates — a command can still carry an off-screen y, it's just not
+ * drawn when replayed. Cropping is the job of whoever handed out
  * the slot, not whoever draws.
  */
 import { describe, expect, it } from "vitest";

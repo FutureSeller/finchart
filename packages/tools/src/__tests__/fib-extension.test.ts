@@ -13,11 +13,10 @@ import type { DrawingSpace } from "../space";
 import { drawingChart } from "./drawing-chart.fixture";
 
 /**
- * T4 wave — fibExtension. A three-anchor Fibonacci whose levels project
- * the a→b swing from c. Its default level list and its formula are
- * deliberately **separate** from the retracement's: levels past 1 are
- * this tool's whole point, and sharing `FIB_LEVELS` would hand it a
- * retracement's screen.
+ * fibExtension. A three-anchor Fibonacci whose levels project the a→b swing
+ * from c. Its default level list and its formula are deliberately
+ * **separate** from the retracement's: levels past 1 are this tool's whole
+ * point, and sharing `FIB_LEVELS` would hand it a retracement's screen.
  */
 
 const space: DrawingSpace = {

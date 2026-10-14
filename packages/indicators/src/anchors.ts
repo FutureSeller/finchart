@@ -21,7 +21,7 @@ import type { AnchorPredicate } from "./factories";
  * argument.
  *
  * **The bug this exists for**: a New York session opens at 05:00Z, and the
- * `x % 86_400_000 === 0` predicate that every example used to carry asks
+ * `x % 86_400_000 === 0` predicate that reads as "daily" asks
  * about UTC midnight instead, and whether any bar even lands there is an
  * accident of the tape. Where none does — daily or six-hourly bars from
  * that 05:00Z opening never do — the predicate is true of nothing and VWAP

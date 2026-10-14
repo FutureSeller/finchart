@@ -68,9 +68,9 @@ describe("pivotPoints's anchor must be a predicate", () => {
 });
 
 /**
- * When `source` is missing from an `attach*` call, the core computation
- * door used to answer positionally ("input 0"), so the consumer couldn't
- * tell which option key was missing — now it names it.
+ * When `source` is missing from an `attach*` call, the error names the
+ * option key. The core computation door answers positionally ("input 0"),
+ * which wouldn't tell the consumer which key was missing.
  */
 describe("attach door's source", () => {
   it("when missing, it names the option — not the position", () => {

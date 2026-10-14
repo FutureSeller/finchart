@@ -106,10 +106,9 @@ export function mount(container: HTMLElement): () => void {
   });
 
   // A door to selection and deletion for environments without a keyboard
-  // (touch) — the spot the drawing-tools senior review (2026-08-13) caught as
-  // "there is no way to erase a line you drew on a phone." Delete is not a new
-  // API; it goes through the same door the real key does (routeInput) — with
-  // nothing selected it simply does nothing.
+  // (touch) — without it there is no way to erase a line you drew on a
+  // phone. Delete is not a new API; it goes through the same door the real
+  // key does (routeInput) — with nothing selected it simply does nothing.
   const deselect = document.createElement("button");
   deselect.textContent = "Deselect";
   deselect.addEventListener("click", () => tools.select(null));
@@ -127,7 +126,7 @@ export function mount(container: HTMLElement): () => void {
 
   // Snapping — drawing and anchor drags stick to a bar's values (close, low,
   // high) and the bar's x. It's off by default, so it takes a button to turn on
-  // before you can see the real thing (round 16).
+  // before you can see the real thing.
   const magnet = document.createElement("button");
   magnet.textContent = "Magnet";
   magnet.title = "Snap to a bar's values — catch peaks and troughs exactly";

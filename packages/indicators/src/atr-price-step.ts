@@ -24,7 +24,7 @@ export interface AtrPriceStepOptions {
  * cannot lay its two-brick reversal — are refused here, as
  * `ContractError`; what comes out passes the three transforms' option doors (`renko` and `pointAndFigure`
  * also hold the prices themselves to within 2⁴⁷ steps of zero — a step of
- * 16,384 on a price of 10²⁰ is below the doubles' spacing there, and that
+ * 16,384 on a price of 10²⁰ is 6 × 10¹⁵ steps from zero, past it, and that
  * is their door to raise, under their own names). The step follows the
  * tape's recent volatility: for a period above 1, Wilder's average decays
  * older true ranges exponentially — a bar's weight halves every

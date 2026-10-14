@@ -6,14 +6,13 @@
  * both DOM boxes. Axis labels read `AXIS_LABEL_SPEC`, which belongs to the
  * core because the core draws them onto the canvas too.
  *
- * This file used to live inside core's test, which reached over here with
- * `../../../dom/src/legend` to get at the two specs. That import put dom's
- * sources into core's compile and broke CI the day the builder started
- * emptying `dist` before writing it. `scripts/package-boundary-check.mjs`
- * now refuses that shape, and the repo-wide half of the manifest — the
- * frozen union, one fallback per shared variable, the demo apps — moved to
- * `scripts/style-vars-check.mjs`, which reads text and needs no import at
- * all.
+ * This file lives here, not inside core's test: reaching over with
+ * `../../../dom/src/legend` to get at the two specs puts dom's sources into
+ * core's compile, which breaks CI once the builder empties `dist` before
+ * writing it. `scripts/package-boundary-check.mjs` refuses that shape, and
+ * the repo-wide half of the manifest — the frozen union, one fallback per
+ * shared variable, the demo apps — lives in `scripts/style-vars-check.mjs`,
+ * which reads text and needs no import at all.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";

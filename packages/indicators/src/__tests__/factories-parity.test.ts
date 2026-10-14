@@ -5,19 +5,19 @@ import { bbi, brar, cr, dma, emv, kdj, psy, pvt, roc, trix, vr } from "../factor
 import { ema, sma } from "../kernels";
 
 /**
- * Wave 2 — the KLineChart parity set. Each indicator is held to a hand
- * calculation, to an oracle written in the order its own JSDoc states (exact —
- * the reading is what that order of double operations gives) and, where the
- * canonical has a window form, to an array oracle written from the canonical
- * source within a tolerance (parity of values, not of rounding; with our null
- * rule where the canonical writes 0 for a case its formula leaves undefined: a
- * missing predecessor, a zero denominator, a zero box-ratio divisor, a gap is
- * "no value", not a reading). Where an oracle averages through this package's
- * own `sma` / `ema` array kernels — signal lines, BBI, DMA, TRIX, CR's
- * averages — those kernels are the same folds the node runs, so that part
- * checks the composition and the default windows, not the averages' values;
- * the kernels' own values are held to hand calculations and fresh references
- * in their own tests.
+ * The KLineChart parity set. Each indicator is held to a hand calculation, to
+ * an oracle written in the order its own JSDoc states (exact — the reading is
+ * what that order of double operations gives) and, where the canonical has a
+ * window form, to an array oracle written from the canonical source within a
+ * tolerance (parity of values, not of rounding; with our null rule where the
+ * canonical writes 0 for a case its formula leaves undefined: a missing
+ * predecessor, a zero denominator, a zero box-ratio divisor, a gap is "no
+ * value", not a reading). Where an oracle averages through this package's own
+ * `sma` / `ema` array kernels — signal lines, BBI, DMA, TRIX, CR's averages —
+ * those kernels are the same folds the node runs, so that part checks the
+ * composition and the default windows, not the averages' values; the kernels'
+ * own values are held to hand calculations and fresh references in their own
+ * tests.
  */
 
 function bar(i: number, close: number, volume: number | null = 1000): OHLC {
@@ -815,7 +815,7 @@ describe("pvt", () => {
 
   it("lands a page by recomputing everything — a prepend alone, before any tick, equals a cold node", () => {
     // A running sum has no bounded lookback. Were a head door declared, the kept tail would carry the
-    // old origin's level; the first tick would then repair it (ADR-0050), so only a tick-less read can tell.
+    // old origin's level; the first tick would then repair it, so only a tick-less read can tell.
     let data = closes(300).map((v, i) => traded(i + 200, v, 1000 + (i % 7) * 50));
     const live = pvt({ read: () => data });
     live.out.pvt.read();

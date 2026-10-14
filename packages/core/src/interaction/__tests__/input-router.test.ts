@@ -205,10 +205,9 @@ describe("InputRouter", () => {
 });
 
 /**
- * The rejection branch of the input door. This guard existed, but had no
- * test — deleting the single line `checkInputEvent(event)` still left
- * the whole suite green. An example of "a passing test suite can guard
- * nothing."
+ * The rejection branch of the input door. Without these tests, deleting
+ * the single line `checkInputEvent(event)` would leave the whole suite
+ * green — an example of "a passing test suite can guard nothing."
  *
  * `routeInput` is a public contract, and this module explicitly sells
  * the idea that a headless host can synthesize input. Those synthesized
@@ -229,8 +228,8 @@ describe("the input door — synthesized coordinates aren't ours", () => {
   });
 
   it("should refuse an event whose type has no point", () => {
-    // It used to crash **inside** `@finchart/tools` with a raw
-    // TypeError — what the consumer saw was another package's internal
+    // Unchecked, it crashes **inside** `@finchart/tools` with a raw
+    // TypeError — what the consumer sees is another package's internal
     // variable name.
     expect(() => router().route({ type: "dblclick" } as never)).toThrow(
       ContractError,
@@ -320,12 +319,12 @@ describe("the input door — synthesized coordinates aren't ours", () => {
 });
 
 /**
- * Checks that what's declared is actually checked. `checkInputEvent`
- * claimed to check `type` itself but didn't — a single typo passed
- * straight through to every consumer, and the consumer had no idea why
- * its own `handle` wasn't being called.
+ * Checks that what's declared is actually checked. If `checkInputEvent`
+ * claims to check `type` itself but doesn't, a single typo passes
+ * straight through to every consumer, and the consumer has no idea why
+ * its own `handle` isn't being called.
  *
- * `wheel`'s `deltaY` was declared `number` in the union too, with no
+ * `wheel`'s `deltaY` is declared `number` in the union too, and needs a
  * runtime check. If `NaN` arrives, `@finchart/dom`'s
  * `deltaY < 0 ? zoomSpeed : 1/zoomSpeed` silently falls into the
  * zoom-out branch — synthesized input (RN inertial scroll, worker
@@ -351,8 +350,8 @@ describe("the shape of synthesized input — declaration and validation must mat
       router.route({ type: "bogus", point: { x: 1, y: 1 } } as never),
     ).toThrow(/type/);
 
-    // And it never leaks to the consumer — a silently running typo was
-    // the problem.
+    // And it never leaks to the consumer — a silently running typo is
+    // the failure here.
     expect(seen).toEqual([]);
   });
 

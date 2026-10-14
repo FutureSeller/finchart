@@ -279,8 +279,8 @@ describe("y-axis scale tick geometry", () => {
   }
 
   it("should read the scale's own geometry when it has one", () => {
-    // A log pane with no strategy used to get linear-arithmetic ticks —
-    // R1's bug. The wiring must ask the scale first.
+    // A log pane with no strategy must not get linear-arithmetic ticks:
+    // the wiring asks the scale first.
     const pane = logPane();
     const { ticks } = frame({ panes: [pane] });
 
@@ -384,8 +384,8 @@ describe("y-axis scale tick geometry", () => {
 
 /**
  * The degenerate frame. A collapsing sidebar sweeps its width from 400
- * down to 0, and it used to filter out exactly 0 only, so the values in
- * between leaked into setRange(x, x) and threw a ContractError every
+ * down to 0; filtering out exactly 0 only would let the values in
+ * between leak into setRange(x, x) and throw a ContractError every
  * frame. The contract is "degenerate means null, and never throws" — the
  * sizes below were measured with this file's own ruler (7px/character),
  * so the exact numbers themselves are not part of the contract.
@@ -432,7 +432,7 @@ describe("sizes that cannot be drawn", () => {
     expect(lay(width, height)).not.toBeNull();
   });
 
-  /** The vertical check runs before the first assignment, so the x scale is never touched — it used to throw from yScale.setRange(0, 0) before the check ran. */
+  /** The vertical check runs before the first assignment, so the x scale is never touched — a later check would first throw from yScale.setRange(0, 0). */
   it("should leave the x scale range untouched when it bails", () => {
     const xScale = new LinearScale();
     xScale.setDomain(0, 100);
@@ -453,10 +453,10 @@ describe("sizes that cannot be drawn", () => {
   });
 
   /**
-   * One collapsed pane must not take the rest down with it. The check was
-   * heights.some(h => h < 1), and giving flex: 0 and minHeight: 0 together
-   * (both individually valid values) made the height exactly 0, wiping out
-   * the whole chart.
+   * One collapsed pane must not take the rest down with it. With a check of
+   * heights.some(h => h < 1), giving flex: 0 and minHeight: 0 together
+   * (both individually valid values) makes the height exactly 0, wiping
+   * out the whole chart.
    */
   it("should still lay out when one pane is collapsed to nothing", () => {
     const [main, collapsed] = panes(2);
@@ -520,10 +520,10 @@ describe("sizes that cannot be drawn", () => {
 
     /**
      * The claim is not "narrower or equal" but "the same as if it weren't
-     * there." toBeLessThanOrEqual(expanded) had zero discriminating power
-     * — since the baseline leaves the large-domain pane expanded, both the
-     * buggy version and the fixed version passed it. So compare instead
-     * against a layout where that pane doesn't exist at all.
+     * there." toBeLessThanOrEqual(expanded) has zero discriminating power
+     * — since the baseline leaves the large-domain pane expanded, both a
+     * buggy and a correct layout pass it. So compare instead against a
+     * layout where that pane doesn't exist at all.
      */
     const xScale2 = new LinearScale();
     xScale2.setDomain(0, 100);

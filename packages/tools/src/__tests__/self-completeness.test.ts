@@ -78,15 +78,14 @@ interface Verdict {
 const OPTIONS: Record<string, Verdict> = {
   plot: {
     shape:
-      "Blocks it -- is it an object, and does it have all five of the " +
+      "Blocks it -- is it an object, and does it have all seven of the " +
       "stage's methods. If it only checked whether it's an object, " +
       "assembly would succeed quietly, and a drawing could enter the " +
       "ledger but never get drawn",
     value:
       "Where the value comes from is the wiring -- both plot and pane " +
       "are in the name, installation happens on the pane, and the " +
-      "argument is plot. Our .d.ts tooltip taught the wrong shape for a " +
-      "long time",
+      "argument is plot; a tooltip that shows the wrong shape teaches it",
     policy: "throws (an input API)",
   },
   zIndex: {
@@ -266,8 +265,8 @@ const MODULE: Record<string, Verdict> = {
   },
   serializeDrawings: {
     shape:
-      "blocks it -- this is the spot where a getter-only class instance " +
-      "used to get stored as {}, wiping out the whole ledger next " +
+      "blocks it -- without this, a getter-only class instance " +
+      "gets stored as {}, wiping out the whole ledger next " +
       "session. The value comes from an app's store",
     value: "blocks it -- runs through the same one normalizer as add",
     policy: "throws (an input API)",
@@ -327,8 +326,8 @@ describe("self-completeness -- the door-by-door verdict table", () => {
   /**
    * The notification's own fields -- the first public shape that is
    * neither an option nor an api member, so `membersOf` would never see a
-   * field added here (the `via` day proved it: "carries only reason" went
-   * stale with nothing red).
+   * field added here (a verdict like "carries only reason" would go stale
+   * with nothing red).
    */
   const CHANGE: Record<string, Verdict> = {
     reason: {

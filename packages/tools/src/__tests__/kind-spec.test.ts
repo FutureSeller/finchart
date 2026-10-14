@@ -20,7 +20,7 @@ import { drawingChart } from "./drawing-chart.fixture";
  * direction (a row whose kind fell out of `DRAWING_KINDS`).
  *
  * The table lives in a test file on purpose — zero runtime bytes (the
- * serialization-only entry point is a budgeted promise). Each wave adds
+ * serialization-only entry point is a budgeted promise). A new kind adds
  * its row in the same commit as the union member, the renderer case,
  * and the hit case.
  */

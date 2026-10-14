@@ -13,7 +13,7 @@ const data: LineDataPoint[] = [
   { x: 100, y: 110 },
 ];
 
-describe("setVisibleRange (2.3)", () => {
+describe("setVisibleRange", () => {
   it("should frame the given data window", () => {
     const model = headlessModel({ series: { series: lineSeries(), data } });
 
@@ -23,7 +23,7 @@ describe("setVisibleRange (2.3)", () => {
   });
 });
 
-describe("rightOffset (2.3)", () => {
+describe("rightOffset", () => {
   it("should leave room after the last bar on refit", () => {
     const model = headlessModel({
       series: { series: lineSeries(), data },
@@ -51,7 +51,7 @@ describe("rightOffset (2.3)", () => {
   });
 });
 
-describe("barSpacing limits (2.3)", () => {
+describe("barSpacing limits", () => {
   it("should stop zooming in at maxBarSpacing", () => {
     const model = headlessModel({
       series: { series: lineSeries(), data },
@@ -80,7 +80,7 @@ describe("barSpacing limits (2.3)", () => {
   });
 });
 
-describe("syncX (2.3)", () => {
+describe("syncX", () => {
   function pair() {
     const make = () => headlessModel({ series: { series: lineSeries(), data } });
     return { a: make().plot, b: make().plot };

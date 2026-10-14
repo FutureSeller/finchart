@@ -2,8 +2,8 @@
  * `<SyncX>`/`<SyncCrosshair>` + `onPlot` — does the wiring between
  * containers hold up over state?
  *
- * The core regression is a key remount: wiring based on `plotRef` has the
- * parent's effect holding onto a discarded instance. `onPlot`
+ * The case that matters is a key remount: wiring based on `plotRef` leaves
+ * the parent's effect holding onto a discarded instance. `onPlot`
  * swaps the state every time a stage comes up or goes down, so `<SyncX>`
  * gets rewired to the new stage.
  */
@@ -115,7 +115,7 @@ describe('SyncX + onPlot', () => {
  * matches, the effect never reruns and the new stage never makes it into
  * `syncX`.
  *
- * The tests above never caught this because `plots` was always length 2.
+ * The tests above all keep `plots` at length 2, so they cannot see this.
  */
 describe('SyncX — when the list length changes', () => {
   function Growing({ live }: { live: { a: Plot | null; b: Plot | null } }) {

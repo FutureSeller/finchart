@@ -13,7 +13,7 @@ import { PlotBuilder } from "../builder";
 import { createDomLayers } from "../dom-layers";
 import { fakeContainer, fakeLayersFactory, testBrowserDeps } from "./fakes";
 
-/** Truthy values that aren't elements — every one of these passes as truthy today. */
+/** Truthy values that aren't elements — every one of these is truthy. */
 const NOT_ELEMENTS: [string, unknown][] = [
   ["a selector string", "#chart"],
   ["an empty object", {}],

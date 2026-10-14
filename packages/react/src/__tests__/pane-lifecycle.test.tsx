@@ -251,7 +251,7 @@ describe('one pane hidden by its own Suspense boundary', () => {
     expect(rsi.yScale.getDomain()).toEqual([1, 100]);
   });
 
-  it('keeps the pane and the state inside it when a transition suspends', async () => {
+  it('leaves the pane in place, with the state inside it, when the suspension comes in a transition', async () => {
     const { plot, suspendInTransition, reveal, inner } = setup();
     const rsi = plot.panes[1];
     act(() => inner.bump());

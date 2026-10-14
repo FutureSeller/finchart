@@ -1,12 +1,11 @@
 /**
  * **There is exactly one rule for prop removal — revert to the default.**
  *
- * The rule used to be split four ways (inherit / retain / revert /
- * imperative), with zero tests measuring it, and the only discipline was a
- * comment on the single `gridStyle` prop. The ruling: **removing an option
- * prop means "back to the default now"** — since core's vocabulary treats
- * "undefined" as "nothing given," reverting means the wrapper has to supply
- * the explicit value itself (core exports the defaults as one package,
+ * **Removing an option prop means "back to the default now"** — a prop that
+ * kept its last value after removal would leave the chart showing a setting
+ * nobody passes any more. Since core's vocabulary treats "undefined" as
+ * "nothing given," reverting means the wrapper has to supply the explicit
+ * value itself (core exports the defaults as one package,
  * `PANE_OPTION_DEFAULTS` — copying the numbers would leave only the wrapper
  * to go stale). `data`, `series`, `width`, and `height` aren't options —
  * they're **imperative statements and measurements** — so they fall outside
@@ -201,10 +200,12 @@ describe('prop removal = revert to default', () => {
 });
 
 /**
- * **Four narrow doors for accessibility/identification.** plot-contract's
- * prescription (`role="img"` + `aria-label`, `tabIndex={-1}`) is a
- * container-level attribute, but there was no door for it — four explicit
- * props instead of a blanket spread.
+ * **Four narrow doors for accessibility/identification.** Announcing the
+ * chart as an image (`role="img"` + `aria-label`) and, when wanted, taking
+ * it out of the tab order (`tabIndex={-1}`; the container is focusable by
+ * default) belong on the container element, so `ChartContainer` takes four
+ * explicit props (`id`, `role`, `ariaLabel`, `tabIndex`) instead of a
+ * blanket spread.
  */
 describe('the four accessibility doors', () => {
   it('all four land on the container div', () => {

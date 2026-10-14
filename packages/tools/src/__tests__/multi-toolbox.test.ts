@@ -276,8 +276,8 @@ describe("at a shared boundary, exactly one pane owns it", () => {
     s.key("Delete");
 
     // The boundary belongs to the pane **below** -- the pane above's
-    // bottom edge is not its own territory. This used to have both
-    // believing it was theirs, with the winner decided by registration
+    // bottom edge is not its own territory. Otherwise both would
+    // believe it was theirs, with the winner decided by registration
     // order.
     expect(s.rsi?.list()).toEqual([]);
     expect(s.main.list()).toMatchObject([{ type: "horizontal", price: 110 }]);

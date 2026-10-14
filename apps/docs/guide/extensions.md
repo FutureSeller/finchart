@@ -8,10 +8,10 @@ If you want your own indicator or drawing tool to snap in and out like a
 package, it helps to know first that there are already cases that started from
 exactly the same place.
 
-`@finchart/indicators` and `@finchart/tools` were built **without the core
-API growing for them** — 35 indicators and three drawing tools, all of them
-built on contracts core had already published. This page shows those contracts. So a
-third party can start from the same place.
+`@finchart/indicators` and `@finchart/tools` use **no core API made for
+them** — 35 indicators and fourteen drawing kinds, all of them built on
+contracts core publishes for everyone. This page shows those contracts, so
+a third party can start from the same place.
 
 ## A plugin — one function, one dispose
 

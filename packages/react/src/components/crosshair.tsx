@@ -5,8 +5,9 @@ import { useChartApi } from './chart-context';
 
 /**
  * The core's options are the props, directly — copying them by hand would
- * let this quietly go stale as the core grows (`magnet` actually did). The
- * core is the source of truth for field docs.
+ * let this quietly go stale as the core grows (an option like `magnet`
+ * would drop out unnoticed). The core is the source of truth for field
+ * docs.
  */
 export type CrosshairProps = CrosshairLineOptions;
 
@@ -26,8 +27,7 @@ export type CrosshairProps = CrosshairLineOptions;
  * the crosshair off and still get the value.
  *
  * **Inline objects like `format` are fine to pass** — when the reference
- * changes, only the options get re-applied. This used to rebuild the
- * whole decoration.
+ * changes, only the options get re-applied, not the whole decoration.
  */
 export function Crosshair(props: CrosshairProps) {
   const { vertical, horizontal, style, badges, magnet, format, ...rest } = props;
@@ -44,9 +44,9 @@ export function Crosshair(props: CrosshairProps) {
    * **Installed once per chart.** When a prop changes, only the options
    * get re-applied below.
    *
-   * It used to tear down and reinstall even when a single format function
-   * changed — in the common case of passing an inline object, that was
-   * every render, and each time a dead plugin piled up on the chart.
+   * Tearing down and reinstalling on every prop change would, in the
+   * common case of passing an inline object, rebuild the decoration on
+   * every render.
    */
   useEffect(() => {
     const cursor = plot.use(

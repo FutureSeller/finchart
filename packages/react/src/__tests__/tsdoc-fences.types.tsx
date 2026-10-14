@@ -5,9 +5,9 @@
  * triage (*"does copy-pasting it break? does the IDE autocomplete a
  * different name?"*) picks which ones get locked. The snippets kept here
  * are cross-checked both ways against the original TSDoc by
- * `snippet-drift.test.ts`'s `CODE_LOCKS` — this file exists because of the
- * `movingAverage(20)` incident in `chart-line.tsx` (the IDE autocompleting a
- * real export with a different signature).
+ * `snippet-drift.test.ts`'s `CODE_LOCKS` — this file exists because a fence
+ * calling a helper like `movingAverage(20)` can have the IDE autocomplete a
+ * real export of that name with a different signature.
  *
  * (Since the file isn't `.test.tsx`, vitest ignores it and only `tsc` looks
  * at it.)

@@ -179,7 +179,7 @@ describe("derive", () => {
     derived.prepend(points(-50, 0));
     plot.render();
 
-    // History was prepended, so the leading range that used to have no value can now be drawn.
+    // With history prepended, the leading range that lacked a value can be drawn.
     expect(Number(series.seen.at(-1)![0].x)).toBeLessThan(firstBefore);
   });
 });
@@ -200,7 +200,7 @@ describe("series without derive", () => {
     );
   });
 
-  it("should get the full data for its extent, as before", () => {
+  it("should measure its extent over all of its data", () => {
     const { plot } = loaded();
     const series = spySeries();
 

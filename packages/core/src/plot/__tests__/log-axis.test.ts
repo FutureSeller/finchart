@@ -1,9 +1,9 @@
 /**
  * Checks that the log axis actually holds up on data that needs it —
  * ranges spanning more than an 11x ratio (BTC 3,000->70,000, a 10-year
- * stock 10->300, etc.) used to throw. The arithmetic is covered by
- * scale/__tests__/log-expand.test.ts; this file checks that the whole
- * stage actually draws a frame.
+ * stock 10->300, etc.), where additive padding throws. The arithmetic is
+ * covered by scale/__tests__/log-expand.test.ts; this file checks that
+ * the whole stage actually draws a frame.
  */
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint } from "../../data";
@@ -25,7 +25,7 @@ function chartOf(values: number[]) {
   });
 }
 
-describe("the paths the migration guide walks through", () => {
+describe("log charts over wide and narrow ranges", () => {
   it.each([
     ["BTC 3,000->70,000 (23x)", [3_000, 45_000, 70_000, 52_000]],
     ["10-year stock 10->300 (30x)", [10, 45, 120, 300, 210]],
@@ -48,8 +48,8 @@ describe("the paths the migration guide walks through", () => {
     expect(max).toBeGreaterThanOrEqual(Math.max(...values));
   });
 
-  /** autoScale only measures the visible range, so a bug where zooming in
-   * and then out past an 11x ratio threw. */
+  /** autoScale measures only the visible range, so zooming in and then
+   * out can reach an 11x ratio, and that must not throw. */
   it("should survive zooming out into a wider ratio", () => {
     const model = chartOf([1, 5, 25, 125, 625, 3_125]);
     model.plot.mainPane.setYScale(new LogScale());
@@ -136,10 +136,10 @@ describe("log axis — data with non-positive values mixed in", () => {
   });
 
   /**
-   * A rejected toggle must not kill the stage. setYScale used to swap in
-   * this.scale before the fallback, so if the fallback also threw, the
-   * pane was left holding a new axis with an invalid domain, and every
-   * subsequent render kept throwing the same exception.
+   * A rejected toggle must not kill the stage. If setYScale swapped in
+   * this.scale before the fallback and the fallback also threw, the pane
+   * would be left holding a new axis with an invalid domain, and every
+   * subsequent render would keep throwing the same exception.
    */
   it("should keep the stage alive after a rejected toggle", () => {
     const { model, pane } = stage([-50, -30, -10]);
@@ -159,11 +159,11 @@ describe("log axis — data with non-positive values mixed in", () => {
   });
   /**
    * One halted bar must not get to invent the axis. When expand's lower
-   * bound was non-positive, it used to unconditionally fall back to
-   * max/1000 as the floor, so a single close: 0 bar rewrote the entire
-   * domain and squeezed the real bars into 5.3% of the axis height. Now
-   * the scale asks back for the real minimum positive value through a
-   * deferred callback (ExpandHints.minPositive).
+   * bound is non-positive, an unconditional fallback to max/1000 as the
+   * floor lets a single close: 0 bar rewrite the entire domain and squeeze
+   * the real bars into 5.3% of the axis height. So the scale asks back
+   * for the real minimum positive value through a deferred callback
+   * (ExpandHints.minPositive).
    */
   it("should fit the real bars, not the invented floor", () => {
     const { model, pane } = stage([120, 0, 100, 150, 130]);
@@ -233,11 +233,11 @@ describe("log axis — data with non-positive values mixed in", () => {
   });
 
   /**
-   * One halted bar must not cut off every other bar's lower wick. The
-   * domain's upper bound came from getYRange.max (the high), but the
-   * lower bound came only from getY (a candle's close), so normal bars
-   * whose low sat below their close all got pushed under the domain and
-   * had their bottoms clipped off.
+   * One halted bar must not cut off every other bar's lower wick. If the
+   * domain's upper bound comes from getYRange.max (the high) but the
+   * lower bound only from getY (a candle's close), normal bars whose low
+   * sits below their close all get pushed under the domain and have their
+   * bottoms clipped off.
    */
   it("should keep the low wick of every bar on a log axis", () => {
     const model = createPlotModel({

@@ -48,8 +48,8 @@ export function barSampleAt(samples: readonly SeriesSample[]): SeriesSample | nu
 
 /**
  * A snapped domain position, and whether it actually stuck — the
- * toolbox draws a ring on a stuck anchor so the hand knows (the
- * "did it snap?" report that made snapping without feedback a guess).
+ * toolbox draws a ring on a stuck anchor so the hand knows (without that
+ * feedback, "did it snap?" is a guess).
  */
 export interface SnapResult {
   x: number;

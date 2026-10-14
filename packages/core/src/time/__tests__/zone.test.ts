@@ -81,8 +81,8 @@ describe("Zone — the earliest instant at or after a reading", () => {
    * clock is asked about seconds and no finer; a millisecond between two
    * of them names no reading, and the earliest one at or after it is the
    * next second rather than the one beneath. Leaving the remainder on
-   * would also carry it into every offset sampled from there, which is how
-   * asking about millisecond 1 once answered millisecond 2.
+   * would also carry it into every offset sampled from there, so asking
+   * about millisecond 1 would answer millisecond 2.
    */
   it.each([
     [0, 0],
@@ -444,9 +444,9 @@ describe("the zone database the rule rests on", () => {
    * move must be at most a day — Samoa's date-line move in 2011 is exactly
    * that — and two must stand more than five days apart, where the
    * tightest pair from 1900 to 2035 is 167 hours, an hour under seven days
-   * (America/Boa_Vista, October 2000). The range matters: this used to
-   * start at 1970 while the reader it holds up claimed 1900, and the gap
-   * between the two is where Toronto's 1919 clocks sat.
+   * (America/Boa_Vista, October 2000). The range matters: it starts at
+   * 1900 because the reader it holds up claims 1900, and a sample from
+   * 1970 would miss the years where Toronto's 1919 clocks sat.
    *
    * This is a sample, not a proof: twelve zones, the ones that move most or
    * most strangely. It would catch an upgrade that changed one of those,

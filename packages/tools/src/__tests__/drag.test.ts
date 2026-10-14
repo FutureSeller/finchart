@@ -142,7 +142,7 @@ describe("drawingTools drag", () => {
 });
 
 describe("fibonacci", () => {
-  it("should draw seven levels with ratio labels", () => {
+  it("should label the seven default levels with their ratios", () => {
     const { model, tools } = drawingChart();
 
     tools.add({

@@ -154,12 +154,11 @@ describe("module boundaries", () => {
   /**
    * The root of `src` is the surface layer: the explicit public entry points
    * may import from any module, because aggregating the package is their job.
-   * That freedom has to stay small and deliberate — a file dropped at the root silently
-   * escapes every direction rule above, which is how the type-name union
-   * landed there unguarded in the first place. So membership is pinned, and
-   * the union file (unlike the barrel, which re-exports values) must never
-   * leave the type level: an `import` without `type` there would put every
-   * spec module into any bundle that touches it.
+   * That freedom has to stay small and deliberate — a file dropped at the
+   * root silently escapes every direction rule above, so membership is
+   * pinned, and the union file (unlike the barrel, which re-exports values)
+   * must never leave the type level: an `import` without `type` there
+   * would put every spec module into any bundle that touches it.
    */
   it("should keep the surface layer to explicit entry points and the name union", () => {
     const rootFiles = readdirSync(SRC).filter((entry) => entry.endsWith(".ts"));

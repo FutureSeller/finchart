@@ -115,8 +115,8 @@ describe("LogScale", () => {
     });
 
     /**
-     * This used to throw — a single `close: 0` bar killed the whole frame,
-     * which also contradicted the stance that "toggling an axis is a
+     * Throwing here would let a single `close: 0` bar kill the whole frame,
+     * and would contradict the stance that "toggling an axis is a
      * transformation, not a failure."
      *
      * On a log axis, 0 is a value infinitely far below, not a contract
@@ -134,10 +134,10 @@ describe("LogScale", () => {
          * lower bound." This fixture has `range = [0, 800]`, so the domain
          * minimum (1) maps to pixel 0 — i.e. small values sit at the top of
          * the screen. So a value below 0 also lands off-screen toward the
-         * top (a negative pixel). The old assertion was `> 800`, which would
-         * only hold if the formula were anchored on `rangeMax` — and that
-         * formula was wrong for the direction a real chart actually wires
-         * things up (see the `it.each` below).
+         * top (a negative pixel). Asserting `> 800` would only hold if the
+         * formula were anchored on `rangeMax` — and that formula is wrong
+         * for the direction a real chart actually wires things up (see the
+         * `it.each` below).
          */
         expect(pixel).toBeLessThan(0);
       }
@@ -148,9 +148,9 @@ describe("LogScale", () => {
      * things up. The fixture in the test right above has `range = [0, 800]`,
      * so `rangeMax` is at the bottom — but the direction a chart actually
      * uses is the opposite: `pane.ts`'s non-inverted branch calls
-     * `setRange(area.bottom, area.top)`, so `rangeMin` is at the bottom. The
-     * old formula (`rangeMax + |rangeMax - rangeMin|`) only worked for this
-     * one fixture. This checks both.
+     * `setRange(area.bottom, area.top)`, so `rangeMin` is at the bottom. A
+     * formula anchored on `rangeMax` (`rangeMax + |rangeMax - rangeMin|`)
+     * works only for this one fixture. This checks both.
      */
     it.each([
       ["non-inverted pane — setRange(bottom, top)", 600, 0],
@@ -431,7 +431,7 @@ describe("pixels stay finite at the edge of the doubles", () => {
         previousValue = value;
       }
     }
-    // The two spots a rounding once reversed: a value just under twice `min`, and the pixel of `min × e`.
+    // The two spots where rounding can reverse the order: a value just under twice `min`, and the pixel of `min × e`.
     const tiny = new LogScale(1e-300, 3e-300, 0, 600);
     expect(tiny.scale(2e-300 - 2e-300 * Number.EPSILON)).toBeLessThanOrEqual(tiny.scale(2e-300));
     const hundred = new LogScale(1e-100, 3e-100, 0, 600);
@@ -557,7 +557,7 @@ describe("pixels stay finite at the edge of the doubles", () => {
       }
       return ticks;
     };
-    // A label's fifteen-digit rounding moved a tick under the gap the plan had checked.
+    // A label's fifteen-digit rounding can move a tick under the gap the plan checked.
     contract(new LogScale(8.06798900190339e-303, 8.068010726842184e-303, 600, 0), 5.098776948820927e-7, 8.06798900190339e-303, 8.068010726842184e-303);
     // A spacing of a billionth of a pixel: two rungs on one pixel are still one tick.
     const max = Number.MAX_VALUE;

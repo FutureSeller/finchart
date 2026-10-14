@@ -42,9 +42,9 @@ describe("SimpleDataManager", () => {
   });
 
   it("should report no range at all for empty data", () => {
-    // This used to be { min: 0, max: 0 }. "Nothing to measure" is different
-    // from "measures to 0", and once each series carries its own data, that
-    // 0 would leak into the union.
+    // Not { min: 0, max: 0 }. "Nothing to measure" is different from
+    // "measures to 0", and since each series carries its own data, that 0
+    // would leak into the union.
     expect(manager().getXRange()).toBeNull();
   });
 

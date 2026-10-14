@@ -77,10 +77,10 @@ export interface PlotEvents {
   /**
    * A frame finished drawing. **No payload.**
    *
-   * It used to carry `{ dataPoints }`, but that value was **the source's
-   * visible point count**, so it didn't count what derived series drew —
-   * stacking on four indicators gave the same number. Fixing it would mean
-   * the drawing path counts, and the only place that wants the count is
+   * No `{ dataPoints }`: the count at hand is **the source's visible point
+   * count**, which doesn't count what derived series draw — stacking on
+   * four indicators gives the same number. A true count would mean the
+   * drawing path counts, and the only place that wants the count is
    * benchmarks — **and a benchmark can count more accurately by wrapping the
    * renderer** (the commands actually issued). The core has no reason to
    * count every frame.

@@ -92,8 +92,9 @@ describe("crosshair.applyOptions", () => {
 
 /**
  * Whether the core's own extensions actually honor what the contract
- * promises. PluginApi.disposed's "block calls after cleanup" used to be
- * upheld only by @finchart/tools — a contract nobody honors isn't a contract.
+ * promises. PluginApi.disposed's "block calls after cleanup" must hold for
+ * the core too, not only @finchart/tools — a contract nobody honors isn't
+ * a contract.
  */
 describe("giving options to a disposed extension", () => {
   it("should refuse on crosshair", () => {

@@ -1,8 +1,8 @@
 /**
  * An extension lives and dies with whatever it's attached to. A pane-level
- * extension used to follow the plot.use(x({ pane })) convention, so
- * removing the pane left the extension alive, still holding its
- * decoration and input consumer onto a pane no longer on screen.
+ * extension following the plot.use(x({ pane })) convention would outlive
+ * a removed pane, still holding its decoration and input consumer onto a
+ * pane no longer on screen.
  */
 import { describe, expect, it, vi } from "vitest";
 import { lineSeries } from "../../series";
@@ -209,12 +209,12 @@ describe("coordinate capabilities", () => {
   });
 });
 
-/** The pane option now demands a type a consumer can actually get their hands on. */
+/** The pane option demands a type a consumer can actually get their hands on. */
 describe("the legend's pane option", () => {
   it("should accept a pane taken from the plot", () => {
     const plot = mount();
     const second: PaneApi = plot.addPane();
-    // This line is the compile-time assertion — there used to be no value that could go here.
+    // This line is the compile-time assertion — a pane taken from the plot must fit here.
     const asLegendPane: ValueCoordinates & DataProbe = second;
 
     expect(asLegendPane.xRange()).toBeNull();

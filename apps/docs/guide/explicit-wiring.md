@@ -83,7 +83,7 @@ justification:
 
 If this list grows, that is a bug — a passenger must have either **a door (an
 import boundary)** or **a justification (a contract in writing)**, and "it's
-small, it's fine" is not a justification (PRINCIPLES 27).
+small, it's fine" is not a justification.
 
 ## When to use which
 

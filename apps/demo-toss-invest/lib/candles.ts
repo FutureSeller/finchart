@@ -43,7 +43,7 @@ export function toBars(candles: ApiCandle[], interval: Interval): OHLC[] {
   const offset = tossLabelOffset(interval);
   return candles
     .map((candle) => {
-      // The accessor now rejects a non-finite volume loudly (a bar without
+      // The accessor rejects a non-finite volume loudly (a bar without
       // volume is still a bar, so a gap is null — not NaN).
       const volume = Number(candle.volume);
       return {

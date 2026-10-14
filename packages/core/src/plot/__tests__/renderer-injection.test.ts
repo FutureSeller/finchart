@@ -14,7 +14,7 @@ const data: LineDataPoint[] = [
   { x: 100, y: 15 },
 ];
 
-/** A renderer with no canvas at all — that this works is exactly why DrawTarget was factored out. */
+/** A renderer with no canvas at all — that this works is exactly what DrawTarget is for. */
 function recordingRenderer() {
   const calls: string[] = [];
   let committed = 0;

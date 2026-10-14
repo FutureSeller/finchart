@@ -254,8 +254,8 @@ function orderOnly<T extends BaseDataPoint>(): CoordinateAccessor<T> {
 
 /**
  * Loads older data as the view approaches or passes the left edge of what
- * is held — the bookkeeping every infinite-scroll consumer was writing by
- * hand: the cursor, the threshold test, in-flight dedup, and the
+ * is held — the bookkeeping every infinite-scroll consumer would otherwise
+ * write by hand: the cursor, the threshold test, in-flight dedup, and the
  * re-judgment after a landing (a `prepend` doesn't move the domain, so no
  * event ever announces it).
  *
@@ -640,8 +640,8 @@ export function infiniteHistory<T extends BaseDataPoint, C extends NonNullable<u
     }
 
     // The retained page's own shape is judged by the same walker every
-    // data door runs (one rule set — a hand-written `<` loop here used to
-    // let a repeated x through to the sink, where it read as a retryable
+    // data door runs (one rule set — a hand-written `<` loop here would
+    // let a repeated x through to the sink, where it reads as a retryable
     // delivery failure instead of the fetch defect it is).
     try {
       scanSeriesData(trimmed, coordinates, null);

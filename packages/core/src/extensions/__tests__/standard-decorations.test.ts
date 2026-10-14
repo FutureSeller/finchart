@@ -19,7 +19,7 @@ function mounted() {
   });
 }
 
-describe("standard decoration set (2.1)", () => {
+describe("standard decoration set", () => {
   it("priceLine should draw the line and put its badge on the y axis", () => {
     const model = mounted();
     model.plot.mainPane.addDecoration(

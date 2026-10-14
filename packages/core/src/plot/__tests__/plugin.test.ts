@@ -199,9 +199,9 @@ describe("pluginApi", () => {
 });
 
 /**
- * The stage releases dead plugins — it used to only remove them in
- * destroy(), so a React effect that rebuilds on every option change kept
- * piling up dead APIs.
+ * The stage releases dead plugins — removing them only in destroy() would
+ * let a React effect that rebuilds on every option change keep piling up
+ * dead APIs.
  */
 describe("releasing dead plugins", () => {
   it("should not grow when install and dispose alternate", () => {
@@ -232,7 +232,7 @@ describe("releasing dead plugins", () => {
   });
 });
 
-/** Cleanup runs to completion — one plugin's dispose throwing used to skip
+/** Cleanup runs to completion — one plugin's dispose throwing must not skip
  * the rest of teardown (releasing the observer, layers.destroy), leaking resources. */
 describe("failure during cleanup", () => {
   it("should finish destroying even when a plugin throws", () => {
@@ -302,7 +302,8 @@ describe("subscriber isolation", () => {
 
 describe("crosshair as a plugin", () => {
   it("should be cleaned up by destroy without an explicit detach", () => {
-    // This is the reason X6a exists — previously, forgetting to call the disposer left the subscription in place.
+    // A plugin is torn down with the plot, so forgetting to call its
+    // disposer cannot leave the subscription in place.
     const plot = mount();
     const cursor = plot.use(crosshair());
     const dispose = vi.spyOn(cursor, "dispose");

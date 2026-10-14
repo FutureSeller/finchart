@@ -3,7 +3,7 @@
  * Mounts one case onto the site — it takes the `CaseModule` from
  * `apps/examples/src/cases/*.ts` as-is, with no wrapper.
  *
- * Four things the shell (cases.html) used to provide behind the scenes are
+ * Four things the shell (cases.html) provides behind the scenes are
  * supplied here instead:
  * ① Theme CSS scoping (the `.dark` rules below — same values as
  *    src/theme.css, only the selector differs; the two apps have different

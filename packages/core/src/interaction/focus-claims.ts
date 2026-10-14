@@ -2,10 +2,10 @@
  * The keyboard-focus contest — the door that separates *"the cursor went to
  * **someone contesting the keyboard**"* from *"it went to no one."*
  *
- * An earlier version asked *"is there anyone with an area."* That let a
- * claimant with no interest in the keyboard — a legend, a watermark — kill
- * the toolbox's Delete key (a release blocker). Registering is now itself
- * the declaration *"I contest the keyboard too."*
+ * Asking *"is there anyone with an area"* would let a claimant with no
+ * interest in the keyboard — a legend, a watermark — kill the toolbox's
+ * Delete key. So registering is itself the declaration *"I contest the
+ * keyboard too."*
  */
 import {
   ContractError,
@@ -29,22 +29,21 @@ export interface FocusClaims {
 /**
  * Reads someone else's `areaOf` **safely**.
  *
- * Three things are absorbed here — all three measured in the wild:
+ * Three things are absorbed here:
  *
- * - **It throws**: a defect in someone else's extension blew up right where
- *   this calls `contestedAt`, killing the entire drawing-tools keyboard
- *   path. Treated as unable to contest.
- * - **Wrong shape**: `claimFocusArea` only checked that its argument was a
- *   function and nobody looked at the return value. The exact raw
- *   `TypeError` that was eliminated from the five coordinate doors
- *   showed up again, **in a neighbor's hands.**
+ * - **It throws**: a defect in someone else's extension would blow up
+ *   right where this calls `contestedAt`, killing the entire drawing-tools
+ *   keyboard path. Treated as unable to contest.
+ * - **Wrong shape**: `claimFocusArea` only checks that its argument is a
+ *   function, so nothing else looks at the return value. Unread here, it
+ *   would raise the raw `TypeError` the five coordinate doors refuse to,
+ *   **in a neighbor's hands.**
  * - **Degenerate area**: a zero-width vertical line (`x == left == right`)
  *   contests its entire x — it's the only line where `x >= left && x <=
- *   right` is true. (An earlier line of reasoning here — *"`EMPTY_AREA` lets
- *   (0,0) through"* — was false: `containsFocus`'s bottom edge is exclusive,
- *   so it never passed through to begin with. That was corrected.) Both
- *   siblings (`insideArea` in `tools.ts`, and `hit.ts`) already had this
- *   guard — only this third copy was missing it.
+ *   right` is true. (`EMPTY_AREA` does not let (0,0) through:
+ *   `containsFocus`'s bottom edge is exclusive.) Core `PaneStack.at` in
+ *   `panes.ts` carries the same guard (and `PaneStack.atY`, for height),
+ *   as do `gripAt` in tools `hit.ts` and `usableArea` in tools `tools.ts`.
  */
 function focusAreaOf(entry: FocusEntry): PlotArea | null {
   let area: unknown;
@@ -83,9 +82,9 @@ function focusAreaOf(entry: FocusEntry): PlotArea | null {
  * verdict that claims to be exclusive can't have a
  * point that isn't.
  *
- * `contains`, used for hit testing, is left alone — there, including both
- * ends is correct (`geometry.ts`: *"on the boundary counts as inside — every
- * hit test follows this rule"*).
+ * `contains`, the plot-interior rule used by pane lookup, is left alone —
+ * there, including both ends is correct: `geometry.ts` counts a point on
+ * the boundary as inside.
  */
 function containsFocus(area: PlotArea, point: Point): boolean {
   return (

@@ -125,14 +125,13 @@ function makeCandles(count: number, seed = 42, startX = 0, startPrice = 100): OH
 
 /**
  * An instrumented renderer must draw the same picture as an uninstrumented
- * one. An older wrapper copied `Renderer`'s optional members (clip,
- * drawCustom) across by hand and missed some — a missing clip didn't cut at
- * the pane boundary, which understated the commit share on small canvases
- * (sparklines), and a missing drawCustom would have measured the fallback path
- * had there been an area or gradient series (there is none in this suite, so
- * no number was actually wrong). The big-chart figures were unaffected.
+ * one. A wrapper that copies `Renderer`'s optional members (clip,
+ * drawCustom) across by hand can miss some — a missing clip doesn't cut at
+ * the pane boundary, which understates the commit share on small canvases
+ * (sparklines), and a missing drawCustom would measure the fallback path for
+ * an area or gradient series (there is none in this suite).
  *
- * To keep that from recurring, the forwarding object is pinned to
+ * So the forwarding object is pinned to
  * `Required<Renderer>` — add a member and the build breaks right here.
  */
 type CompleteRenderer = Required<Renderer>;
@@ -218,7 +217,7 @@ interface Scenario {
   /**
    * Tears down every chart this scenario stood up. For a scenario that stands
    * up several (the sparkline list, say), `subject.plot` is only the first, so
-   * the rest went uncollected and once polluted the next scenario's numbers.
+   * the rest would go uncollected and pollute the next scenario's numbers.
    * Without this, the harness destroys `subject.plot` alone.
    */
   dispose?: () => void;
@@ -929,8 +928,8 @@ const scenarios: Scenario[] = [
   /**
    * The bar-index pair — one option apart from its siblings above. Only
    * measuring them side by side in one session separates out the coordinate
-   * system's share. The combination of ticks with indicators had been an empty
-   * cell all along — and it is exactly the trading screen's combination, and
+   * system's share. The combination of ticks with indicators is measured
+   * here too — it is exactly the trading screen's combination, and
    * where the bar-index mapping's rebuild lives.
    */
   {
@@ -1802,10 +1801,10 @@ const harness = {
   },
 
   /**
-   * Tears down every chart the prepared scenario stood up. Back when only
-   * `subject.plot` was collected, `prepare()` ran first every time and the
-   * driver swept the whole scenario list, so passing a scenario that stands up
-   * several left the rest behind, riding along on whatever came next.
+   * Tears down every chart the prepared scenario stood up. Collecting only
+   * `subject.plot` would leave the rest of a scenario that stands up several
+   * behind — `prepare()` runs first every time and the driver sweeps the whole
+   * scenario list — riding along on whatever comes next.
    */
   dispose(): void {
     if (!prepared) return;

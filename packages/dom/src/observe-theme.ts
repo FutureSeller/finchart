@@ -8,8 +8,8 @@ import { listen } from "./listen";
  * moment the cascade changes, but nothing redraws with them — the DOM parts
  * (axis labels, tooltip, legend) follow at once while candles, grid and
  * crosshair stay in the old colors. Theming guide calls that "changing only
- * halfway", and until now the fix was a subscription every consumer wrote by
- * hand. This is that subscription, once.
+ * halfway", and without this the fix is a subscription every consumer writes
+ * by hand. This is that subscription, once.
  *
  * ```ts
  * const stop = observeTheme(container, () => plot.requestRender());

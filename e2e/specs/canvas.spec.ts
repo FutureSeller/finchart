@@ -164,26 +164,22 @@ test("the trading screen exposes exact candle data in a navigable table", async 
 /**
  * **Does a hostile style value get painted in a neighbor's color?**
  *
- * This group is here for the same reason the file is. What `applyColor`,
- * `usableWidth` and `applyFont` decide on is *"did the assignment take on the
- * canvas"* — and **vitest's fake context accepts anything as-is** (the setter
- * in `dom-fakes.ts` is `state[name] = value`). So the rejection branches are
- * **unreachable** from a unit test, and defects turned up in exactly that spot
- * three rounds running.
- *
- * Only real Chromium actually rejects an invalid value. This is its only home.
+ * `applyColor` and `applyFont` decide on *"did the assignment take on the
+ * canvas"*, and `usableWidth` filters out widths a canvas would silently
+ * ignore. Core's unit tests drive them through fakes modeled on assumed
+ * canvas behavior; these specs remain because only here is a real engine's
+ * rejection checked.
  */
 test.describe("hostile style values (zero trust)", () => {
   /**
    * Sets CSS variables on the container and **actually forces a redraw.**
    *
-   * A mutation test caught this: an earlier version of this helper set the
-   * variables and waited two rAFs, but **a canvas only redraws when something
-   * invalidates it.** Assigning a CSS variable is not an invalidation — the
-   * theming guide says so itself, in *"it takes effect on the next render —
-   * which is why `requestRender()` exists"*. So all four assertions were
-   * **measuring a frozen picture**, and reverting the guards wholesale left
-   * them green. The file built to hold the guards was holding nothing.
+   * **A canvas only redraws when something invalidates it**, and assigning a
+   * CSS variable is not an invalidation — the theming guide says so itself:
+   * canvas-drawn things *"land on the next render"*, which is why its
+   * dark-switch recipe calls `requestRender()`. Without a redraw every
+   * assertion here would measure a frozen picture and stay green with the
+   * guards removed.
    *
    * Toggling the grid checkbox off and on **redraws** the chart in its original
    * state — an invalidation handle the example already has, so no test-only
@@ -209,13 +205,12 @@ test.describe("hostile style values (zero trust)", () => {
   };
 
   /**
-   * **Is the harness alive?** This proves the other four assertions in this
-   * file are not measuring a frozen picture. Set a valid value and the pixels
-   * have to **actually change**.
+   * **Is the harness alive?** This proves the other assertions in this group
+   * are not measuring a frozen picture. Set a valid value and the pixels have
+   * to **actually change**.
    *
-   * Without this control, all four sat quietly dead. When the control goes red
-   * it does not mean "a guard broke" — it means "the invalidation handle is
-   * gone".
+   * When the control goes red it does not mean "a guard broke" — it means
+   * "the invalidation handle is gone".
    */
   test("control: a valid value really does change the pixels", async ({ page }) => {
     const MAGENTA = "255,0,255";
@@ -229,14 +224,12 @@ test.describe("hostile style values (zero trust)", () => {
 
   /**
    * **The central assertion**: an invalid candle color must not leave that spot
-   * **painted in some other element's color.** Measured once, the candles came
-   * out in the axis label's gray — not the fallback, not unpainted, but the
-   * neighbor's color.
+   * **painted in some other element's color** — unguarded, the canvas keeps
+   * the color of whatever was drawn just before.
    *
    * Two things are measured. The up candles **disappear** (the guard demotes
    * them to transparent), and the total ink **drops by that much** (painting in
-   * a neighbor's color would leave the total unchanged — disabling the guard
-   * and measuring gave exactly "unchanged").
+   * a neighbor's color would leave the total unchanged).
    */
   test("an invalid color does not inherit its neighbor's", async ({ page }) => {
     const before = await pixelStats(page, [UP]);
@@ -272,10 +265,9 @@ test.describe("hostile style values (zero trust)", () => {
   });
 
   /**
-   * A consumer trying to turn the grid off with `--chart-grid-width: 0`. The
-   * canvas used to ignore the 0 and draw **at the previous line's width** —
-   * with the guard disabled, the ink went **up**, 75886 → 77300. So the `<`
-   * bites in exactly that direction.
+   * A consumer trying to turn the grid off with `--chart-grid-width: 0`.
+   * Unguarded, the canvas ignores the 0 and draws **at the previous line's
+   * width**, so the ink goes **up**. The `<` bites in exactly that direction.
    */
   test("a width of 0 does not inherit the previous width", async ({ page }) => {
     const before = await pixelStats(page);
@@ -287,20 +279,20 @@ test.describe("hostile style values (zero trust)", () => {
 
   /**
    * `--chart-label-font-size: 12` (the unit is missing) becomes
-   * `"12 system-ui"`, which the canvas rejects. Text used to be drawn **in the
-   * previous command's font**.
+   * `"12 system-ui"`, which the canvas rejects. Unguarded, text is drawn **in
+   * the previous command's font**.
    *
    * The axis labels on this chart are DOM, so canvas text is only about 1% of
-   * the total ink — which made a threshold like `before * 1.5` fifty times too
-   * loose. **So a scale is measured first with a valid value**: how far 40px
-   * moves the ink, and then the assertion is that the invalid value doesn't get
-   * even halfway. Without the guard, the invalid value inherits the previous
-   * 40px and travels the full scale.
+   * the total ink — a fixed ratio like `before * 1.5` would be far too loose.
+   * **So a scale is measured first with a valid value**: how far 40px moves
+   * the ink, and then the assertion is that the invalid value doesn't get even
+   * halfway. Without the guard, the invalid value inherits the previous 40px
+   * and travels the full scale.
    *
-   * It measures **magnitude, not direction** — in practice 40px **reduces** the
-   * ink by 639 (bigger text means labels that overlap and get dropped).
-   * Inheriting travels the full scale in either direction, so the absolute
-   * value is the right ruler.
+   * It measures **magnitude, not direction** — 40px can **reduce** the ink
+   * (bigger text means labels that overlap and get dropped). Inheriting
+   * travels the full scale in either direction, so the absolute value is the
+   * right ruler.
    */
   test("an invalid font does not draw text at a neighbor's size", async ({ page }) => {
     const base = await pixelStats(page);

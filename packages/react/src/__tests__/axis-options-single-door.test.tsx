@@ -1,19 +1,19 @@
 /**
- * The value axis had **two doors to write through**.
+ * The value axis has **one door to write through**, not two.
  *
- * `<ChartPane axis>` and the `<YAxis>` inside a pane both call the same
- * `pane.applyOptions({axis})`, and both write every field they know about
- * (leaving the ones they weren't given as `undefined`). Since core's merge
- * is a spread, `undefined` overwrites too, so **whichever ran last erased
- * the other's settings.** Observed in practice: right after mount,
- * `<YAxis>`'s format was the one called, but changing a single `flex` prop
- * that had nothing to do with the axis made `<ChartPane axis>`'s format the
- * one called from then on — same JSX, a different owner.
+ * `<ChartPane axis>` and the `<YAxis>` inside a pane would both call the
+ * same `pane.applyOptions({axis})`, each writing every field it knows about
+ * (leaving the ones it isn't given as `undefined`). Since core's merge is a
+ * spread, `undefined` overwrites too, so **whichever ran last would erase
+ * the other's settings**: right after mount `<YAxis>`'s format would be
+ * the one called, but changing a single `flex` prop that has nothing to do
+ * with the axis would make `<ChartPane axis>`'s format the one called from
+ * then on — same JSX, a different owner.
  *
- * The fix was to cut it down to one door (see `chart-pane.tsx`). The type
- * lock lives in `react-lane.types.tsx` — if the door reopens to two,
- * compilation fails there. This is the **behavior lock** that checks the
- * one remaining door actually holds up under that scenario.
+ * So there is one door (see `chart-pane.tsx`). The type lock lives in
+ * `react-lane.types.tsx` — if the door reopens to two, compilation fails
+ * there. This is the **behavior lock** that checks the one remaining door
+ * actually holds up under that scenario.
  */
 import type { LineDataPoint } from '@finchart/core';
 import { lineSeries } from '@finchart/core';

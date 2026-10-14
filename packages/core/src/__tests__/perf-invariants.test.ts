@@ -197,9 +197,9 @@ const sameBarTick = (close: number): OHLC => ({
 describe("a tick on the same bar does not re-index x", () => {
   /**
    * A tick only sets a new value at the same x, so the bar index stays put
-   * — but there used to be code that unconditionally gathered every
-   * series's x values and re-indexed them whenever `change.data` fired.
-   * That waste once ate up half the frame.
+   * — code that unconditionally gathers every series's x values and
+   * re-indexes them whenever `change.data` fires wastes work, and that
+   * waste can eat up half the frame.
    */
   it("is zero on a stage with only candles", () => {
     const { model, counts, price } = counted(false);
@@ -211,7 +211,7 @@ describe("a tick on the same bar does not re-index x", () => {
     expect(counts.rebuild - before).toBe(0);
   });
 
-  /** Stays zero even with a derived series attached — the derived branch used to always answer "don't know" as true, so having even a single indicator disabled the skip entirely. */
+  /** Stays zero even with a derived series attached — a derived branch that always answers "don't know" as true would let a single indicator disable the skip entirely. */
   it("is zero even when ticking the derived indicator directly", () => {
     const { model, counts, indicator } = counted(true);
     expect(indicator).not.toBeNull();
@@ -377,8 +377,8 @@ describe("a scan window opens, and the cursor lives inside the window", () => {
 
 describe("a new bar does not re-map the whole history", () => {
   /**
-   * Because `xValues`'s cache key is array identity, a single new bar used
-   * to miss and re-map the entire history. Now an identity registration
+   * Because `xValues`'s cache key is array identity, a single new bar would
+   * miss and re-map the entire history. So an identity registration
    * only extends the tail (the discipline of "whoever knows about the
    * change pays only for that much"). Drawing (the visible ~3,200 points)
    * is the baseline, so this isn't 0 — what's being checked is whether the

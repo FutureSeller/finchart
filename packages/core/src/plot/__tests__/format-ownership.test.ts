@@ -10,9 +10,8 @@ import { defaultConfig, mountPlot } from "./helpers";
 /**
  * Format ownership — a single axis format drives the default display for
  * the crosshair badge, the priceLine badge, the legend, and the tooltip.
- * Each surface used to reinvent its own toFixed(2), so for sub-cent
- * instruments only the axis label was correct and everything else showed
- * "0.00".
+ * If each surface reinvented its own toFixed(2), sub-cent instruments
+ * would get a correct axis label and "0.00" everywhere else.
  */
 
 const data: LineDataPoint[] = [

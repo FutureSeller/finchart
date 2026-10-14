@@ -22,15 +22,14 @@ export type InputEvent =
       pointerId: number;
       /**
        * The button pressed (same numbering as DOM `PointerEvent.button`:
-       * 0 primary, 1 wheel, 2 secondary). Absent means the primary button —
-       * the same meaning as today for synthetic input that doesn't set it.
+       * 0 primary, 1 wheel, 2 secondary). Absent means the primary button,
+       * so synthetic input that doesn't set it reads as a primary press.
        *
        * This field prevents a right-click-drag misfire — without it, hand
        * tremor while holding the button during a right-click on a line
-       * would read as a drag and shove the shape. Being an optional field
-       * means adding it after release still leaves a consumer that doesn't
-       * read it working exactly as before (unlike adding a new variant or
-       * changing an existing field's meaning).
+       * would read as a drag and shove the shape. Being an optional field,
+       * it leaves a consumer that doesn't read it working unchanged (unlike
+       * a new variant or a change to an existing field's meaning).
        */
       button?: number;
     }
@@ -44,9 +43,9 @@ export type InputEvent =
    * meant to be undone.
    *
    * Why this is a new variant instead of an optional field: an optional
-   * field would silently hand a consumer that doesn't read it the old bug
-   * (a release that isn't really a release) as the default. A new variant
-   * makes an exhaustive switch raise the question at compile time.
+   * field would silently hand a consumer that doesn't read it a release
+   * that isn't really a release, as the default. A new variant makes an
+   * exhaustive switch raise the question at compile time.
    *
    * `dom` also uses this for pan/gesture cleanup, for the sake of
    * consumers that don't consume it.
@@ -84,10 +83,9 @@ export type InputEvent =
   | { type: "contextmenu"; point: Point }
   /**
    * A single key with no modifiers (select, delete, and cancel all arrive
-   * this way — 2026-08-10 review). There's no `point` — a key belongs to
-   * focus, not the cursor. No capture either: a key has nothing
-   * equivalent to "take over the drag," so like wheel it only passes
-   * through the stack once.
+   * this way). There's no `point` — a key belongs to focus, not the cursor.
+   * No capture either: a key has nothing equivalent to "take over the
+   * drag," so like wheel it only passes through the stack once.
    */
   | { type: "keydown"; key: string };
 
@@ -247,7 +245,7 @@ const INPUT_TYPES: readonly InputEvent["type"][] = [
  * input — synthetic coordinates come from RN gestures, a worker, a server,
  * a test harness, and aren't ours to trust. The browser path is safe.
  *
- * The cost of not checking this was quiet data destruction — grab a shape
+ * The cost of not checking this is quiet data destruction — grab a shape
  * with a normal pointerdown, then a single `{x: NaN, y: NaN}` move would
  * assign straight to the anchor with no check (a captured move skips the
  * boundary check), and that would reach a save, wiping out the ledger for

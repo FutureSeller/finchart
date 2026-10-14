@@ -622,15 +622,14 @@ export class Pane implements PaneApi {
     /**
      * **`autoScale` turns off only after the scale accepts the value.**
      *
-     * The line that turns it off used to come first. `setValueDomain(NaN,
-     * 200)` correctly throws `ContractError`, but **autoScale was already
-     * permanently off** by then — if the consumer catches the error and
-     * moves on, the y-axis stops following even as later ticks arrive. No
-     * notification either.
+     * Turned off first, `setValueDomain(NaN, 200)` would still correctly
+     * throw `ContractError`, but **autoScale would already be permanently
+     * off** by then — if the consumer catches the error and moves on, the
+     * y-axis stops following even as later ticks arrive. No notification
+     * either.
      *
      * The sibling right above, `applyOptions`, checks its numbers first —
-     * **the two siblings answered differently** (the exact shape of a bug
-     * this once caused).
+     * **the two siblings must answer the same way.**
      */
     const [previousMin, previousMax] = this.yScale.getDomain();
     const wasManual = !this.settings.autoScale && this.manualDomain;

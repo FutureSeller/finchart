@@ -68,7 +68,7 @@ describe("mergeByX — the x keys are the union, the named ones are the incoming
   /**
    * A `NaN` x is a precondition violation — the doors refuse it before it
    * gets here — but a pure function has to finish on any input, and one
-   * that compared `NaN` to itself to decide when to move on never did.
+   * that compared `NaN` to itself to decide when to move on would never finish.
    */
   it("finishes even on an x that is not a number", () => {
     const held = [p(1), { x: Number.NaN, v: "?" }, p(4)];

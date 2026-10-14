@@ -282,16 +282,17 @@ describe("clip", () => {
   });
 
   /**
-   * A polygon that can't form a face must not kill commit — `replayShape`
-   * read `points[0]` without checking it, so an empty array became a raw
-   * `TypeError`. If that escapes rAF, the canvas freezes permanently on a
+   * A polygon that can't form a face must not kill commit — a `replayShape`
+   * that reads `points[0]` without checking it turns an empty array into a
+   * raw `TypeError`. If that escapes rAF, the canvas freezes permanently on a
    * partial frame.
    *
    * The path to reach this is in a consumer's hands: `fillLinearGradient`
    * falls back to a polygon on a surface with no painter plugged in, and an
    * area series with no points in the visible range produces zero points.
    * The painter side (`gradient.ts`) silently skips `points.length < 3`, so
-   * the same input was ending up differently depending on the surface.
+   * without the same rule here one input would end up differently
+   * depending on the surface.
    */
   it.each([
     ["empty array", []],
@@ -339,7 +340,7 @@ describe("applyFont — repeated calls", () => {
     applyFont(context, "16px Inter", FALLBACK_FONT);
     expect(context.font).toBe("16px Inter");
 
-    // The second and third calls must give the same value too — this is the spot that used to make the measurer wobble.
+    // The second and third calls must give the same value too — this is the spot where the measurer would wobble.
     applyFont(context, "16px Inter", FALLBACK_FONT);
     expect(context.font).toBe("16px Inter");
     applyFont(context, "16px Inter", FALLBACK_FONT);
@@ -357,11 +358,11 @@ describe("applyFont — repeated calls", () => {
 
 /**
  * Caching a verdict must not weaken value validation. Reading the value
- * back cost a lot of frame time, so it's cached to check each value only
+ * back costs a lot of frame time, so it's cached to check each value only
  * once — but if the second call onward skips validation and just assigns
- * the value, the old bug returns: a rejected color gets painted with
- * whatever color the previous command left behind. So what's checked here
- * isn't "is it fast" but "does the second call also come out transparent."
+ * the value, a rejected color gets painted with whatever color the
+ * previous command left behind. So what's checked here isn't "is it
+ * fast" but "does the second call also come out transparent."
  */
 describe("applyColor — verdict cache", () => {
   /** Like a real canvas, accepts only colors it recognizes and silently ignores the rest — the value gets normalized. */

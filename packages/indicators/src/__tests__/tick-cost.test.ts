@@ -19,8 +19,8 @@ import {
 } from "../factories";
 
 /**
- * A tick costs what it can reach, not the history: the fifteen that used to
- * recompute everything on every `updateLast` now either fold one bar from a
+ * A tick costs what it can reach, not the history: rather than recompute
+ * everything on every `updateLast`, these fifteen either fold one bar from a
  * checkpoint or re-run only the window a tick can move. Two guards: a
  * work count (candle fields read and anchor calls made per tick, against a
  * 10 000-bar history), and a differential fuzz — ticks, pages and gaps

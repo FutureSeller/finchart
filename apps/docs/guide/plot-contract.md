@@ -165,8 +165,8 @@ overlay that's already been torn down.
   (line = close, candle = low–high). x is the range you were looking at, so it's kept.
   Data belongs to the registration, so **it isn't inherited from the previous one** — you hand it to the new registration.
 - **`applyOptions` doesn't touch what you left out.** Pass `axis: { x }` and `y`
-  stays as it was — the old `setConfig` was a shallow merge, so `y` vanished
-  quietly right here. The unit of replacement differs by slot: `padding`,
+  stays as it was — a shallow merge would make `y` vanish quietly right
+  here. The unit of replacement differs by slot: `padding`,
   `axis.x` and `axis.y` merge per field; `style` is replaced wholesale (that's
   what lets `style: { grid: {} }` get you back to the defaults).
 - **`applyOptions` doesn't rebuild the layers.** Recreating the `Plot` for
@@ -184,7 +184,7 @@ overlay that's already been torn down.
 - **While it's on, the value domain is derived, not state.** It's recomputed on
   every render, so anything you set by hand with `pane.yScale.setDomain()` is
   overwritten on the next frame. To set it yourself, turn it off with
-  `autoScale: false` — then it fits once against the whole source data, as before.
+  `autoScale: false` — then it fits once against the whole source data.
   Two things hand it back: `pane.resetValueAxis()` (a double-click on that
   pane's y-axis strip does this, when `axisDrag` is on) and `fitDomains()`,
   which turns it on for every pane — "show me everything" includes following
@@ -251,8 +251,8 @@ and they draw over each other, with the later one on top.
   **The roles split: `syncSeries` owns the list, the handle owns the data.**
 - **The six write doors on a detached handle** (`setData`, `prepend`, `append`,
   `updateLast`, `upsert`, `swapSeries`) throw a `ContractError`. Letting them pass quietly
-  moved the chart for real — `setData`'s refit **re-fitted the x window against
-  the remaining series** and the pan you had set jumped. Two doors detach a
+  would move the chart for real — `setData`'s refit **would re-fit the x window against
+  the remaining series** and the pan you had set would jump. Two doors detach a
   handle: a `dispose()` you called yourself, or imperative `setSeries()`
   replacing it. The latter is **a removal you never called**, so you ask with
   `handle.attached` — `read()`, `xRange` and `dispose()` are safe after
@@ -381,7 +381,7 @@ pane.addSeries({ series, data, derive: (source) => points, coordinates });
 
 - **`derive` gets that registration's whole `data`, not the visible range.** That's what it takes
   for an indicator that has to look backwards — a moving average — not to break off at the left edge.
-  A series without `derive` gets the clipped range, as before.
+  A series without `derive` gets the clipped range.
 - It recomputes **only when the data changes.** Calling it on the draw path
   would put the data size inside the frame budget — O(n) per indicator, so it
   multiplies as you add panes.
@@ -609,7 +609,7 @@ Do the three steps in this order, because each needs the one before it:
 
 A strategy that skips step 2 in bar-index coordinates draws a tick for every
 boundary, including the weekend midnights that have no bar of their own; the
-frame no longer snaps them for you. Step 2 can be omitted where the domain is
+frame does not snap them for you. Step 2 can be omitted where the domain is
 continuous and the boundaries already meet the requested pixel spacing; return
 the candidates with their labels.
 
@@ -639,8 +639,8 @@ Try `plot.use(watermark())` and you're stopped. Here's the line:
   and `markers`, are decorations; things that **act**, like `crosshair`,
   `tooltip`, `legend` and `drawingTools`, are plugins. Put a decoration into
   `use` and the types stop you — the vocabularies aren't merged because
-  [PRINCIPLES.md](https://github.com/FutureSeller/finchart/blob/main/PRINCIPLES.md)
-  principle 12, "extensions come wrapped", starts by separating the wrapper
+  the [PRINCIPLES.md](https://github.com/FutureSeller/finchart/blob/main/PRINCIPLES.md)
+  rule "extensions come wrapped" starts by separating the wrapper
   (plugin) from the ingredient (decoration).
 
 ### Install on the chart or on a pane — `plot.use` or `pane.use`
@@ -657,12 +657,12 @@ Plugins are divided by one more line of the same kind. The criterion is
 | `paneMaximize` | `plot.use` | it toggles the chart's maximized pane and hit-tests every pane (`PaneHost`) |
 
 **What you install on a pane dies with that pane.** `plot.removePane(rsi)` cleans
-up the extensions attached to it — the old convention was passing a `pane?`
-option by hand, and removing a pane left the extension none the wiser, still
-holding onto a pane that had fallen away.
+up the extensions attached to it — the pane is the install target, so there
+is no `pane?` option to pass by hand, and no extension is left holding onto a
+pane that has fallen away.
 
 What a pane can't give — input, x coordinates, render requests — **arrives as
-wiring**; `drawingTools({ plot })` is that shape (principle 11).
+wiring**; `drawingTools({ plot })` is that shape (collaborators are injected from outside).
 
 **Where it belongs decides its context.** `Plot` owns x and `Pane` owns y, so if
 you need y you belong to a pane.
@@ -752,7 +752,7 @@ const off = plot.on("xDomainChange", (payload) => { ... });   // disposer
 | `click` · `dblclick` · `contextmenu` | when you press on what's under the cursor | a `CrosshairPayload` — never `null` |
 | `panesChange` | when the pane layout (a pane added, removed or reordered, `flex`, `minHeight`) or a pane's value-axis mode (`autoScale`, `invert`, the scale, a range set by hand) changed | nothing — read `plot.panes` |
 
-⁵ The crosshair stays under the pointer during a pan too (since 2026-08-14) —
+⁵ The crosshair stays under the pointer during a pan too —
 anything subscribing to `crosshair`, a tooltip for instance, keeps getting
 updates mid-pan. **Exceptions**: touch pan (a crosshair under your finger tells
 you nothing) and pinch stay quiet. A drag a tool consumed is the tool's: the
@@ -990,10 +990,9 @@ those numbers may be the only text alternative there is.
 **All `keyboard: false` turns off is the two "core" rows in the table below.**
 `tabIndex` and the keydown listener attach regardless of the option, so even with
 it off ⑴ the element still takes focus and ⑵ the keys headed for the input stack
-(the drawing tools' `Esc`, `Delete`, `]`, `[`) stay alive. This option used to
-close the door itself, so an app that turned it off because "I don't want `←→`
-stealing page scroll" lost every drawing-edit key and couldn't even reach the
-chart by keyboard.
+(the drawing tools' `Esc`, `Delete`, `]`, `[`) stay alive. So an app that
+turns it off because "I don't want `←→` stealing page scroll" keeps every
+drawing-edit key and can still reach the chart by keyboard.
 
 | Key | What it does | Owner |
 |---|---|---|
@@ -1157,7 +1156,7 @@ value that ticks every frame moves the line, not the registration.
   `key` is what moves the slot.
 - **You don't have to hold a stable reference.** Build `series` fresh on every
   render and the derive cache survives as long as the slot is the same. `useMemo`
-  is optional now.
+  is optional.
 - **If there's a `derive`, `deriveKey` is required too** (caught at compile time).
   Same rule as `useMemo`'s dependency array — if the value is unchanged the
   derive isn't run again.

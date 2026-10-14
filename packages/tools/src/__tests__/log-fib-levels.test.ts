@@ -1,10 +1,11 @@
 /**
  * A Fibonacci drawing can space its levels in log price. On a log axis the
- * price-linear levels bunch toward one end — measured while dogfooding: the
- * 50% line of a 160,000 → 380,000 retracement sat 29px of 276 off the visual
- * middle. Log spacing is plain value arithmetic, `b·(a/b)^level`, so the
- * drawing carries it (`levelSpacing: "log"`) and no scale is asked anything:
- * the same stored drawing draws its lines at the same prices on any axis.
+ * price-linear levels bunch toward one end — measured on the trading
+ * screen: the 50% line of a 160,000 → 380,000 retracement sits 29px of 276
+ * off the visual middle. Log spacing is plain value arithmetic,
+ * `b·(a/b)^level`, so the drawing carries it (`levelSpacing: "log"`) and no
+ * scale is asked anything: the same stored drawing draws its lines at the
+ * same prices on any axis.
  *
  * The expected numbers here are **independent oracles** — computed at 60
  * digits outside this code base — never the implementation called again.
@@ -89,7 +90,7 @@ describe("log-spaced retracement levels", () => {
    * Oracles from 90-digit arithmetic on the exact doubles. A large level
    * multiplies whatever the logarithm of the swing got wrong, so the swing's
    * logarithm has to be good to the last digits at any magnitude — subtracting
-   * two logarithms near 690 is not (it was 5e-11 off on the first of these).
+   * two logarithms near 690 is not (it is 5e-11 off on the first of these).
    */
   it("hold their precision for a huge level at a huge magnitude, on both sides of where the arithmetic switches", () => {
     close(fibLevelPrice(retracement(5e299, 1e300), 1000), 0.09332636185032189);
@@ -288,9 +289,9 @@ describe("the stored field", () => {
     expect(() => serializeDrawings([broken])).toThrow();
   });
 
-  // An unknown field NAME has always been dropped quietly. An unknown VALUE of a
-  // known field used to fail the predicate — and one fib took every saved
-  // drawing with it. It is read the way an unknown field is: dropped.
+  // An unknown field NAME is dropped quietly. An unknown VALUE of a known
+  // field failing the predicate would let one fib take every saved drawing
+  // with it. It is read the way an unknown field is: dropped.
   it("does not kill the ledger when a future build wrote a spacing this one does not know", () => {
     const trend = { type: "trend", id: "t", a: { x: 0, price: 1 }, b: { x: 1, price: 2 } };
     const fib = { type: "fib", id: "f", a: { x: 0, price: 100 }, b: { x: 1, price: 200 }, levelSpacing: "sqrt" };

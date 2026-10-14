@@ -1,9 +1,8 @@
 /**
- * `levelSpacing` could be set through `add` and `update` and by nothing a
- * hand does: a Fibonacci drawn with the pointer is born with its type, id and
- * anchors, and nothing else.
- * The defect this answers was seen on a chart, by someone drawing — so the
- * tool takes what a hand-drawn drawing of each kind is born with.
+ * Without defaults, `levelSpacing` can be set through `add` and `update`
+ * and by nothing a hand does: a Fibonacci drawn with the pointer is born
+ * with its type, id and anchors, and nothing else. So the tool takes what a
+ * hand-drawn drawing of each kind is born with.
  */
 import type { LineDataPoint } from "@finchart/core";
 import { ContractError, createPlotModel, lineSeries } from "@finchart/core";

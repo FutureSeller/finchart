@@ -147,7 +147,7 @@ describe("style reading", () => {
       "rgba(59, 130, 246, 0.08)",
       // Badge text color (BADGE_TEXT_COLOR) — a code constant with no
       // variable, so it can't be fed a sentinel. If it leaks into a canvas
-      // command, it's caught here (S1 — closing the blind spot).
+      // command, it's caught here.
       "#ffffff",
     ];
 

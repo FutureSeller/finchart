@@ -2,7 +2,7 @@
  * The drawing rail down the left — one set of buttons, acting on the
  * **focused chart**.
  *
- * Persisting drawings (the localStorage round trip) moved into the instance,
+ * Persisting drawings (the localStorage round trip) lives in the instance,
  * because a tool lives exactly as long as its chart. What is left here is the
  * buttons, plus a subscription that mirrors the focused chart's state (mode and
  * selection) into aria. Deleting is not a separate API — it **synthesizes a
@@ -63,10 +63,6 @@ export function installRail(
          * without handing focus back **Esc, Delete, `]` and `[` are all dead**
          * — and turning a tool on, changing your mind, and pressing Esc is the
          * most common way anyone cancels.
-         *
-         * The separate *"Cursor (cancel drawing)"* button on this rail was a
-         * workaround for that symptom — Esc was out of reach, so a button was
-         * sold in its place.
          */
         chart.keyboardHost.focus();
       }),

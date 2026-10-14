@@ -112,8 +112,8 @@ describe("headLookback — the declared door", () => {
   });
 
   it("declines a head longer than the sliced prefix — 1:1 is enforced, not inferred", () => {
-    // A non-1:1 calc that emits MORE outputs than inputs used to slip a
-    // corrupted stitch into the node whenever its length landed inside
+    // A non-1:1 calc that emits MORE outputs than inputs would slip a
+    // corrupted stitch into the node whenever its length lands inside
     // [count, count + tail]; the strict per-branch check declines it and
     // the full path answers with the calc's own honest output.
     const calls = { full: 0 };

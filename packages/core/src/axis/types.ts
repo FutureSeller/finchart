@@ -83,9 +83,9 @@ export interface TickStrategyContext {
  * draws what the strategy returns without choosing among it.
  *
  * **The choosing is the strategy's because only it knows what a tick is
- * worth.** A frame that snapped ticks onto bars and thinned them by pixel
- * after they were labelled kept whichever was closer or earlier, and
- * dropped "Feb" for the 31st of January in front of it. So the context
+ * worth.** A frame that snaps ticks onto bars and thins them by pixel
+ * after they are labeled keeps whichever is closer or earlier, and drops
+ * "Feb" for the 31st of January in front of it. So the context
  * carries what the frame alone knows — where a value is drawn, and which
  * bar a boundary lands on — and the strategy places, selects, and only
  * then labels, so a boundary that stands for a month outranks one that

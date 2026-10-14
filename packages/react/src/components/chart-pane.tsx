@@ -12,9 +12,8 @@ import { createSeriesPlacement } from './series-collector';
  * later erases the other's setting** — on mount, the child effect runs
  * first so `<YAxis>` wins, but change an unrelated value like `flex` and
  * this component's effect runs, flipping it the other way. With no
- * actual use case, this was removed instead of building machinery to
- * reconcile the two doors — use a `<YAxis>` outside the pane if you need
- * this.
+ * actual use case, there's no prop rather than machinery to reconcile the
+ * two doors — use a `<YAxis>` outside the pane if you need this.
  */
 export interface ChartPaneProps {
   /** The share of leftover vertical space this takes. Defaults to 1. */

@@ -67,7 +67,7 @@ const lineOnly = seriesSpec<LineDataPoint>({ id: "l", series: lineSeries() });
 // @ts-expect-error: SeriesSpec<LineDataPoint> is not a SeriesSpec<OHLC>
 export const mixed: SeriesSpec<OHLC>[] = [price, lineOnly];
 
-// ── registration type: three branches, so an invalid combination cannot be written (2026-08-09) ──
+// ── registration type: three branches, so an invalid combination cannot be written ──
 
 import type { Source } from "../../data";
 import type { SeriesRegistration } from "../../registration";
@@ -99,8 +99,8 @@ const fromInput: SeriesRegistration<LineDataPoint> = {
 void [plain, derived, fromInput];
 
 /** This is the reason this split exists — with a flat interface, this
- * line used to pass the compile, and at runtime the line series read
- * OHLC's .y and got undefined. */
+ * line would pass the compile, and at runtime the line series would read
+ * OHLC's .y and get undefined. */
 // @ts-expect-error: candles cannot feed a line series without a derive
 const wrong: SeriesRegistration<OHLC> = { series: lineSeries(), data: candles };
 void wrong;

@@ -2,16 +2,15 @@
  * `useInfiniteHistory` + `<InfiniteHistory>` — history whose place outlives
  * the chart.
  *
- * A consumer used to carry it by hand: the held bars in a ref, the paging
- * token caught by wrapping its own fetch, a load counter to drop late
- * pages, the loader lifted out through an effect for its status. Two
- * defects came out of that glue in a row — a remount asked for the first
- * page again on top of bars that held it, and a page for the previous
- * symbol landed on the new one. Contracts: pages land in `data`; a
- * remounted chart resumes from the first bar held and the last token; a
- * load pages with the fetch it was reset with and nothing else; a page for
- * a load `reset` replaced is dropped; an end stays an end; the status is
- * state.
+ * Without them a consumer carries it by hand: the held bars in a ref, the
+ * paging token caught by wrapping its own fetch, a load counter to drop
+ * late pages, the loader lifted out through an effect for its status. That
+ * glue is easy to get wrong — a remount can ask for the first page again
+ * on top of bars that hold it, or a page for the previous symbol can land
+ * on the new one. Contracts: pages land in `data`; a remounted chart
+ * resumes from the first bar held and the last token; a load pages with the
+ * fetch it was reset with and nothing else; a page for a load `reset`
+ * replaced is dropped; an end stays an end; the status is state.
  */
 import type { CoordinateAccessor, LineDataPoint, Plot } from '@finchart/core';
 import { immediateScheduler, lineSeries } from '@finchart/core';

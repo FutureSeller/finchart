@@ -52,8 +52,8 @@ table above and file the badge under canvas, you diagnose it backwards.
 | DOM + `var()` (axis labels, tooltip, legend) | Plain CSS rules apply | **Immediate** |
 | DOM + resolved value (badge, price-line label) | **Plain CSS rules apply** | `requestRender()` |
 
-A typo on the DOM side won't fit on one line. Of all six DOM leaves, the
-sentence was **true of only four**:
+A typo on the DOM side won't fit on one line. Of all six DOM leaves, a typo
+shows **the value inherited from the page** for only four:
 
 | Property the DOM leaf declares | With a typo in it |
 |---|---|
@@ -65,7 +65,7 @@ sentence was **true of only four**:
 > grid and candles disappear.** To put one value on both paths, pick a syntax
 > **the canvas reads too** — `#rrggbb`, `rgb()`.
 >
-> The canvas side reads *"nothing is drawn"* because it is the fix for
+> The canvas side reads *"nothing is drawn"* because it guards against
 > **inheriting the color of whatever was drawn just before and painting in the
 > wrong color** — `e2e/specs/canvas.spec.ts` holds it with real Chromium pixels.
 

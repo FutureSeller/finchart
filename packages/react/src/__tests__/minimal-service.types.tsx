@@ -2,7 +2,7 @@
  * **The README's 60-second example compiles here.**
  *
  * A doc's example is just a string, so it goes stale silently as the API
- * grows — `magnet` and `position` had actually dropped out that way. So the
+ * grows — an option can drop out of it that way unnoticed. So the
  * minimal program for "one production-shaped chart" lives here, and `tsc`
  * guards it. Change the README and this file has to change with it; fail to
  * and the build breaks.
@@ -33,9 +33,9 @@ declare const volume: HistogramPoint[];
 /**
  * **This is not a place to erase with `declare`.**
  *
- * It used to be `declare const ma: LineDataPoint[]` — the JSX was guarded,
- * but exactly where consumers got stuck was "so where do I get `ma` from,"
- * and the machine's coverage fell short of the README's promise ("this
+ * `declare const ma: LineDataPoint[]` would guard the JSX but skip exactly
+ * where consumers get stuck — "so where do I get `ma` from" — and the
+ * machine's coverage would fall short of the README's promise ("this
  * example is machine-guarded"). Data (`bars`, `volume`) is fair game for
  * `declare` since the consumer brings it, but the derive is **knowledge the
  * example has to teach**.
@@ -90,8 +90,8 @@ export const minimalService = (
 );
 
 /**
- * `MarkersProps` — the one component props type that used to be anonymous.
- * The wrapper around `<Markers>` couldn't name its own props type.
+ * `MarkersProps` — named, so a wrapper around `<Markers>` can name its own
+ * props type.
  */
 import type { MarkersProps } from '../components';
 export const markerProps: MarkersProps = { items: [] };

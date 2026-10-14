@@ -13,8 +13,8 @@ Kagi's reversal and Point & Figure's box from the tape's own volatility.
 one does on a tick. One calculation can feed several drawings
 (`macd.out.signal`), and the `attach*` plugins reduce setup and teardown to a
 single line. Oscillators (RSI, Stochastic) also wire up a fixed 0–100 axis and
-reference lines when they get their own pane. The whole package was built
-without the core API growing for it — that's the proof those extension points
+reference lines when they get their own pane. The whole package uses
+no core API made for it — that's the proof those extension points
 are real.
 
 ## Install
@@ -176,9 +176,9 @@ as `tone` (`>=` is `up`, so a tie is up; the first value and a bar right
 after a gap have none), and the theme picks the colour through
 `--chart-histogram-up` / `--chart-histogram-down`. Passing one colour to the
 `attach*` (`colors.histogram`, `color`, `colors.momentum`) keeps every bar in
-that colour, as before. One known limit: with decimation on (the default is
-M4), a bar's tone was judged against its neighbour in the data, not the one
-drawn next to it on screen.
+that colour. One known limit: with decimation on (the default is M4), a
+bar's tone comes from its neighbour in the data, not the one drawn next to
+it on screen.
 
 Squeeze Momentum's two squeeze states are **marker rows**, not values:
 `squeezeOn` and `squeezeOff` are `0` while their state holds and `null`
@@ -290,7 +290,7 @@ Other exports with a row of their own, not computed nodes:
 |---|---|
 | `volumeProfile` | a pane decoration — the traded volume over the visible range, in `VOLUME_PROFILE_DEFAULTS.bins` buckets |
 | `heikinAshi` | a derivation `OHLC[] → OHLC[]` — feed the result to a candle series; `heikinAshiLast` is its tail, the `deriveLast` for that registration (`addSeries({ derive: heikinAshi, deriveLast: heikinAshiLast })`), so a tick folds one bar instead of the whole tape — there is no head door, a page changes bar 0's seed and every open after it |
-| `renko` | a derivation `OHLC[] → RenkoBrick[]` — bricks on their own x axis (brick index), not time; register it with `derive` so ticks go in as candles (the guide's "Price-axis transforms"); a close 2⁴⁷ bricks or more from zero is refused — past that a brick is under the doubles' spacing at that price and could not move the level; a brick over half the largest double is refused too — its two-brick reversal would not fit the doubles |
+| `renko` | a derivation `OHLC[] → RenkoBrick[]` — bricks on their own x axis (brick index), not time; register it with `derive` so ticks go in as candles (the guide's "Price-axis transforms"); a close 2⁴⁷ bricks or more from zero is refused — a margin that keeps every brick well above the doubles' spacing at that price; a brick over half the largest double is refused too — its two-brick reversal would not fit the doubles |
 | `lineBreak` | a derivation `OHLC[] → LineBreakBlock[]` — three-line break (`LINE_BREAK_DEFAULTS.lines`), blocks on their own x axis like renko's bricks; a reversal needs the close beyond the extreme of the last `lines` lines and opens where the last line opened (Nison's turnaround line) |
 | `kagi` | a derivation `OHLC[] → KagiPoint[]` — one point per vertex on its own x axis, the last point the line's live end; `reversal` (an absolute price distance — a positive finite number, required) turns the line; `tone` is yang/yin (thick/thin), changing at `breakY` where a segment crosses the previous shoulder or waist |
 | `kagiSeries` | a series for `kagi`'s points — one stepped line (the corner at the new x, the old price) at two widths, yang thick and yin thin (`KAGI_STYLE_SPEC`: the widths are its own, the colours the candle's), split inside a stroke at `breakY`; declares M4 decimation at four points per pixel (a pixel column keeps its first, lowest, highest and last vertex as they are — every vertex is a local extreme, so thinning by count would drop turns); a tone run that begins and ends inside one pixel column can still vanish with the vertices M4 leaves out, as a toned histogram bar's colour can |

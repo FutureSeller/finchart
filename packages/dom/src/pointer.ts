@@ -151,8 +151,8 @@ export class PointerInteractions implements InteractionHandler {
     /**
      * **The chart takes horizontal gestures and leaves vertical ones to the
      * page.** A pan is `clientX` only; with `none` here a vertical swipe
-     * over a chart that is one block of a phone's page did nothing and
-     * scrolled nothing. `pan-y` hands the vertical swipe to the browser —
+     * over a chart that is one block of a phone's page would do nothing and
+     * scroll nothing. `pan-y` hands the vertical swipe to the browser —
      * which then cancels the pointer, so the crosshair is cleared on
      * `pointercancel` the same as on leaving. What this gives up on touch
      * is dragging the value axis vertically; a mouse is unaffected.

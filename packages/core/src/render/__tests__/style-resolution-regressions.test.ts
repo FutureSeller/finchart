@@ -1,8 +1,8 @@
 /**
- * A collection of regression checks for defects caught during a full audit
- * of `packages/core/src/render`. This whole batch shares one character: the
- * same rule was written differently in different places, and only the spot
- * fixed last was correct.
+ * Regression checks for style-resolution defects in
+ * `packages/core/src/render`. This whole batch shares one character: the
+ * same rule written differently in different places, so the places drift
+ * apart and only one of them stays correct.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -51,9 +51,9 @@ function rejectingCanvasContext(initial = "44px Inter") {
 describe("drawLine inside a fallback — the replay path bypasses the door", () => {
   /**
    * The polygon guard exists for "if the same input ends up different
-   * depending on the surface, that's not a contract" — but its sibling,
-   * the line, was never fixed to match. The `custom` fallback path bypasses
-   * `drawLine()`'s door-level two-point check entirely.
+   * depending on the surface, that's not a contract" — and its sibling, the
+   * line, has to match. The `custom` fallback path bypasses `drawLine()`'s
+   * door-level two-point check entirely.
    */
   it("should not crash commit() on an empty polyline inside a fallback", () => {
     const { renderer: r, context } = renderer();
@@ -263,10 +263,10 @@ describe("applyFont — returns the string that actually landed and remembers th
   });
 
   /**
-   * The read-back cache was removed for color, but font was never checked
-   * the same way. The fast path only holds "when the value changed," so
-   * the common case where the font stays the same (every axis label in a
-   * frame shares one font) was instead falling onto the slow path.
+   * Font caches its verdict the same way color does. The fast path only
+   * holds "when the value changed," so without the cache the common case
+   * where the font stays the same (every axis label in a frame shares one
+   * font) falls onto the slow path.
    */
   it("should not read back the context once the verdict is known", () => {
     const verdicts = new FontVerdicts();
@@ -344,7 +344,7 @@ describe("measured vs. drawn — they must agree on the font even in a demoted f
     r.commit();
 
     const box = context.calls.find((call) => call.method === "fillRect");
-    // What actually landed is 11px — this used to measure the requested string and come out at the constant fallback, 12.
+    // What actually landed is 11px — measuring the requested string would come out at the constant fallback, 12.
     expect(box?.args?.[3]).toBe(11);
   });
 
@@ -361,8 +361,9 @@ describe("measured vs. drawn — they must agree on the font even in a demoted f
 describe("resolveStyle — anything that isn't a valid spec is a contract error", () => {
   /**
    * `styleVars` and `cssVarExpr` are guarded with `requireObject`, but
-   * `resolveStyle`, which runs every frame, was left unguarded — a typo in
-   * a third party's spec broke through rAF as `Cannot use 'in' operator…`.
+   * `resolveStyle`, which runs every frame, needs the guard too — a typo in
+   * a third party's spec would break through rAF as
+   * `Cannot use 'in' operator…`.
    */
   it("should throw a ContractError, not a TypeError, for a resolved style", () => {
     expect(() => resolveStyle({ color: "#fff" }, () => "")).toThrow(
@@ -379,9 +380,9 @@ describe("empty value — both doors must render the same verdict", () => {
   const SPEC = { color: { css: "--c", fallback: "#16a34a" } };
 
   /**
-   * `readVar` falls back to the default for `""`, but `coerceLeaf` passed
-   * it straight through — that value then gets rejected by `applyColor`
-   * and turns transparent, making the series disappear. That's the
+   * `readVar` falls back to the default for `""`; a `coerceLeaf` that
+   * passes it straight through hands it to `applyColor`, which rejects it
+   * and turns it transparent, making the series disappear. That's the
    * opposite of falling back to the default.
    */
   it.each([[""], ["   "]])(
@@ -399,11 +400,10 @@ describe("empty value — both doors must render the same verdict", () => {
 });
 
 /**
- * There wasn't a single test for the numeric branch of the override door.
- * `3` should clamp, `"60%"` should fall back, `NaN` should fall back — and
- * none of the three were mechanically checked. Reverting
- * `given != null ? coerceLeaf(given, node) : readVar(...)` to its old,
- * unvalidated form still left the suite entirely green.
+ * The numeric branch of the override door, checked mechanically. `3`
+ * should clamp, `"60%"` should fall back, `NaN` should fall back — so
+ * reducing `given != null ? coerceLeaf(given, node) : readVar(...)` to an
+ * unvalidated form must turn the suite red.
  */
 describe("the override door renders the same verdict as the CSS door", () => {
   const SPEC = {
@@ -438,9 +438,10 @@ describe("the override door renders the same verdict as the CSS door", () => {
 
 describe("gradient painter — the guard itself must not fail", () => {
   /**
-   * `JSON.stringify(params)` threw a `TypeError` on a circular reference
-   * (outside the contract's vocabulary, and it broke through `commit()`),
-   * and on a large polygon the message ran past 90,000 characters.
+   * A bare `JSON.stringify(params)` throws a `TypeError` on a circular
+   * reference (outside the contract's vocabulary, and it breaks through
+   * `commit()`), and on a large polygon the message runs past 90,000
+   * characters.
    */
   it("should throw a ContractError for circular params", () => {
     const context = fakeCanvasContext();
@@ -523,8 +524,8 @@ describe("clip boundary — survives even when a painter throws off the stack", 
 
 describe("ColorVerdicts — exported from the barrel", () => {
   /**
-   * It sits in `applyColor`'s public signature, but with no way to name
-   * it, a third-party painter had no way to opt into the cached fast path.
+   * It sits in `applyColor`'s public signature; with no way to name it, a
+   * third-party painter could not opt into the cached fast path.
    */
   it("should let a third-party painter opt into the cached path", () => {
     const verdicts = new ColorVerdicts();

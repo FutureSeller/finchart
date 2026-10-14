@@ -125,8 +125,8 @@ export function requireRange(
  * For data gates. Throws `DataError` if not an array.
  *
  * A `.d.ts` is advice, not enforcement — a failed `fetch` hands you
- * `undefined`, and `setData(null)` used to throw a raw `TypeError` that
- * leaked an internal variable name. The shape of a server response really
+ * `undefined`, and unguarded, `setData(null)` throws a raw `TypeError` that
+ * leaks an internal variable name. The shape of a server response really
  * does go wrong at runtime, so it's something the consumer can catch.
  */
 export function requireDataArray<T>(value: readonly T[], label: string): readonly T[] {
@@ -184,8 +184,8 @@ export function requireObject<T>(value: T, label: string): T {
  * For data gates. Throws `DataError` if a point isn't an object.
  *
  * The per-element check doesn't add a new loop — it's called inside the
- * O(n) pass the ordering check already runs. This is where a single `null`
- * element used to blow up with a `TypeError` in `coordinates.getX(point)`.
+ * O(n) pass the ordering check already runs. Without it, a single `null`
+ * element blows up with a `TypeError` in `coordinates.getX(point)`.
  */
 export function requireDataPoint(value: unknown, index: number, label: string): void {
   if (typeof value !== "object" || value === null) {

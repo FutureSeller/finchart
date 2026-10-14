@@ -71,7 +71,7 @@ describe("lineSeries and areaSeries take a coordinate accessor", () => {
     expect(polygon?.type === "drawShape" ? polygon.shape.fill : null).toBe("#abcdef");
   });
 
-  it("the style-only call is unchanged", () => {
+  it("the style-only call maps y straight from point.y and keeps its style", () => {
     const data: LineDataPoint[] = [
       { x: 0, y: 1 },
       { x: 1, y: 2 },

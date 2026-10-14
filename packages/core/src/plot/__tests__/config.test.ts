@@ -1,7 +1,6 @@
 /**
  * The config's three doors, tested with no stage — taking one in (copy),
- * changing one (merge), and the numeric guards. These rules used to be
- * checkable only by standing up a whole chart and reading the plot area.
+ * changing one (merge), and the numeric guards.
  */
 import { describe, expect, it } from "vitest";
 import { ContractError } from "../../primitives";
@@ -99,7 +98,7 @@ describe("mergeOptions — clearing a bar-spacing override", () => {
     expect(Object.hasOwn(both, "maxBarSpacing")).toBe(false);
   });
 
-  it("should keep the standing value on undefined and take a number as before", () => {
+  it("should keep the standing value on undefined and take a given number", () => {
     const held = mergeOptions(resolveConfig(base()), { minBarSpacing: 3 });
     expect(mergeOptions(held, { minBarSpacing: undefined }).minBarSpacing).toBe(3);
     expect(mergeOptions(held, { minBarSpacing: 7 }).minBarSpacing).toBe(7);
@@ -157,11 +156,10 @@ describe("checkPlotNumbers", () => {
   });
 
   /**
-   * The old exemption said rejecting negatives "would break something
-   * that currently works" — measured false: a negative minBarSpacing
-   * turns the span clamp in x-viewport into an always-true branch and
-   * silently locks zoom-out at the current width. Zero stays legal: it
-   * is the documented "no limit in that direction".
+   * Rejecting negatives breaks nothing that works — accepting them does:
+   * a negative minBarSpacing turns the span clamp in x-viewport into an
+   * always-true branch and silently locks zoom-out at the current width.
+   * Zero stays legal: it is the documented "no limit in that direction".
    */
   it("should reject a negative bar spacing but accept zero", () => {
     expect(() => checkPlotNumbers({ minBarSpacing: -1 })).toThrow(

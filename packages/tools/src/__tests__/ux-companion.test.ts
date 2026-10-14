@@ -7,7 +7,7 @@ import type { DrawingSpace } from "../space";
 import { drawingChart } from "./drawing-chart.fixture";
 
 /**
- * The UX that rides along with thirteen kinds: the crosshair keeps
+ * The UX that rides along with every drawing kind: the crosshair keeps
  * reading prices while you draw or drag, a snapped anchor shows a ring
  * so you know it stuck, a selected drawing is drawn heavier than its
  * neighbors (handles alone vanish in a crowd), and when two handles

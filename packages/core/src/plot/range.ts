@@ -27,8 +27,8 @@ export function expandRange({ min, max }: Range, ratio: number): [number, number
  * know which axis it is.
  *
  * A caller that invokes `expandRange` directly applies linear arithmetic
- * to a log axis too, which used to push the lower bound past zero once
- * `max/min > 11x` — `LogScale` then rejected the result.
+ * to a log axis too, which pushes the lower bound past zero once
+ * `max/min > 11x` — `LogScale` then rejects the result.
  */
 export function expandFor(
   scale: Scale,

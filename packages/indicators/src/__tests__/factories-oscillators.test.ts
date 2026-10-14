@@ -1,9 +1,12 @@
 /**
- * Stochastic RSI, MFI, Ultimate Oscillator — wave 1. Exact values pinned
- * with short scripts checked by hand, the conventions at their edges
- * (first bar, zero denominators, a bar without volume), and Stochastic RSI's
+ * Oscillator factories: Stochastic RSI, MFI, Ultimate Oscillator, Awesome
+ * Oscillator, momentum, Elder Ray and Squeeze Momentum. Exact values pinned
+ * with short scripts checked by hand, the conventions at their edges (first
+ * bar, zero denominators, a bar without volume), and Stochastic RSI's
  * composition checked against the package's own rsi and array kernels — the
  * same folds the node runs, so not an independent check of their values.
+ * Other oscillators sit in factories.test.ts (RSI, stochastic, MACD), the
+ * high-low set (CCI, Williams %R) and the parity set (ROC, TRIX, PSY, KDJ).
  */
 import type { HistogramPoint, LineDataPoint, OHLC, Source } from "@finchart/core";
 import { ContractError, M4Decimation } from "@finchart/core";

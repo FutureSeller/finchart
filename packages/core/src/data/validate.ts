@@ -79,7 +79,7 @@ export interface SeriesDataIssue {
  *
  * `report === null` is throw mode: the first violation throws `DataError`
  * and nothing is allocated on the way there — this is the ingestion path a
- * derived tick rides, so the per-point work must stay what it always was
+ * derived tick rides, so the per-point work must stay exactly this
  * (shape, finite x, per-accessor values, gap watch, order). With a
  * `report`, every violation is handed over and the walk continues; a point
  * whose shape is broken is skipped past the reads that would blow up on it.
@@ -198,7 +198,7 @@ export function scanSeriesData<T extends BaseDataPoint>(
  * and a lone point is its own edge) → finite x → the accessor's own
  * values. **One body for two doors**: the whole-array walk calls it per
  * point, and `replaceLast` — the tick path — calls it once on the bar it
- * replaces. A second copy used to live on the tick path and could drift.
+ * replaces. A second copy on the tick path could drift.
  *
  * Returns the point's x so the caller can carry on with the rules that
  * need a neighbour (gaps, order) — a scalar, so the tick path allocates
@@ -243,7 +243,7 @@ export function checkPoint<T extends BaseDataPoint>(
   report: ((issue: SeriesDataIssue) => void) | null,
   edge: boolean,
 ): number | null {
-  // Shape before any read — one null element used to blow up inside the
+  // Shape before any read — otherwise one null element blows up inside the
   // accessor as a raw TypeError.
   if (typeof point !== "object" || point === null) {
     fail(
@@ -259,7 +259,7 @@ export function checkPoint<T extends BaseDataPoint>(
   // `getX: p => p.time.valueOf()` meeting `time: null`) is reported as the
   // fact it is: this point can't be read. Throw mode reads straight; the
   // ingestion path carries no try/catch, and a throwing accessor there is
-  // the consumer's own TypeError, exactly as before.
+  // the consumer's own TypeError, unwrapped.
   if (edge) {
     let y: number | null | undefined;
     if (report === null) {

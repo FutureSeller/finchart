@@ -22,7 +22,7 @@ export interface AreaSeriesStyle {
    * The color the fill touches at the bottom of the pane. Supplying a
    * value turns the fill into a vertical gradient — from `fill` (top) to
    * this color (bottom), across the pane's full height. An empty string
-   * keeps it a flat color, as before.
+   * keeps it a flat color.
    */
   fillBottom: string;
 }

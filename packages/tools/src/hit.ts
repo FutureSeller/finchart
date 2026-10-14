@@ -207,10 +207,9 @@ export function gripAt(
   const { area } = space;
   /**
    * No area, nothing to grab. That's the state before the first frame —
-   * the pane's area is empty until render allocates it, and until then
-   * the boundary check below would let the single point (0,0) through.
-   * If that one point actually got grabbed, a drag would start against a
-   * coordinate system that doesn't exist.
+   * the pane's area is empty until render allocates it — and a drag
+   * started then would run against a coordinate system that doesn't exist
+   * yet.
    */
   if (area.right <= area.left || area.bottom <= area.top) return null;
 
@@ -220,9 +219,9 @@ export function gripAt(
    * click hit-testing and cursor-ownership checks would point at
    * different panes: selection would work on that pixel but Delete
    * wouldn't fire. Uses the same exclusive (`< bottom`) rule as
-   * `insideArea` in `tools.ts`.
+   * `ownsPoint` in `tools.ts`.
    *
-   * Leaves hit-testing's `contains` (`geometry.ts`) alone — there,
+   * Leaves core's `contains` (`primitives/geometry.ts`) alone — there,
    * including the boundary line is correct. This is a different spot,
    * dealing with exclusivity between panes.
    */

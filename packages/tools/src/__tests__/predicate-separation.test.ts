@@ -1,6 +1,6 @@
 /**
  * Predicate separation. The disease that shows up when a single
- * `insideArea` handles all three roles: (1) at boundary y, drawing
+ * predicate handles all three roles: (1) at boundary y, drawing
  * leaks through while hit-testing still catches it (half-open vs.
  * closed) (2) a miss on another toolbox's pane clears my selection,
  * making `selection()` depend on registration order (3) mid-gesture, a
@@ -45,8 +45,8 @@ describe("(1) drawing is inside the pane (closed) -- it doesn't leak into pan at
     main.begin("trend");
     const consumed = press({ px: (area.left + area.right) / 2, py: area.bottom }).down;
 
-    // Same rule as hit-testing (closed) -- the old half-open version
-    // returned false here and leaked into pan.
+    // Same rule as hit-testing (closed) -- a half-open edge would
+    // return false here and leak into pan.
     expect(consumed).toBe(true);
   });
 });

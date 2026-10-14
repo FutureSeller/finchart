@@ -169,9 +169,8 @@ describe("barIndexX", () => {
  * The union of several sorted slices. Using a cursor sweep instead of
  * `sources.flat().sort()` relies on the fact that each registration is
  * already sorted — ascending x is the data contract. It has to preserve
- * all three things sorting
- * used to guarantee: ascending order, dedup within a series, and dedup
- * across series.
+ * all three things a sort would guarantee: ascending order, dedup within
+ * a series, and dedup across series.
  */
 describe("x union across multiple series", () => {
   /** Give the domain plenty of room so indices can be read off directly. */
@@ -246,10 +245,11 @@ describe("x union across multiple series", () => {
 
 /**
  * A scan pass must not change the answer, and passes must not interfere with
- * each other. Back when the cursor was shared across one mapping, "what did
- * we ask yesterday" would fork the code path — tests protected the answer
- * being the same, but nothing in the structure guaranteed it. Now `toDomain`
- * is pure and the cursor belongs to whichever pass `scanToDomain()` opened.
+ * each other. A cursor shared across one mapping would let "what did we
+ * ask yesterday" fork the code path — tests could protect the answer
+ * being the same, but nothing in the structure would guarantee it. So
+ * `toDomain` is pure and the cursor belongs to whichever pass
+ * `scanToDomain()` opened.
  * What's checked here are that structure's three promises: any query order
  * matches the pure answer, passes are independent of each other, and a
  * rebuild mid-pass doesn't blow up.
@@ -283,8 +283,8 @@ describe("scanToDomain", () => {
   /**
    * Independence between passes — with a shared cursor hint, interleaving
    * two scans would trample each other's cursor, and the resulting
-   * backtracking blew up thousands of times per frame. Now there's no way
-   * for one pass to even know the other exists.
+   * backtracking would run thousands of times per frame. Here there's no
+   * way for one pass to even know the other exists.
    */
   it("interleaving two passes doesn't change either one's answers", () => {
     const mapping = mounted();

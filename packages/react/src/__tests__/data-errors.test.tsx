@@ -3,7 +3,8 @@
  * of it, so a refusal leaves the previous data on the chart. With `onError`
  * the container reports it and keeps drawing that data — a live screen
  * survives one bad tick. Without it, the error goes to the nearest error
- * boundary, as before: a bug is never silent by default.
+ * boundary, like an error thrown in an effect: a bug is never silent by
+ * default.
  */
 import { ContractError, DataError, type LineDataPoint, type Plot } from '@finchart/core';
 import { lineSeries } from '@finchart/core';

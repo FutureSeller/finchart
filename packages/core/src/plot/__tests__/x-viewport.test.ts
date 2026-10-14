@@ -375,7 +375,7 @@ describe("bar spacing limits", () => {
   it("should stop at the floating-point floor instead of throwing", () => {
     // No limit set (the continuous coordinate default) — only the
     // arithmetic floor remains. This center is a value that actually
-    // threw before the guard was added (329 out of 500 scanned values threw).
+    // throws without the guard (329 out of 500 scanned values do).
     const s = setup();
     s.load([-420.41, -360.41]);
     s.viewport.fit();
@@ -666,9 +666,9 @@ describe("zoom center clamp", () => {
     s.viewport.fit();
     s.viewport.pan(10_000); // future boundary — [800, 1600], last bar at the left edge
 
-    // Anchor on empty space (1500) and zoom in repeatedly — this used to
-    // push the data off to the left until it vanished. Now the center
-    // gets clamped to 800 (the last bar), so it can no longer be lost.
+    // Anchor on empty space (1500) and zoom in repeatedly — unclamped, this
+    // pushes the data off to the left until it vanishes. The center gets
+    // clamped to 800 (the last bar), so the data cannot be lost.
     for (let i = 0; i < 8; i++) s.viewport.zoom(1.5, 1500);
 
     const [min] = s.domain();

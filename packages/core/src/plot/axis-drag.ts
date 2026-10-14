@@ -109,7 +109,7 @@ export function axisDragConsumer(target: AxisDragTarget): InputConsumer {
    * toward) the middle of the pane in pixels, and the scale turns them back
    * into values. Scaling values linearly around their midpoint would pull
    * a log axis's lower bound below zero on a zoom-out (rejected, so the drag
-   * did nothing) and zoom a log axis in lopsided.
+   * would do nothing) and zoom a log axis in lopsided.
    *
    * **Just stops when it reaches a range the scale can't live in** — the
    * gesture doesn't throw. When that's rejected, `setValueDomain` changes

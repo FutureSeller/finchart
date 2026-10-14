@@ -1,8 +1,8 @@
 /**
- * `no-amplifier` is a contract, not just a claim — it moves what used to be
+ * `no-amplifier` is a contract, not just a claim — it moves what would be
  * checked by hand (feed a hostile value -> zero state residue by the next
  * frame, command count unchanged) into machine verification. It reads
- * `tag: "no-amplifier"` from `boundary-values`'s `EXEMPT`, so tagging an
+ * `tag: "no-amplifier"` from `exemptions.ts`'s `EXEMPT`, so tagging an
  * entry puts it under this probe's jurisdiction.
  *
  * What the probe checks: a stage that had a door fed a hostile value
@@ -10,9 +10,8 @@
  * where nothing happened at all. If a bad value leaves any trace of state
  * behind, this is where it shows up.
  *
- * Not every door is wired up yet — `UNWIRED` is an exact roster, so if it
- * grows, this fails loudly (a new no-amplifier tag must ship with its
- * feeding recipe).
+ * `UNWIRED` is an exact roster (now empty), so if it grows, this fails
+ * loudly (a new no-amplifier tag must ship with its feeding recipe).
  */
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../data";
@@ -498,7 +497,7 @@ const UNWIRED = [] as const;
 describe("no-amplifier — a bad value leaves no residue", () => {
   /**
    * Derives the feed's scope from the spec tables. Because the series
-   * recipes' numeric slots were written by hand, this fails loudly whenever
+   * recipes' numeric slots are written by hand, this fails loudly whenever
    * a spec gains a new numeric leaf, forcing the recipe to catch up.
    */
   it("series feed's numeric slot count matches the spec table", () => {

@@ -1,6 +1,6 @@
 /**
- * Mistakes a caller can make that used to be accepted and then failed on
- * some later frame, pan or input — each is refused where it is made.
+ * Mistakes a caller can make that, if accepted, would fail on some later
+ * frame, pan or input — each is refused where it is made.
  */
 import { describe, expect, it } from "vitest";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";

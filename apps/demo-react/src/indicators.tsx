@@ -5,8 +5,8 @@ import { sessionStart } from "@finchart/core";
  * **The overlays (MA, BOLL, VWAP) take the declarative `input` lane**: one
  * computation node is built with `useMemo` and its branches (`node.out.*`) ride
  * in as `input`. BOLL's bands and its center line share **one** computation, and
- * the indicator math belongs to `@finchart/indicators` (the app used to
- * reimplement sma, stddev and VWAP by hand — a demo that didn't use the
+ * the indicator math belongs to `@finchart/indicators` (reimplementing sma,
+ * stddev and VWAP by hand would make a demo that doesn't use the
  * library).
  *
  * **The own-pane indicators (RSI, MACD) stay on `attach*`.** They make their own

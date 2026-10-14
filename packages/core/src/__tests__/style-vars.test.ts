@@ -1,6 +1,5 @@
 /**
- * Freezes the set of style variables — the baseline for the StyleSpec
- * migration.
+ * Freezes the set of style variables.
  *
  * A typo in a CSS variable key falls back to the default value silently —
  * in the node test environment the reader always returns "", so a typo
@@ -10,9 +9,8 @@
  * shows up as a two-line diff (`--chart-lien-width` appears,
  * `--chart-line-width` disappears).
  *
- * Every commit made during the refactor must leave this snapshot
- * unchanged — a commit that changes it has added or removed a variable,
- * and that fact must show up in the diff.
+ * A refactor must leave this snapshot unchanged — a change to it means a
+ * variable was added or removed, and that fact must show up in the diff.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
@@ -114,9 +112,9 @@ function cssBearingFiles(root: string): string[] {
     "coverage",
     "test-results",
     ".vitepress",
-    // typedoc output (435 of 501 locally were this — clean CI and the
-    // local machine were running on different stages while both stayed
-    // green).
+    // typedoc output (a local build leaves hundreds of files here that a
+    // clean CI checkout lacks, so the two would scan different sets while
+    // both stay green).
     "api",
   ]);
   const KEEP = /\.(md|css|html|vue)$/;
@@ -258,18 +256,16 @@ describe("the set of style variables", () => {
   /**
    * **Sharing is allowed, but the fallback has to match too.**
    *
-   * The assertion above used to say only "more than one owner is fine."
-   * That let `--chart-label-font-family` end up with **two different
-   * defaults** — `inherit` for axis, tooltip, and legend, `sans-serif` for
-   * the marker. In an app using a company font, only the marker's text
-   * failed to follow the page font, while `docs/theme.md` was flatly
-   * stating that *"the default is `inherit`, so if you set nothing it
-   * follows the page font."* **The docs were only true for three out of
-   * five.**
+   * The assertion above allows more than one owner. Without this check a
+   * shared variable such as `--chart-label-font-family` could default to
+   * `inherit` for axis, tooltip and legend but `sans-serif` for the marker,
+   * and in an app using a company font only the marker's text would miss
+   * the page font, while `apps/docs/guide/theme.md` says the family
+   * defaults to `inherit` and follows the page font when nothing is set.
    *
-   * What diverged was not the name but the **value**, so all six existing
-   * layers passed. A shared variable looks like "one token" to a consumer,
-   * so its default has to be one value too.
+   * Such a split differs in the **value**, not the name, so the name checks
+   * above pass it. A shared variable looks like one token to a consumer, so
+   * its default has to be one value too.
    */
   it("should give a shared variable one fallback", () => {
     const fallbacks = new Map<string, Map<string, string[]>>();
@@ -304,17 +300,14 @@ describe("the set of style variables", () => {
   });
 
   /**
-   * **A machine now enforces the suffix rule** (design review).
+   * **The suffix rule, checked by machine.**
    *
-   * `docs/theme.md` teaches this as a table — `-width` is a px scalar,
-   * `-ratio` is unitless 0..1 (clamped outside that range), everything
-   * else is color, dash, or font. A full cross-check found it **true
-   * today** (all 14 numeric leaves end in `-width`, `-radius`, or
-   * `-ratio`, and all three `-ratio`s have `range: [0,1]`). But the only
-   * thing enforcing it was a person.
-   *
-   * A wick bug (a numeric leaf on a color token) once looked exactly like
-   * this rule breaking, and no machine cried out then. Now it does.
+   * `apps/docs/guide/theme.md` documents the variables in a table whose
+   * names follow a rule: `-width` is a px scalar, `-ratio` is unitless 0..1
+   * (clamped outside that range), everything else is color, dash, or font.
+   * Every numeric leaf in core's specs must end in `-width`, `-radius`, or
+   * `-ratio`, and every `-ratio` must have `range: [0,1]`, so a numeric leaf
+   * named like a color token fails here instead of in a reader's stylesheet.
    */
   it("should keep every numeric leaf's name matching its unit rule", () => {
     const NUMERIC_SUFFIX = /-(width|radius|ratio)$/;
@@ -368,18 +361,17 @@ describe("the set of style variables", () => {
   /**
    * **Does the assigned value match the leaf's type?**
    *
-   * Up through this layer, all six checks looked only at **names**. So
-   * `--chart-candle-wick` — a numeric leaf (`wickWidth`, fallback 1) — had
-   * **five separate spots** in this repo assigning it a color, including
-   * the *"a validated starting point"* palette in `docs/theme.md`, and
-   * since `parseFloat("#64748b")` is NaN, every one of them **silently
-   * dropped back to the fallback of 1**. Those lines were doing nothing.
+   * The checks above read only core's declarations (names and fallbacks),
+   * never what a stylesheet assigns. A numeric leaf such as
+   * `--chart-candle-wick-width` (`wickWidth`, fallback 1) could still be
+   * assigned a color in any palette, the one in `apps/docs/guide/theme.md`
+   * included, and since `parseFloat("#64748b")` is NaN, the value would
+   * **silently drop back to the fallback of 1**: the line would do nothing.
    *
    * What gets checked against are ```` ```css ```` blocks in docs/demos
    * and `--chart-x: v` assignments in CSS files. **Markdown tables are not
-   * parsed** — the table formatting is ours to define, so if we change it
-   * the parser would go stale (which is why table-row parsing was
-   * rejected for this reason), but `--x: v` is CSS syntax we cannot
+   * parsed** — the table formatting is ours to define, so a parser for it
+   * would go stale when we change it, but `--x: v` is CSS syntax we cannot
    * change.
    */
   it("should assign values that match the leaf type", () => {
@@ -398,12 +390,11 @@ describe("the set of style variables", () => {
     for (const spec of Object.values(SPECS)) collect(spec);
 
     /**
-     * **Numeric-ness knowledge also belongs to all five packages** (a
-     * mutation test caught this — `--chart-drawing-width: bold` was
-     * passing, because that leaf belongs to tools and sat outside core's
-     * SPECS traversal). Derived from text instead of an import, so as not
-     * to cross a module boundary — a `css: "--chart-…" … fallback: <number>`
-     * leaf.
+     * **Numeric-ness knowledge also belongs to all five packages** —
+     * otherwise `--chart-drawing-width: bold` passes, because that leaf
+     * belongs to tools and sits outside core's SPECS traversal. Derived
+     * from text instead of an import, so as not to cross a module boundary
+     * — a `css: "--chart-…" … fallback: <number>` leaf.
      */
     const LEAF = /css:\s*["'](--chart-[a-z0-9-]+)["'][^{}]*?fallback:\s*-?[\d.]+/g;
     for (const pkg of OTHER_PACKAGES) {
@@ -421,17 +412,11 @@ describe("the set of style variables", () => {
     const ASSIGNMENT = /(--chart-[a-z0-9-]+)\s*:\s*`?([^;{}\n`]+)/g;
     const ROOT = resolve(SRC, "../../..");
     /**
-     * **Takes the target list out of human hands** (the trigger for this
-     * fired on an earlier pass).
-     *
-     * The reasoning up to now was *"zero real-world drift, so there is no
-     * urgency."* But **because the root `README.md` was not on this
-     * list**, planting a typo'd token, a type-mismatched assignment, or a
-     * nonexistent API in it left every machine in the repo green, and a
-     * later fix to that README **planted a false number in the very same
-     * sentence.** No machine watching the deployment surface does not mean
-     * *"it goes stale"* — it means **"the hand that fixes it gets it
-     * wrong again, right there."**
+     * **Takes the target list out of human hands.** A hand-kept list can
+     * miss a file such as the root `README.md`, and then a typo'd token, a
+     * type-mismatched assignment, or a nonexistent API planted in it leaves
+     * every machine in the repo green. A surface no machine watches keeps
+     * whatever mistake the next edit plants.
      *
      * And the root README is the GitHub landing page — the first thing a
      * consumer copies and pastes.
@@ -445,11 +430,11 @@ describe("the set of style variables", () => {
     expect(sources.length).toBeLessThan(200);
 
     /**
-     * **A typo'd token bites** (this is what triggered this check in the
-     * first place). Skipping a name that is not in `numericVars` with
-     * `continue` would let a `--chart-*` assignment that does not exist
-     * (a typo, an old name) stay silent forever. The set of known names is
-     * derived from all five packages' sources — not a hand-written list.
+     * **A typo'd token bites.** Skipping a name that is not in
+     * `numericVars` with `continue` would let a `--chart-*` assignment that
+     * does not exist (a typo, an old name) stay silent forever. The set of
+     * known names is derived from all five packages' sources — not a
+     * hand-written list.
      */
     const known = repoVars;
 
@@ -475,9 +460,9 @@ describe("the set of style variables", () => {
     }
 
     /**
-     * **A JS assignment goes through the same door** (a later addition —
-     * looking only at the CSS regex leaves `setProperty("--chart-…", …)`
-     * outside it). Scrapes ts/tsx across the app sources.
+     * **A JS assignment goes through the same door** (looking only at the
+     * CSS regex would leave `setProperty("--chart-…", …)` outside it).
+     * Scrapes ts/tsx across the app sources.
      */
     const SET_PROPERTY = /setProperty\(\s*["'](--chart-[a-z0-9-]+)["']\s*,\s*["']?([^)"']+)/g;
     const appsRoot = resolve(ROOT, "apps");
@@ -501,14 +486,10 @@ describe("the set of style variables", () => {
 
   it("should find every variable the demo apps set", () => {
     // If a flagship example sets a variable nobody reads, it silently
-    // becomes dead code — --chart-ma and --chart-momentum actually did
-    // this (indicator colors are JS values).
-    // The scan roots are an array — apps/docs was added on 2026-08-13
-    // (senior-review-2026-08-13 D2, "apps/docs is outside machine
-    // verification").
-    // Derived from apps/* rather than a hand-written list — the two
-    // integrated demos, the repo's biggest consumers, were outside the list, so
-    // 23 tokens each went unchecked.
+    // becomes dead code (indicator colors are JS values, so a `--chart-*`
+    // an app sets for one is read by nothing).
+    // The scan roots are every directory under apps/, apps/docs included,
+    // derived rather than hand-written so a new demo cannot be left out.
     const APPS = resolve(SRC, "../../../apps");
     const SCAN_ROOTS = readdirSync(APPS)
       .filter((name) => statSync(resolve(APPS, name)).isDirectory())

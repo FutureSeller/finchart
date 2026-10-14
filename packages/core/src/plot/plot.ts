@@ -85,16 +85,15 @@ import type {
 /**
  * What it takes to stand up a `Plot`.
  *
- * This used to be five positional arguments; now it's named. `new Plot(el,
- * deps, config, null, size)` gave no way to tell what the fourth argument was
- * just by reading the call site.
+ * Named, not positional: `new Plot(el, deps, config, null, size)` gives no
+ * way to tell what the fourth argument is just by reading the call site.
  *
- * **There's no series here.** When there was, nothing checked that `series`
- * and `data` agreed on point type — a class constructor can't be generic, so
- * it fell back to `PlotOptions<BaseDataPoint>`, which disarmed the
+ * **There's no series here.** With one, nothing would check that `series`
+ * and `data` agree on point type — a class constructor can't be generic, so
+ * it would fall back to `PlotOptions<BaseDataPoint>`, disarming the
  * registration union's discriminant (`SeriesRegistration`) entirely.
- * `{ series: lineSeries(), data: candles }` **compiled and read `.y` at
- * runtime as undefined** — the exact bug the discriminant was supposed to
+ * `{ series: lineSeries(), data: candles }` **would compile and read `.y`
+ * at runtime as undefined** — the exact bug the discriminant is meant to
  * block, alive on this one path.
  *
  * The place to mount one is `plot.mainPane.addSeries()`. Being a method
@@ -161,12 +160,12 @@ export class Plot
     OverlayHost,
     ViewportControl,
     XCoordinates,
-    // The three below were missing from this list for a long time — because
-    // typing is structural, consumers (`CursorHost & FocusAreaHost` in
-    // `@finchart/tools`, `FormatSource` in `@finchart/dom`) still worked, but
-    // that means a signature mismatch here would compile quietly and blow up
-    // **in someone else's package.** Adding them makes the class docstring's
-    // claim — "the compiler keeps the pairing honest" — actually true.
+    // The three below matter even though typing is structural and consumers
+    // (`CursorHost & FocusAreaHost` in `@finchart/tools`, `FormatSource` in
+    // `@finchart/dom`) work without them here: left out, a signature mismatch
+    // would compile quietly and blow up **in someone else's package.**
+    // Listing them makes the class docstring's claim — "the compiler keeps
+    // the pairing honest" — actually true.
     FormatSource,
     CursorHost,
     FocusAreaHost,
@@ -250,8 +249,8 @@ export class Plot
    * The visible x range. **The trio (has it fitted, a window chosen before
    * the data, previous end) lives there.**
    *
-   * Split out because it's the window's job, not the chart's — when it lived
-   * here, that trio was scattered across two dozen-odd fields, and the two
+   * Split out because it's the window's job, not the chart's — kept here,
+   * that trio would be scattered across the chart's fields, and the two
    * subtlest rules (a window set before data arrives, deciding whether a
    * new bar counts as a shift) could only be tested by standing up the whole
    * chart → `x-viewport.ts`
@@ -269,22 +268,22 @@ export class Plot
 
   constructor(options: PlotOptions) {
     // The options object **itself** is a door too — `checkViewportSize`
-    // guarded `size` but not this, so `new Plot(null)` threw
-    // "Cannot destructure property 'deps'". Destructuring happened before
-    // the check below, so the internal name leaked straight through.
+    // guards `size` but not this, and without it `new Plot(null)` throws
+    // "Cannot destructure property 'deps'". Destructuring happens before
+    // the check below, so the internal name would leak straight through.
     requireObject(options, "Plot(options)");
     const { deps, size } = options;
     // Say so here if a required collaborator is missing — `checkPlotNumbers`
-    // destructures first, so `{}` alone produced a raw TypeError. `config`
+    // destructures first, so `{}` alone would produce a raw TypeError. `config`
     // may be left out entirely (every static default is filled at this
     // door), but a given one must be an object — `null` stays an error.
     requireObject(deps, "Plot({ deps })");
     const config = options.config === undefined ? {} : options.config;
     requireObject(config, "Plot({ config })");
 
-    // Both the constructor and applyOptions pass through this — only one
-    // getting fixed is exactly the accident this guard exists to prevent
-    // (see the checkPlotNumbers docstring).
+    // Both the constructor and applyOptions pass through this — guarding
+    // only one would let a value be refused at one door and accepted at the
+    // other (see the checkPlotNumbers docstring).
     checkPlotNumbers(config, "construct");
     checkViewportSize(size);
 
@@ -405,8 +404,8 @@ export class Plot
        * Neither the viewport nor the domain is touched. Reacquiring the
        * backing store is `layers.resize()`, called from `render()`, and the
        * surface reads its own `devicePixelRatio` inside that call
-       * itself. All this does is trigger that, so leaving it unwired
-       * behaves exactly as before.
+       * itself. All this does is trigger that, so leaving it unwired only
+       * loses the redraw on a resolution change.
        */
       const unobserveResolution = this.deps.observeResolution?.(() =>
         this.scheduleRender(),
@@ -470,16 +469,15 @@ export class Plot
    * ```
    *
    * **What splits the chart's things from a pane's things is what they hang
-   * off of.** The example above used to be drawing tools, and that was
-   * **the wrong example** — drawing tools is `pane.use(drawingTools({ plot
-   * }))` (it uses the pane's value axis). JSDoc ships into the published
-   * `.d.ts` and becomes editor tooltips, so a wrong snippet here travels
-   * further than the docs do.
+   * off of.** Drawing tools, for one, hang off a pane —
+   * `pane.use(drawingTools({ plot }))` (they use the pane's value axis).
+   * JSDoc ships into the published `.d.ts` and becomes editor tooltips, so
+   * a wrong snippet here travels further than the docs do.
    *
-   * (Don't quote the wrong form even in a comment: `snippet-drift.test.ts`
-   *  scans the published source and blocks a call with no arguments, so
-   *  writing it as an aside gets flagged as a violation too. This trap was
-   *  hit twice — the first time was a stale token name that slipped through.)
+   * (Don't quote the plot-level drawing-tools call even in a comment:
+   *  `snippet-drift.test.ts` scans the published source and blocks a call
+   *  with no arguments, so writing it as an aside gets flagged as a
+   *  violation too.)
    *
    * **Doesn't merge methods onto the instance.** TanStack Table v8 does that
    * with `_features` (`table.getSortedRowModel()`), which needs type
@@ -547,9 +545,9 @@ export class Plot
      * If the drawn points haven't changed, **only redraw the picture.**
      *
      * Value-axis swaps, decorations, and options (padding, flex, autoScale)
-     * come through here. There used to be no such branch, so changing even
-     * a single padding value recounted the entire x index — a full merge
-     * sort of every point under bar-index coordinates.
+     * come through here. Without this branch, changing even a single
+     * padding value would recount the entire x index — a full merge sort of
+     * every point under bar-index coordinates.
      */
     if (!change.data) {
       // A listener that throws reports its error, but must not leave the
@@ -775,8 +773,8 @@ export class Plot
    * The **data x** under a screen x (px). Not an index even in bar-index
    * coordinates.
    *
-   * The door an extension doing hit testing uses — this door didn't used to
-   * exist, so `@finchart/tools` was stashing the draw context in a variable
+   * The door an extension doing hit testing uses — without it,
+   * `@finchart/tools` would have to stash the draw context in a variable
    * on the side.
    */
   xAt(pixel: number): number {
@@ -855,10 +853,10 @@ export class Plot
   /**
    * The chart's viewport size (CSS px). **`Plot` owns it as state.**
    *
-   * This used to be read off the layers, which meant changing the size
-   * meant clearing the bitmap right then, so "state is synchronous, drawing
-   * is per-frame" couldn't be kept. State changes immediately here, and the
-   * bitmap catches up right before drawing.
+   * Read off the layers, changing the size would mean clearing the bitmap
+   * right then, so "state is synchronous, drawing is per-frame" couldn't be
+   * kept. State changes immediately here, and the bitmap catches up right
+   * before drawing.
    */
   private viewportSize: ViewportDimensions;
 
@@ -1015,11 +1013,11 @@ export class Plot
    * entirely.
    *
    * **Only the fields given change.** Giving `axis: { x }` leaves `y` alone
-   * — the old `setConfig` did a shallow merge, so it silently vanished
-   * there. Which fields swap as a unit is documented on `PlotOptionsPatch`.
+   * — under a shallow merge it would silently vanish. Which fields swap as
+   * a unit is documented on `PlotOptionsPatch`.
    */
   applyOptions(options: PlotOptionsPatch): void {
-    // Vocabulary cleanup — a wrong shape used to blow up in
+    // Vocabulary cleanup — otherwise a wrong shape blows up in
     // the destructuring below under someone else's name.
     requireObject(options, "applyOptions(options)");
     checkPlotNumbers(options);
@@ -1045,8 +1043,8 @@ export class Plot
    * A **copy** of the current config. Editing it doesn't touch the chart —
    * the one door for changes is `applyOptions`.
    *
-   * When this was a shallow copy, `getOptions().padding.left = 0` mutated
-   * the internals directly.
+   * A shallow copy would let `getOptions().padding.left = 0` mutate the
+   * internals directly.
    */
   getOptions(): ResolvedPlotConfig {
     return copyConfig(this.config);
@@ -1055,22 +1053,18 @@ export class Plot
   /**
    * **Keeps "only what's given changes" true to the letter.**
    *
-   * This used to be `{ ...this.viewportSize, ...viewport }`. A spread
-   * **treats an explicit `undefined` as a value too**, so `setViewport({
-   * width: 640, height: undefined })` erased the height — and
-   * `@finchart/react` calls it exactly that way (`use-chart.ts`: receiving
-   * only a width prop sends height through as `undefined`). The erased
-   * height became `NaN` in layout arithmetic and flowed all the way to the
-   * scale's range.
-   *
-   * 1,283 tests didn't catch this — nobody asserted on the resulting range,
-   * and `NaN` draws silently. The numeric door's `requireFinite` is what
-   * caught it.
+   * Not `{ ...this.viewportSize, ...viewport }`. A spread **treats an
+   * explicit `undefined` as a value too**, so `setViewport({ width: 640,
+   * height: undefined })` would erase the height — and `@finchart/react`
+   * calls it exactly that way (`use-chart.ts`: receiving only a width prop
+   * sends height through as `undefined`). The erased height becomes `NaN`,
+   * the layout drops every frame as degenerate, and the chart goes blank
+   * with no throw.
    */
   setViewport(viewport: Partial<ViewportDimensions>): void {
     // Check the shape first, in the same vocabulary as its sibling doors —
-    // without this, `null` leaked an internal variable name through a raw
-    // TypeError, and a string skipped both branches, **succeeding silently
+    // without this, `null` leaks an internal variable name through a raw
+    // TypeError, and a string skips both branches, **succeeding silently
     // while changing nothing** (you'd never know the resize didn't take).
     requireObject(viewport, "setViewport(viewport)");
 
@@ -1124,7 +1118,7 @@ export class Plot
          * once at install time would make
          * `applyOptions({ axisDrag })` a silently dead option — created off,
          * it could never be turned on, and vice versa. `PlotOptionsPatch`
-         * carries this field, so that dead-option behavior broke its
+         * carries this field, so that dead-option behavior would break its
          * promise.
          *
          * Not giving out slices is enough: `axisAt` is then always null, so
@@ -1299,11 +1293,12 @@ export class Plot
 
   /**
    * All four pass through this one door — the **public path for composing
-   * coordinates**, which doesn't go through the router. `null` used to
-   * arrive here from a consumer clearing the crosshair on `pointerleave`
-   * and leak an internal field name through `Cannot read properties of
-   * null (reading 'x')`; `crosshair(null)` is a real door now and never
-   * reaches this. `label` says which of the four doors this is.
+   * coordinates**, which doesn't go through the router. A consumer
+   * clearing the crosshair on `pointerleave` passes `null`; that is
+   * `crosshair(null)`'s own door and never reaches this, and a stray `null`
+   * here is refused by `requirePoint` rather than leaking `Cannot read
+   * properties of null (reading 'x')`. `door` says which of the four doors
+   * this is.
    */
   private pointPayload(position: Point, door: string): CrosshairPayload {
     const point = requirePoint(position, door);
@@ -1487,9 +1482,9 @@ export class Plot
       labels: this.axisLabels !== null,
       // Measurement uses the font the DOM label actually draws with — the
       // variable contract lives in the same place. The measurer is bound
-      // locally so the closure keeps the narrowed type — with `this.measurer!`
-      // the narrowing above used to unravel inside the arrow function and get
-      // papered over with an assertion — a type has to be true.
+      // locally so the closure keeps the narrowed type — read through `this`,
+      // the narrowing above unravels inside the arrow function and needs
+      // papering over with a `!` assertion — a type has to be true.
       measure: measurer && this.axisLabels
         ? {
             font: labelFont(readStyle),
@@ -1609,8 +1604,8 @@ export class Plot
        * the degenerate-frame branch does (see the comment on `layout()`).
        * Just returning here would leave the previous frame's axis strip in
        * `lastSlices`, so **axis drag can be grabbed on an empty screen.**
-       * Measured: after `setData([])`, pressing where the y-axis used to be
-       * makes `grabbed === true`, and a single pointermove calls
+       * Measured without the clear: after `setData([])`, pressing where the
+       * y-axis was makes `grabbed === true`, and a single pointermove calls
        * `setValueDomain`, turning that pane's `autoScale` off
        * **permanently** — the y-axis never follows again even once data
        * comes back. The divider handle stays in the DOM too, and can still
@@ -1641,12 +1636,11 @@ export class Plot
      * x is already the screen position, so there's no reason to open a
      * scan.
      *
-     * **The mapping's own function is passed through as-is** — this used to
-     * build a `(x) => this.x.toDomain(x)`
-     * closure and hand out one shared function, so every consumer stepped
-     * on the same cursor inside it. Now whoever does the scanning opens the
-     * slot and owns the cursor → `XMapping.scanToDomain`,
-     * `Viewport.screenXScan`
+     * **The mapping's own function is passed through as-is** — a
+     * `(x) => this.x.toDomain(x)` closure handed out as one shared function
+     * would have every consumer step on the same cursor inside it. Whoever
+     * does the scanning opens the slot and owns the cursor →
+     * `XMapping.scanToDomain`, `Viewport.screenXScan`
      */
     /**
      * **Doesn't detach the receiver.** Pulling out just the property loses
@@ -1729,12 +1723,11 @@ export class Plot
    * at their floor, so only the whole set, frozen together, reproduces the
    * heights on screen.
    *
-   * **Writes through the proper door (`applyOptions`).** This used to
-   * assign `pane.flex` directly and fill in the panes notification by hand
-   * — because going through the subscriber recounts the x index — but now
-   * that `PaneChange.data` names that branch, there's no reason left to
-   * dodge it. The notification firing once per pane is coalesced into one
-   * by `coalescePanesChange`.
+   * **Writes through the proper door (`applyOptions`).** Going through the
+   * subscriber doesn't recount the x index, since `PaneChange.data` names
+   * that branch, so there's no reason to write `flex` around it and fill
+   * in the panes notification by hand. The notification firing once per
+   * pane is coalesced into one by `coalescePanesChange`.
    */
   private resizeBetween(index: number, dy: number): void {
     // Only a handle the last frame put up can be moved. A frame with no
@@ -1748,11 +1741,11 @@ export class Plot
      * **Measured from the chart as it is now, not from the last frame.**
      * Moves arrive faster than frames: the areas are what the last frame
      * laid out, and a move, a resized viewport or a flex written since then
-     * hasn't reached them — two arrow keys before a frame used to both start
-     * from the same areas, so the second replaced the first. Drawing the
-     * owed frame first would run render listeners that can change the chart
-     * again before this move lands, so the heights come from the vertical
-     * half of the layout alone.
+     * hasn't reached them — two arrow keys before a frame would both start
+     * from the same areas, and the second would replace the first. Drawing
+     * the owed frame first would run render listeners that can change the
+     * chart again before this move lands, so the heights come from the
+     * vertical half of the layout alone.
      *
      * That half still calls out — the style reader and the text measurer
      * are the consumer's wiring, and so is a data source read on the way
@@ -1901,11 +1894,11 @@ export class Plot
     this.events.clear();
 
     /**
-     * **Goes all the way through even if one step throws.** There used to
-     * be no guard, so if one plugin's dispose threw, the plugins after it,
-     * the size observer, and `layers.destroy` never ran — a spot where the
-     * canvas and the `ResizeObserver` leaked outright. Cleanup should be
-     * "finish everything, then report."
+     * **Goes all the way through even if one step throws.** Otherwise, if
+     * one plugin's dispose threw, the plugins after it, the size observer,
+     * and `layers.destroy` would never run — leaking the canvas and the
+     * `ResizeObserver` outright. Cleanup should be "finish everything, then
+     * report."
      *
      * **External resources** a plugin created — timers, a
      * `ResizeObserver`, a worker — are cleaned up here too. The chart takes

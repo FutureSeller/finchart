@@ -133,9 +133,9 @@ describe('usePluginState', () => {
    *
    * Called on the server without a `getServerSnapshot`,
    * `useSyncExternalStore` **throws** *"Missing getServerSnapshot, which is
-   * required for server-rendered content."* The reason this went uncaught
-   * even though the README advertises an SSR path is that every test in
-   * this file renders on the client.
+   * required for server-rendered content."* The README advertises an SSR
+   * path, yet every other test in this file renders on the client, so none
+   * of them reaches that throw.
    *
    * And using it only from **inside** the container accidentally masks the
    * bug — with a `null` api, the child just doesn't render on the server.

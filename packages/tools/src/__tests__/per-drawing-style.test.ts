@@ -15,9 +15,9 @@ import type { DrawingSpace } from "../space";
 import { drawingChart } from "./drawing-chart.fixture";
 
 /**
- * Commit 2 of the schema-v2 day: per-drawing `style` (the same
- * `Partial<LineStyle>` leaves the toolbox override uses) and the fib
- * `levels` field, with one interpreter shared by hit and render.
+ * Per-drawing `style` (the same `Partial<LineStyle>` leaves the toolbox
+ * override uses) and the fib `levels` field: both survive save and load,
+ * and one interpreter serves hit and render.
  */
 
 const fib = (levels?: number[]): FibRetracement => ({
@@ -181,9 +181,9 @@ describe("one interpreter for hit and render", () => {
 
   it("grabs on a custom level line and not on a dropped default", () => {
     const custom = fib([0.9]);
-    // level 0.9 → price 90 in this identity space (a=0 → level 0 at b? —
-    // the formula reads from b toward a, so assert through the hit
-    // itself rather than re-deriving the price here).
+    // Levels read from b toward a, so level 0.9 → price 10, which this
+    // identity space puts at y=10; y=50 is where the dropped default 0.5
+    // would sit.
     const onCustom = gripAt([custom], space, { x: 50, y: 10 });
     const onDroppedDefault = gripAt([custom], space, { x: 50, y: 50 });
     expect(onCustom).not.toBeNull();

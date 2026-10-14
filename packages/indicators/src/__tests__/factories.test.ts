@@ -111,7 +111,7 @@ describe("macd", () => {
     node.out.histogram.read();
 
     // Reading all three branches still costs one pass over the values —
-    // proof the calculation runs once (C1).
+    // proof the calculation runs once.
     expect(reads).toBe(trending.length);
   });
 
@@ -341,7 +341,7 @@ describe("vwap", () => {
     expect(out[1].y).toBeCloseTo((10 * 10 + 20 * 30) / 40); // 17.5
   });
 
-  it("should go null from a missing volume to the end — D1", () => {
+  it("should go null from a missing volume to the end", () => {
     const source = sourceOf([traded(0, 10, 5), traded(1, 11), traded(2, 12, 7)]);
 
     const out = vwap(source).out.vwap.read();
@@ -487,7 +487,7 @@ describe("adx", () => {
 });
 
 describe("ichimoku", () => {
-  it("should shift by index, never inventing an x — D3", () => {
+  it("should shift by index, never inventing an x", () => {
     const source = sourceOf([
       ohlc(0, 10, 0, 5),
       ohlc(1, 20, 10, 15),

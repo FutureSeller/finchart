@@ -8,7 +8,7 @@ import { chartHost, focusRecent } from "./stage";
 
 export const title = "Own-pane indicators — MACD · ADX · OBV · CR";
 export const description =
-  "Indicators whose magnitudes differ from the price's — each makes its own pane to mount into, and dispose tears the pane down with it. Unlike the oscillators, the axis stays on autoScale. CR is five lines on one pane: the band and four averages drawn back by ceil(p / 2.5 + 1) bars, the averages in one colour and told apart by the window in their labels, with a line at 100 where the two sums balance. The buttons demonstrate pane maximizing — back when the panes were equal, the price pane got squeezed to the same size as an indicator.";
+  "Indicators whose magnitudes differ from the price's — each makes its own pane to mount into, and dispose tears the pane down with it. Unlike the oscillators, the axis stays on autoScale. CR is five lines on one pane: the band and four averages drawn back by ceil(p / 2.5 + 1) bars, the averages in one colour and told apart by the window in their labels, with a line at 100 where the two sums balance. The buttons demonstrate pane maximizing — with equal panes, the price pane would be squeezed to the same size as an indicator.";
 
 /** Background for the pressed button — the case stands on its own without the shell's CSS. */
 function paintPressed(el: HTMLButtonElement, pressed: boolean): void {

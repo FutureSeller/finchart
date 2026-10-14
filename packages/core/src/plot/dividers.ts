@@ -49,17 +49,17 @@ export interface DividerSide {
  *
  * **Both limits are wrapped at 0** — the same clause the x viewport uses
  * at pan boundaries, for the same reason: *"if already past the boundary,
- * only block the direction that makes it worse."* Before wrapping, a
- * limit's sign could flip. If the container is shorter than the sum of
- * minHeights, `distributeHeights` shrinks proportionally all the way to
- * the floor, so both panes ending up smaller than their own minimum is
- * produced by **ordinary input.**
+ * only block the direction that makes it worse."* Unwrapped, a limit's
+ * sign can flip. If the container is shorter than the sum of minHeights,
+ * `distributeHeights` shrinks proportionally all the way to the floor, so
+ * both panes ending up smaller than their own minimum is produced by
+ * **ordinary input.**
  *
- * Measured: with two panes of minHeight 40 sitting at 32px each, the lower
- * limit was `-(32-40) = +8`, the upper limit `min(dy, -8) = -8` → `max(8,
- * -8) = 8`, **regardless of dy.** Drag up by 1px and the boundary moved 8px
- * down, shrinking the lower pane to 24px — the opposite of the gesture, and
- * it violated the very minimum it was meant to protect even further.
+ * Measured unwrapped: with two panes of minHeight 40 sitting at 32px each,
+ * the lower limit is `-(32-40) = +8`, the upper limit `min(dy, -8) = -8` →
+ * `max(8, -8) = 8`, **regardless of dy.** Drag up by 1px and the boundary
+ * moves 8px down, shrinking the lower pane to 24px — the opposite of the
+ * gesture, violating the very minimum the clamp protects even further.
  */
 export function clampDividerDrag(
   dy: number,

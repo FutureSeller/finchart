@@ -1,4 +1,4 @@
-/** A collection of regression checks for bugs caught in review. One describe block per fix. */
+/** Regression checks for pane state, axis and handle bugs. */
 import { describe, expect, it } from "vitest";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";
 import type { LineDataPoint } from "../../data";
@@ -128,7 +128,7 @@ describe("a y-axis drag stops at the range the scale can't accept", () => {
     });
   }
 
-  /** A bug where dragging a LogScale pane downward tried to push the domain to <= 0 and threw. */
+  /** Dragging a LogScale pane downward must not push the domain to <= 0 and throw. */
   it("dragging a log axis downward does not throw", () => {
     const scale = new LogScale(100, 200, 300, 0);
     const consumer = dragConsumer(scale);
@@ -174,7 +174,7 @@ describe("a y-axis drag stops at the range the scale can't accept", () => {
 
 describe("removePane removes its own pane even when cleanup re-enters", () => {
   /** detach() can run dispose synchronously and recursively call removePane
-   * — a bug where a captured index pointed into a list that had already shifted. */
+   * — a captured index would then point into a list that has already shifted. */
   it("an extension's dispose removing an earlier pane leaves no zombie", () => {
     const { plot } = mount();
     const a = plot.addPane();
@@ -290,7 +290,7 @@ describe("applyOptions treats an explicit undefined as not given", () => {
     expect(plot.getOptions().showGrid).toBe(true);
   });
 
-  /** A padding patch should change only the side it gives, but a spread used to overwrite the rest with undefined, leaking NaN. */
+  /** A padding patch should change only the side it gives; a spread would overwrite the rest with undefined, leaking NaN. */
   it("even one side of padding coming in as undefined leaves the rest intact", () => {
     const { plot } = mount();
 
@@ -368,7 +368,7 @@ describe("even an empty array throws on a detached handle", () => {
   });
 });
 
-describe("points that had been missed", () => {
+describe("stage options, axis slots, handed-out copies and doors keep their contracts", () => {
   /**
    * If an option is only read once at install time, axisDrag becomes a
    * lie — building it turned off means it can never be turned on. An
@@ -456,7 +456,7 @@ describe("points that had been missed", () => {
     expect(plot.panes).toHaveLength(2);
   });
 
-  /** A bug where, before any data arrived, it sat pending and blew up inside the first setData. */
+  /** Left pending until data arrives, a bad range would blow up inside the first setData. */
   it("setVisibleRange is caught at the door", () => {
     const { plot } = mount();
 
@@ -478,7 +478,7 @@ describe("points that had been missed", () => {
     ).toThrow(ContractError);
   });
 
-  /** A bug where format: undefined erased the stage-wide display, splitting tick and badge formatting apart — omitting it should fall back to Plot's default. */
+  /** If format: undefined erased the stage-wide display, tick and badge formatting would split apart — omitting it should fall back to Plot's default. */
   it("undefined on a pane's axis does not erase the stage-wide display", () => {
     const model = createPlotModel({
       size: { width: 400, height: 300 },

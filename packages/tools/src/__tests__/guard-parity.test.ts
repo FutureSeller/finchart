@@ -1,5 +1,5 @@
 /**
- * Two spots where a rule was wired into sibling doors only. "Another
+ * Two spots where a rule is wired into sibling doors only. "Another
  * toolbox's contested area is its own business" is wired into
  * pointerdown and contextmenu, but might not be wired into dblclick, and
  * "cut any in-progress gesture before swapping out the list" is honored

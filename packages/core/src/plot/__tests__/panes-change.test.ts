@@ -187,7 +187,7 @@ describe("panesChange", () => {
 
 /** A two-pane chart whose divider drag is driven by hand — the fake divider just captures the callback. */
 function dragging() {
-  // The DOM divider moved to @finchart/dom — what's tested here is the core
+  // The DOM divider lives in @finchart/dom — what's tested here is the core
   // wiring by which a drag callback reaches the panes event.
   const captured: {
     drag: ((index: number, dy: number) => void) | null;
@@ -218,7 +218,7 @@ describe("setValueDomain", () => {
   it("should survive streaming appends", () => {
     const { plot, handle, yScale } = mounted();
 
-    // RSI's fixed 0~100 — the fixed-range use case now comes through the front door.
+    // RSI's fixed 0~100 — the fixed-range use case comes through the front door.
     plot.mainPane.setValueDomain(0, 100);
     handle.append([{ x: 150, y: 999 }]);
 

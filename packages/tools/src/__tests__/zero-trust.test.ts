@@ -28,7 +28,7 @@ describe("add builds an owned copy, not the argument itself", () => {
 
     tools.add(new HorizontalLine());
 
-    // This used to be `[{}]`, and the load below used to return false.
+    // A `structuredClone` copy reads `[{}]`; the load below then returns false.
     expect(tools.list()).toMatchObject([{ type: "horizontal", price: 105 }]);
     expect(tools.load(tools.serialize())).toBe(true);
   });
@@ -41,8 +41,8 @@ describe("add builds an owned copy, not the argument itself", () => {
 
   it("should not choke on a function field", () => {
     const { tools } = drawingChart();
-    // This used to throw `DOMException: () => {} could not be cloned` --
-    // outside the contract's vocabulary.
+    // A `structuredClone` copy would throw `DOMException: () => {} could not
+    // be cloned` here -- outside the contract's vocabulary.
     expect(() =>
       tools.add({ type: "horizontal", price: 1, onDone: () => {} } as never),
     ).not.toThrow();
@@ -55,7 +55,7 @@ describe("add builds an owned copy, not the argument itself", () => {
     cyclic.self = cyclic;
 
     tools.add(cyclic as never);
-    // This used to throw `TypeError: Converting circular structure to JSON` here.
+    // Unguarded, this throws `TypeError: Converting circular structure to JSON`.
     expect(() => tools.serialize()).not.toThrow();
     expect(tools.load(tools.serialize())).toBe(true);
   });
