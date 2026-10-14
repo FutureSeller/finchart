@@ -167,7 +167,8 @@ export type PaneHeightInput = Pick<FrameInput, "area" | "panes" | "shares" | "ga
 /**
  * The pane heights a frame of this input lays out — the vertical half of
  * `layoutFrame`, on its own: nothing is assigned, no tick is made, no scale
- * is touched. `null` when that frame would be dropped for want of space.
+ * is touched. `null` when that frame would be dropped for want of space or
+ * of a usable text measurement.
  *
  * A divider move measures from this rather than from the areas the last
  * frame left: moves, a resized viewport or a flex written since then have
@@ -189,6 +190,7 @@ export function layoutPaneHeights(input: PaneHeightInput): {
 
   // 1) x-axis height — font height doesn't depend on the label values, so this settles before ticks do.
   const xHeight = xAxisHeight(input);
+  if (xHeight === null) return null;
 
   // 2) Vertical distribution — the y tick count comes from pixels, so range is set before anything else.
   //    Areas (setArea) still can't be set: the left edge is waiting on the y-axis width.
@@ -282,8 +284,14 @@ export function layoutFrame(input: FrameInput): Frame | null {
    * 2) — the vertical check passed above, so it's a valid value. The next
    * normal frame overwrites it, so this is a frame stale by one cycle,
    * not a half-broken state.
+   *
+   * **Only the data area is checked.** Every pane slice shares its width,
+   * and every pane height is already at least 1px (the floor above). A
+   * slice's own `bottom - top` is a difference of summed fractional edges,
+   * so a 1px pane can measure a hair under 1 there — checking it would drop
+   * a drawable frame over rounding.
    */
-  if (isDegenerate(slices.data) || paneSlices.some(isDegenerate)) return null;
+  if (isDegenerate(slices.data)) return null;
 
   paneSlices.forEach((slice, index) => panes[index].setArea(slice));
   xScale.setRange(slices.data.left, slices.data.right);
@@ -296,8 +304,15 @@ export function layoutFrame(input: FrameInput): Frame | null {
  * The height the x-axis claims. Zero if labels aren't shown — the
  * placement rule matches the drawing rule. Skips measurement if a fixed
  * `size` is given.
+ *
+ * `null` when the measurer reports a NaN or negative height: there is no
+ * axis height to budget around — a NaN would reach `setRange` and throw, a
+ * negative one would stretch the panes past the data area — so the frame is
+ * skipped like any other size that can't be drawn. The measurement itself is
+ * checked, not the padded result, so a small negative height can't hide
+ * behind the label offset.
  */
-function xAxisHeight({ area, axis, labels, measure }: PaneHeightInput): number {
+function xAxisHeight({ area, axis, labels, measure }: PaneHeightInput): number | null {
   const options = axis.x;
   if (!labels || !options.showLabels) return 0;
 
@@ -326,10 +341,10 @@ function xAxisHeight({ area, axis, labels, measure }: PaneHeightInput): number {
   }
   if (!measure) return Math.min(FALLBACK_X_AXIS_HEIGHT, available);
 
-  return Math.min(
-    Math.ceil(measure.of("0", measure.font).height + 2 * AXIS_LABEL_OFFSET),
-    available,
-  );
+  const measured = measure.of("0", measure.font).height;
+  return measured >= 0
+    ? Math.min(Math.ceil(measured + 2 * AXIS_LABEL_OFFSET), available)
+    : null;
 }
 
 /** The width the y-axis claims. Decided by the longest label. Rounding up to 8px stops the axis from jittering when a value's digit count shifts during pan. */

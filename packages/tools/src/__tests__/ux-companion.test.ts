@@ -138,6 +138,41 @@ describe("a snapped anchor shows a ring", () => {
     plot.render();
     expect(rings(lines())).toEqual([]);
   });
+
+  /** Back to armed, there is no anchor left for the ring to mark. */
+  it("drops the ring when undo takes back a draft's only anchor", () => {
+    const { plot, tools, at, click, lines } = mounted(true);
+    tools.begin("trend");
+    click({ px: at(1, 112).x, py: at(1, 112).y + 3 });
+    expect(ringAround(lines(), at(1, 112))).toBe(true);
+
+    expect(tools.undo()).toBe(true);
+    plot.render();
+    expect(rings(lines())).toEqual([]);
+  });
+
+  it("drops the ring when a cancelled pointer discards the draft", () => {
+    const { plot, tools, at, press, route, lines } = mounted(true);
+    tools.begin("trend");
+    const near = { x: at(1, 112).x, y: at(1, 112).y + 3 };
+    press({ px: near.x, py: near.y });
+    expect(ringAround(lines(), at(1, 112))).toBe(true);
+
+    route({ type: "pointercancel", point: near, pointerId: 1 });
+    plot.render();
+    expect(rings(lines())).toEqual([]);
+  });
+
+  it("drops the ring when begin() switches tools mid-draft", () => {
+    const { plot, tools, at, press, lines } = mounted(true);
+    tools.begin("trend");
+    press({ px: at(1, 112).x, py: at(1, 112).y + 3 });
+    expect(ringAround(lines(), at(1, 112))).toBe(true);
+
+    tools.begin("horizontal");
+    plot.render();
+    expect(rings(lines())).toEqual([]);
+  });
 });
 
 describe("a selected drawing is drawn heavier", () => {

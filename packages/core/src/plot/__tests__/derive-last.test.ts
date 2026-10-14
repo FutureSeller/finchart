@@ -127,6 +127,10 @@ describe("deriveLast — tail-increment door", () => {
     expect(() => handle.updateLast({ ...candles[29], close: 999 })).toThrow(
       DataError,
     );
+    // The message names the door, the count it wanted and what came back, and nothing else.
+    expect(() => handle.updateLast({ ...candles[29], close: 999 })).toThrow(
+      /^deriveLast\(replace\) must return exactly 1, got .+ — length is the contract$/,
+    );
     // A rejection leaves nothing behind.
     expect(handle.read()).toEqual(before);
   });

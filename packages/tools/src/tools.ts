@@ -698,7 +698,7 @@ export function drawingTools(
     /**
      * Where the last snap stuck, in domain coordinates — drawn as a ring
      * so the hand knows it snapped. Null when the last position was
-     * free, and cleared when the gesture ends.
+     * free, and cleared whenever no anchor is in flight (idle or armed).
      */
     let snapMark: Anchor | null = null;
 
@@ -866,7 +866,9 @@ export function drawingTools(
       const before = modeOf(state);
       const cursorBefore = cursorOf(state);
       state = next;
-      if (next.kind === "idle") snapMark = null;
+      // Idle and armed hold no anchor in flight, so a ring left from the
+      // last snap would mark a point nothing is placed at.
+      if (next.kind === "idle" || next.kind === "armed") snapMark = null;
 
       const cursorAfter = cursorOf(state);
       // Hover backs off when drawing or dragging claims the cursor — if
@@ -1036,6 +1038,7 @@ export function drawingTools(
         restoreDrawing(state.drag.grip.drawing, state.drag.original);
       }
       state = { kind: "idle" };
+      snapMark = null;
       selected = null;
       plot.requestRender();
     });
@@ -1154,9 +1157,10 @@ export function drawingTools(
           drawOne(target, space, renderContext, state.draft, style, false);
         }
 
-        // The snap ring — where the anchor under the hand stuck. Only
-        // while a gesture is in flight (the mark clears on idle).
-        if (snapMark && state.kind !== "idle") {
+        // The snap ring — where the anchor under the hand stuck. The mark
+        // is set only while a gesture is in flight and clears on idle and
+        // armed, so its presence is the whole condition.
+        if (snapMark) {
           target.drawLine(snapRing(toPixel(space, snapMark)), {
             ...style,
             width: 1,
