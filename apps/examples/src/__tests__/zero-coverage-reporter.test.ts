@@ -2,10 +2,10 @@
  * A coverage threshold with nothing to measure passes for free: an `include`
  * that stops matching gives `Unknown% (0/0)`, a type-only file gives
  * `100% (0/0)`, and either way the run exits 0. Predicting that from the
- * config was tried first and lost to vitest's own matching every round — a
- * `..` segment, `//`, braces, letter case, `#`, the exclusions no config can
- * override. So nothing is predicted: a reporter reads what was **measured** and
- * fails the run when that is zero statements.
+ * config loses to vitest's own matching — a `..` segment, `//`, braces,
+ * letter case, `#`, the exclusions no config can override. So nothing is
+ * predicted: a reporter reads what was **measured** and fails the run when
+ * that is zero statements.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -143,7 +143,7 @@ describe("zero-coverage reporter", () => {
   });
 
   // A test that fails **and** coverage that measures nothing: the run must still
-  // show the failing assertion's two values — throwing from `onCoverage` lost them.
+  // show the failing assertion's two values — throwing from `onCoverage` loses them.
   it("keeps a failing test's diagnostics when coverage is empty as well", { timeout: 120_000 }, () => {
     const { status, output } = realRun('expect("left-value").toBe("right-value");');
     expect(status).toBe(1);

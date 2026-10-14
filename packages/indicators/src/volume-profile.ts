@@ -94,8 +94,8 @@ export function volumeProfile(options: VolumeProfileOptions): PaneDecoration {
       const totals = new Array<number>(bins).fill(0);
       for (const candle of visible) {
         const volume = candle.volume;
-        // `isGap` covers `null` too — `null <= 0` happened to be true, but
-        // that was luck, not a rule. Finiteness is the data gate's job.
+        // `isGap` covers `null` too — `null <= 0` is true, but by coercion,
+        // not by rule. Finiteness is the data gate's job.
         if (isGap(volume) || volume <= 0) continue;
         const sum = candle.high + candle.low + candle.close;
         const typical = Number.isFinite(sum) ? sum / 3 : candle.high / 3 + candle.low / 3 + candle.close / 3;

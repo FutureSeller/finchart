@@ -14,7 +14,7 @@ them directly** too.
 **It is a client module.** The bundle carries `"use client"`: the package
 creates a React context at module scope, which only a client module may do,
 and the directive marks the boundary, so importing it from a server file
-(Next.js App Router's default) no longer fails at the module. A chart still
+(Next.js App Router's default) does not fail at the module. A chart still
 needs a Client Component of your own around it: `deps={browserDeps()}` is a
 function, and this function cannot cross the server–client boundary as a prop —
 create it in a small `"use client"` component and render that from the
@@ -127,7 +127,7 @@ wiring **between** containers (`<SyncX>`) — see "Across containers" below.
 a default for convenience, this package would statically import
 `browserDeps`, and then consumers who wired things leanly — plus headless and
 worker builds — would carry the entire browser shell. Measured: +21.6KB raw /
-+6.5KB gzip. We tried it once and reverted it the same day.
++6.5KB gzip.
 
 ```tsx
 // Need a bar-index x-axis and kinetic scrolling? You choose that here too.

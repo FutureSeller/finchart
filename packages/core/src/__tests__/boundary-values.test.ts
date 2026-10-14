@@ -35,10 +35,9 @@ const HOSTILE_NUMBERS: readonly (readonly [string, number])[] = [
 /**
  * A value shaped wrong. `HOSTILE_NUMBERS` is entirely `number`, but that
  * only holds when a TypeScript consumer has kept the type — a `.d.ts` is
- * advice, not enforcement, and a failed `fetch` hands back `undefined`. A
- * real measurement found 47 of 101 public functions threw a raw
- * `TypeError` (outside the error set the docs promise, and leaking
- * internal variable names).
+ * advice, not enforcement, and a failed `fetch` hands back `undefined`.
+ * Unguarded, a public function fed one throws a raw `TypeError` (outside
+ * the error set the docs promise, and leaking internal variable names).
  *
  * An empty array is not here — it is a legitimate value (a series with no
  * data yet, a pane with no markers).
@@ -226,10 +225,10 @@ function lineStage() {
 
 describe("chokepoint 6 — the live path passes through the data door too", () => {
   /**
-   * `updateLast` used to have its own separate ordering check — both
-   * `newX > lastX` and `newX < lastX` are false on `NaN`, so a bad tick
-   * fell silently into the replace path. The manager's `replaceLast` also
-   * only checked `x < previousX`, so both layers were wide open.
+   * An ordering check written as `newX > lastX` / `newX < lastX` is not
+   * enough — both are false on `NaN`, so a bad tick falls silently into
+   * the replace path, and a `replaceLast` that only checks
+   * `x < previousX` leaves the manager layer wide open too.
    */
   it.each(HOSTILE_NUMBERS)("should reject %s as an updateLast x", (_l, bad) => {
     const { main } = twoSeriesStage();
@@ -246,9 +245,9 @@ describe("chokepoint 6 — the live path passes through the data door too", () =
       main.updateLast({ x: NaN, open: 1, high: 2, low: 0, close: 1 }),
     ).toThrow();
 
-    // This matters more than the throw itself for this test — this used
-    // to not throw at all, and a series on a different pane vanished
-    // along with it.
+    // This matters more than the throw itself for this test — unguarded,
+    // this does not throw at all, and a series on a different pane
+    // vanishes along with it.
     expect(drawn()).toBe(before);
   });
 
@@ -297,16 +296,16 @@ const EXEMPT_DOORS: Record<string, string> = {
 
 /**
  * Counts every `number` field on the options types straight from their
- * declarations — a hand-written list tends to only list what a review
- * happened to report as a symptom, not what the type actually contains.
+ * declarations — a hand-written list tends to hold only the fields someone
+ * noticed misbehaving, not what the type actually contains.
  * The same idiom as `module-boundaries.test.ts` walking the directory
  * tree.
  */
 function declaredNumberFields(source: string, name: string): string[] {
   // Some declarations (XAxisOptions) carry an `extends`, so the regex
   // reaches all the way to the opening brace. Looking for this spot by
-  // name alone once came back empty-handed, and the throw below is what
-  // caught it.
+  // name alone comes back empty-handed for those, and the throw below is
+  // what catches it.
   const declaration = new RegExp(`export interface ${name}\\b[^{]*\\{`);
   const found = declaration.exec(source);
   if (!found) throw new Error(`could not find the ${name} declaration — this check comes back empty`);
@@ -421,7 +420,7 @@ describe("chokepoint 2 — Plot options' numeric doors", () => {
     expect(() =>
       model.plot.applyOptions({ axis: { y: { size: Infinity } } }),
     ).toThrow();
-    // This matters more than the throw itself — this used to pass through and the command count went to 0.
+    // This matters more than the throw itself — unguarded, this passes through and the command count goes to 0.
     expect(drawn()).toBe(before);
   });
 
@@ -481,9 +480,8 @@ describe("chokepoint 2 — Plot options' numeric doors", () => {
 
 describe("chokepoint 7 — createPlotDeps's trimming budget", () => {
   /**
-   * This export's exemption reason used to be "assembly — takes a
-   * collaborator" — a sentence that only counted the collaborator and
-   * never counted the two numbers. With `maxPoints: -1` and
+   * An exemption reason of "assembly — takes a collaborator" would count
+   * only the collaborator and never the two numbers. With `maxPoints: -1` and
    * `pointsPerPixel: 0`, the budget drops to zero or below, and a
    * 500-point series's line command never comes out at all. It does not
    * throw either.
@@ -526,7 +524,7 @@ describe("chokepoint 7 — createPlotDeps's trimming budget", () => {
   });
 });
 
-// Z1 — self-completeness on the shape axis. A consumer might not use TS.
+// Self-completeness on the shape axis. A consumer might not use TS.
 
 /**
  * A blocking door where that one shape is nonetheless a legitimate input.
@@ -555,7 +553,7 @@ const LEGITIMATE: Record<string, readonly string[]> = {
 
 
 
-describe("Z1 — the shape axis", () => {
+describe("the shape axis", () => {
   it("should classify every public runtime export", () => {
     const unclassified = Object.keys(publicApi)
       .filter((name) => !(name in SHAPE_GUARDED) && !(name in SHAPE_EXEMPT))
@@ -568,12 +566,11 @@ describe("Z1 — the shape axis", () => {
   });
 
   /**
-   * Moves the ban on the `〃` ("ditto") mark into a machine check — writing
-   * `〃` in an exemption reason means the regex cannot read that line, so
-   * it drops out of what gets checked. `styleVars` and `cssVarExpr`
-   * inherited "does not throw, demotes to the fallback" via `〃`, and both
-   * of them actually threw a raw `TypeError` at one point. Instead of
-   * writing the rule in a comment, it is enforced here.
+   * Moves the ban on the `〃` ("ditto") mark into a machine check. A `〃`
+   * note cannot be read by the checks that parse notes (chokepoint
+   * numbers, `guarded in` pointers), and it tells a reader nothing about
+   * that name. Instead of writing the rule in a comment, it is enforced
+   * here.
    */
   it("should not let any verdict lean on a ditto mark", () => {
     const dittos = [
@@ -647,22 +644,17 @@ describe("Z1 — the shape axis", () => {
   });
 
   /**
-   * Actually measures the property an exemption reason claims. A fixing
-   * hand introduced a new sibling, and that same hand recorded, to the
-   * machine, that the sibling did not exist — in the same commit that
-   * added leniency to `applyFont` by unconditionally calling `font.trim()`
-   * and turned `undefined` into a crash, that function's exemption reason
-   * was written as "demotes without throwing no matter what comes in."
+   * Actually measures the property an exemption reason claims. A reason is
+   * written by the same hand that changes the code, so it can be false
+   * from the start: an `applyFont` that unconditionally calls
+   * `font.trim()` crashes on `undefined` while its reason still says
+   * "demotes without throwing no matter what comes in."
    *
-   * The existing machinery only counts whether a reason exists. Nobody
-   * counted whether the reason was true — this moves from "is there a
-   * reason" to "does it do what the reason says." The rule: if an
-   * exemption reason says "does not throw" or "demotes," that name must
-   * really not throw even when fed a hostile value.
-   *
-   * A machine cannot read `〃` — shortening a reason to `〃` drops it out
-   * of the promise list entirely, so a regression can live on while
-   * staying green. The words the check keys on are spelled out in full.
+   * The census only counts whether a reason exists, not whether it is
+   * true — this moves from "is there a reason" to "does it do what the
+   * reason says." The rule: an export whose shape exemption is tagged
+   * `safe` must really not throw, even when fed a hostile value in the
+   * argument `SAFE_ARG` names.
    */
   describe("is the exemption reason true — if it says it does not throw, it must not throw", () => {
     /**
@@ -696,7 +688,7 @@ describe("Z1 — the shape axis", () => {
      * reason says "does not throw," it also has to say which argument.
      */
     const SAFE_ARG: Record<string, { index: number; rest: () => unknown[] }> = {
-      // Two names that made the promise back in the regex days but sat outside the probe.
+      // Every name tagged `safe` needs an entry here, predicates and validators included.
       isGap: { index: 0, rest: () => [] },
       validateSeriesData: { index: 0, rest: () => [] },
       validateSeriesPoint: { index: 0, rest: () => [] },
@@ -726,7 +718,7 @@ describe("Z1 — the shape axis", () => {
       .map(([name]) => name);
 
     it("should have someone making that promise", () => {
-      // If the regex catches nothing, everything below passes for free (the same idiom as style-vars).
+      // If nothing is tagged, everything below passes for free (the same idiom as style-vars).
       expect(promised.length).toBeGreaterThan(0);
     });
 
@@ -799,7 +791,7 @@ describe("Z1 — the shape axis", () => {
    * object a factory returns never gets caught by the census in the first
    * place, and a single `Plot` line has to stand in for all of it.
    *
-   * The worst of these was `addDecoration`. A decoration is an object a
+   * The worst of these is `addDecoration`. A decoration is an object a
    * third-party author builds by hand, and other libraries name that hook
    * differently (`renderer`, `createPointFigures`) — get the name wrong
    * and it succeeds silently, then blows up inside rAF and kills the chart
@@ -827,8 +819,8 @@ describe("Z1 — the shape axis", () => {
 
     /**
      * A hook named wrong — the single most common mistake a hand coming
-     * from another library makes. This used to pass through silently and
-     * die on the next frame.
+     * from another library makes. Unguarded, it passes through silently and
+     * dies on the next frame.
      */
     it("should refuse a decoration whose hook is named for another library", () => {
       const { model } = twoSeriesStage();
@@ -856,7 +848,7 @@ describe("Z1 — the shape axis", () => {
 
     /**
      * The decimation budget at the registration layer. The wiring layer
-     * (`presets`) got a guard, but the registration layer
+     * (`presets`) has a guard, but the registration layer
      * (`decimation: { pointsPerPixel }`) can bypass that door — at a
      * budget of 0, that series's line disappears without a sound.
      */
@@ -918,9 +910,9 @@ describe("Z1 — the shape axis", () => {
     });
 
     /**
-     * The door names itself — `setSeries({data})`'s error message used to
-     * read "addSeries…." That leads a consumer to suspect a door they
-     * never called.
+     * The door names itself — a `setSeries({data})` error that read
+     * "addSeries…" would lead a consumer to suspect a door they never
+     * called.
      */
     it("setSeries's rejection carries setSeries's own name", () => {
       const { model } = twoSeriesStage();
@@ -991,9 +983,9 @@ describe("Z1 — the shape axis", () => {
     /**
      * Four public paths that synthesize a coordinate — they do not pass
      * through the router, so input validation never reaches them. `null`
-     * was the first value a consumer trying to clear the crosshair on
-     * `pointerleave` tried, and it used to be a raw `TypeError` leaking an
-     * internal field name; for `crosshair` it is now the door for exactly
+     * is the first value a consumer trying to clear the crosshair on
+     * `pointerleave` tries, and unguarded it is a raw `TypeError` leaking an
+     * internal field name; for `crosshair` it is the door for exactly
      * that (the cursor being nowhere), so that one door is asked about
      * every hostile value but `null`.
      */
@@ -1152,9 +1144,9 @@ describe("Z1 — the shape axis", () => {
     });
 
     /**
-     * `swapSeries(candleSeries)` — a missing call. This used to swap the
-     * series out already, so every subsequent frame, pan, and setData
-     * raised the same raw `TypeError`.
+     * `swapSeries(candleSeries)` — a missing call. Swapping the series out
+     * before refusing would make every subsequent frame, pan, and setData
+     * raise the same raw `TypeError`.
      */
     it("swapSeries — a rejection does not swap out the representation", () => {
       const stage = lineOnly();

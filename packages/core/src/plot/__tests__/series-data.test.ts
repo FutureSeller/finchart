@@ -1,7 +1,7 @@
 /**
- * The registration owns the data. The stage used to hold a single
- * dataset shared by every series, so BTC and ETH could never be drawn on
- * one stage together.
+ * The registration owns the data. A stage holding a single dataset
+ * shared by every series could never draw BTC and ETH on one stage
+ * together.
  */
 import { describe, expect, it } from "vitest";
 import type { LineDataPoint, OHLC } from "../../data";

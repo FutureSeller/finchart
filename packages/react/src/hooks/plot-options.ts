@@ -4,8 +4,7 @@ import type { Padding, PlotOptionsPatch, ResolvedPlotConfig } from '@finchart/co
  * The plot options that have no prop of their own. `axis` belongs to
  * `<XAxis>`/`<YAxis>`, `style.grid` to `gridStyle`, and `showGrid` and
  * `paneGap` are props — one door per value, because two doors to the same
- * value erase each other (the value axis once had two, and whichever effect
- * ran last won).
+ * value erase each other (whichever effect runs last wins).
  *
  * A key that is missing reverts to what the plot was built with. The list
  * is a `Pick`, named twice — here and in `pickPlotOptions` — on purpose: an

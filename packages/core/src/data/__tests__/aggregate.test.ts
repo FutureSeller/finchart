@@ -228,7 +228,7 @@ describe("chokepoint 11 — a trade's own price and volume", () => {
    * **Two volumes a door would each let through can add to one it would
    * not.** The bar carries the sum, so the sum is what has to be a number
    * — and an infinite one poisons every trade folded after it, the same
-   * way a `NaN` did.
+   * way a `NaN` would.
    */
   it("refuses a sum that is no longer a number", () => {
     const feed = minutes();

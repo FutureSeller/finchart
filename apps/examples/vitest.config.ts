@@ -11,7 +11,7 @@ export default defineConfig({
     // (Vitest also swaps "default" for "agent" when it detects an AI agent; that
     // is not restated — it changes how output reads, not what passes.)
     // The path is built from strings, not `new URL()` — in the examples app's
-    // jsdom test run that was jsdom's URL and `fileURLToPath` threw on it (the
+    // jsdom test run that is jsdom's URL and `fileURLToPath` throws on it (the
     // wiring test imports this file).
     reporters: [
       "default",

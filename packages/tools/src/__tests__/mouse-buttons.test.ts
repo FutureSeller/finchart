@@ -64,7 +64,7 @@ describe("the secondary button does not grab a drawing", () => {
     expect(tools.list()[0]).not.toMatchObject({ type: "horizontal", price: 105 });
   });
 
-  /** Synthetic input that omits `button` must mean the same thing as today. */
+  /** Synthetic input that omits `button` must keep meaning the primary button. */
   it("should treat a missing button as primary", () => {
     const { route, tools, at } = drawingChart();
     tools.add({ type: "horizontal", price: 105 });

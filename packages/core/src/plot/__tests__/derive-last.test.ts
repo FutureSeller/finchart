@@ -114,8 +114,8 @@ describe("deriveLast — tail-increment door", () => {
       // Contract violation — a replace must be exactly 1. The point is that
       // **both are valid points**: an empty array is already caught by the
       // manager's shape check regardless, but a valid excess point gets
-      // **silently dropped** without a length check — that's the mutation
-      // this leaked through.
+      // **silently dropped** without a length check — that's the gap this
+      // case closes.
       deriveLast: () => [
         { x: 29, y: 1 },
         { x: 29, y: 2 },

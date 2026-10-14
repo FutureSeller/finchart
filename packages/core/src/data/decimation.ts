@@ -323,8 +323,8 @@ export class M4Decimation<T extends BaseDataPoint = BaseDataPoint>
      * `place - first >= 0`.
      *
      * The division isn't precomputed as `buckets / span` — that version
-     * was faster, but floating-point reassociation shifted points across
-     * bucket boundaries and changed the output.
+     * is faster, but floating-point reassociation shifts points across
+     * bucket boundaries and changes the output.
      */
     const spread = span > 0;
     const lastBucket = buckets - 1;
@@ -497,8 +497,8 @@ export class LttbDecimation<T extends BaseDataPoint = BaseDataPoint>
     // The first and last points are always kept, so only the middle is bucketed.
     const bucketSize = (count - 2) / (threshold - 2);
     const sampled: T[] = [data[start]];
-    // Carries forward the previously chosen point's place and value — this
-    // used to ask the pass to look back (to the previous bucket) per
+    // Carries forward the previously chosen point's place and value rather
+    // than asking the pass to look back (to the previous bucket) per
     // bucket. The scoring loop already measured this value with the same
     // pass, so the answer is the same.
     let previousX = placeOf(data[start]);

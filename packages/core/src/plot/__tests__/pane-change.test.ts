@@ -1,7 +1,7 @@
 /**
- * What PaneChange reporting exactly what changed makes possible. It used
- * to only tell Plot "something changed," so the x index got fully
- * recounted every single time. This file guards the cheap path; pane
+ * What PaneChange reporting exactly what changed makes possible. A report
+ * that only told Plot "something changed" would make the x index get
+ * fully recounted every single time. This file guards the cheap path; pane
  * options and pane notifications are covered in pane-options.test.ts and
  * panes-change.test.ts.
  */

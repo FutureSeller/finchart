@@ -68,15 +68,15 @@ describe("atrPriceStep", () => {
       expect(() => pointAndFigure(source, { boxSize: step })).not.toThrow();
     }
     // …while `renko` and `pointAndFigure` also hold the prices: a step of 16,384 on a price of 10²⁰ is 6 × 10¹⁵ steps
-    // from zero, past their 2⁴⁷ — those doors are the transforms' own, raised under their own names. (Before its
-    // door, `renko` looped forever on such a step: the brick was under the doubles' spacing at that price.)
+    // from zero, past their 2⁴⁷ — those doors are the transforms' own, raised under their own names. (16,384 is the
+    // doubles' spacing at 10²⁰ itself — well short of the ~32× margin 2⁴⁷ keeps.)
     const far = [{ x: 0, open: 1e20, high: 1e20 + 16384, low: 1e20, close: 1e20 }];
     const farStep = atrPriceStep(far, { period: 1 });
     expect(farStep).toBe(16384);
     expect(() => renko(far, { brickSize: farStep })).toThrow(/^renko brickSize 16384 is too small to step the price 100000000000000000000$/);
     expect(() => kagi(far, { reversal: farStep })).not.toThrow();
     expect(() => pointAndFigure(far, { boxSize: farStep })).toThrow(/pointAndFigure boxSize .* too small to quantise/);
-    // The ten-bar shape that used to hang: one jump of 16,384 at 10²⁰, then flat — ATR(10) = 1,638.4, absorbed at 10²⁰.
+    // One jump of 16,384 at 10²⁰, then flat — ATR(10) = 1,638.4, a tenth of the spacing there: unrefused, it lays 14 bricks, 13 flat.
     const hang = [{ x: 0, open: 1e20, high: 1e20, low: 1e20, close: 1e20 }, ...Array.from({ length: 9 }, (_, i) => ({ x: i + 1, open: 1e20 + 16384, high: 1e20 + 16384, low: 1e20 + 16384, close: 1e20 + 16384 }))];
     expect(atrPriceStep(hang, { period: 10 })).toBeCloseTo(1638.4, 9);
     expect(() => renko(hang, { brickSize: 1638.4 })).toThrow(/too small to step the price/);

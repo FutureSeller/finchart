@@ -4,7 +4,9 @@
  * pane's height and limits, and moves with the arrow keys. The keys it
  * handles stop at the handle — neither the input stack (a drawing tool's
  * editing keys) nor the container's own key gestures see them — and a
- * frame drawn while it has focus doesn't take the focus away.
+ * frame drawn while it has focus doesn't take the focus away. A pointer
+ * drag on it ends cleanly when its boundary goes, an inert handle starts
+ * none, and a drag stops once its panes change under it.
  */
 import type { ChartLayers, LayersFactory, LineDataPoint, Pane } from "@finchart/core";
 import { lineSeries, manualScheduler, Plot } from "@finchart/core";

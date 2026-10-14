@@ -10,7 +10,7 @@ import type { ExpandHints, Scale, TickGeometry } from "./types";
 
 /**
  * Same number, same reason as the linear axis's `MAX_TICKS` — a
- * degenerate domain once spun tick generation forever and killed the tab
+ * degenerate domain can spin tick generation forever and kill the tab
  * with an OOM. Geometry ticks skip that door, so they carry their own
  * copy of the lock.
  */
@@ -73,7 +73,7 @@ function alignDecade(from: number, stride: number): number {
  * away). 1000 is three orders of magnitude, a width that leaves three or
  * four ticks on screen.
  *
- * This is no longer the first answer — `expand` asks
+ * This is not the first answer — `expand` asks
  * `ExpandHints.minPositive()` for the real smallest positive value in the
  * visible interval first. This constant is what's left for when there's
  * nowhere to ask (a direct call with no hints, or an interval with no
@@ -111,9 +111,11 @@ const LOG_MAX_VALUE = Math.log(Number.MAX_VALUE);
  * there.
  */
 function logOver(base: number, value: number): number {
-  // A value or base that is not a positive finite number has no ratio to measure — the logarithms say so
-  // (NaN, or the infinity it is), as they always did; the steps below are for positive finite pairs only. (A
-  // base is a domain end, or an extent's — and an extent a series returns is not checked before it is padded.)
+  // A value or base that is not a positive finite number has no ratio to
+  // measure — the logarithms say so (NaN, or the infinity it is); the steps
+  // below are for positive finite pairs only. (A base is a domain end, or an
+  // extent's — and an extent a series returns is not checked before it is
+  // padded.)
   if (!Number.isFinite(value) || !(base > 0) || !Number.isFinite(base)) return Math.log(value) - Math.log(base);
   const relative = (value - base) / base;
   if (Number.isFinite(relative)) {
@@ -159,8 +161,8 @@ export class LogScale implements Scale {
 
   /**
    * Check finiteness first — checking only `min <= 0 || max <= 0` would
-   * let `max = Infinity` through, since `Infinity > 0`, and that can reach
-   * an infinite tick loop.
+   * let `max = Infinity` through, since `Infinity > 0`, and an uncapped
+   * tick loop over that domain would never end.
    */
   setDomain(min: number, max: number): void {
     requireFinite(min, "domain min");
@@ -464,7 +466,7 @@ export class LogScale implements Scale {
      * the whole domain, cramming the real candles into a sliver of the
      * axis height.
      *
-     * Falls back to the old constant when there's no `hints`, or no
+     * Falls back to that constant when there's no `hints`, or no
      * positive value at all.
      */
     if (min <= 0) {

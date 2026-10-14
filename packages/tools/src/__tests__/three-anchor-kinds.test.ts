@@ -8,11 +8,11 @@ import type { DrawingSpace } from "../space";
 import { drawingChart } from "./drawing-chart.fixture";
 
 /**
- * T3 wave — three-anchor kinds (parallelChannel · pitchfork) and the
- * drafting generalization that carries them: a draft confirms one anchor
- * per click, the following anchors trail the cursor, and the click
- * boundary ("was that a drag") measures from the **latest press** — the one
- * that confirmed the last anchor — not from `a`.
+ * Three-anchor kinds (parallelChannel · pitchfork) and the drafting
+ * generalization that carries them: a draft confirms one anchor per click,
+ * the following anchors trail the cursor, and the click boundary ("was that a
+ * drag") measures from the **latest press** — the one that confirmed the last
+ * anchor — not from `a`.
  */
 
 const space: DrawingSpace = {

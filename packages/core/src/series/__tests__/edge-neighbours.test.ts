@@ -1,10 +1,10 @@
 /**
- * The slice handed to drawing used to stop at the last point inside the
- * view, so the segment to the off-screen neighbour was never drawn: a
- * zoomed-in line left an empty strip at both plot edges, a single visible
- * point drew no line at all, and a candle cut by the edge vanished.
- * Drawing now gets one neighbour on each side; the y range still comes
- * from the points inside the view.
+ * A slice handed to drawing that stopped at the last point inside the
+ * view would never draw the segment to the off-screen neighbour: a
+ * zoomed-in line would leave an empty strip at both plot edges, a single
+ * visible point would draw no line at all, and a candle cut by the edge
+ * would vanish. So drawing gets one neighbour on each side; the y range
+ * still comes from the points inside the view.
  */
 import { describe, expect, it } from "vitest";
 import type { DataView, LineDataPoint, Range } from "../../data";

@@ -20,11 +20,10 @@ const lines = (commands: readonly DrawCommand[]): Line[] =>
   commands.flatMap((command) => (command.type === "drawLine" ? [command] : []));
 
 /**
- * A tape that rises 100→110 (yang), pulls back to 104 (still yang — above
- * the waist that does not exist yet… it turns yin the moment it drops
- * below the previous waist, which is 100 here, so no break), rises to 112
- * (yang: crosses the shoulder 110 — but it was already yang, so no
- * break), falls to 99 (crosses the waist 104 → yin, breakY 104).
+ * A tape that rises 100→110 (yang), pulls back to 104 (still yang — no
+ * waist stands yet, so there is nothing to fall below and no break), rises
+ * to 112 (crosses the shoulder 110, but it is already yang, so no break),
+ * falls to 99 (crosses the waist 104 → yin, breakY 104).
  */
 const tape = [tick(0, 100), tick(1, 110), tick(2, 104), tick(3, 112), tick(4, 99)];
 

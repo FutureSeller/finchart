@@ -8,15 +8,18 @@
  * prose lets a sentence like "the result shows up immediately" slip past
  * the check net even when the thing actually throws. A tag is a kind of
  * promise, so a machine can attach the right probe per kind — `safe` is
- * caught in full by the `SAFE_ARG` probe, and `no-amplifier`'s state-
- * residue probe is stage 1b.
+ * caught in full by the `SAFE_ARG` probe, and `no-amplifier` by the
+ * state-residue probe in state-residue.test.ts.
  */
 export type Exemption =
   /** Takes no argument, or is a value — there is no door at all. */
   | { tag: "constant"; note: string }
   /** An error class in the contract vocabulary — the side a consumer catches. */
   | { tag: "error-type"; note: string }
-  /** A bad value leaves no state behind and does not change the screen. Probe wiring is stage 1b. */
+  /**
+   * A bad value leaves no state behind and does not change the screen.
+   * Checked by the state-residue probe.
+   */
   | { tag: "no-amplifier"; note: string }
   /** A promise not to crash — checked in full by the `SAFE_ARG` probe. */
   | { tag: "safe"; note: string }
@@ -100,7 +103,7 @@ export const EXEMPT: Record<string, Exemption> = {
   isGap: { tag: "safe", note: "a predicate — returns a boolean no matter what comes in. There is no place for it to throw" },
   tailDelta: { tag: "safe", note: "a check — only pointer-compares two arrays. It never reads a number, and when it cannot tell, null is the answer itself (the full path)" },
   reuseUnchanged: { tag: "safe", note: "an identity pass — compares points as plain data and never reads a number as a number; anything it cannot judge is handed on as is, for the data door to name" },
-  // "Takes no numbers" was only half true — the number it carries
+  // "Takes no numbers" is only half true — the number it carries
   // (pointsPerPixel) passes through with no check. That number is checked
   // by the wiring's door (presets's requirePositive).
   mergePolicy: { tag: "delegated", note: "policy merging — the numbers it carries are accepted by the wiring's door (presets)" },
@@ -129,11 +132,11 @@ export const EXEMPT: Record<string, Exemption> = {
   createScope: { tag: "constant", note: "takes no argument — the door is add(), which takes only a callback (no numeric slot)" },
   validateSeriesData: { tag: "safe", note: "the validator itself — reporting bad values as issues is its output, never a throw" },
   validateSeriesPoint: { tag: "safe", note: "the tick validator — the same per-point rules as updateLast, reported as issues, never a throw" },
-  frameScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback). The old reason (no amplifier) was empty, since there was no door to measure" },
+  frameScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback), so there is no door to measure and no-amplifier would claim nothing" },
   // Not "no amplifier" — there is simply no door to measure. Keep the tag honest.
-  immediateScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback). The old reason (no amplifier) was empty, since there was no door to measure" },
+  immediateScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback), so there is no door to measure and no-amplifier would claim nothing" },
   // Not "no amplifier" — there is simply no door to measure. Keep the tag honest.
-  manualScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback). The old reason (no amplifier) was empty, since there was no door to measure" },
+  manualScheduler: { tag: "assembly", note: "assembly vocabulary — has no numeric slot (only a callback), so there is no door to measure and no-amplifier would claim nothing" },
 
   // Input stack — coordinates are pixels and leave no state behind.
   InputRouter: { tag: "no-amplifier", note: "input router — coordinates leave no state behind" },
@@ -205,15 +208,14 @@ export const GUARDED: Record<string, string> = {
     + "(guarded in time/__tests__/bar-start.test.ts)",
   LinearScale: "chokepoint 1 — the domain becomes the boundary of the axis-tick loop (amplified)",
   LogScale: "chokepoint 1 — the domain becomes the boundary of the axis-tick loop (amplified)",
-  // An export with multiple doors can sit in this table with a checkmark
-  // even if only one of them is guarded — setViewport was, while
-  // applyOptions once had no numeric check at all.
+  // An export with multiple doors could sit in this table with a checkmark
+  // while only one of them is guarded, so a note names each door it vouches
+  // for; a door it doesn't name isn't covered by the checkmark.
   Plot: "chokepoints 2/3/6 — setViewport, applyOptions, and the constructor become dimensions and the domain, and the handle's updateLast is a data door (amplified, delayed)",
   createPlotDeps:
     "chokepoint 7 — maxPoints and pointsPerPixel become the trimming budget "
-    + "(delayed). This used to be exempted as "
-    + "\"assembly — takes a collaborator\", but that reason only counted the "
-    + "collaborator and never counted the two numbers",
+    + "(delayed). \"assembly — takes a collaborator\" is no reason "
+    + "here: it counts the collaborator and never the two numbers",
   infiniteHistory:
     "chokepoint 8 — options.from seeds every `before` the fetch is asked for, "
     + "and screensAhead scales the pull threshold (both throw at the door; "
@@ -230,39 +232,39 @@ export const GUARDED: Record<string, string> = {
 export const SHAPE_GUARDED: Record<string, string> = {
   barAggregator: "the options object and its barStart, which would otherwise fail at the first trade",
   fixedBars: "interval, where an exchange's bar width arrives as a string",
-  sessionStart: "timeZone, which must be given — a missing one used to mean the runtime's",
+  sessionStart: "timeZone, which must be given — a missing one would otherwise mean the runtime's",
   createPlotModel: "the size object and its dimensions. Layout arithmetic runs directly on it",
   Plot: "the constructor's size, and the data doors (setData, append, prepend, updateLast)",
-  markers: "where garbage coordinates used to get drawn as-is",
-  priceLine: "used to pass even when value was a string",
+  markers: "where garbage coordinates would otherwise be drawn as-is",
+  priceLine: "value, which unguarded passes even as a string",
   span: "the from/to range",
   watermark: "the options object",
-  paneMaximize: "the options object and its gestures flag, which used to throw a raw TypeError on every input event",
+  paneMaximize: "the options object and its gestures flag, which unguarded throws a raw TypeError on every input event",
   /**
-   * The exemption reason was "the result shows up on the label
-   * immediately," but there was no result — it threw. The `tickSize` an
+   * "The result shows up on the label immediately" is no reason here:
+   * unguarded, there is no result — it throws. The `tickSize` an
    * exchange hands over is a string (`"0.01000000"`), and
    * `Number(localStorage…)` is `NaN`.
    */
-  priceFormat: "precision, minMove, locale. Where tickSize used to arrive as a string",
+  priceFormat: "precision, minMove, locale. Where tickSize arrives as a string",
 
   /**
-   * All three exemption reasons here were false. "Style leaves no state
-   * behind" — `lineSeries(42)` passed through silently and drew with the
-   * default, and all the consumer saw was "the style isn't taking effect."
+   * A reason that says only who calls a function, never where the value
+   * comes from, is false here. "Style leaves no state behind" — unguarded,
+   * `lineSeries(42)` passes through silently and draws with the default,
+   * and all the consumer sees is "the style isn't taking effect."
    * "Belongs to renderer authors" — `fillLinearGradient` receives a
-   * consumer value that arrived via `areaSeries({ fill })`, and a raw
-   * `TypeError` leaked out on all six hostile shapes. Both were wrong
-   * because they only said who calls it, never where the value comes from.
+   * consumer value that arrives via `areaSeries({ fill })`, and unguarded
+   * a raw `TypeError` leaks out on all six hostile shapes.
    */
-  lineSeries: "the style argument. 42 passed through and drew with the default",
+  lineSeries: "the style argument. Unguarded, 42 passes through and draws with the default",
   stepLineSeries: "the same door as lineSeries (same requireObject)",
-  areaSeries: "the style argument. 42 passed through and drew with the default (fill reaches all the way to fillLinearGradient)",
-  barSeries: "the style argument. 42 passed through and drew with the default (fill reaches all the way to fillLinearGradient)",
-  baselineSeries: "the style argument. 42 passed through and drew with the default (fill reaches all the way to fillLinearGradient)",
-  candleSeries: "the style argument. 42 passed through and drew with the default (fill reaches all the way to fillLinearGradient)",
-  histogramSeries: "the style argument. 42 passed through and drew with the default (fill reaches all the way to fillLinearGradient)",
-  fillLinearGradient: "areaSeries({fill}) arrives here. All six were raw TypeErrors",
+  areaSeries: "the style argument. Unguarded, 42 passes through and draws with the default (fill reaches all the way to fillLinearGradient)",
+  barSeries: "the style argument. Unguarded, 42 passes through and draws with the default (fill reaches all the way to fillLinearGradient)",
+  baselineSeries: "the style argument. Unguarded, 42 passes through and draws with the default (fill reaches all the way to fillLinearGradient)",
+  candleSeries: "the style argument. Unguarded, 42 passes through and draws with the default (fill reaches all the way to fillLinearGradient)",
+  histogramSeries: "the style argument. Unguarded, 42 passes through and draws with the default (fill reaches all the way to fillLinearGradient)",
+  fillLinearGradient: "areaSeries({fill}) arrives here. Unguarded, all six are raw TypeErrors",
 };
 
 export const SHAPE_EXEMPT: Record<string, Exemption> = {
@@ -290,7 +292,7 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
 
   // Style utilities — used by extension authors when building their own spec.
   /**
-   * The old reason was "belongs to spec authors," but the third argument is
+   * "Belongs to spec authors" is no reason here: the third argument is
    * every series factory's consumer-facing option. That door does not
    * throw — it tames the value instead, because it sits on the draw path,
    * where falling back is the contract. It is not a throwing door, so it
@@ -305,7 +307,7 @@ export const SHAPE_EXEMPT: Record<string, Exemption> = {
    * would pass silently with "zero variables." Silence costs more here.
    */
   styleVars: { tag: "assembly", note: "style utility — throws ContractError if it is not a spec. This is an authoring-time door, so throwing beats staying silent" },
-  cssVarExpr: { tag: "assembly", note: "style utility — throws ContractError if it is not a leaf. This is where a third-party extension's typo'd leaf name used to blow up on the render path" },
+  cssVarExpr: { tag: "assembly", note: "style utility — throws ContractError if it is not a leaf. This is where a third-party extension's typo'd leaf name is caught instead of blowing up on the render path" },
   styleSpec: { tag: "assembly", note: "assembly vocabulary — the identity at runtime (`(spec) => spec`), so there is no shape it can be given wrong. Everything it does happens in the type system, and a spec that is not one fails to compile" },
   noStyle: { tag: "constant", note: "a value — a single reader" },
   labelFont: { tag: "assembly", note: "style resolution — takes a reader" },

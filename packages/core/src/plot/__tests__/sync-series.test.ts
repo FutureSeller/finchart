@@ -51,7 +51,7 @@ function loaded() {
 }
 
 describe("Pane.syncSeries", () => {
-  /** A conditional series turned on later still follows array order — when it was addSeries' push order, whatever turned on later always ended up on top. */
+  /** A conditional series turned on later still follows array order — with addSeries' push order, whatever turned on later would always end up on top. */
   it("should place a later-inserted series by array order, not insertion order", () => {
     const plot = loaded();
     const log: string[] = [];

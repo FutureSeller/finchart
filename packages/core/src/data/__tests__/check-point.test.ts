@@ -7,9 +7,9 @@ import { checkPoint } from "../validate";
 
 /**
  * The tick path and the whole-array walk read one per-point body.
- * `updateLast` used to carry its own four checks (shape, readable y,
- * finite values, finite x) — a copy that could drift from
- * `scanSeriesData`. Now both call `checkPoint`, and the tick door reports
+ * Were `updateLast` to carry its own four checks (shape, readable y,
+ * finite values, finite x), the copy could drift from
+ * `scanSeriesData`. So both call `checkPoint`, and the tick door reports
  * the bar it is actually replacing (the last index), not a made-up 0.
  */
 

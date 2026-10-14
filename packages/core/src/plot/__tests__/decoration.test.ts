@@ -63,8 +63,8 @@ describe("decoration order", () => {
     expect(log).toEqual(["plot-bg", "pane-bg", "pane-fg", "plot-fg"]);
   });
 
-  it("should let a decoration sit between the old two slots", () => {
-    // A position that used to be impossible to express — there were only two slots.
+  it("should let a decoration sit between BELOW_SERIES and the series", () => {
+    // A position that two fixed slots (below and above the series) cannot express.
     const { plot, handle } = mount();
     const log: string[] = [];
 

@@ -358,8 +358,8 @@ describe("timeTicks — where the grid stops", () => {
  * them.** A fraction on a bound names an instant no tick can sit on, and
  * carrying it through the grid loses it — added to an offset, subtracted
  * from an anchor, divided by a step, and a small enough one stops existing
- * at any of the three. `[5e-324, 2000]` drew a tick at 0, outside the very
- * window it was asked about.
+ * at any of the three. Carried through, `[5e-324, 2000]` would draw a
+ * tick at 0, outside the very window it was asked about.
  */
 describe("timeTicks — a window whose edge is not a whole millisecond", () => {
   it.each([
@@ -402,8 +402,8 @@ describe("timeTicks — a window whose edge is not a whole millisecond", () => {
    * from.** A window whose edge sits half a millisecond before a midnight
    * belongs to the day before it; rounding that edge up to the midnight
    * moves the day the grid is anchored on, and a two-day rung then draws
-   * the odd days where it drew the even ones. Nothing about which instants
-   * are drawable changed — the whole phase did.
+   * the odd days instead of the even ones. Which instants are drawable
+   * stays the same — the whole phase shifts.
    */
   it("hangs the grid off the day the caller's window starts in", () => {
     const min = Date.UTC(2026, 0, 2) - 0.5;
@@ -416,7 +416,7 @@ describe("timeTicks — a window whose edge is not a whole millisecond", () => {
    * **A clock read through `Date` truncates toward zero, not down.** A
    * window opening half a millisecond before the epoch belongs to the day
    * that ended there; reading it as the day after moves the grid's whole
-   * phase, the same way narrowing the edge did.
+   * phase, the same way rounding the edge up does.
    */
   it("hangs the grid off the day a window before the epoch starts in", () => {
     const ticks = timeTicks(UTC).ticks(context(-0.5, 863_999_999.5, 500, 100));
@@ -429,13 +429,13 @@ describe("timeTicks — a window whose edge is not a whole millisecond", () => {
    * walks back within the year, and at the earliest instants a `Date`
    * holds there is nothing behind to walk into — its first instant falls
    * in an April, so that April is half outside and March wholly so.
-   * Asking anyway threw where the axis had drawn nothing before.
+   * Asking anyway throws.
    */
   it.each([
     ["earliest", -8.64e15, -8.64e15 + 100 * 24 * 60 * 60 * 1000],
     // The same walk at the other end: the loop asks about a month before
-    // it learns the month is past the window, so the one after the last
-    // was asked about too — and up there it cannot be read.
+    // it learns the month is past the window; unbounded, the one after the
+    // last would be asked about too — and up there it cannot be read.
     ["latest", 8.64e15 - 100 * 24 * 60 * 60 * 1000, 8.64e15],
   ])("draws months at the %s instants a Date holds", (_end, min, max) => {
     const ticks = timeTicks(UTC).ticks(context(min, max, 800, 100));
@@ -615,7 +615,7 @@ describe("timeTicks — how close a pair may sit", () => {
    * **The year ladder only ever asks about years the window covers.** The
    * whole range a `Date` can hold wants a hundred-thousand-year step, and
    * the nearest multiple below its first year is a year no `Date` reaches
-   * — asking a zone to read it used to throw.
+   * — and asking a zone to read it throws.
    */
   it("spans the whole range a Date can hold", () => {
     const ticks = timeTicks(UTC).ticks(context(-8.64e15, 8.64e15, 800, 100));
@@ -629,7 +629,7 @@ describe("timeTicks — how close a pair may sit", () => {
   /**
    * The earliest instant a `Date` can hold falls in an April, so its own
    * year's January is a reading no zone can be asked to read. A single-year
-   * step at that edge used to ask anyway.
+   * step at that edge must not ask anyway.
    */
   it("starts at the earliest January it can be asked about", () => {
     const YEAR_MS = 365 * 24 * 60 * 60 * 1000;

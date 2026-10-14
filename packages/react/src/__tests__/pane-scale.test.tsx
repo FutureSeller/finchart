@@ -5,8 +5,8 @@
  * `PANE_OPTION_DEFAULTS`) and are applied **per changed field** — a grouped
  * `applyOptions` of every prop would, on a `flex` change, write
  * `autoScale: true` back over a pane the user had just dragged to a fixed
- * range. The same defect already existed for `flex` itself (a divider drag
- * undone by a `minHeight` change), so that is measured too.
+ * range. `flex` has the same hazard (a divider drag undone by a
+ * `minHeight` change), so that is measured too.
  *
  * `yScale` is a factory called when the pane is built, like `deps.mainPaneYScale`,
  * and on later commits, installing a scale only when its kind changes. On
@@ -118,8 +118,8 @@ describe('<ChartPane autoScale invert>', () => {
 
 describe('<ChartPane yScale>', () => {
   /**
-   * **A log toggle is a prop change, not a remount.** The factory used to be
-   * read once, so a toggle took a `key` — and the remount threw away every
+   * **A log toggle is a prop change, not a remount.** A factory read once
+   * would make a toggle take a `key` — and the remount would throw away every
    * series in the pane, the indicators built on them and a dragged height.
    */
   it('swaps the scale when the factory hands out another kind, keeping the pane and what is in it', () => {
@@ -371,8 +371,8 @@ describe('<ChartPane yScale>', () => {
 
 /**
  * `<ChartPane valueDomain>` — a fixed value axis declared, the way an
- * oscillator pane pins 0..100. Without it the only way was the indicator's
- * own pane, which a period change rebuilt — at the bottom of the stack,
+ * oscillator pane pins 0..100. Without it the only way is the indicator's
+ * own pane, which a period change rebuilds — at the bottom of the stack,
  * without its drawings or height.
  */
 describe('<ChartPane valueDomain>', () => {

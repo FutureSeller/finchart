@@ -7,9 +7,9 @@ import { type RowFormat, sampleText } from "./sample-text";
  * What the legend requires from a pane — knowing its position and being
  * able to query values is enough.
  *
- * This used to be the `Pane` (class) type, but every pane a consumer
- * actually gets their hands on is a `PaneApi`, so that was an option with no
- * real value to pass.
+ * It is not the `Pane` (class) type: every pane a consumer actually gets
+ * their hands on is a `PaneApi`, so that would be an option with no real
+ * value to pass.
  */
 export type LegendPane = ValueCoordinates & DataProbe & ValueFormatSource;
 

@@ -3,10 +3,8 @@ import { ContractError } from "../../primitives";
 import { LogScale } from "../log-scale";
 
 /**
- * Pins the numeric table in log-ticks-approach-2026-09-02.md §2c — the
- * approach declared "tests fix this table verbatim", so every literal
- * here traces to a line of that table. The scale under test is set up
- * the way `Pane` does it: a y range of `[bottom, top]` (reversed), so
+ * Pins the log tick ladder with exact values. The scale under test is set
+ * up the way `Pane` does it: a y range of `[bottom, top]` (reversed), so
  * these tests also pin that the geometry survives the reversed range
  * without a sign contract on the caller.
  */
@@ -22,8 +20,8 @@ function logScale(
 const SPACING = 40;
 
 describe("LogScale.tickGeometry — placement", () => {
-  it("fills the reviewed domain with the 1·2·5 ladder (R1's two symptoms)", () => {
-    // Review-measured domain: 156.7 px/decade ≥ 133 → full {1,2,5}.
+  it("fills a domain of about 157 px per decade with the full 1·2·5 ladder", () => {
+    // 156.7 px/decade ≥ 133 → full {1,2,5}.
     const geometry = logScale(0.5011, 1995.3).tickGeometry(SPACING);
     expect(geometry.values()).toEqual([
       1, 2, 5, 10, 20, 50, 100, 200, 500, 1000,
@@ -32,17 +30,17 @@ describe("LogScale.tickGeometry — placement", () => {
 
   it("keeps the inner set fixed when the lower bound moves (pan stability)", () => {
     // 88.9 px/decade → decade-only band. A 20% move of the lower bound
-    // must not reshuffle the interior — the old greedy filter anchored
-    // to the domain edge and swapped all ten labels here.
+    // must not reshuffle the interior — a greedy filter anchored to the
+    // domain edge swaps all ten labels here.
     const before = logScale(0.05, 110000).tickGeometry(SPACING).values();
     const after = logScale(0.06, 110000).tickGeometry(SPACING).values();
     expect(before).toEqual([0.1, 1, 10, 100, 1000, 10000, 100000]);
     expect(after).toEqual(before);
   });
 
-  it("does not snap at the old d = 1 threshold", () => {
-    // The v1 rule flipped from linear to ladder at exactly one decade,
-    // collapsing 9 ticks to 4 on a 6% zoom-out. The single predicate
+  it("does not snap from linear to ladder at exactly one decade", () => {
+    // A rule that flips from linear to ladder at exactly one decade
+    // collapses 9 ticks to 4 on a 6% zoom-out. The single predicate
     // (whichever candidate keeps more ticks) answers the same on both
     // sides of that boundary.
     const below = logScale(1, 9.9).tickGeometry(SPACING).values();
@@ -71,12 +69,12 @@ describe("LogScale.tickGeometry — placement", () => {
 
   it("caps values() at 1,000 ticks", () => {
     // A pathological span affords the full ladder over hundreds of
-    // decades — the linear axis earned this cap from a real OOM, and
-    // this path leaves that door.
+    // decades — about 1,800 rungs here — so this path carries its own
+    // copy of the 1,000-tick cap the linear axis has.
     const geometry = logScale(1e-300, 1e300, 100000).tickGeometry(SPACING);
     // Exactly the cap — not less. A lesser count would mean the ladder
-    // collapsed (the log10(max/min) overflow once made this 0, and a
-    // ≤-assertion waved it through).
+    // collapsed (an overflowing log10(max/min) would make this 0, and a
+    // ≤-assertion would wave it through).
     expect(geometry.values().length).toBe(1000);
   });
 
@@ -105,9 +103,9 @@ describe("LogScale.tickGeometry — stepAt", () => {
     expect(geometry.stepAt(Number.NaN)).toBe(1);
   });
 
-  it("keeps the tiny-value gain the badge change exists for", () => {
-    // Domain [0.00001, 0.1]: today's linear ruler says step 0.01 and
-    // every badge reads "0.00". The local decade is 0.00001.
+  it("gives a tiny value its own decade's step", () => {
+    // Domain [0.00001, 0.1]: a linear ruler over this domain says step
+    // 0.01 and every badge reads "0.00". The local decade is 0.00001.
     const geometry = logScale(0.00001, 0.1).tickGeometry(SPACING);
     expect(geometry.stepAt(0.00003)).toBe(0.00001);
   });

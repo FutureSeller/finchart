@@ -75,7 +75,7 @@ describe("addSeries", () => {
     const log: string[] = [];
 
     plot.setSeries({ series: fakeSeries("candles", { min: 0, max: 30 }, log), data });
-    // A band fill turned on late by a toggle — registered late, but drawn underneath (dogfooding #5)
+    // A band fill turned on late by a toggle — registered late, but drawn underneath
     plot.mainPane.addSeries({
       series: fakeSeries("fill", { min: 0, max: 30 }, log),
       data,

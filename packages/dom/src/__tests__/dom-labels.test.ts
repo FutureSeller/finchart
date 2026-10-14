@@ -250,7 +250,7 @@ describe("createDomAxisLabels", () => {
 
   /**
    * **An edge tick's label stays on the chart.** Centred on a tick at the
-   * data area's edge, half of it hung past the chart and was cut off. The
+   * data area's edge, half of it would hang past the chart and be cut off. The
    * centring is clamped in CSS — no layout read — between the data area's
    * left edge and the y gutter's right edge.
    */

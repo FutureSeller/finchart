@@ -1,7 +1,7 @@
 /**
  * A collection of regression checks for the data layer. Each describe is
- * one fixed spot, and its title records what was actually observed at the
- * time — if the next person reopens the same spot, this is where it cries out.
+ * one guarded spot, and its title names what it guards — if the next
+ * person reopens the same spot, this is where it cries out.
  */
 import { describe, expect, it } from "vitest";
 import { defaultCoordinates, LINE_COORDINATES, OHLCAccessor } from "../accessors";
@@ -70,7 +70,7 @@ describe("the default accessor tells 'missing y' apart from 'a hole'", () => {
 });
 
 describe("grid decimation also reads through its own accessor", () => {
-  /** A hand-rolled accessor carried the same `?? null` bug too. */
+  /** A hand-rolled accessor can carry the same `?? null` mistake too. */
   it("doesn't collapse the window to one point for a point shape with no y", () => {
     const data = valuePoints(1000);
     const out = new SimpleDecimation<ValuePoint>({
@@ -106,7 +106,7 @@ describe("M4 columns come out in place order, with no duplicates", () => {
   /**
    * `flushInto` compares the four positions directly instead of sorting
    * (to cut allocations) — the question is whether it still preserves the
-   * ascending order and dedup that sorting used to guarantee. The edge
+   * ascending order and dedup that a sort would guarantee. The edge
    * case is when an extreme value is the first point or overlaps the last one.
    */
   const m4 = () => new M4Decimation<LineDataPoint>(defaultCoordinates());
@@ -138,13 +138,14 @@ describe("M4 columns come out in place order, with no duplicates", () => {
 describe("a per-registration decimation policy also passes through the door", () => {
   /**
    * `presets.ts` guards a wiring's `maxPoints`/`pointsPerPixel` with
-   * `requirePositive`, but the per-registration
-   * `DecimationPolicy.pointsPerPixel` skipped that door and went straight
-   * to the manager. `NaN` disables decimation entirely; `0` or `-1` turns
-   * the chart into a straight line. `createDataManager(coords, policy)`
-   * measures against the door a registration actually passes through; the
-   * refusals themselves are checked in boundary-values.test.ts, through
-   * `addSeries`'s `decimation.pointsPerPixel`.
+   * `requirePositive`, and the per-registration
+   * `DecimationPolicy.pointsPerPixel` must not skip that door and go
+   * straight to the manager: `NaN` disables decimation entirely; `0` or
+   * `-1` turns the chart into a straight line.
+   * `createDataManager(coords, policy)` measures against the door a
+   * registration actually passes through; the refusals themselves are
+   * checked in boundary-values.test.ts, through `addSeries`'s
+   * `decimation.pointsPerPixel`.
    */
   const deps = () =>
     createPlotDeps({
@@ -181,10 +182,10 @@ describe("step decimation also preserves holes", () => {
    * Calling `pickEveryNth` directly without `preservingHoles` selects by
    * index, so a hole can simply be dropped — then the hole-splitting logic
    * never fires and the line connects straight across a value that isn't
-   * there. This is the picture once described as "worse than losing an
-   * extreme value." The default accessor doesn't declare `gapless`, so this
-   * is also the counterpart of the gapless fast path below: without the
-   * declaration the window is still scanned for holes.
+   * there, a picture worse than losing an extreme value. The default
+   * accessor doesn't declare `gapless`, so this is also the counterpart of
+   * the gapless fast path below: without the declaration the window is
+   * still scanned for holes.
    */
   it("whitespace survives decimation", () => {
     const data: LineDataPoint[] = Array.from({ length: 100 }, (_, i) => ({
@@ -203,11 +204,11 @@ describe("step decimation also preserves holes", () => {
 
 describe("an accessor that can't produce holes doesn't scan the window", () => {
   /**
-   * `preservingHoles` used to call `getY` across the whole window every
-   * frame just to get a single boolean. A bar series asked this question
-   * even though the answer is always "no" — and since the viewport cache
-   * keys on `startX`/`endX`, panning or zooming misses it every frame. This
-   * measures by call count, not time — "it stopped asking" is what this fix is about.
+   * `preservingHoles` must not call `getY` across the whole window every
+   * frame just to get a single boolean for a bar series, whose answer is
+   * always "no" — and since the viewport cache keys on `startX`/`endX`,
+   * panning or zooming misses it every frame. This measures by call count,
+   * not time — "it does not ask" is the property.
    */
   it("doesn't call getY across the whole window for a gapless accessor", () => {
     const data: OHLC[] = Array.from({ length: 5_000 }, (_, i) => ({
@@ -342,11 +343,11 @@ describe("hole presence is rewritten on every mutation", () => {
   });
 });
 
-describe("M4 with gaps keeps each value run's extremes (a spike in a short run was dropped)", () => {
+describe("M4 with gaps keeps each value run's extremes, a short run's spike included", () => {
   /**
-   * Gaps split the budget across runs; a run whose share rounded below one
-   * column used to keep only its two endpoints, so a spike inside it left
-   * the drawing and the autoscaled y range with it.
+   * Gaps split the budget across runs; a run whose share rounds below one
+   * column must not keep only its two endpoints, or a spike inside it
+   * leaves the drawing and the autoscaled y range with it.
    */
   it("keeps the spike of a run whose budget share rounds below four", () => {
     const data: LineDataPoint[] = Array.from({ length: 10_000 }, (_, i) => ({

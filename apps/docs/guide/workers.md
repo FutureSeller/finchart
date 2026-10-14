@@ -6,7 +6,7 @@ description: "Render a chart in a Web Worker on an OffscreenCanvas: what moves t
 
 The core has no DOM, so a whole chart can run in a Web Worker and draw on an
 `OffscreenCanvas`. The main thread keeps the canvas element and the input; a
-long task on the main thread no longer stalls the chart.
+long task on the main thread does not stall the chart.
 [Worker rendering](/examples/worker-render) is the running version of this
 page.
 

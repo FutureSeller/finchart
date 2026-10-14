@@ -21,7 +21,7 @@ describe("clampDividerDrag", () => {
 
   it("should not move at all when both panes already sit under their floors", () => {
     // Ordinary input when the container is shorter than the floors add up
-    // to — a sign flip here once moved the boundary against the gesture.
+    // to — a sign flip here would move the boundary against the gesture.
     const squeezed = { height: 32, minHeight: 40 };
     expect(clampDividerDrag(-1, squeezed, squeezed)).toBe(0);
     expect(clampDividerDrag(1, squeezed, squeezed)).toBe(0);

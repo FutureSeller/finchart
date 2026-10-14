@@ -3,7 +3,7 @@
  * boundaries between them.
  *
  * No browser needed: with a fake reader, the whole CSS-variable-to-resolved-
- * value path is a pure function — the seam was made for testability.
+ * value path is a pure function — the seam exists for testability.
  */
 import { describe, expect, it } from "vitest";
 import type { StyleReader } from "../style-reader";

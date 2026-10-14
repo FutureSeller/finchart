@@ -2,9 +2,9 @@
  * A slot with no value is a gap — in any series, anywhere in the array.
  * Separate from the contract that `y: null` means whitespace, when an
  * exchange row is missing `close` and `y` arrives as a key that isn't
- * there at all (`undefined`), a hole check that only looked at
- * `y === null` used to let it pass as a non-gap value — the line bridged
- * the hole instead of breaking at it.
+ * there at all (`undefined`), a hole check that only looks at
+ * `y === null` lets it pass as a non-gap value — the line bridges the
+ * hole instead of breaking at it.
  *
  * The data door can't catch this — `assertReadableValue` only looks at
  * `data[0]` and `data[last]` to stay O(1), so a missing value in the

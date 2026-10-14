@@ -1,17 +1,15 @@
 /**
  * **The root README's React example compiles here.**
  *
- * This example had no machine guarding it, and so it wasn't merely stale —
- * it **never compiled in the first place**. The derive function's body was
- * the pseudocode `/* source → points *\/ points;`, and `points` didn't exist
- * anywhere. A consumer who copy-pasted it would see `TS2304: Cannot find
+ * An example no machine guards need not compile at all: a derive body
+ * written as the pseudocode `/* source → points *\/ points;`, with `points`
+ * defined nowhere, gives a consumer who copy-pastes it `TS2304: Cannot find
  * name 'points'` on the very first line.
  *
  * The vanilla 60-second example is guarded by
  * `apps/docs/snippets/getting-started.ts`, and the package README's
- * 60-second example by `minimal-service.types.tsx`. **Of the three front
- * doors, React was the only one left undefended** — that asymmetry is why
- * this file exists.
+ * 60-second example by `minimal-service.types.tsx`. This file guards the
+ * third front door, React.
  *
  * (Since the file isn't `.test.tsx`, vitest ignores it and only `tsc` looks
  * at it.)

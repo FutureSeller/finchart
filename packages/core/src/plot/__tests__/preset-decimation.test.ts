@@ -1,8 +1,7 @@
 /**
- * The manager defaults a registration actually receives. The wiring used
- * to hold the manager instance so it could be asked about directly, but
- * since data moved down into the registration, it has to be asked at the
- * end of the chain that builds a registration's manager.
+ * The manager defaults a registration actually receives. Data lives in the
+ * registration, not in the wiring, so the defaults are asked at the end
+ * of the chain that builds a registration's manager.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -59,7 +58,7 @@ describe("wiring default — a series that declares no policy", () => {
 
     const ys = manager.getVisibleData(viewport(800)).map((p) => p.y);
 
-    // Back when the grid was the default, only a bucket's first point survived and both would have disappeared.
+    // With a grid default, only a bucket's first point would survive and both would disappear.
     expect(ys).toContain(999);
     expect(ys).toContain(-999);
   });
@@ -68,7 +67,7 @@ describe("wiring default — a series that declares no policy", () => {
     const manager = managerFor(testBrowserDeps(), lineSeries());
     manager.setData(line(100_000));
 
-    // Back when the default cap was 1000, it got truncated at 1000 points regardless of width.
+    // A fixed cap of 1000 would truncate it at 1000 points regardless of width.
     expect(
       manager.getVisibleData(viewport(2000)).length,
     ).toBeGreaterThanOrEqual(2000);

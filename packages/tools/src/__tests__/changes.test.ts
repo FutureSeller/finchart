@@ -1,7 +1,7 @@
 /**
- * **The extension notifies.** There used to be no channel for this, so
- * the only place an example could save a drawing was a button click --
- * the result of a drag would vanish on refresh.
+ * **The extension notifies.** Without this channel, the only place an
+ * example could save a drawing is a button click -- the result of a drag
+ * would vanish on refresh.
  */
 import { describe, expect, it, vi } from "vitest";
 import { lineSeries } from "@finchart/core";

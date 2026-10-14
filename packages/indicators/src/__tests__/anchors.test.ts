@@ -28,7 +28,7 @@ describe("anchor sees the bar before it", () => {
    * **A session boundary is a comparison, not a property of one bar.** The
    * question "did a new session open here" cannot be answered by looking at
    * this bar alone — it needs the bar behind it. Without the third
-   * argument, every consumer had to close over the array and index it
+   * argument, every consumer would have to close over the array and index it
    * again.
    */
   it("hands vwap's anchor the previous bar, and null at the first", () => {
@@ -77,7 +77,7 @@ describe("periodAnchor", () => {
 
   /**
    * **The bug this exists for.** A New York session opens at 05:00Z, and
-   * the `x % 86_400_000 === 0` anchor every example used to carry asks
+   * the `x % 86_400_000 === 0` anchor that reads as "daily" asks
    * about UTC midnight instead. On this tape — six-hourly bars from an
    * 05:00Z open — no bar's x is a multiple of a day, so it is true of
    * nothing and VWAP accumulates across every session forever. Move to

@@ -151,7 +151,7 @@ export class SimpleDataManager<
    * and `updateLast` checks only one point.
    *
    * False covers "don't know" — the safe default is false, and not knowing
-   * falls back to a full scan as before (slower, but always correct).
+   * falls back to a full scan (slower, but always correct).
    */
   private gapFree = true;
 
@@ -193,7 +193,9 @@ export class SimpleDataManager<
     if (points.length === 0) return;
 
     // The seam is the walk's seed — the existing tail plays "the previous
-    // point" for the chunk's first one (one rule set, ADR-0032).
+    // point" for the chunk's first one, so `scanSeriesData` applies its
+    // order rule (and, under `uniqueX`, the repeated-x rule) across the seam
+    // as it does inside the chunk.
     const chunkHasGap = this.assertChunkSorted(
       points,
       this.data.length
@@ -371,17 +373,6 @@ export class SimpleDataManager<
   }
 
   /**
-   * x-ascending order is a contract. Violate it and you find out here —
-   * slicing is a binary search, which needs order, and unsorted data gets
-   * drawn wrong regardless. A repeated x is allowed (two points at one
-   * moment) unless the accessor declares `uniqueX`.
-   *
-   * Merged into one with `assertChunkSorted` — these used to be nearly
-   * identical copies, and the one real difference (the empty-array gate,
-   * checking the last point) actually drifted apart and left a hole in the
-   * incremental path.
-   */
-  /**
    * The landing door — see the `DataManager` contract. The caller supplies
    * only the changed head; the retained body is selected from this manager's
    * own accepted array. That makes narrowed validation a structural fact,
@@ -421,6 +412,14 @@ export class SimpleDataManager<
     this.afterIncrement();
   }
 
+  /**
+   * x-ascending order is a contract. Violate it and you find out here —
+   * slicing is a binary search, which needs order, and unsorted data gets
+   * drawn wrong regardless. A repeated x is allowed (two points at one
+   * moment) unless the accessor declares `uniqueX`. Full loads and
+   * incremental chunks both check through `assertChunkSorted`, so the two
+   * paths cannot drift apart.
+   */
   private assertSorted(data: readonly T[]): boolean {
     // `=== 0`, not `< 2` — even a single-element array needs its shape and
     // finiteness checked (there's just nothing to sort).
@@ -547,7 +546,7 @@ export class SimpleDataManager<
    * There's no reason to draw 100k points in 400px — keep only as many as
    * screen width needs, without exceeding the ceiling.
    *
-   * The floor used to fail at being a floor when handed `NaN` —
+   * A `Math.max` floor fails at being a floor when handed `NaN` —
    * `Math.max(1, NaN)` is `NaN`, and that budget passes every comparison,
    * turning off decimation entirely. The comparison is flipped (`>= 1`) so
    * `NaN` falls through to the floor.

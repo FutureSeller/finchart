@@ -304,7 +304,7 @@ export function barIndexX(scale: Scale, probe?: XMappingProbe): XMapping {
   /**
    * How many steps forward the cursor walks before giving up. Past this,
    * it falls back to binary search — the limit is set so that even a
-   * miss costs no more than the old pure-binary-search path did.
+   * miss costs no more than a plain binary search would.
    */
   const SCAN_STEPS = 32;
 

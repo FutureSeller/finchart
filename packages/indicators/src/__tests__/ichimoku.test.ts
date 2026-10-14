@@ -191,7 +191,7 @@ describe("ichimoku — ahead, independently", () => {
 });
 
 describe("ichimoku — calcFirst (a history page)", () => {
-  /** The prefix's lagging span reads ahead — Codex's counterexample: periods 3, displacement 2, count 1. */
+  /** The prefix's lagging span reads ahead — a counterexample: periods 3, displacement 2, count 1. */
   it("lands a page with the lagging span intact — the prefix is computed on displacement more inputs", () => {
     const short = (i: number): OHLC => ({ x: i, open: i, high: i + 0.5, low: i - 0.5, close: i });
     const f = feed([1, 2, 3, 4, 5, 6].map(short));

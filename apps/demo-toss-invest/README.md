@@ -33,7 +33,7 @@ instance accessible to other people.
 
 - The import contains chart code and market-data routes. Credentials, personal
   records, private lab pages, saved market snapshots, caches, and source-repo
-  metadata were excluded.
+  metadata are excluded.
 - No account, holdings, or order endpoints are used.
 - Authentication and response projection use `server-only` modules. Access
   tokens stay in server memory and are never returned to the browser.

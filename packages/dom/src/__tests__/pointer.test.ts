@@ -375,9 +375,8 @@ describe("PointerInteractions crosshair", () => {
   });
 
   it("should follow the pointer through a pan drag", () => {
-    // The contract flipped (2026-08-14 review) — the crosshair now stays
-    // under the pointer even while panning. Matches the reference-library
-    // convention (lightweight-charts, TradingView).
+    // The crosshair stays under the pointer even while panning, matching
+    // the reference-library convention (lightweight-charts, TradingView).
     new PointerInteractions(element).connect(target.target);
 
     down(100);
@@ -592,7 +591,7 @@ describe("PointerInteractions through the input stack", () => {
   });
 });
 
-describe("PointerInteractions pinch (2.4)", () => {
+describe("PointerInteractions pinch", () => {
   const downAt = (pointerId: number, clientX: number) =>
     element.dispatchEvent(
       Object.assign(new MouseEvent("pointerdown", { clientX, bubbles: true }), {
@@ -678,7 +677,7 @@ describe("PointerInteractions pinch (2.4)", () => {
   });
 });
 
-describe("PointerInteractions dblclick + keyboard (2.4)", () => {
+describe("PointerInteractions dblclick + keyboard", () => {
   it("should reset to the full view on double click", () => {
     new PointerInteractions(element).connect(target.target);
 
@@ -924,7 +923,7 @@ describe("PointerInteractions dblclick + keyboard (2.4)", () => {
   });
 });
 
-describe("PointerInteractions kinetic scroll (2.4)", () => {
+describe("PointerInteractions kinetic scroll", () => {
   /**
    * A cancellation is not a release — and neither is kinetic scrolling.
    * If a pan reclaimed by palm rejection or a browser gesture handoff
@@ -1058,7 +1057,7 @@ describe("PointerInteractions kinetic scroll (2.4)", () => {
   });
 });
 
-describe("PointerInteractions click trio (2.5)", () => {
+describe("PointerInteractions click trio", () => {
   it("should echo a clean click with local coordinates", () => {
     new PointerInteractions(element).connect(target.target);
 

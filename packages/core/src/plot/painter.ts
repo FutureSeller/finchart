@@ -101,9 +101,8 @@ export function paintFrame(
    *
    * Without it, it actually leaks. If a manual value range is narrower
    * than the data, a line stretches hundreds of pixels past the pane, and
-   * with two panes, the lower one covers the upper one. This was only
-   * invisible under the default wiring, where the value axis follows the
-   * data.
+   * with two panes, the lower one covers the upper one. This is invisible
+   * only under the default wiring, where the value axis follows the data.
    *
    * Plot decorations get the whole data area; pane decorations and series
    * get that pane's slice. The axis slice belongs to neither — what
@@ -194,21 +193,18 @@ function collectAxisBadges(
      * **A pane that mounts no labels mounts no badges either.**
      *
      * The tick side is already filtered by `drawAxisLabels` via
-     * `showLabels`. The badge side had no such door, so badges from a
-     * collapsed pane (`{flex:0, minHeight:0}`) were collected as-is —
-     * that pane's range is a **1px fake** laid down by
-     * `floorAtOnePixel`, so every one of its badges piled into a 1px band
-     * and got stamped right on top of a still-visible pane's price
-     * labels. This is the other half of what was fixed on the
-     * tick side.
+     * `showLabels`; this is the badge side's half. A collapsed pane's
+     * (`{flex:0, minHeight:0}`) range is a **1px fake** laid down by
+     * `floorAtOnePixel`, so collecting its badges as-is would pile every
+     * one into a 1px band, stamped right on top of a still-visible pane's
+     * price labels.
      *
-     * **What's checked is `collapsed`, not `showLabels`.** It was first
-     * written as the latter, but that made a
-     * **normal setting** — *"clean axis, badges only"*
-     * (`axis: {showLabels: false}`) — **make the price badge disappear
-     * too,** and that's a common shape for a trading screen, where a
-     * neighboring pane has labels on and the axis strip is perfectly
-     * intact. The only pane with no space is a collapsed one.
+     * **What's checked is `collapsed`, not `showLabels`.** Checking
+     * `showLabels` would make a **normal setting** — *"clean axis, badges
+     * only"* (`axis: {showLabels: false}`) — **hide the price badge too,**
+     * and that's a common shape for a trading screen, where a neighboring
+     * pane has labels on and the axis strip is perfectly intact. The only
+     * pane with no space is a collapsed one.
      */
     const group = ticks.y[index];
     if (!group || group.collapsed || !onChart(pane)) return;

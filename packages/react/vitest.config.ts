@@ -15,10 +15,9 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/index.ts', 'src/**/*.d.ts', 'src/**/__tests__/**'],
       /**
-       * A floor that only stops backsliding. `functions` is 70 alone because it
-       * sits at 73% today and the wrapper is on a hold-steady policy — no work
-       * is scheduled to raise it. This catches a core change eating into the
-       * wrapper, nothing more.
+       * A floor that only stops backsliding, not a target: it catches a core
+       * change eating into the wrapper, nothing more. `functions` sits lower
+       * (70) than the other three (80).
        */
       thresholds: {
         branches: 80,

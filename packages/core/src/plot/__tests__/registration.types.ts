@@ -22,8 +22,9 @@ const plot = new Plot({ deps: testBrowserDeps(), config, size });
 
 // ── everything below must be a compile error ──
 
-// (1) The constructor doesn't accept a series at all. Back when it did,
-//     it was non-generic, so `{ line series + candles }` passed right through.
+// (1) The constructor doesn't accept a series at all. A non-generic
+//     constructor that did would let `{ line series + candles }` pass
+//     right through.
 new Plot({
   deps: testBrowserDeps(),
   config,

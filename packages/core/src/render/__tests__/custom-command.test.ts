@@ -82,7 +82,7 @@ describe("an extension's primitive", () => {
   });
 
   it("should replay the fallback on a target that has no drawCustom at all", () => {
-    // An older, third-party renderer — it doesn't break just because this method was added.
+    // An older, third-party renderer — it doesn't break for lacking this method.
     const drawn: string[] = [];
     const old: DrawTarget = {
       drawLine: () => drawn.push("line"),
@@ -212,9 +212,10 @@ describe("an extension's primitive and command purity", () => {
 
 /**
  * A fallback cannot swap out someone else's clip boundary. If the replay
- * path skipped clip, an extension could escape a pane's boundary (the bug
- * the custom-command door meant to prevent, `y = -8731`) — now the type prevents it. If it
- * were only a runtime rule, every path would have to enforce it separately.
+ * path skipped clip, an extension could escape a pane's boundary (what
+ * the custom-command door exists to prevent, `y = -8731`) — the type
+ * prevents it. If it were only a runtime rule, every path would have to
+ * enforce it separately.
  */
 describe("fallback and clip boundary", () => {
   it("should not accept a clip command in a fallback", () => {

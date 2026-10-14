@@ -117,7 +117,7 @@ describe('<ChartLine>', () => {
     expect(drawnLines).toHaveLength(1);
     expect(drawnLines[0].style.color).toBe('#f59e0b');
     expect(drawnLines[0].style.width).toBe(1.5);
-    // A field the flat props never had is reachable too.
+    // A field beyond color and width is reachable too.
     expect(drawnLines[0].style.dashArray).toBe('4 2');
   });
 
@@ -138,7 +138,7 @@ describe('<ChartLine>', () => {
     expect(circles).toHaveLength(0);
   });
 
-  /** `color` used to feed the legend swatch as well as the stroke; the swatch now reads `style.line.color`. */
+  /** The legend swatch reads `style.line.color`, the same color as the stroke. */
   it('should register the line color as the legend swatch', () => {
     const { deps, ref, plot } = setup();
 

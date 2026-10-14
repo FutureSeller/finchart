@@ -15,7 +15,7 @@ import * as mod from "../../examples/src/cases/infinite-history";
 In this imperative demo, the consumer's whole share is two functions: a `fetch` that produces the page
 of bars strictly before a given x (empty array = the end of history), and a
 `sink` that says where a landed page goes — here one fetch fans out to the
-candle and volume handles. Everything the hand-rolled version had to carry —
+candle and volume handles. Everything a hand-rolled version would have to carry —
 the cursor, the "how close to the edge" test, in-flight dedup, trimming the
 inclusive boundary bar exchanges like to send back, and re-checking after a
 landing (a `prepend` never moves the domain, so no event announces it) — is

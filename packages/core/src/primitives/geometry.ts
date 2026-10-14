@@ -30,7 +30,14 @@ export function plotAreaOf(
   };
 }
 
-/** Is the point inside the area? On the boundary counts as inside — every hit test follows this rule. */
+/**
+ * Is the point inside the area? On the boundary counts as inside: the
+ * plot-interior rule, used by pane lookup (`PaneStack.at`), axis drag's slice
+ * test and the crosshair magnet. Keyboard ownership and drawing grabs (core
+ * `containsFocus`, tools `ownsPoint` and `gripAt`) use a half-open bottom
+ * edge instead, so the 1px line between stacked panes belongs to one pane
+ * only.
+ */
 export function contains(area: PlotArea, point: Point): boolean {
   return (
     point.x >= area.left &&

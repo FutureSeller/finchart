@@ -48,7 +48,7 @@ const maximize = plot.use(paneMaximize({ gestures: true }));
 ```
 
 `gestures: true` is **opt-in** — double-clicking a pane is already taken by
-`doubleClickReset` and used to reset to the full view (on by default — for the
+`doubleClickReset`, which resets to the full view (on by default — for the
 table see the interaction options table in
 [the Plot contract](/guide/plot-contract#interaction-—-what-works-and-how-to-turn-it-off-and-on)). If maximize ate
 the same gesture by default, that reset would die quietly on every pane

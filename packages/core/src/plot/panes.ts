@@ -162,7 +162,8 @@ export class PaneStack {
    * A degenerate area contests nothing. Without this, the moment the cursor
    * touches a collapsed pane's zero-height boundary that pane wins, and a
    * tooltip reads a value from **an invisible pane's scale.** The empty
-   * area before the first frame produced a phantom hit at (0,0) the same way.
+   * area before the first frame would produce a phantom hit at (0,0) the
+   * same way.
    */
   at(point: Point): PaneApi | null {
     return (

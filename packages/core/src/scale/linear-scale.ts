@@ -23,14 +23,14 @@ export class LinearScale implements Scale {
 
   /**
    * **This is a chokepoint.** Both the y domain and the x domain pass
-   * through here without exception (`pane.ts:589·1006·1021` ·
-   * `x-viewport.ts`, 9 places), and axes only read via `getDomain()`
-   * (`axis.ts:52`). So unless the scale refuses a non-finite domain,
-   * the tick loop in `axis.ts` can end up infinite.
+   * through here without exception (the pane's value domain,
+   * `value-axis.ts`, `x-viewport.ts`), and an axis reads it only via
+   * `getDomain()`, in the `Axis` constructor. Refusing a non-finite domain
+   * here keeps the tick count finite; the cap in `axis.ts` is only a
+   * backstop.
    *
-   * An earlier version only checked `min >= max`. **`-Infinity < Infinity`
-   * passed that check**, and once that domain reached the axis, `count`
-   * became `Infinity` and the tab died of OOM.
+   * Checking only `min >= max` is not enough: **`-Infinity < Infinity`
+   * passes it**, and that domain makes the axis's tick `count` `Infinity`.
    */
   setDomain(min: number, max: number): void {
     this.domain = requireInterval(min, max, "domain");
@@ -52,9 +52,9 @@ export class LinearScale implements Scale {
    * A domain — or a range — is two finite numbers, but their difference
    * need not be one: `[-MAX_VALUE, MAX_VALUE]` is legal for either, its span
    * overflows, and `∞ / ∞` is `NaN`, a pixel the canvas silently drops.
-   * `lerp`/`unlerp` take the plain arithmetic wherever it is finite (an
-   * ordinary axis's pixels are the same bits as before) and the same
-   * interpolation at half scale where it is not.
+   * `lerp`/`unlerp` take the plain arithmetic wherever it is finite (so an
+   * ordinary axis's pixels are bit-for-bit the plain arithmetic's) and the
+   * same interpolation at half scale where it is not.
    */
   scale(value: number): number {
     const [domainMin, domainMax] = this.domain;

@@ -9,10 +9,10 @@ import type { DrawingSpace } from "../space";
 import { drawingChart } from "./drawing-chart.fixture";
 
 /**
- * T2 wave — rectangle · ellipse · priceMeasure · barMeasure. The area
- * kinds hit on their boundary only (a filled interior is a separate
- * decision); the measures hit on their segment and carry a label the
- * renderer sizes. The kind table (kind-spec.test.ts) pins serialization.
+ * Rectangle · ellipse · priceMeasure · barMeasure. The area kinds hit on
+ * their boundary only (a filled interior is a separate decision); the
+ * measures hit on their segment and carry a label the renderer sizes. The
+ * kind table (kind-spec.test.ts) pins serialization.
  */
 
 const space: DrawingSpace = {

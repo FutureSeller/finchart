@@ -72,8 +72,8 @@ export interface TickGeometry {
   /**
    * Tick values in domain space: ascending, all finite, and already
    * density-filtered — every adjacent pair sits at least the requested
-   * pixel spacing apart. Capped at 1,000 values; the linear axis earned
-   * that cap from a real OOM (a degenerate domain once spun tick
+   * pixel spacing apart. Capped at 1,000 values; the linear axis carries
+   * the same cap against an OOM (a degenerate domain can spin tick
    * generation forever), and this path leaves that door, so it carries
    * its own copy of the lock.
    *
@@ -103,9 +103,9 @@ export interface TickGeometry {
  * aren't logarithmic — as a callback it's only invoked from
  * `LogScale.expand`'s `min <= 0` branch.
  *
- * Why this isn't just a field on `Range`: adding a field there broke
- * things in quiet ways — `unionRange` drops fields when there are two
- * series. An unfilled field failed silently instead of throwing.
+ * Why this isn't just a field on `Range`: a field there breaks in quiet
+ * ways — `unionRange` drops fields when there are two series, and an
+ * unfilled field fails silently instead of throwing.
  */
 export interface ExpandHints {
   /**

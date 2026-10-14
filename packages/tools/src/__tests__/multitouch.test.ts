@@ -61,8 +61,8 @@ describe("drawingTools pointer ownership", () => {
 
     routeAs("pointerdown", at(2, 105), 1);
     routeAs("pointermove", at(5, 110), 1);
-    // A second finger -- this used to be mistaken for a "second click,"
-    // which locked the line in right here.
+    // A second finger -- mistaken for a "second click," it would lock
+    // the line in right here.
     expect(routeAs("pointerdown", at(9, 118), 2)).toBe(true);
     expect(tools.list()).toHaveLength(0);
     expect(tools.mode()).toBe("trend");

@@ -1,7 +1,7 @@
 /**
  * The series list on its own — no pane, no scale, no data manager. The two
- * owners, the reconcile plan, and the draw order used to be reachable only
- * through a mounted pane.
+ * owners, the reconcile plan, and the draw order are checked directly,
+ * without a mounted pane.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { DataManagerFactory } from "../../data";

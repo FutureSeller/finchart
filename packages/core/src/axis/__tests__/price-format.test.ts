@@ -30,7 +30,7 @@ describe("priceFormat", () => {
     expect(priceFormat({ compact: true, locale: "ko" })(12_000)).toBe("1.2만");
   });
 
-  describe("tick step awareness (dogfood #3)", () => {
+  describe("tick step awareness", () => {
     it("should widen compact precision until neighbouring ticks differ", () => {
       const format = priceFormat({ compact: true, locale: "ko" });
       const step = 2_000_000;
@@ -52,7 +52,7 @@ describe("priceFormat", () => {
       const format = priceFormat({ locale: "en-US" });
 
       expect(format(1.005, 0.005)).toBe("1.005");
-      expect(format(1.005)).toBe("1.01"); // unchanged from today without a step
+      expect(format(1.005)).toBe("1.01"); // no step: the default two decimals
     });
 
     it("should let explicit precision ignore the step", () => {

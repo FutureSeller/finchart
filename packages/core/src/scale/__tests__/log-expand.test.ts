@@ -1,10 +1,10 @@
 /**
- * Padding on a log axis has to be multiplicative. Using the
- * linear additive padding rule (`[min - span·r, max + span·r]`) on a log
- * axis pushes the lower bound past zero once `max/min > 11x`:
+ * Padding on a log axis has to be multiplicative. Using the linear
+ * additive padding rule (`[min - span·r, max + span·r]`) on a log axis
+ * pushes the lower bound past zero once `max/min > 11x`:
  * `min - r·(max-min) <= 0` iff `max/min >= (1+r)/r`, which is 11 when
- * `r = 0.1`. So this was an axis that only threw for the data that actually
- * needed log scaling.
+ * `r = 0.1`. So the additive rule gives an axis that throws only for the
+ * data that actually needs log scaling.
  */
 import { describe, expect, it } from "vitest";
 import { LinearScale, LogScale } from "..";
@@ -14,7 +14,7 @@ import { expandFor, expandRange } from "../../plot/range";
 /** `Pane`'s default `valuePadding`. */
 const PADDING = 0.1;
 
-describe("the crash condition is gone", () => {
+describe("log-axis padding keeps the lower bound positive", () => {
   it.each([
     ["narrow range (1.2x)", 50, 60],
     ["10-year stock (30x)", 10, 300],
@@ -33,11 +33,11 @@ describe("the crash condition is gone", () => {
     expect(hi).toBeGreaterThan(max);
   });
 
-  /** What would have happened with linear arithmetic — kept as a regression baseline. */
+  /** What linear arithmetic gives — the baseline the multiplicative rule exists to beat. */
   it.each([
     ["10-year stock", 10, 300],
     ["BTC", 3_000, 70_000],
-  ])("should show why the additive rule failed for %s", (_label, min, max) => {
+  ])("should push the lower bound to zero or below with the additive rule for %s", (_label, min, max) => {
     const [lo] = expandRange({ min, max }, PADDING);
     expect(lo).toBeLessThanOrEqual(0);
     expect(() => new LogScale().setDomain(lo, max)).toThrow();
@@ -67,8 +67,8 @@ describe("properties of multiplicative padding", () => {
   });
 });
 
-describe("linear is unchanged", () => {
-  /** `expand` is an **optional method** — not implementing it keeps the old arithmetic. */
+describe("linear keeps the additive rule", () => {
+  /** `expand` is an **optional method** — not implementing it keeps the additive arithmetic. */
   it("should leave LinearScale on the additive rule", () => {
     // Viewed through the contract type — the implementing class doesn't declare this method at all.
     const linear: Scale = new LinearScale();
@@ -86,11 +86,11 @@ describe("linear is unchanged", () => {
 });
 
 /**
- * A hint equal to the upper bound still isn't discarded. When `floor < max`,
- * the fallback happened to give the worst possible answer: in a range where
+ * A hint equal to the upper bound still isn't discarded. Keeping it only
+ * when `floor < max` gives the worst possible answer: in a range where
  * every visible positive value is identical (a flat stretch, or zero volume
- * mixed into a flat section), the hint got discarded and it fell back to a
- * constant, sticking the real bar to the top. That's a discontinuity where
+ * mixed into a flat section), the hint gets discarded and it falls back to
+ * a constant, sticking the real bar to the top. That's a discontinuity where
  * floor = 99 is correct but floor = 100 is the worst case.
  */
 describe("boundary of the positive-value hint", () => {
@@ -131,7 +131,7 @@ describe("range where the floor underflows", () => {
   it("should terminate instead of recursing forever", () => {
     const scale = new LogScale();
 
-    // A number where both `max / 1000` and `max / 2` are 0. Before the fix, the stack overflowed here.
+    // A number where both `max / 1000` and `max / 2` are 0. Without the guard, the stack overflows here.
     const [low, high] = scale.expand([0, Number.MIN_VALUE], 0.05);
 
     expect(low).toBeGreaterThan(0);
@@ -148,8 +148,8 @@ describe("range where the floor underflows", () => {
   it("the factor branch doesn't collapse to zero either", () => {
     const scale = new LogScale();
 
-    // factor = (max/min)^ratio ~= 31.6 — a range where min/factor used to
-    // fall below half the smallest denormalized number and underflow to 0.
+    // factor = (max/min)^ratio ~= 31.6 — a range where a naive min/factor
+    // falls below half the smallest denormalized number and underflows to 0.
     // If it becomes 0, setDomain rejects it on the render path.
     const [low, high] = scale.expand([5e-324, 5e-321], 0.5);
 

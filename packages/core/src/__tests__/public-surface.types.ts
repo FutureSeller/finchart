@@ -69,11 +69,10 @@ export type SpecFactory = typeof Public.seriesSpec;
 
 /**
  * The opposite direction: if a sibling exists, this one should stand
- * alongside it. These are names that were missing — `AreaSeriesOptions` was
- * the odd one out while its three siblings (`Line`, `Baseline`, `Histogram`)
- * were in the barrel, and `PaneMaximizeOptions` only had a return type
- * exported with no parameter type, so a consumer wrapping that extension
- * had no way to type the wrapper's props.
+ * alongside it. `AreaSeriesOptions` belongs in the barrel with its three
+ * siblings (`Line`, `Baseline`, `Histogram`), and `PaneMaximizeOptions`
+ * with that extension's return type — without the parameter type, a
+ * consumer wrapping that extension has no way to type the wrapper's props.
  */
 export type AreaOptionsIsPublic = Public.AreaSeriesOptions<{ x: number }>;
 export type PaneMaximizeOptionsIsPublic = Public.PaneMaximizeOptions;
@@ -90,8 +89,8 @@ export type StepLineIsPublic = typeof Public.stepLineSeries;
 export type TickGeometryIsPublic = Public.TickGeometry;
 
 /**
- * The tick arithmetic that moved down into `scale` did so for the module
- * graph, not for consumers — 1·2·5 rounding and float-noise trimming are
+ * The tick arithmetic lives in `scale` for the module graph, not for
+ * consumers — 1·2·5 rounding and float-noise trimming are
  * implementation detail behind `TickGeometry`, and publishing them would
  * freeze their signatures for no consumer's benefit.
  */

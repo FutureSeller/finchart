@@ -19,8 +19,8 @@ describe("drawingTools drawing", () => {
     tools.add({ type: "horizontal", price: 10_000 });
 
     // The tool doesn't clip -- "whoever allocated the area does the
-    // clipping" (the plot's clip). This used to hand-clip only
-    // horizontal lines, which split the rule away from trend and fib.
+    // clipping" (the plot's clip). Hand-clipping only horizontal
+    // lines would split the rule away from trend and fib.
     const commands = model.commands();
     const drawn = lines(model);
     expect(drawn).toHaveLength(before + 1);

@@ -5,10 +5,10 @@
  * into a chart that's already mounted — `applyOptions` is the one door,
  * and it's the one that schedules a render and emits change.
  *
- * The top level was already copied. The nested objects (`padding`,
- * `axis.x`/`axis.y`, `style.grid`) weren't, and `padding` is read on every
- * layout — so `config.padding.left = 0` after mounting silently moved the
- * plot area with no render scheduled.
+ * Copying the top level is not enough. The nested objects (`padding`,
+ * `axis.x`/`axis.y`, `style.grid`) need copying too, and `padding` is read
+ * on every layout — shared, `config.padding.left = 0` after mounting would
+ * silently move the plot area with no render scheduled.
  */
 import { describe, expect, it } from "vitest";
 import { testBrowserDeps } from "../../__tests__/dom-fakes";

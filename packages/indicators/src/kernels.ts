@@ -31,12 +31,12 @@ export type SmaState = SumState;
 
 /**
  * The window mean is the window sum over the period — `sumFold`'s ring,
- * summed afresh each step. It used to keep a running total that subtracted
- * what left the window, and that total carried two flaws no order of
- * operations fixes: the residual a departing outlier leaves behind
- * (`[1e20, 1, 1, 1]` over 3 answered 1/3 — the ones were rounded away while
- * the spike was inside — where the window's mean is 1), and a sum that
- * finite inputs pushed past the double range stayed Infinity for good.
+ * summed afresh each step. A running total that subtracts what left the
+ * window carries two flaws no order of operations fixes: the residual a
+ * departing outlier leaves behind (`[1e20, 1, 1, 1]` over 3 answers 1/3 —
+ * the ones were rounded away while the spike was inside — where the
+ * window's mean is 1), and a sum that finite inputs pushed past the
+ * double range stays Infinity for good.
  * Recomputing costs O(period) per step; the state is just the ring.
  */
 export function smaFold(period: number): SmaFold {
@@ -288,12 +288,12 @@ export function volumeOf(candle: OHLC): number | null {
  * rather than kept as a running total: a running sum subtracts what
  * leaves, and after a 1e20 spike leaves a window of ones it answers 1 for
  * `[1, 1, 1]` (the ones were rounded away while the spike was inside —
- * measured; `smaFold` had the same flaw until it became this fold over the
- * period). The division is left to the
- * caller (UO and MFI divide one sum by another). Same null rule: null
- * until the window is full or while it holds a gap — and null when the sum
- * of finite inputs leaves the double range or saturates at its largest value
- * (a ratio of two such sums would read NaN; line data is finite or null).
+ * measured; `smaFold` avoids the same flaw the same way). The division is
+ * left to the caller (UO and MFI divide one sum by another). Same null
+ * rule: null until the window is full or while it holds a gap — and null
+ * when the sum of finite inputs leaves the double range or saturates at
+ * its largest value (a ratio of two such sums would read NaN; line data is
+ * finite or null).
  * O(period) per step by design; the state is just the ring.
  */
 export interface SumFold {
@@ -437,17 +437,16 @@ export function lowestFold(period: number): ExtremumFold {
  *
  * Numerics, since a variance is where running sums fail: `Σy²/n − mean²`
  * cancels catastrophically when the spread is small next to the level
- * (prices near 1e6 with a spread of 0.03 came out 700% wrong — measured),
+ * (prices near 1e6 with a spread of 0.03 come out 700% wrong — measured),
  * and an incremental update that *subtracts* a departing value cancels
  * again whenever that value dwarfs what remains (a 1e9 spike leaving a
- * window of 1e6 prices left the residual 20% wrong; two such departures
- * in a row slipped past a guard). So nothing is subtracted, ever: each
- * step sweeps the window twice — a mean, then squared deviations — with
- * every value taken relative to the window's oldest value so the sums
- * are the size of the spread, not the level. O(period) per step by
- * design; period is in the tens, and the tick's own `slice + concat`
- * over the whole history is a hundred thousand pointers. The state is
- * just the ring.
+ * window of 1e6 prices leaves the residual 20% wrong — measured). So
+ * nothing is subtracted, ever: each step sweeps the window twice — a
+ * mean, then squared deviations — with every value taken relative to the
+ * window's oldest value so the sums are the size of the spread, not the
+ * level. O(period) per step by design; period is in the tens, and the
+ * tick's own `slice + concat` over the whole history is a hundred thousand
+ * pointers. The state is just the ring.
  */
 export interface StddevFold {
   step(value: number | null): number | null;
@@ -575,8 +574,8 @@ export function lagFold(lag: number): LagFold {
  * end point sits near it, so what is added back to it is small, and for
  * `n = 2` the answer is that value exactly (a two-point line ends on its
  * second point) — returned as such. No running sum is kept, so nothing
- * is ever subtracted out — the rolling form (`T' = T − S + y₀ + (n − 1)·y`)
- * drifted and lost its digits whenever a departing value dwarfed the
+ * is ever subtracted out — a rolling form (`T' = T − S + y₀ + (n − 1)·y`)
+ * drifts and loses its digits whenever a departing value dwarfs the
  * rest. O(period) per step by design, like `stddevFold`. The state is
  * just the ring.
  *

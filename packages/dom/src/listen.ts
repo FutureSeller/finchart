@@ -22,9 +22,9 @@ interface ListenerHost<E> {
  * Attaches a listener and registers its removal in the scope — one call,
  * both halves. This is the only way this package attaches listeners:
  * a raw `addEventListener` puts the removal in someone's memory, and the
- * teardown checklist that memory turns into is exactly what leaked here
- * before. With the removal registered at the attach site, forgetting it
- * is not a thing that can be written.
+ * teardown checklist that memory turns into is exactly what leaks. With
+ * the removal registered at the attach site, forgetting it is not a thing
+ * that can be written.
  */
 export function listen<E>(
   scope: Scope,

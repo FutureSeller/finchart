@@ -56,8 +56,9 @@ export const PANE_OPTION_DEFAULTS = {
  * height becomes `NaN`, which then leaks into the canvas size.
  *
  * **Both** the constructor and `applyOptions` pass through here — if the two
- * spots diverge, only one of them gets fixed. Zero is not blocked: a pane at
- * `flex: 0` takes only its `minHeight` — a consumer collapsing it by hand.
+ * spots diverged, a value would be refused at one and accepted at the
+ * other. Zero is not blocked: a pane at `flex: 0` takes only its
+ * `minHeight` — a consumer collapsing it by hand.
  */
 export function checkPaneNumbers(options: PaneOptions): void {
   if (options.flex !== undefined) requireNonNegative(options.flex, "pane flex");
@@ -94,12 +95,10 @@ export function checkAxisCallbacks(axis: AxisOptions | undefined, label: string)
 /**
  * A pane's settled options — every field present, defaults filled in.
  *
- * **Reading is open; writing goes through `applyPaneOptions` alone.** Back
- * when these were assignable fields on the pane, there were two doors and
- * one of them was silent — `pane.flex = 2` went through with no
- * notification and no render. Even the chart itself wrote through that
- * silent door on divider drag and patched in a state notification by hand,
- * which means the rule existed only as convention, not in code.
+ * **Reading is open; writing goes through `applyPaneOptions` alone.** As
+ * assignable fields on the pane, there would be two doors and one of them
+ * silent — `pane.flex = 2` going through with no notification and no
+ * render — and the rule would exist only as convention, not in code.
  */
 export interface PaneSettings {
   readonly valuePadding: number;

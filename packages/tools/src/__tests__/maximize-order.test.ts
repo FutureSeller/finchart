@@ -1,8 +1,8 @@
 /**
  * **A drawing comes before the layout.** `paneMaximize` and the drawing
  * tools both answer Esc and double-click; at the same priority the one
- * installed later went first, so whether Esc cancelled the line being
- * drawn or restored the panes depended on JSX order. The maximize
+ * installed later goes first, so whether Esc cancels the line being
+ * drawn or restores the panes would depend on JSX order. The maximize
  * gestures only take what nothing on the chart claimed.
  */
 import { describe, expect, it } from "vitest";
@@ -19,7 +19,7 @@ const mount = () => {
       ],
     },
   });
-  // Installed after the tools — the order that used to put it in front.
+  // Installed after the tools — the order that wins a tie.
   const max = chart.plot.use(paneMaximize({ gestures: true }));
   return { ...chart, max };
 };

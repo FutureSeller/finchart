@@ -330,7 +330,7 @@ export class Zone {
      * earliest reading *at or after* it is the next whole second, not the
      * one beneath. Rounding down would answer earlier than asked, and
      * leaving the remainder on would carry it into every offset sampled
-     * from here, which is how a millisecond once became two.
+     * from here, which is how a millisecond becomes two.
      *
      * Up to a whole millisecond before the division, because the division
      * is where a small enough reading stops existing: `5e-324 / 1000`

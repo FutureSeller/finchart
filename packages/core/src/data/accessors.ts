@@ -108,7 +108,7 @@ export class OHLCAccessor implements CoordinateAccessor<OHLC> {
     if (!Number.isFinite(point.high)) reject("high", point.high, index, label);
     if (!Number.isFinite(point.low)) reject("low", point.low, index, label);
     if (!Number.isFinite(point.close)) reject("close", point.close, index, label);
-    // Present but not a number — a feed's `"1234"` used to slip through and
+    // Present but not a number — a feed's `"1234"` would slip through and
     // concatenate in the aggregate; a gap (null/absent) is fine.
     if (!isGap(point.volume) && !Number.isFinite(point.volume)) {
       reject("volume", point.volume, index, label);

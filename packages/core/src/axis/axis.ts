@@ -101,8 +101,8 @@ export class Axis {
      * Defense in depth. `Scale.setDomain` already blocks a degenerate
      * domain, so `count` is already finite — but `config.min`/`config.max`
      * can bypass the scale, and the tab needs to survive even if a new path
-     * shows up later. `count = Infinity` used to spin this loop forever and
-     * kill the tab with an OOM — 1000 ticks on one axis is already more
+     * shows up later. Uncapped, `count = Infinity` spins this loop forever
+     * and kills the tab with an OOM — 1000 ticks on one axis is already more
      * than anyone can read, so more than that means the math is wrong.
      */
     const MAX_TICKS = 1000;

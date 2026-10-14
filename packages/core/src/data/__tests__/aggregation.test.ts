@@ -151,9 +151,9 @@ it("OHLC aggregation refuses overflowing volume without altering its input", () 
 });
 
 /**
- * Buckets were counted from the first visible index, so a one-bar pan
- * moved every boundary and the whole zoomed-out chart shimmered — bodies,
- * colours and wicks changed on each move.
+ * Buckets counted from the first visible index would move every boundary
+ * on a one-bar pan, and the whole zoomed-out chart would shimmer — bodies,
+ * colors and wicks changing on each move.
  */
 describe("OhlcAggregation buckets stay put while panning", () => {
   it("leaves every candle away from the window edges unchanged after a one-bar pan", () => {

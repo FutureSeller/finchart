@@ -1,10 +1,9 @@
 /**
  * The imperative bridge: a `SeriesHandle` is already a `Source`, so an
  * `attach*` indicator reads straight from it and sees what the handle sees,
- * `prepend`ed history included. What was missing was a way to say "not yet"
- * from `usePlugin` while the handle is still `null` before commit; `install`
- * may now return `null`, which installs nothing and leaves the state `null`
- * until `deps` change.
+ * `prepend`ed history included. `usePlugin` says "not yet" while the handle
+ * is still `null` before commit: `install` may return `null`, which installs
+ * nothing and leaves the state `null` until `deps` change.
  */
 import type { OHLC, Plot, SeriesHandle } from '@finchart/core';
 import { candleSeries, immediateScheduler } from '@finchart/core';

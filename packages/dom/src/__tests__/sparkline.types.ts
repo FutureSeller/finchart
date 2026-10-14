@@ -1,6 +1,6 @@
 /**
- * The sparkline recipe compiles here. The prose it came from lives in the
- * private development repository, so nothing in this repo can compare the two.
+ * The sparkline recipe compiles here. The prose it came from is not in this
+ * repository, so nothing here can compare the two.
  *
  * A doc's example is just a string, so it goes stale silently as the API
  * grows — the sparkline recipe is even more exposed to this, since it's the

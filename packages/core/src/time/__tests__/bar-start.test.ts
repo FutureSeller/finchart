@@ -176,12 +176,12 @@ describe("the instants a bar start answers for", () => {
   });
 
   /**
-   * **A reader that has already answered must not answer more.** The
-   * stretch a session cache holds used to be compared against before
-   * anything was known about the instant, so one just past the reach fell
-   * inside the stretch written for the one just inside it and the same
-   * reader accepted what a new one refused. The door runs first now, and
-   * this is what holds it there.
+   * **A reader that has already answered must not answer more.** Were the
+   * stretch a session cache holds compared against before anything is
+   * known about the instant, one just past the reach would fall inside the
+   * stretch written for the one just inside it and the same reader would
+   * accept what a new one refuses. The door runs first, and this is what
+   * holds it there.
    */
   it("refuses what it would refuse cold, once it is warm", () => {
     const barStart = sessionStart({ timeZone: "UTC" });

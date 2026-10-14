@@ -67,9 +67,9 @@ describe("an indicator's numeric door calls a string a string", () => {
 });
 
 /**
- * When `ichimoku({ displacement })` is violated it used to become `NaN`,
- * dropping the `y` key from every point in `spanA`/`spanB` instead of
- * throwing — the consumer ends up suspecting the field name.
+ * When `ichimoku({ displacement })` is violated it must throw: unchecked,
+ * it becomes `NaN` and drops the `y` key from every point in
+ * `spanA`/`spanB` — the consumer ends up suspecting the field name.
  */
 describe("ichimoku displacement", () => {
   it.each([

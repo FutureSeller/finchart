@@ -2,7 +2,7 @@
  * One more drawing primitive, with no change to the core — the custom command
  * demonstrated.
  *
- * A gradient was the case `fill: string` couldn't express: covering the
+ * A gradient is the case `fill: string` can't express: covering the
  * after-hours stretch with a band that fades from top to bottom. Widening the
  * command union for this one shape would break every consumer that switches
  * over it exhaustively.

@@ -56,7 +56,7 @@ describe("updateLast", () => {
     expect(handle.xRange).toEqual({ min: 0, max: 3 });
     // The new bar is still off-screen — leaving the domain unchanged is the
     // default, and following it is an opt-in choice made by
-    // shiftVisibleRangeOnNewBar (commit 3).
+    // shiftVisibleRangeOnNewBar.
     expect(model.plot.getVisibleRange()).toEqual(viewing);
   });
 
@@ -114,7 +114,7 @@ describe("incremental append/prepend", () => {
   it("should still refuse a chunk that breaks order at the seam", () => {
     const { handle } = mounted();
 
-    // The check narrowed to the seam, but it didn't go away — same DataError.
+    // The check is narrowed to the seam, not removed — same DataError.
     expect(() => handle.append([{ x: 1, y: 1 }])).toThrow(/continue after/);
     expect(() => handle.prepend([{ x: 5, y: 1 }])).toThrow(/end before/);
   });

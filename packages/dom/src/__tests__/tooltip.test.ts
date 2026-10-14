@@ -103,7 +103,7 @@ describe("tooltip", () => {
     plot.crosshair(paneCenter());
     expect(tooltipBox().textContent).toContain("120.00");
 
-    // The cursor stayed put, but switching symbols swapped the entire dataset (dogfooding #6).
+    // The cursor stayed put, but switching symbols swapped the entire dataset.
     handle.setData([
       { x: 0, y: 100 },
       { x: 5, y: 300 },
@@ -258,7 +258,7 @@ describe("legend", () => {
     const { plot, overlay } = mounted();
     plot.use(legend());
 
-    // A fixed dark default vanished on a dark page.
+    // A fixed dark default would vanish on a dark page.
     expect(overlay.querySelector<HTMLElement>("[data-chart-legend]")?.style.color).toBe("var(--chart-legend, inherit)");
   });
 

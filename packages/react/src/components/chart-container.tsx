@@ -150,10 +150,10 @@ export interface ChartContainerProps<T extends BaseDataPoint> {
   /**
    * **Four narrow doors for accessibility and identification.** A canvas
    * has no name and no role, so say what the chart is with `role="img"` +
-   * `aria-label`, and pull it out of the tab order with `tabIndex={-1}` —
-   * all four are **props of the container element.** There's no blanket
-   * rest-spread: that would blur which props go to the container as part
-   * of the contract.
+   * `aria-label`. The container is in the tab order by default; when that
+   * isn't wanted, take it out with `tabIndex={-1}`. All four are **props of
+   * the container element.** There's no blanket rest-spread: that would
+   * blur which props go to the container as part of the contract.
    */
   id?: string;
   role?: AriaRole;

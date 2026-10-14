@@ -16,9 +16,8 @@ export const description =
   "Toggle to linear to compare — this pair of charts is also the standing judgment fixture for whether the unset-format split needs unifying.";
 
 /**
- * Three decades of deterministic growth, ~0.5 → ~2000 — the domain the
- * log-ticks review measured. Deterministic (no Math.random) so the case
- * screenshots the same every time.
+ * Three decades of deterministic growth, ~0.5 → ~2000. Deterministic (no
+ * Math.random) so the case screenshots the same every time.
  */
 function growth(): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = [];

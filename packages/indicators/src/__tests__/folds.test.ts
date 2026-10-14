@@ -232,14 +232,14 @@ describe("a computed window result that is not committable is null", () => {
 });
 
 describe("smaFold — a window mean recomputed each step", () => {
-  it("stays within 16 ULP of the shipped running-total kernel's golden output on a 400-bar tape with gaps", () => {
-    // Dumped at 04dc50c before the rewrite. Over this short tape the two forms differ by at
+  it("stays within 16 ULP of a running-total kernel's golden output on a 400-bar tape with gaps", () => {
+    // The golden is a running-total kernel's output. Over this short tape the two forms differ by at
     // most 13 ULP (period 20; 4 at period 2, 11 at period 5) — each form's own window rounding
-    // plus the drift the running total had accumulated by then. Over a long tape that drift
+    // plus the drift the running total has accumulated by then. Over a long tape that drift
     // grows with history while the window sum's error does not (the next test measures it
-    // against the exact window mean) — so a long tape parts further from the golden, as a
-    // correction, not a compatibility cost. (The rewrite also fixes the residual a departing
-    // outlier leaves behind.)
+    // against the exact window mean) — so a long tape parts further from the golden, and of the
+    // two the window sum stays closer to the exact mean. (The window sum also avoids the residual
+    // a departing outlier leaves behind.)
     const golden = JSON.parse(readFileSync(new URL("./fixtures/sma-golden.json", import.meta.url), "utf8")) as {
       values: (number | null)[];
       periods: number[];
@@ -263,7 +263,7 @@ describe("smaFold — a window mean recomputed each step", () => {
     // first order, u = 2⁻⁵³ — a bound on the window alone, with nothing about how many bars came
     // before. The test takes ε = 2u, which also covers the reference's own two roundings (the
     // BigInt-to-double conversion and the division). A running total's error is a bound on the
-    // whole tape instead. Replaying the 04dc50c kernel on this tape against the same reference:
+    // whole tape instead. Replaying a running-total kernel on this tape against the same reference:
     // period 10 first exceeds its bound (1.8e-13 at that bar) at bar 4994 and reaches 1.0e-11 by a
     // million bars; period 50, with a wider bound (about 1.1e-12), first exceeds it at bar
     // 550393 (1.11e-12 against 1.07e-12) and peaks at 1.19e-12. The window sum's worst error on
@@ -291,7 +291,7 @@ describe("smaFold — a window mean recomputed each step", () => {
   });
 
   it("a window whose sum overflows has no mean, and the fold recovers when the window moves on", () => {
-    // The running-total form kept Infinity in its state for good; the recomputed form has no state but the ring.
+    // A running-total form keeps Infinity in its state for good; the recomputed form has no state but the ring.
     expect(run(smaFold(2), [1e308, 1e308, 1, 1])).toEqual([null, null, 5e307, 1]);
   });
 });
@@ -372,7 +372,7 @@ describe("stddevFold ↔ a two-pass reference", () => {
     }
   });
 
-  it("two departures in a row, each dwarfing what remains — the period-3 sequence that slipped a guard", () => {
+  it("two departures in a row, each dwarfing what remains, leave no residual (period 3)", () => {
     const got = run(stddevFold(3), [0, 1e12, 1e9, 0, 1e6, 1e6]);
     const want = stddevReference([0, 1e6, 1e6]);
     expect(Math.abs((got[5] ?? Number.NaN) - want) / want).toBeLessThan(1e-12);

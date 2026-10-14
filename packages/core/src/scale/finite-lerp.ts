@@ -1,8 +1,8 @@
 /**
  * Linear interpolation that stays inside the doubles. `a + t · (b − a)` is
  * the plain form, and the one used wherever it is finite — an ordinary
- * interval's result is the same bits as ever. Where the difference of the
- * ends overflows (an interval such as `[−MAX_VALUE, MAX_VALUE]`, legal for
+ * interval's result is bit-for-bit the plain form's. Where the difference
+ * of the ends overflows (an interval such as `[−MAX_VALUE, MAX_VALUE]`, legal for
  * a domain and for a range) — or where `t` times a finite span does, before
  * the addition would have brought the sum back inside — the same
  * interpolation is taken at half scale and doubled at the end: halving the

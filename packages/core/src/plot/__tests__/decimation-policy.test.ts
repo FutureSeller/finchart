@@ -48,8 +48,8 @@ describe("mergePolicy", () => {
 });
 
 describe("a series knows its own policy", () => {
-  it("should give candles the policy that used to live in the wiring", () => {
-    // The judgment call that presets.ts's ohlcDeps used to carry in prose.
+  it("should give candles their own decimation policy", () => {
+    // The judgment call belongs to the series, not to prose in the wiring.
     const { decimation } = candleSeries();
 
     expect(decimation.strategy).toBeInstanceOf(OhlcAggregation);

@@ -36,14 +36,14 @@ export type DrawingPane = PaneDecorationHost & ValueCoordinates & DataProbe;
 
 /**
  * The **runtime list** of methods `DrawingStage` requires. The type doesn't
- * exist at runtime, so this holds it separately — if the chart ever grows
- * one more door, this list would quietly fall short, and a non-TypeScript
- * consumer who passed a pane where plot belongs would sail through assembly
- * and hit a raw `TypeError` on the first `pointermove`.
+ * exist at runtime, so this holds it separately — a list that fell short of
+ * the type would let a non-TypeScript consumer who passed a pane where plot
+ * belongs sail through assembly and hit a raw `TypeError` on the first
+ * `pointermove`.
  *
- * `Record<keyof DrawingStage, 0>` makes the type enforce the list — leaving
- * one out breaks the compile (a missing key), and so does a typo or a
- * rename (an extra key).
+ * The compiler keeps the two in step: `satisfies readonly (keyof
+ * DrawingStage)[]` refuses a typo or a rename, and `StageMembersAreComplete`
+ * below refuses a missing name.
  */
 const DRAWING_STAGE_MEMBERS = [
   "requestRender",
@@ -609,7 +609,7 @@ export function drawingTools(
      * back in (`clear()` from a selection listener, `undo()` from a change
      * listener) therefore never runs while a door is half-done: its call
      * applies at once, and its own notifications line up behind the ones
-     * already queued. Without this, every door needed its own "did a
+     * already queued. Without this, every door would need its own "did a
      * subscriber pull the rug" check, and a mirror could see a `remove`
      * for a drawing that had already been put back.
      *
@@ -842,8 +842,8 @@ export function drawingTools(
     /**
      * The signal that something's grabbable — hovering over a line shows
      * `grab`. State cursors alone (drawing's `crosshair`, dragging's
-     * `grabbing`) gave no way to discover a shape before selecting it — a
-     * user would've had to press down just to find out one was there.
+     * `grabbing`) give no way to discover a shape before selecting it — a
+     * user would have to press down just to find out one is there.
      *
      * Managed separately from state cursors: hover is a function of
      * pointer position, not a state transition, so folding it into
@@ -986,10 +986,8 @@ export function drawingTools(
     const ownsKeyboard = (): boolean => cursorInside !== false;
 
     /**
-     * Updates who owns the cursor — inside mine, it's mine; inside
-     * someone else's pane, it's theirs; over an axis or margin, it's
-     * nobody's, so the last owner stands. Reading a value off an axis and
-     * then pressing Delete is a normal path, not a transfer of ownership.
+     * An empty area (zero width or height, such as the pane before its
+     * first render) contains no point and contends for nothing.
      */
     const usableArea = (area: PlotArea): boolean =>
       area.right > area.left && area.bottom > area.top;
@@ -1002,9 +1000,9 @@ export function drawingTools(
      *   both believe the boundary y is inside them. The bottom edge
      *   belongs to the neighbor below (the same rule as core's
      *   `containsFocus`).
-     * - `insidePlot` — inside the plot (closed). This is the "inside the
-     *   on-screen plot" that drawing and hit-testing look at, so the edge
-     *   counts as inside too (the same rule as `hit.ts` / `geometry.ts`).
+     * - `insidePlot` — inside the plot (closed). Placing an anchor reads
+     *   this, so a press on the edge still lands on the plot (the same
+     *   rule as core's `contains`).
      */
     const ownsPoint = (point: Point): boolean => {
       const { area } = space;
@@ -1057,6 +1055,12 @@ export function drawingTools(
 
     installation.add(() => focusClaim.release());
 
+    /**
+     * Updates who owns the cursor — inside mine, it's mine; inside
+     * someone else's pane, it's theirs; over an axis or margin, it's
+     * nobody's, so the last owner stands. Reading a value off an axis and
+     * then pressing Delete is a normal path, not a transfer of ownership.
+     */
     const trackCursor = (point: Point): void => {
       if (ownsPoint(point)) cursorInside = true;
       else if (focusClaim.contestedAt(point)) cursorInside = false;
@@ -1233,9 +1237,9 @@ export function drawingTools(
         }
 
         case "dragging":
-          // Another pointer while dragging — consumed but ignored. This
-          // used to let `drag` get overwritten here, so finger A's move
-          // would end up moving finger B's drawing.
+          // Another pointer while dragging — consumed but ignored. If
+          // `drag` were overwritten here, finger A's move would end up
+          // moving finger B's drawing.
           return true;
 
         case "idle": {
@@ -1516,12 +1520,12 @@ export function drawingTools(
          * on something the user never picked, which this blocks with the
          * same rule as `onPointerDown`'s idle branch.
          *
-         * This gate was once dropped to protect a handle from a
-         * right-click over the axis, but that invariant never existed in
-         * the first place, since axis dragging sees input before the
-         * toolbox does — a recoverable error (deselection, just click
-         * again) is the safer default over deleting a drawing you never
-         * pointed at and then asking history to repair the wrong action.
+         * Dropping this gate would not protect a handle from a
+         * right-click over the axis — axis dragging sees input before the
+         * toolbox does, so there is no such invariant to protect. A
+         * recoverable error (deselection, just click again) is the safer
+         * default over deleting a drawing you never pointed at and then
+         * asking history to repair the wrong action.
          */
         if (!focusClaim.contestedAt(point)) deselect();
         return false;

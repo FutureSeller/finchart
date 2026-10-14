@@ -112,16 +112,17 @@ export interface CoordinateAccessor<T extends BaseDataPoint = BaseDataPoint> {
    * are four, you must implement this: `getY` only reads `close`, so
    * `open`, `high`, and `low` pass through no gate at all.
    *
-   * One bar with `close: null` drew a 7140px red bar in a 600px pane, and
-   * `close: "102"` produced not a broken screen but a wrong one — a
-   * perfectly normal-looking bar that reads as a doji. Not failing to draw,
+   * Without it, one bar with `close: null` can draw a body thousands of
+   * pixels tall in a 600px pane, and one with `open: NaN` produces not a
+   * broken screen but a wrong one — the body drops out and only the wick is
+   * drawn, a normal-looking bar that reads as a doji. Not failing to draw,
    * but confidently drawing the wrong price — the worst failure a financial
    * chart can produce.
    *
    * Where the value comes from: exchange REST APIs give prices as strings.
-   * Unwrap `open`/`high`/`low` with `+` and let one `close` slip through
-   * and that's the row. `close: null` on a closed or unfilled bar is just
-   * an ordinary day on the feed, and `parseFloat("")` is `NaN`.
+   * Parse them with `parseFloat` and one empty `open` field is `NaN`
+   * (`parseFloat("")`) — that's the row. `close: null` on a closed or
+   * unfilled bar is just an ordinary day on the feed.
    *
    * The cost was measured: on 100k bars, a loop that only touches x takes
    * 0.10ms; checking all four OHLC fields in the same loop still takes

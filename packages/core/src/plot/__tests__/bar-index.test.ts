@@ -316,10 +316,10 @@ describe("axis labels", () => {
 
 /**
  * **A calendar boundary is chosen by what it stands for, before it is
- * labelled.** The strategy used to label its boundaries first, and the
- * frame then snapped them onto bars and thinned them by pixel — so where
- * two landed on one bar the closer won, and where two crowded the earlier
- * won, and neither rule knew that one of the pair was the month's name.
+ * labeled.** If the strategy labeled its boundaries first and the frame
+ * then snapped them onto bars and thinned them by pixel, where two landed
+ * on one bar the closer would win, where two crowded the earlier would
+ * win, and neither rule would know one of the pair was the month's name.
  */
 describe("bar-index ticks keep the promoted label", () => {
   const DAY_MS = 24 * 3600 * 1000;
@@ -327,7 +327,7 @@ describe("bar-index ticks keep the promoted label", () => {
   /**
    * February 2026 opens on a Sunday. Saturday's, Sunday's and Monday's
    * midnights all snap onto Monday's bar, and Monday's own midnight stands
-   * closest — so "2/2" used to win the bar over "Feb".
+   * closest — so closest-wins would give the bar "2/2" over "Feb".
    */
   it("keeps the month's name on the first bar after a weekend 1st", () => {
     const EPOCH = Date.UTC(2026, 0, 26); // Monday
@@ -359,7 +359,7 @@ describe("bar-index ticks keep the promoted label", () => {
   /**
    * Ninety-one bars inside the 30th of January and one a day after that:
    * the 31st and the 1st are neighbouring bars a few pixels apart, so the
-   * pair crowds and the earlier used to be kept — "1/31" over "Feb".
+   * pair crowds, and keeping the earlier would show "1/31" over "Feb".
    */
   it("keeps the month's name when it crowds the day before it", () => {
     const EPOCH = Date.UTC(2026, 0, 30); // Friday

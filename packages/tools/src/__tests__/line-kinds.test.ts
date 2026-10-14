@@ -7,10 +7,11 @@ import type { DrawingSpace } from "../space";
 import { drawingChart } from "./drawing-chart.fixture";
 
 /**
- * T1 wave — ray · extended · arrow · vertical. Placement, hit, render,
- * drag, and the new "x" snap axis, per kind. The kind table
- * (kind-spec.test.ts) already pins serialization; this file pins the
- * other eight of the nine per-kind touch points.
+ * Ray · extended · arrow · vertical. Placement, hit, render, drag, and the
+ * "x" snap axis, per kind. The kind table (kind-spec.test.ts) already pins
+ * serialization; this file pins the rest. It also holds the shared hit
+ * tolerance and pane-edge checks (horizontal, fib and extension levels,
+ * zero-width panes).
  */
 
 const space: DrawingSpace = {
@@ -226,7 +227,7 @@ describe("placement and drag through the real state machine", () => {
     const barPx = plot.pixelAtX(5);
     const mid = (pane.area.top + pane.area.bottom) / 2;
     // 4px off the bar — inside the default 8px snap radius, at a y far
-    // from the bar's value (the old "xy" Euclidean gate would refuse).
+    // from the bar's value (a Euclidean xy radius would refuse).
     click({ px: barPx + 4, py: mid });
 
     const [drawn] = tools.list();

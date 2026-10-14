@@ -184,7 +184,7 @@ describe("createCanvasAxisLabels", () => {
 
   /**
    * **An edge tick's label stays on the chart.** Centred on a tick at the
-   * data area's edge, half of it hung past the chart and was cut off
+   * data area's edge, half of it would hang past the chart and be cut off
    * ("0. 2. 07:52" for "10. 2. 07:52"). It may use the y-axis gutter on
    * its side, never past it.
    */

@@ -334,7 +334,7 @@ describe("config updates", () => {
     expect(plot.getOptions().padding).toEqual(defaultConfig.padding);
   });
 
-  /** With a shallow copy, a nested field was the same object as the internal one, so whoever read it could mutate the stage without any notification. */
+  /** With a shallow copy, a nested field would be the same object as the internal one, so whoever read it could mutate the stage without any notification. */
   it("should hand out a copy, not the live config", () => {
     const { plot } = mount();
     plot.applyOptions({
@@ -467,7 +467,7 @@ describe("axis labels", () => {
   });
 });
 
-describe("takeScreenshot (2.5)", () => {
+describe("takeScreenshot", () => {
   it("should render a fresh frame and hand out the layer's pixels", () => {
     const deps = testBrowserDeps();
     const factory = { taken: 0 };

@@ -163,8 +163,8 @@ describe("bandSeries", () => {
   });
 
   /**
-   * **A band reads as both edges.** Registered with a name, it used to read
-   * as its upper edge alone — one unlabelled number standing for a range.
+   * **A band reads as both edges.** Registered with a name, its upper edge
+   * alone would be one unlabeled number standing for a range.
    */
   it("describes its upper and lower edge, a gap as a dash", () => {
     const band = bandSeries();

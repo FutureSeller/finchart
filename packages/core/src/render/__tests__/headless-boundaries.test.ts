@@ -5,7 +5,7 @@ import { createCanvasTextMeasurer } from "../text-measurer";
 import type { Canvas2DContext, TextMetricsLike } from "../types";
 
 /**
- * With the DOM type trio (container/overlay/context) now optional, an
+ * With the DOM type trio (container/overlay/context) optional, an
  * implementation that genuinely needs a surface has to report a wiring
  * error, not degrade into a quiet null object. It's part of the contract
  * that the throw happens at wiring time (construction), not later — an

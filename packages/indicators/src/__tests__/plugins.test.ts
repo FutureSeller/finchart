@@ -103,8 +103,8 @@ describe("indicator plugins", () => {
 
     expect(model.plot.panes).toHaveLength(2);
     // The domain default is that a secondary pane is smaller than the
-    // main one — back when it was uniform (1), stacking just three panes
-    // squeezed the price pane down to the same size as the indicator.
+    // main one — with a uniform flex (1), stacking just three panes would
+    // squeeze the price pane down to the same size as the indicator.
     expect(model.plot.panes[1].flex).toBe(0.35);
     installed.dispose();
     expect(model.plot.panes).toHaveLength(1);
@@ -847,13 +847,11 @@ describe("the node door refuses before it mounts anything", () => {
     expect(() => model.plot.use(attachRsi(badBranch))).toThrow(ContractError);
     expect(model.plot.panes).toHaveLength(panes);
     // A node with the wrong branches for this attach — a MACD node under attachRsi — is refused the same way.
-    const { price } = pricedModel();
     const other = JSON.parse("{}");
     other.node = { out: { macd: { read: () => [] } } };
     other.name = "x";
     expect(() => model.plot.use(attachRsi(other))).toThrow(ContractError);
     expect(model.plot.panes).toHaveLength(panes);
-    void price;
   });
 });
 

@@ -1,8 +1,8 @@
 /**
  * The pane list on its own — no stage, no render. The subtle contracts
  * here (main survives, a removal during someone else's cleanup takes the
- * right pane, teardown walks a copy) used to be reachable only through a
- * whole chart and its lifecycle regressions.
+ * right pane, teardown walks a copy) are checked directly, without a
+ * whole chart and its lifecycle around them.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { DataManagerFactory } from "../../data";
@@ -151,7 +151,7 @@ describe("PaneStack.at", () => {
 
   it("should not let a pane with no area yet win a hit", () => {
     // Before its first frame a pane's area is the empty box at (0,0) — a
-    // phantom hit there used to read a value off a pane nobody can see.
+    // phantom hit there would read a value off a pane nobody can see.
     const { stack } = setup();
     stack.main.setArea({ left: 10, right: 100, top: 10, bottom: 50 });
     stack.add(new LinearScale(), {});

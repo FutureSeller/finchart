@@ -53,8 +53,8 @@ export type StyleSpec<S> = {
  * Two things have to hold at once and neither survives alone. `satisfies
  * StyleSpec<S>` checks the shape but lets every property widen, so `css`
  * lands as `string` and a name can never be read back out of the type —
- * measured, and it is why a typo in a variable name was only ever caught by
- * scraping the source. A `const` type parameter keeps the literals but
+ * measured: with that alone, a typo in a variable name can only be caught
+ * by scraping the source. A `const` type parameter keeps the literals but
  * checks nothing. Doing both, in that order, gives both.
  *
  * ```ts
@@ -174,13 +174,13 @@ export function resolveStyle<Spec>(
 
     if ("css" in node) {
       /**
-       * An override goes through the same judgment. It used to be `given
-       * != null ? given : readVar(...)` — for the same leaf, a value that
-       * came in as a CSS variable went through the unit regex, finiteness
-       * check, and `range` clamp in full, while an override went through
-       * none of it. Let a `3` in with no clamp and the body becomes 5.4
-       * times the slot, so candles overlap each other; let a `NaN` in and
-       * `fillRect` no-ops, wiping the body out entirely.
+       * An override goes through the same judgment. With `given != null ?
+       * given : readVar(...)`, for the same leaf, a value that comes in as a
+       * CSS variable would go through the unit regex, finiteness check, and
+       * `range` clamp in full, while an override goes through none of it.
+       * Let a `3` in with no clamp and the body becomes 5.4 times the slot,
+       * so candles overlap each other; let a `NaN` in and `fillRect`
+       * no-ops, wiping the body out entirely.
        */
       out[key] = isGiven(given) ? coerceLeaf(given, node) : readVar(read, node);
     } else {

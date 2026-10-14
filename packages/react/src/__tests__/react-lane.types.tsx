@@ -1,12 +1,13 @@
 /**
- * Type locks for the react lane round.
+ * Type locks for the react lane.
  *
  * - `options` is `PlotOptionsPatch` minus the keys that have a door of their
  *   own (`axis` → `<XAxis>/<YAxis>`, `style.grid` → `gridStyle`, `showGrid`,
- *   `paneGap`). Two doors to one value erase each other — the axis proved it.
+ *   `paneGap`). Two doors to one value erase each other (whichever effect
+ *   runs last wins).
  *   For the same reason `<ChartPane>` takes no `axis`; `<YAxis>` owns it.
  * - `<ChartLine>`/`<ChartCandles>` take the imperative lane's override shape
- *   through `style`; the flat mirror props are gone.
+ *   through `style`; there are no flat mirror props.
  * - A `SeriesHandle` is a `Source`, so it hands straight to anything that
  *   takes one.
  */
@@ -61,11 +62,11 @@ export const styledLine = (
 );
 export const styledCandles = <ChartCandles style={{ up: '#0f0', down: '#f00', wickWidth: 1, bodyRatio: 0.5 }} />;
 
-// @ts-expect-error the flat mirror is gone — say `style={{ point: { radius: 0 } }}`
+// @ts-expect-error no flat mirror — say `style={{ point: { radius: 0 } }}`
 export const flatLine = <ChartLine data={data} pointRadius={0} />;
-// @ts-expect-error the flat mirror is gone — say `style={{ up }}`
+// @ts-expect-error no flat mirror — say `style={{ up }}`
 export const flatCandles = <ChartCandles up="#0f0" />;
-// @ts-expect-error `color` was the swatch and the stroke — now `style.line.color`
+// @ts-expect-error no `color` — the swatch and the stroke are `style.line.color`
 export const flatLineColor = <ChartLine data={data} color="red" />;
 // @ts-expect-error `down` is `style.down`
 export const flatCandlesDown = <ChartCandles down="#f00" />;

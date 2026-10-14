@@ -398,8 +398,7 @@ describe('<ChartContainer data>', () => {
  * Data can differ per series.
  *
  * The container's `data` is the **default** for the whole stage, and a
- * series can declare its own. Back when a chart only ever had one data set,
- * this shape didn't exist at all.
+ * series can declare its own.
  */
 describe('<ChartData> · <ChartSeries data>', () => {
   // x 0..10 in 200 steps — enough bars to fill the screen at the default

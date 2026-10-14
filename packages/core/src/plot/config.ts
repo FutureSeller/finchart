@@ -2,8 +2,8 @@
  * The config's doors — taking one in, checking its numbers, and changing it.
  *
  * Nothing here knows the chart exists. That's the point: the "explicit
- * `undefined` means not given" rule and the numeric guards used to be
- * checkable only by standing up a whole chart and reading the plot area.
+ * `undefined` means not given" rule and the numeric guards can be checked
+ * without standing up a whole chart and reading the plot area.
  */
 import { MIN_TICK_SPACING } from "../axis";
 import {
@@ -58,19 +58,19 @@ export function checkViewportSize(size: ViewportDimensions): void {
   /**
    * **Zero is not rejected.**
    *
-   * An earlier version of this guard wrote it as `requirePositive`, then
-   * reverted that. `setViewport` uses `requireNonNegative` and accepts 0; if
-   * only the constructor threw, **"the same value behaves differently depending on
-   * when it arrives"** — the very reason this door was opened — would still
-   * hold, and one side would get worse: with `<Chart width={measured}>`, the
-   * first paint, a `display: none` tab, or an unresolved flex all leave
-   * `measured === 0`, and then **mounting dies with a ContractError.**
-   * Yesterday an empty chart drew and recovered on the next resize.
+   * Not `requirePositive`. `setViewport` uses `requireNonNegative` and
+   * accepts 0; if only the constructor threw, **"the same value behaves
+   * differently depending on when it arrives"** — the very reason this door
+   * exists — would still hold, and one side would get worse: with
+   * `<Chart width={measured}>`, the first paint, a `display: none` tab, or
+   * an unresolved flex all leave `measured === 0`, and then **mounting
+   * would die with a ContractError** instead of drawing an empty chart that
+   * recovers on the next resize.
    *
    * The same rule that governs `zoomSpeed` applies here unchanged —
    * *"a guard on a value with no meaning is free whenever you add it, a
    * guard on a value that has meaning is only free before release."*
-   * `width: 0` has a meaning today: **"layout hasn't happened yet."**
+   * `width: 0` has a meaning: **"layout hasn't happened yet."**
    * Negative has no meaning, so it stays rejected.
    */
   requireNonNegative(size.width, "size width");
@@ -78,13 +78,12 @@ export function checkViewportSize(size: ViewportDimensions): void {
 }
 
 /**
- * The numeric door for the chart's options, closed the rest of the way after
- * `checkPaneNumbers` guarded only the pane side.
+ * The numeric door for the chart's options — the sibling of
+ * `checkPaneNumbers` on the pane side.
  *
- * That left **only one of the two sibling option objects covered**, and the
- * conformance table marked `Plot` as covered — true for `setViewport` but
- * false for `applyOptions`. The exact same shape as the sibling-field accident caught
- * in `state.ts` recurred here, inside the machinery meant to catch it.
+ * Both the constructor and `applyOptions` pass through it: guarding only
+ * one of the two sibling doors would let the same value be refused at one
+ * door and accepted at the other.
  *
  * The amplifier each field is wired to:
  *
@@ -100,14 +99,14 @@ export function checkViewportSize(size: ViewportDimensions): void {
  *   becomes "no limit."** Worse for not throwing — the consumer never learns
  *   why the zoom limit they set isn't taking effect.
  *
- * Negatives are rejected too. This guard once exempted them ("that would
- * break something that currently works"), but the premise was false — a
- * negative minBarSpacing flips the span clamp's sign in `x-viewport.ts`
- * and **silently locks zoom-out at the current width**, the opposite
- * direction of the NaN failure and just as quiet. Zero stays legal: it is
- * the documented "no limit in that direction". And the **pair** is a door
- * of its own — a floor above the ceiling (both positive, min > max) can't
- * be satisfied by any spacing, so zooming would dead-end either way.
+ * Negatives are rejected too. Exempting them would protect nothing that
+ * works — a negative minBarSpacing flips the span clamp's sign in
+ * `x-viewport.ts` and **silently locks zoom-out at the current width**,
+ * the opposite direction of the NaN failure and just as quiet. Zero stays
+ * legal: it is the documented "no limit in that direction". And the
+ * **pair** is a door of its own — a floor above the ceiling (both
+ * positive, min > max) can't be satisfied by any spacing, so zooming would
+ * dead-end either way.
  */
 /**
  * Which door the numbers come through. `null` on a bar-spacing key clears
@@ -141,8 +140,8 @@ export function checkPlotNumbers(
   if (rightOffset !== undefined) requireFinite(rightOffset, "rightOffset");
   // `null` is "clear the override", so there is no number to check — but
   // only null and undefined skip the guard; a string or a boolean still has
-  // to fail it, the way it did before null was allowed. The ordering check
-  // likewise only has something to say when both are values.
+  // to fail it, like any other non-number. The ordering check likewise only
+  // has something to say when both are values.
   if (door === "construct" && (minBarSpacing === null || maxBarSpacing === null)) {
     throw new ContractError(
       "minBarSpacing/maxBarSpacing: null clears an override through applyOptions — leave the key out of the constructor's config instead",
@@ -167,19 +166,18 @@ export function checkPlotNumbers(
   /**
    * **A nested spot is a door too.**
    *
-   * That guard only checked the flat five — because the review reported
-   * five symptoms, **not because the type happens to have five numeric
-   * fields.** `axis.y.size` sits in the config and becomes axis width
-   * during layout, which is exactly "delayed," and at `Infinity` the data
-   * area gets squeezed to zero width, so **commands drop to zero** — no
-   * throw, the chart just goes permanently blank. The path there is one
-   * documented prop: `<YAxis size={n} />` in `@finchart/react` (`axes.tsx`).
+   * The flat fields above are not the only numbers in the config.
+   * `axis.y.size` sits in the config and becomes axis width only during
+   * layout, so a bad value surfaces late: at `Infinity` the data area gets
+   * squeezed to zero width, so **commands drop to zero** — no throw, the
+   * chart just goes permanently blank. The path there is one documented
+   * prop: `<YAxis size={n} />` in `@finchart/react` (`axes.tsx`).
    *
-   * `style.grid.width` is **deliberately not checked** — canvas ignores
-   * `lineWidth` on the shape it's drawing a metaphor for, by spec, so there's
-   * no amplifier. That judgment is recorded, with its reason, in
-   * `boundary-values.test.ts`'s `EXEMPT_DOORS`, and any new numeric field not
-   * listed there is caught by the test.
+   * `style.grid.width` is **deliberately not checked** — canvas ignores a
+   * non-finite `lineWidth` by spec, so there's no amplifier. That judgment
+   * is recorded, with its reason, in `boundary-values.test.ts`'s
+   * `EXEMPT_DOORS`, and any new numeric field not listed there is caught by
+   * the test.
    */
   for (const [side, options] of [
     ["x", axis?.x],

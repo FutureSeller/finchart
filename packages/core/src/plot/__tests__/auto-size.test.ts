@@ -200,9 +200,9 @@ describe("autoSize", () => {
 describe("flicker during resize", () => {
   /**
    * Clearing the bitmap and redrawing it must be a single task. Assigning
-   * canvas.width clears the bitmap immediately; setViewport used to clear
-   * right there while deferring the draw to rAF, so an empty canvas was
-   * visible — and flickered — for one frame.
+   * canvas.width clears the bitmap immediately; if setViewport cleared
+   * right there while deferring the draw to rAF, an empty canvas would be
+   * visible — and flicker — for one frame.
    */
   it("should not touch the layers before the frame is drawn", () => {
     const observer = fakeObserver();
@@ -245,10 +245,10 @@ describe("flicker during resize", () => {
   });
 
   /**
-   * An explicit undefined means "not given," not "clear it." The previous
-   * implementation used { ...size, ...viewport }, and the spread treated
-   * an explicit undefined as a value, turning the cleared height into NaN
-   * that then leaked into the scale range.
+   * An explicit undefined means "not given," not "clear it." A merge by
+   * { ...size, ...viewport } treats an explicit undefined as a value,
+   * turning the cleared height into NaN; the layout then drops every frame
+   * as degenerate and the chart goes blank with no throw.
    */
   it("should ignore an explicitly undefined dimension", () => {
     const observer = fakeObserver();

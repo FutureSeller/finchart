@@ -53,7 +53,7 @@ function llmsSidebar(configured: DefaultTheme.Sidebar | undefined): DefaultTheme
    *
    * `apiSidebar` is mounted under both `/reference/` and `/api/` so the API
    * navigation survives wherever the reader is standing. Flattening turns that
-   * into the identical object twice, and "API Reference" was printed twice.
+   * into the identical object twice, and "API Reference" would print twice.
    *
    * De-duplicating by object identity rather than by title is deliberate: it
    * removes exactly the one-sidebar-two-mounts case and cannot silently merge

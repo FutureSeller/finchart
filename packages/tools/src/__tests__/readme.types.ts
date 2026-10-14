@@ -24,14 +24,9 @@ export const MOUNT_LINE = "plot.mainPane.use(drawingTools({ plot }))";
 
 
 /**
- * Consumer-facing docs must sell today's truth. While unpublished on
- * npm, what this list requires isn't "no clone step" but "an
- * unpublished notice is present" — that reverts on the day of
- * publication. The rule and the reopening condition live in
- * `snippet-drift.test.ts`.
- *
- * (Contributor procedure — the root README's "Development" section — is
- * outside this list and isn't checked.)
+ * The README's "Mounting" section, compiled against the real types. (The
+ * root README's "Development" section is contributor procedure and isn't
+ * checked.)
  */
 export function readmeSnippet(plot: Plot): void {
   // ---- must match the README's "Mounting" section ----

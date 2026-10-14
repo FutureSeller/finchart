@@ -129,13 +129,13 @@ describe("each registration gets its own manager", () => {
 
     plot.mainPane.addSeries({ series: lineSeries(), derive: double });
 
-    // The derived series went through the same factory — it used to build SimpleDecimation directly.
+    // The derived series goes through the same factory — not a hard-wired SimpleDecimation.
     expect(spy.built).toHaveLength(before + 1);
   });
 
   it("should build one for a series without derive too", () => {
-    // **It used to not build one.** A non-derived series used what Plot had
-    // already sliced, so there were two decimation paths. Now there's one.
+    // A non-derived series builds one too rather than using what Plot has
+    // already sliced, so there is one decimation path, not two.
     const spy = spyFactory();
     const deps = testBrowserDeps({ createDecimation: spy.createDecimation });
     const { plot } = mountPlot({ deps, series: lineSeries(), config: defaultConfig, data });
@@ -160,7 +160,7 @@ describe("each registration gets its own manager", () => {
     plot.mainPane.addSeries({ series: spy, derive: double });
     plot.render();
 
-    // The cap applies to derived points too. The default of 1000 used to just pass through.
+    // The wiring's maxPoints cap applies to derived points too, not only to the series' own data.
     expect(seen.at(-1)!.length).toBeLessThanOrEqual(11);
   });
 });

@@ -375,7 +375,7 @@ export type AttachMovingAverageOptions = AttachFrom<MovingAverage, MovingAverage
  * ```
  *
  * The host is a pane because mounting a single series is all this needs
- * — taking the whole `PaneHost` when only `addSeries` gets used left the
+ * — taking the whole `PaneHost` when only `addSeries` gets used would leave the
  * indicator unaware if the pane it was mounted on later disappeared.
  */
 export function attachMovingAverage(

@@ -29,7 +29,7 @@ of it, wired the same way `@finchart/dom` is.
 Indicators expose computed outputs as data sources, so one calculation can
 feed another indicator or several series. Drawing tools use the plugin and
 input-consumer contracts to capture gestures before chart panning. Both ship
-as separate packages; adding them did not require indicator- or drawing-specific
+as separate packages; neither needs indicator- or drawing-specific
 methods in `@finchart/core`. See [custom indicators](/guide/extensions) and
 [drawing tools](/guide/interaction).
 

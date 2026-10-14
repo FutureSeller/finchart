@@ -60,7 +60,7 @@ export class CanvasRenderer implements Renderer {
   /**
    * Remembers color verdicts — born and dies with the renderer. Reading
    * back canvas state to verify it serializes state on every command and
-   * was eating a sizable chunk of frame time — a verdict is purely a
+   * eats a sizable chunk of frame time — a verdict is purely a
    * property of the string, so once per value is enough.
    */
   private readonly colorVerdicts = new ColorVerdicts();
@@ -69,7 +69,7 @@ export class CanvasRenderer implements Renderer {
    * Font verdicts live in the same kind of container — same reason as
    * color. `applyFont`'s read-back runs more often: its fast path only
    * holds when "the value changed," so the common case where the font
-   * stays the same (axis labels within one frame) was actually the one
+   * stays the same (axis labels within one frame) is actually the one
    * falling to the slow path.
    */
   private readonly fontVerdicts = new FontVerdicts();
@@ -201,7 +201,7 @@ export class CanvasRenderer implements Renderer {
          * A point count too small for a line doesn't get drawn.
          * `drawLine` (the public door) throws under 2 points, but
          * `custom`'s fallback path (`eachFallback` → `replay`) never
-         * passes through that door — `{ points: [] }` used to be a raw
+         * passes through that door — `{ points: [] }` would be a raw
          * `TypeError` in the middle of `commit()`, and punching through
          * rAF leaves the canvas stuck on a partial frame permanently.
          */
@@ -472,8 +472,8 @@ export const FALLBACK_FONT = `${FALLBACK_FONT_SIZE} sans-serif`;
 /**
  * What `applyColor` actually needs — just the two channels.
  *
- * The old signature was `Canvas2DContext`, `string`, which forced the one
- * caller assigning a gradient to use two type assertions. Since
+ * Were `applyColor` typed `(Canvas2DContext, string)`, the one caller
+ * assigning a gradient would need two type assertions. Since
  * `Canvas2DContext` already types its channels as `string |
  * CanvasGradientLike | CanvasPatternLike`, this borrows that instead — the
  * headless type smoke test blocks the DOM global name (`CanvasGradient`).
@@ -559,7 +559,7 @@ export class FontVerdicts extends Verdicts<string | null> {}
  * normalizes colors (`#fff` → `rgb(...)`), this checks "did it change,"
  * not string equality.
  *
- * But that read-back itself was expensive — reading a canvas channel makes
+ * But that read-back itself is expensive — reading a canvas channel makes
  * the browser serialize the current color as a CSS string, and doing that
  * twice per command runs the serialization 34,000 times in a frame with
  * 17,000 commands.
@@ -572,7 +572,7 @@ export class FontVerdicts extends Verdicts<string | null> {}
  *
  * So the verdict gets cached — a canvas's color parsing is purely a
  * function of the string, so once per value is enough. Without a cache,
- * it's the old path unchanged (slow, but correct).
+ * every assignment reads back (slow, but correct).
  */
 export function applyColor(
   context: CanvasColorChannels,
@@ -665,8 +665,8 @@ export function applyFont(
    * It didn't change — either it was the same font, or it was rejected.
    * The value a neighbor left behind can't tell these two apart — the
    * value the ladder produces (`"11px <family>"`) can equal what the
-   * previous label already had set, and there used to be a regression
-   * where success from the second label onward got misread as rejection.
+   * previous label already had set, so a bare "did it change" check
+   * misreads success from the second label onward as rejection.
    *
    * Uses a sentinel the same way `applyColor` does, asking through a value
    * that's certainly different regardless of the neighbor.
@@ -778,8 +778,8 @@ function parseDashArray(dashArray: string | undefined): number[] {
   /**
    * Not a string means no dashing.
    *
-   * This used to be `if (!dashArray) return []` — it blocked `undefined`
-   * and `""`, but an array or a number still went on to `.split`. An array
+   * `if (!dashArray) return []` is not enough — it blocks `undefined`
+   * and `""`, but an array or a number would still go on to `.split`. An array
    * is the shape of the canvas API itself (`ctx.setLineDash([4,4])`), so
    * it's a value a consumer naturally tries. An uncaught `TypeError`
    * punching through rAF leaves the canvas stuck on a partial frame

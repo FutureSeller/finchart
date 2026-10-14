@@ -31,7 +31,7 @@ export const ABOVE_SERIES = 1000;
  * registered. There's no `data` (the source's visible range) here — every
  * series has a different array, so there's no single one to hand over. If
  * you need "each series's value at cursor x", use
- * `PlotDecorationContext.panes` instead. A decoration no longer knows a
+ * `PlotDecorationContext.panes` instead. A decoration doesn't know a
  * point type anywhere.
  */
 interface DecorationBase {
@@ -243,7 +243,7 @@ function after<D>(entry: DecorationEntry<D>, zIndex: number, seq: number): boole
  * itself, the one before it, several — skips nothing. An entry added during
  * the walk (its `seq` is past where the walk began) waits for the next
  * frame, and nothing is visited twice. The search starts from the last
- * slot, so a list nobody touched costs one step per entry, as before.
+ * slot, so a list nobody touched costs one step per entry.
  *
  * `visit` returns `true` to stop.
  */
@@ -310,8 +310,8 @@ export function forEachEntry<D>(
  *
  * `changed` runs once on mount and once on the first removal. The inner
  * `remove` is idempotent on its own, but the notification sits outside it,
- * so an effect cleanup running twice used to give every subscriber a
- * phantom frame.
+ * so without its own flag an effect cleanup running twice would give every
+ * subscriber a phantom frame.
  */
 export function mountDecoration<D>(
   list: DecorationList<D>,

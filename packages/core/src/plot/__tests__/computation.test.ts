@@ -183,7 +183,7 @@ describe("computation", () => {
 });
 
 describe("a registration that does not own its data", () => {
-  /** A combination error is caught at compile time — when the registration type was flat, giving both input and data used to pass. */
+  /** A combination error is caught at compile time — with a flat registration type, giving both input and data would pass. */
   it("should refuse data and input together", () => {
     const { plot } = stage();
     const price = plot.mainPane.addSeries({

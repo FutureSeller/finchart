@@ -917,15 +917,14 @@ export function ichimoku(
  *
  * The third argument is what makes a session boundary answerable: "did a
  * new one open here" is a comparison between two bars, not a property of
- * one, and without it every consumer closed over the array to index it
- * again. `periodAnchor` turns any rule about where a bar starts into one
+ * one, and without it every consumer would close over the array to index
+ * it again. `periodAnchor` turns any rule about where a bar starts into one
  * of these, so a venue's own calendar needs the rule and nothing else.
  *
  * **A predicate may declare fewer parameters than it is given** — one or
- * two is ordinary TypeScript and nothing about that changed. What changed
- * is what an indicator passes: code that reads this type back out and
- * calls it with two arguments, or assigns it to a two-parameter type, has
- * to name the third now.
+ * two is ordinary TypeScript. An indicator passes three: code that reads
+ * this type back out and calls it with two arguments, or assigns it to a
+ * two-parameter type, has to name the third.
  */
 export type AnchorPredicate = (
   point: OHLC,

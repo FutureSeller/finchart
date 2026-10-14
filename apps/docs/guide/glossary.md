@@ -128,7 +128,7 @@ context transform carries the scale factor by itself.
 ### Data point
 
 The smallest unit that has an `x` (`BaseDataPoint`). `x` is a `number` —
-a timestamp in milliseconds, a bar index, anything you can order (ADR-0040).
+a timestamp in milliseconds, a bar index, anything you can order.
 
 | Type | Value field | Used by |
 |---|---|---|

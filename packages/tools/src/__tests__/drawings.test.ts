@@ -11,8 +11,8 @@ describe("serialization", () => {
   ];
 
   /**
-   * Only the current format is read. Nothing was ever published in an
-   * earlier one, so an old `version` is refused like any unknown one.
+   * Only the current format is read. No published data uses an earlier
+   * one, so an old `version` is refused like any unknown one.
    */
   it("refuses a version-1 payload", () => {
     expect(parseDrawings('{"version":1,"drawings":[{"type":"horizontal","price":105}]}')).toBeNull();
@@ -55,12 +55,12 @@ describe("serialization", () => {
 });
 
 /**
- * Round-trip loss is a POLICY, not a bug (ADR-0047): the normalizer
- * drops fields it doesn't know, so a payload written by a future v2.x
- * loses that field when an older v2 client round-trips it. This pin is
- * here so the next person can tell policy from unimplemented — if you
- * came to make unknown fields survive, you are changing ADR-0047, and
- * this test going red is it telling you so.
+ * Round-trip loss is a POLICY, not a bug: the normalizer drops fields it
+ * doesn't know, so a payload written by a future v2.x loses that field
+ * when an older v2 client round-trips it. This pin is here so the next
+ * person can tell policy from unimplemented — if you came to make unknown
+ * fields survive, you are changing that policy, and this test going red is
+ * it telling you so.
  */
 it("round-trip loss is policy — a future optional field drops, knowingly", () => {
   const fromNewerV2 =

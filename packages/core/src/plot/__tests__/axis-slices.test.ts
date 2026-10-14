@@ -142,7 +142,7 @@ describe("sliceAxes", () => {
   });
 });
 
-describe("value axis toggle (2.2)", () => {
+describe("value axis toggle", () => {
   it("should flip the picture when inverted", () => {
     const series = spySeries();
     const model = headlessModel({
@@ -185,7 +185,7 @@ describe("value axis toggle (2.2)", () => {
   });
 });
 
-describe("axis drag scaling (2.2)", () => {
+describe("axis drag scaling", () => {
   async function dragModel() {
     const { createPlotModel } = await import("../model");
     const model = createPlotModel({

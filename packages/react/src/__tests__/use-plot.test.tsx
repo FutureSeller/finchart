@@ -40,7 +40,7 @@ function setup() {
      * Doesn't wait for a frame.
      *
      * jsdom has rAF, so with the default `frameScheduler`, rendering would
-     * get pushed to the next frame. Layer resizing now happens **right
+     * get pushed to the next frame. Layer resizing happens **right
      * before drawing** (to avoid a resize flicker), so without running a
      * frame there'd be nothing to observe.
      */
@@ -160,10 +160,10 @@ describe('onXDomainChange', () => {
 
   /**
    * StrictMode runs mount twice: it builds a plot, tears it down, and
-   * builds another. There used to be an incident where hooking `plot.on`
-   * from an outer effect left the listener attached to the first
-   * (destroyed) plot — the prop path rebinds inside the same effect as the
-   * plot, so it should hear events from the second plot instead.
+   * builds another. Hooking `plot.on` from an outer effect would leave the
+   * listener attached to the first (destroyed) plot — the prop path rebinds
+   * inside the same effect as the plot, so it should hear events from the
+   * second plot instead.
    */
   it('should follow the live plot under StrictMode double mounting', () => {
     const { deps, series } = setup();

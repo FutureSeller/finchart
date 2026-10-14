@@ -58,9 +58,9 @@ describe("LineSeries", () => {
   });
 
   it("should report no extent at all for empty data", () => {
-    // It used to be { min: 0, max: 0 }. "There's nothing to measure" and
-    // "measuring 0" are different, and once each series gets its own
-    // data, that 0 drags the union toward it.
+    // Not { min: 0, max: 0 }. "There's nothing to measure" and "measuring
+    // 0" are different, and since each series carries its own data, that
+    // 0 would drag the union toward it.
     expect(lineSeries().valueExtent([])).toBeNull();
   });
 
@@ -158,9 +158,9 @@ describe("CandleSeries", () => {
   });
 
   it("should report no extent at all for empty data", () => {
-    // It used to be { min: 0, max: 0 }. "There's nothing to measure" and
-    // "measuring 0" are different, and once each series gets its own
-    // data, that 0 drags the union toward it.
+    // Not { min: 0, max: 0 }. "There's nothing to measure" and "measuring
+    // 0" are different, and since each series carries its own data, that
+    // 0 would drag the union toward it.
     expect(candleSeries().valueExtent([])).toBeNull();
   });
 

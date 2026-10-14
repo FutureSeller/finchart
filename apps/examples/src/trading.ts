@@ -250,26 +250,17 @@ function saveDrawings(): void {
   localStorage.setItem(storageKey(), tools.serialize());
 }
 /**
- * Read first. Swap the order and whatever you drew disappears the moment you
- * leave a symbol and come back. `clear()` emits `changes` even when the list is
- * already empty, and that subscriber calls `saveDrawings()` right away. Clear
- * first and you get: clear() → changes → the new symbol's saved copy is
- * overwritten with an empty one → getItem() reads that empty copy → load ends
- * with zero drawings.
- *
- * `load` already replaces the list, so `clear` is only needed when there is no
- * saved copy at all.
+ * `load` replaces the list, so `clear` is needed only when there is no
+ * readable saved copy.
  */
 function loadDrawings(): void {
   const saved = localStorage.getItem(storageKey());
   if (saved && tools.load(saved)) return;
   if (saved) {
     /**
-     * A saved copy we can't read is quarantined, not deleted. It used to be
-     * that the notification from the `clear()` below rode the subscriber back
-     * into `saveDrawings()`, so merely switching symbols overwrote the
-     * unreadable original with an empty one. Move the bytes to another key and
-     * a later version can still recover them.
+     * A saved copy we can't read is quarantined, not deleted. Left under its
+     * key, the next save would overwrite the unreadable original. Move the
+     * bytes to another key and a later version can still recover them.
      */
     localStorage.setItem(`${storageKey()}:broken`, saved);
     localStorage.removeItem(storageKey());
@@ -279,15 +270,15 @@ function loadDrawings(): void {
 loadDrawings();
 
 /**
- * Save whenever the drawings change — a drag arrives here too. It used to save
- * only on a button press, so anything you dragged into place was gone on
- * reload. A move fires on every pointermove, so that one case is debounced.
+ * Save whenever the drawings change — a drag arrives here too, so anything
+ * you dragged into place survives a reload. A move fires on every
+ * pointermove, so that one case is debounced.
  */
 let saveTimer: number | undefined;
 tools.changes.subscribe(({ reason }) => {
   // `load` and `clear` are echoes of calls we made ourselves — turning them
-  // back into a save overwrites the original (a plain read would rewrite it in
-  // normalized form, and the clear after a failure would erase it).
+  // back into a save rewrites what we just read (a plain read would rewrite
+  // it in normalized form, and a clear has nothing worth saving).
   if (reason === "load" || reason === "clear") return;
   if (reason !== "move") {
     saveDrawings();

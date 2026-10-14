@@ -9,14 +9,14 @@
  * the 80% floor guards nothing, and vitest has no option that fails it.
  *
  * **This reads the outcome instead of predicting it.** Asserting at config
- * load that `include` names a real file was tried first and lost to vitest's
- * own matching in every review round: it matches patterns as strings against
- * normalized absolute filenames (`..`, `//`, braces and letter case all
- * resolve on disk and match nothing there), cuts filenames at `#`, and appends
- * exclusions no config can override — tests, config files, setup files. Each
- * was measured with the assertion green and the report at 0/0. `onCoverage`
- * runs after all of that, on what was actually measured, and a CLI override of
- * `include` does not get past it either.
+ * load that `include` names a real file loses to vitest's own matching: it
+ * matches patterns as strings against normalized absolute filenames (`..`,
+ * `//`, braces and letter case all resolve on disk and match nothing
+ * there), cuts filenames at `#`, and appends exclusions no config can
+ * override — tests, config files, setup files. Each was measured with the
+ * assertion green and the report at 0/0. `onCoverage` runs after all of
+ * that, on what was actually measured, and a CLI override of `include` does
+ * not get past it either.
  *
  * **Only `vitest run` is held to it.** A watch rerun runs the tests that
  * changed; if those never touch the target, vitest adds no untested files and
@@ -73,7 +73,7 @@ export default class ZeroCoverageReporter implements Reporter {
    * `onTestRunEnd`, and that last hook is what prints a failing test's diff and
    * the GitHub Actions annotations. Throwing here exits 1 and takes those away
    * — measured: with a failing assertion and an empty map, the assertion's
-   * details were gone. The verdict waits for the end of the run.
+   * details are gone. The verdict waits for the end of the run.
    */
   onCoverage(coverage: unknown): void {
     if (this.watch) return;

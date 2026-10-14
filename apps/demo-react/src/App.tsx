@@ -110,8 +110,8 @@ export function App() {
   const [layout, setLayout] = useState<1 | 2 | 4>(1);
   const [focus, setFocus] = useState(0);
   /**
-   * One slot is one record. It used to be four parallel arrays — settings,
-   * symbol, chart and tools — and every new field added another array. The app
+   * One slot is one record, not four parallel arrays — settings, symbol,
+   * chart and tools — where every new field adds another array. The app
    * holds the symbol, and the settings survive a change of symbol.
    */
   const [slots, setSlots] = useState<SlotState[]>(() =>

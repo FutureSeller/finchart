@@ -127,12 +127,12 @@ export interface ChartInstance {
    * rewrites `textContent` on every hover, painting over whatever message
    * `flashStatus` had put up.
    *
-   * Without this signal the vanilla status bar's bar count was **frozen at
-   * load time** — the feed kept announcing `minuteClosed` (`feed.ts`) with
-   * nobody listening, and `refreshStatus` was only called on a focus change or
-   * a timeframe button. The React demo reads `snapshot.barCount` and
-   * updates every tick, so **the same screen looked different in the two
-   * apps.**
+   * Without this signal the vanilla status bar's bar count would be **frozen
+   * at load time** — the feed would keep announcing `minuteClosed` (`feed.ts`)
+   * with nobody listening, and `refreshStatus` would run only on a focus
+   * change or a timeframe button. The React demo reads `snapshot.barCount`
+   * and updates every tick, so **the same screen would look different in the
+   * two apps.**
    */
   onBarClose(listener: () => void): () => void;
 

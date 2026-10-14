@@ -3,8 +3,8 @@
  *
  * A module's index is an internal convenience layer; this file
  * explicitly re-lists what's public. Under `export *`, one internal
- * helper landing in a module index made it public automatically — now
- * both adding and removing something here is a deliberate diff on this
+ * helper landing in a module index would become public automatically —
+ * here both adding and removing something is a deliberate diff on this
  * file. `scripts/public-barrel-check.mjs` holds every published barrel
  * to that rule (explicit enumeration is itself the lock — no separate
  * name snapshot).

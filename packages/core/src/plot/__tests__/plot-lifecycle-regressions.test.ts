@@ -1,4 +1,4 @@
-/** A collection of regression checks for bugs review caught by actually measuring. */
+/** Regression checks for plot bugs. */
 import { describe, expect, it, vi } from "vitest";
 import { createPlotModel } from "../index";
 import { frameScheduler, createMemoryLayers, noStyle, recordingRenderer } from "../../render";
@@ -24,7 +24,7 @@ function stage(config: Record<string, unknown> = {}) {
 }
 
 describe("axis.y.size leaves the data its share", () => {
-  /** A bug where a y-axis size larger than the stage width squeezed the data area to zero width, permanently dropping the frame. */
+  /** A y-axis size larger than the stage width must not squeeze the data area to zero width, permanently dropping the frame. */
   it.each([400, 500, 10_000])("should keep drawing at size %i", (size) => {
     expect(stage({ axis: { y: { size } } }).commands().length).toBeGreaterThan(0);
   });
@@ -49,7 +49,7 @@ describe("a render request made while drawing does not reopen the frame", () => 
       },
     });
 
-    // This used to throw RangeError (stack overflow) in the immediateScheduler.
+    // Without the guard this throws RangeError (stack overflow) in the immediateScheduler.
     expect(() => model.plot.render()).not.toThrow();
   });
 });
@@ -102,7 +102,7 @@ describe("lifecycle primitives", () => {
       }
     }
 
-    // This used to pass because of `Object.hasOwn`, and its own dispose ended up shadowed.
+    // An `Object.hasOwn` check would let this pass, and its own dispose would end up shadowed.
     expect(() => pluginApi(new Toolbox(), () => undefined)).toThrow();
   });
 
@@ -159,7 +159,7 @@ describe("the numeric and shape doors share the same vocabulary as their sibling
     const model = stage();
     // @ts-expect-error the shape a failed measurement helper would return.
     expect(() => model.plot.setViewport(null)).toThrow();
-    // @ts-expect-error this used to succeed silently, changing nothing.
+    // @ts-expect-error unguarded, this succeeds silently, changing nothing.
     expect(() => model.plot.setViewport("640")).toThrow();
   });
 
@@ -170,7 +170,7 @@ describe("the numeric and shape doors share the same vocabulary as their sibling
 
   it("should treat a non-finite probe as pointing at nothing", () => {
     const model = stage();
-    // This used to return the first bar as a normal sample.
+    // Without the guard this returns the first bar as a normal sample.
     expect(model.plot.mainPane.probe(NaN)).toEqual([]);
   });
 
@@ -195,8 +195,8 @@ describe("a frame with no data leaves no stale geometry behind", () => {
     model.plot.mainPane.clearSeries();
     model.plot.render();
 
-    // Pressing on the old y-axis slot used to still register, and once it
-    // registered, autoScale turned off.
+    // Pressing on the old y-axis slot must not register — once it
+    // registers, autoScale turns off.
     model.plot.routeInput({
       type: "pointerdown",
       point: { x: 10, y: 150 },
@@ -230,15 +230,15 @@ describe("frameScheduler keeps its receiver attached", () => {
     let rendered = 0;
     const scheduler = frameScheduler(host)(() => rendered++);
 
-    // Destructuring used to detach `this`, making the first request() a TypeError.
+    // Destructuring would detach `this`, making the first request() a TypeError.
     expect(() => scheduler.request()).not.toThrow();
     host.queue.forEach((run) => run());
     expect(rendered).toBe(1);
   });
 });
 
-/** Regression checks for bugs that were fixed without a guard. Mutation testing confirmed each guard's discriminating power. */
-describe("fixes that had no guard", () => {
+/** Each test here fails when the guard behind it is removed. */
+describe("lifecycle guards no other test pins down", () => {
   /** Cancellation is not detachment — the same problem shows up in the core's own axis drag. */
   it("a cancelled axis drag does not let a later hover keep stretching the value axis", () => {
     const model = stage();
@@ -261,8 +261,8 @@ describe("fixes that had no guard", () => {
     // The system reclaimed the pointer — per spec, no up event follows.
     model.plot.routeInput({ type: "pointercancel", point: { x: axis.x, y: axis.y + 40 }, pointerId: 1 });
 
-    // A bare hover after releasing. This used to keep stretching the axis
-    // and return `true`, swallowing the crosshair and pan along with it.
+    // A bare hover after releasing. Unguarded, it keeps stretching the axis
+    // and returns `true`, swallowing the crosshair and pan along with it.
     const ate = model.plot.routeInput({
       type: "pointermove",
       point: { x: axis.x, y: axis.y + 120 },
@@ -310,8 +310,8 @@ describe("fixes that had no guard", () => {
 
 /**
  * Five surfaces (axis, badge, tooltip, legend, priceLine) must all use the
- * same number of digits, but only the axis called format(value, step)
- * while the rest were only given the value, so the digit counts diverged.
+ * same number of digits; if only the axis called format(value, step) and
+ * the rest were only given the value, the digit counts would diverge.
  */
 describe("all five surfaces use the same number of digits", () => {
   const tiny = Array.from({ length: 20 }, (_, i) => ({
@@ -341,7 +341,7 @@ describe("all five surfaces use the same number of digits", () => {
     const digitsOf = (text: string) => text.split(".")[1]?.length ?? 0;
     const badge = model.plot.mainPane.formatValue(0.00001234);
 
-    // It used to read as "0.00" (two digits) — the price came out as zero.
+    // Read as "0.00" (two digits), the price would come out as zero.
     expect(digitsOf(badge)).toBe(digitsOf(labels[0]));
     expect(badge).toContain("0.00001");
   });
@@ -359,9 +359,9 @@ describe("all five surfaces use the same number of digits", () => {
 });
 
 /**
- * Delegation, not copying. The draw context used to copy the mapping via
- * a spread, so a class-based mapping reached the series with only
- * toPixel surviving.
+ * Delegation, not copying. A draw context that copied the mapping via a
+ * spread would hand a class-based mapping to the series with only toPixel
+ * surviving.
  */
 describe("the draw context's mapping does not lose its original", () => {
   class ClassMapping {
@@ -420,8 +420,8 @@ describe("the draw context's mapping does not lose its original", () => {
     });
     model.plot.render();
 
-    // Four of them used to vanish (only `toPixel` survived) — and calling
-    // fromPixel inside the render loop then threw forever.
+    // A copy loses four of them (only `toPixel` survives) — and calling
+    // fromPixel inside the render loop then throws forever.
     expect(seen).toEqual([]);
   });
 });

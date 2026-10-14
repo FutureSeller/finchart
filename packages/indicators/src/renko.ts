@@ -115,11 +115,12 @@ function brickGrid(origin: number, size: number) {
  * brick sizes use exact binary units instead: their shortest decimal
  * spelling can have too few digits to preserve a long run's brick count.
  *
- * A close 2⁴⁷ bricks or more from zero cannot be laid — `ContractError` —
- * because past that a brick is under the doubles' own spacing at that
- * price and adding one would leave the level where it was (a brick of
- * 1,638 on a price of 10²⁰ is such a brick); the same door
- * `pointAndFigure` keeps for its boxes.
+ * A close 2⁴⁷ bricks or more from zero cannot be laid — `ContractError`.
+ * 2⁴⁷ is a margin: inside it a brick is at least ~32× the doubles' spacing
+ * at that price, so brick prices stay distinct. Well past it they round
+ * onto each other (a brick of 1,638 on a price of 10²⁰, a tenth of the
+ * spacing, would lay mostly flat bricks). The same door `pointAndFigure`
+ * keeps for its boxes.
  */
 export function renko(
   source: readonly OHLC[],
@@ -138,9 +139,9 @@ export function renko(
   const bricks: RenkoBrick[] = [];
   if (source.length === 0) return bricks;
 
-  // The door a close has to pass to be laid in bricks: within 2⁴⁷ bricks of zero, where a brick is still far
-  // above the doubles' spacing at that price (the spacing is under 2⁻⁵² of the price), so every step below
-  // moves the level. Past it a step can be absorbed and the loops would never end.
+  // The door a close has to pass to be laid in bricks: within 2⁴⁷ bricks of zero, where a brick is at least
+  // ~32× the doubles' spacing at that price (the spacing is under 2⁻⁵² of the price), so every step below
+  // moves the level. The bound is a margin; far enough past it a step rounds onto its neighbour.
   const laid = (close: number): number => {
     if (!(Math.abs(close) < brickSize * 2 ** 47)) {
       throw new ContractError(`renko brickSize ${describeValue(brickSize)} is too small to step the price ${describeValue(close)}`);

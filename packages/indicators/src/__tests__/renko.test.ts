@@ -9,11 +9,11 @@ function tick(x: number, close: number): OHLC {
 }
 
 describe("renko", () => {
-  it("refuses a close 2⁴⁷ bricks or more from zero — a brick under the doubles' spacing there could not move the level", () => {
+  it("refuses a close 2⁴⁷ bricks or more from zero as a brick too small to step the price", () => {
     const at = (x: number, close: number): OHLC => ({ x, open: close, high: close, low: close, close });
     expect(() => renko([at(0, 1e20), at(1, 1e20 + 16384)], { brickSize: 1638.4 })).toThrow(ContractError);
     expect(() => renko([at(0, 2 ** 47)], { brickSize: 1 })).toThrow(/too small to step the price/);
-    // A brick over half the largest double has no reversal inside the doubles (it used to lay one at −∞); under
+    // A brick over half the largest double has no reversal inside the doubles (two bricks overflow); under
     // that, every brick lies between the level and a finite close, so a tape from −1.5e308 to 1.5e308 and back
     // is laid in finite bricks, reversal included.
     expect(() => renko([at(0, -1e308), at(1, 1e308), at(2, -1e308)], { brickSize: 1e308 })).toThrow(/at most half the largest double/);
