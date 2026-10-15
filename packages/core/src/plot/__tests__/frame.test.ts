@@ -6,7 +6,7 @@ import { M4Decimation, SimpleDataManager } from "../../data";
 import type { PlotArea } from "../../primitives";
 import { barIndexX, continuousX, LinearScale, LogScale, type Scale } from "../../scale";
 import { resolveConfig } from "../config";
-import { layoutFrame, type FrameInput, type FrameMeasure } from "../frame";
+import { layoutFrame, layoutPaneHeights, type FrameInput, type FrameMeasure } from "../frame";
 import type { PlotConfig } from "../types";
 import { FALLBACK_X_AXIS_HEIGHT, FALLBACK_Y_AXIS_WIDTH } from "../layout";
 import { Pane } from "../pane";
@@ -564,5 +564,88 @@ describe("sizes that cannot be drawn", () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  /**
+   * A collapsed pane is 1px tall, but its edges are summed from a fractional
+   * top and gap: here its top lands a hair above 511, so `top + 1` rounds to
+   * 512 and its measured height comes out a hair under 1. The pane is still
+   * drawable, so the frame must not be dropped over that rounding.
+   */
+  it("should lay out a collapsed pane whose edges land on fractional pixels", () => {
+    const [main, collapsed] = panes(2);
+    collapsed.applyOptions({ flex: 0, minHeight: 0 });
+
+    const xScale = new LinearScale();
+    xScale.setDomain(0, 100);
+    const result = layoutFrame({
+      area: { left: 0, right: 800, top: 0.2932498582193208, bottom: 512 },
+      panes: [main, collapsed],
+      gap: 1.4899541430545185,
+      axis: ax(),
+      xScale,
+      x: continuousX(xScale),
+      labels: false,
+      measure: null,
+    });
+
+    expect(result).not.toBeNull();
+    expect(collapsed.area.bottom - collapsed.area.top).toBeCloseTo(1, 9);
+  });
+
+  /** A measurer that can't size its text leaves no room to lay out — the frame is skipped, the same as an area too small to draw. */
+  it.each([
+    ["a NaN height", { width: 7, height: NaN }],
+    ["a negative height", { width: 7, height: -1 }],
+    ["a NaN width", { width: NaN, height: 10 }],
+  ])("should return null when the measurer reports %s", (_label, size) => {
+    const xScale = new LinearScale();
+    xScale.setDomain(0, 100);
+    const lay = () =>
+      layoutFrame({
+        area: box(800, 600),
+        panes: panes(1),
+        gap: 0,
+        axis: ax(),
+        xScale,
+        x: continuousX(xScale),
+        labels: true,
+        measure: { font: "12px test", of: () => size },
+      });
+
+    expect(lay).not.toThrow();
+    expect(lay()).toBeNull();
+  });
+
+  /** Zero is a height, not a broken one — a measurer stub with zero font metrics still gets a chart. */
+  it("should still lay out when the measurer reports a zero height", () => {
+    const xScale = new LinearScale();
+    xScale.setDomain(0, 100);
+    const result = layoutFrame({
+      area: box(800, 600),
+      panes: panes(1),
+      gap: 0,
+      axis: ax(),
+      xScale,
+      x: continuousX(xScale),
+      labels: true,
+      measure: { font: "12px test", of: () => ({ width: 7, height: 0 }) },
+    });
+
+    expect(result).not.toBeNull();
+  });
+
+  /** A divider move reads heights from here, so it must refuse the same measurement the frame does. */
+  it("should give a divider move no heights when the measurer reports a NaN height", () => {
+    expect(
+      layoutPaneHeights({
+        area: box(800, 600),
+        panes: panes(2),
+        gap: 0,
+        axis: ax(),
+        labels: true,
+        measure: { font: "12px test", of: () => ({ width: 7, height: NaN }) },
+      }),
+    ).toBeNull();
   });
 });

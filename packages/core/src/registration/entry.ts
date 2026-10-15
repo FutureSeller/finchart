@@ -778,7 +778,7 @@ function entryOf<
     if (!Array.isArray(tail) || tail.length !== expected) {
       throw new DataError(
         `deriveLast(${change.kind}) must return exactly ${expected}, ` +
-          `got ${describe(tail)} — length is the contract (resumable-fold-approach)`,
+          `got ${describe(tail)} — length is the contract`,
       );
     }
 
