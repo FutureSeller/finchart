@@ -13,7 +13,7 @@
     "preview:pages": "wrangler pages dev dist --ip 127.0.0.1",
     "typedoc": "typedoc",
     "preview": "vitepress preview",
-    "lint": "oxlint .vitepress/config.ts vitest.config.ts zero-coverage-reporter.ts snippets",
+    "lint": "oxlint .vitepress/config.ts vitest.config.ts snippets",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "clean": "rm -rf dist api public/demos/react-showcase .vitepress/cache .turbo"
