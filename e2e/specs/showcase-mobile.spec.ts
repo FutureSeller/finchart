@@ -110,6 +110,31 @@ test("resizing retains settings and restores the desktop panel grid", async ({ p
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
+test("the legend clears the symbol picker on desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:5178");
+  await expect(page.locator("#ohlc")).toContainText("O ");
+  for (const layout of [1, 4]) {
+    await page.locator("#layouts").getByRole("button", { name: String(layout), exact: true }).click();
+    await expect(page.locator(".chart-cell [data-chart-legend]")).toHaveCount(layout);
+    // Polled: a new cell's legend is placed before its first frame lays the pane out, and moves to its
+    // place on that frame.
+    await expect
+      .poll(() =>
+        page.locator(".chart-cell").evaluateAll((elements) =>
+          Math.min(
+            ...elements.map(
+              (element) =>
+                element.querySelector("[data-chart-legend]")!.getBoundingClientRect().top -
+                element.querySelector(".chart-symbol")!.getBoundingClientRect().bottom,
+            ),
+          ),
+        ),
+      )
+      .toBeGreaterThanOrEqual(0);
+  }
+});
+
 test("live updates do not replace the icon buttons' contents", async ({ page }) => {
   await page.goto("http://127.0.0.1:5178");
   await expect(page.locator("#ohlc")).toContainText("O ");

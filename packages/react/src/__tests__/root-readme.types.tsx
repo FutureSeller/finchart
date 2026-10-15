@@ -1,56 +1,33 @@
 /**
  * **The root README's React example compiles here.**
  *
- * An example no machine guards need not compile at all: a derive body
- * written as the pseudocode `/* source → points *\/ points;`, with `points`
- * defined nowhere, gives a consumer who copy-pastes it `TS2304: Cannot find
- * name 'points'` on the very first line.
+ * An example no machine guards need not compile at all, and a consumer who
+ * copy-pastes it meets the error on the first line. `snippet-drift.test.ts`
+ * holds the README's text to this copy, so editing either side alone fails.
  *
- * The vanilla 60-second example is guarded by
- * `apps/docs/snippets/getting-started.ts`, and the package README's
- * 60-second example by `minimal-service.types.tsx`. This file guards the
- * third front door, React.
+ * The vanilla quick start is guarded the same way by
+ * `apps/docs/snippets/getting-started.ts`, and the package README's example
+ * by `minimal-service.types.tsx`. This file guards the third front door,
+ * React.
  *
  * (Since the file isn't `.test.tsx`, vitest ignores it and only `tsc` looks
  * at it.)
  */
 
-import type { DataView, LineDataPoint, OHLC } from '@finchart/core';
-import { candleSeries, lineSeries } from '@finchart/core';
+import type { OHLC } from '@finchart/core';
+import { candleSeries } from '@finchart/core';
 import { browserDeps } from '@finchart/dom';
 import { useMemo } from 'react';
 import { ChartContainer, ChartPane, ChartSeries, XAxis, YAxis } from '../components';
 
-/**
- * The first 19 values being `null` is half of what this example
- * demonstrates — omitting a point makes the line span across the gap
- * — that is `null`'s whole reason for existing on `LineDataPoint.y`.
- */
-const movingAverage20 = (source: DataView<OHLC>): LineDataPoint[] =>
-  source.map((bar, i) => ({
-    x: bar.x,
-    y:
-      i < 19
-        ? null
-        : source.slice(i - 19, i + 1).reduce((sum, b) => sum + b.close, 0) / 20,
-  }));
-
 export function Chart({ data }: { data: OHLC[] }) {
-  // The reference doesn't need to be stable — identity comes from the JSX
-  // position, and deriveKey decides whether to recompute. deps is read only
-  // once, at mount.
   const deps = useMemo(() => browserDeps(), []);
-  const price = candleSeries();
-  const ma = lineSeries({ line: { color: '#f59e0b' } });
-
   return (
     <ChartContainer deps={deps} data={data} width={800} height={400}>
       <XAxis />
       <ChartPane>
         <YAxis />
-        <ChartSeries series={price} />
-        {/* Overlaid on the price series. deriveKey is what tells it when to recompute */}
-        <ChartSeries series={ma} derive={movingAverage20} deriveKey={[20]} />
+        <ChartSeries series={candleSeries()} />
       </ChartPane>
     </ChartContainer>
   );
