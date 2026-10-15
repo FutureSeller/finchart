@@ -117,13 +117,21 @@ test("the legend clears the symbol picker on desktop", async ({ page }) => {
   for (const layout of [1, 4]) {
     await page.locator("#layouts").getByRole("button", { name: String(layout), exact: true }).click();
     await expect(page.locator(".chart-cell [data-chart-legend]")).toHaveCount(layout);
-    const cells = await page.locator(".chart-cell").evaluateAll((elements) =>
-      elements.map((element) => ({
-        symbolBottom: element.querySelector(".chart-symbol")!.getBoundingClientRect().bottom,
-        legendTop: element.querySelector("[data-chart-legend]")!.getBoundingClientRect().top,
-      })),
-    );
-    for (const { symbolBottom, legendTop } of cells) expect(legendTop).toBeGreaterThanOrEqual(symbolBottom);
+    // Polled: a new cell's legend is placed before its first frame lays the pane out, and moves to its
+    // place on that frame.
+    await expect
+      .poll(() =>
+        page.locator(".chart-cell").evaluateAll((elements) =>
+          Math.min(
+            ...elements.map(
+              (element) =>
+                element.querySelector("[data-chart-legend]")!.getBoundingClientRect().top -
+                element.querySelector(".chart-symbol")!.getBoundingClientRect().bottom,
+            ),
+          ),
+        ),
+      )
+      .toBeGreaterThanOrEqual(0);
   }
 });
 
