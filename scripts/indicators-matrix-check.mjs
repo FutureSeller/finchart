@@ -23,7 +23,7 @@
  *    outside `volumeOf` itself, is refused
  * 6. the barrel's other lowercase exports (the derivations and the
  *    decoration) are each named somewhere in the README
- * 7. every indicator count the docs state (extensions guide, README,
+ * 7. every indicator count the docs state (extensions guide, both READMEs,
  *    naming reference) is the row count
  * 8. every factory has its `attach*` in the barrel, and the defaults a row
  *    names are `SCREAMING_SNAKE(factory)_DEFAULTS` (four older names are
@@ -53,6 +53,7 @@ const readme = read(readmePath);
 const countedDocs = [
   { path: "apps/docs/guide/extensions.md", pattern: /(\d+) indicators/g },
   { path: readmePath, pattern: /(\d+) of them/g },
+  { path: "README.md", pattern: /(\d+) indicators/g },
   { path: "apps/docs/reference/naming.md", pattern: /all (\d+) `attach\*` functions/g },
 ];
 const screaming = (name) => name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();

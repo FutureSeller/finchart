@@ -113,6 +113,20 @@ export const CODE_LOCKS: readonly {
   { file: "packages/core/src/plot/model.ts", contains: "showGrid: false", compiledIn: SPARKLINE },
   { file: "README.md", contains: "showGrid: false", compiledIn: SPARKLINE },
   /**
+   * **The root README's two quick starts** — the GitHub landing page, the
+   * first code a visitor copies.
+   */
+  {
+    file: "README.md",
+    contains: "PlotBuilder.create(browserDeps(), candleSeries())",
+    compiledIn: "apps/docs/snippets/getting-started.ts",
+  },
+  {
+    file: "README.md",
+    contains: "<ChartSeries series={candleSeries()} />",
+    compiledIn: "packages/react/src/__tests__/root-readme.types.tsx",
+  },
+  /**
    * **Risk-based triage of react's TSDoc** — five snippets picked out of
    * forty candidates by asking "does copy-pasting this break?" and
    * "would an IDE auto-import a different name here?"

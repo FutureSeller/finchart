@@ -312,6 +312,11 @@ button[aria-pressed="true"] {
   border-color: var(--divider);
 }
 
+/* The legend starts at the plot's top-left corner, under the symbol picker — move it below the picker. */
+#charts [data-chart-legend] {
+  margin-top: 22px;
+}
+
 /* The focused chart — the controls, rail and header drive this one. With a single cell the marker is just noise. */
 #charts:not([data-layout="1"]) .chart-cell[data-focused="true"] {
   outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
@@ -498,6 +503,8 @@ body.light #charts {
      rows to the plot width so long prices cannot widen the whole page. */
   #charts [data-chart-legend] {
     max-width: calc(100% - 96px);
+    /* The cell's top padding already clears the picker here. */
+    margin-top: 0;
   }
 
   #charts [data-chart-legend] > div {

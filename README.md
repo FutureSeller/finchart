@@ -1,121 +1,30 @@
 # @finchart
 
-**A composable financial chart engine for TypeScript apps.** Build candles,
-indicators, drawings, and live charts on a DOM-free core. Add the browser shell
-and React wrapper when you need them, and inspect draw commands to test chart
-output without a browser.
+**A composable financial chart engine for TypeScript apps.** Candles,
+indicators, drawing tools, and live feeds on a DOM-free core, with a browser
+shell and a React wrapper on top when you need them.
 
-```
-packages/core        @finchart/core        Chart engine (zero dependencies, no DOM)
-packages/dom         @finchart/dom         Browser shell — the react-dom to core's react
-packages/react       @finchart/react       React composable components
-packages/indicators  @finchart/indicators  Indicators (MA·MACD·Bollinger) — the core API never grew for them
-packages/tools       @finchart/tools       Drawing tools (horizontal·trend line·Fibonacci) — nor for these
-apps/examples        Where you see it for yourself
-apps/demo-vanilla    Integrated trading-screen demo in vanilla TypeScript
-apps/demo-react      Integrated trading-screen demo in React
-apps/demo-toss-invest Next.js market-data demo (synthetic data by default)
-apps/docs            User documentation site
-```
+[![npm](https://img.shields.io/npm/v/@finchart/core)](https://www.npmjs.com/package/@finchart/core)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## Why @finchart
+**[Documentation](https://finchart.fseller.dev)** ·
+**[Live showcase](https://finchart.fseller.dev/showcase)** ·
+**[Examples](https://finchart.fseller.dev/examples/)**
 
-**Test chart output directly.** `createPlotModel` emits draw commands, so a test
-can inspect chart geometry without a DOM or a screenshot:
+![A React trading screen built with @finchart: candles with a 20-period moving average and volume, then Bollinger Bands and an RSI pane switched on, with a crosshair tooltip, zoom, and pan](.github/assets/showcase.gif)
 
-```ts
-// Turn off showGrid — otherwise the grid is drawLine too, and find() picks up grid lines.
-const model = createPlotModel({
-  size,
-  series: { series: lineSeries(), data },
-  config: { showGrid: false },
-});
-const lines = model.commands().filter((c) => c.type === "drawLine");
-expect(lines[0].points).toHaveLength(data.length);
-```
+> **Status: alpha.** The public API still changes — during 0.x, minor
+> releases can carry breaking changes.
 
-**Build features on public contracts.** Indicators use computed nodes and
-`Source` outputs; drawing tools use plugins and the input stack. Both ship as
-separate packages without adding feature-specific methods to the core. See
-[Architecture](apps/docs/guide/architecture.md) and
-[Building your own indicator](apps/docs/guide/extensions.md).
-
-**Choose what enters the bundle.** `browserDeps()` provides the full browser
-setup; `createPlotDeps` lets you supply only the collaborators you need. The
-[bundle guide](apps/docs/guide/explicit-wiring.md) records gzipped budgets for
-specific @finchart examples, not cross-library benchmarks.
-
-**Connect charts through the same public API.** The x window is moved with
-`setVisibleRange()` and announced by `xDomainChange` — that is all `syncX`
-needs; `getVisibleRange()` reads it when you want it once.
-
-```ts
-plot.getVisibleRange();          // { min, max } in data x
-syncX(btcPlot, ethPlot);         // sync is a 30-line helper
-```
-
-## What's there
-
-- **Series** — candle·line·histogram(volume)·area·baseline·OHLC bar, plus a
-  2-method contract for building your own
-- **Panes** — overlap or stack. Bar-index x-axis (no weekend gaps), time ticks
-  (calendar boundaries·timezone·locale, using only `Intl`)
-- **Interaction** — pan·zoom·pinch·axis drag·keyboard·double-click reset·kinetic
-  (optional), every one individually toggleable
-- **Real-time** — `updateLast` (ticks), `conflated` (a loud feed's repeated
-  updates to one bar, folded until the next frame), seam-only incremental
-  checks, `shiftVisibleRangeOnNewBar`
-- **Decorations** — crosshair (magnet)·tooltip·legend·price line (axis badge)·
-  markers·watermark·range highlight
-- **Headless** — `createPlotModel` emits a command list without a DOM. The
-  entry point for servers, workers, and tests. The browser shell is a separate
-  package (`@finchart/dom`), so headless consumers don't even install it —
-  core is complete at runtime and in its types without a DOM (CI's ssr-smoke +
-  headless type smoke, zero global DOM type references)
-- Theming via CSS variables, high-DPI support, one render per frame,
-  `takeScreenshot`
-
-> **Status: alpha.** The public API still changes — during 0.x, minor releases
-> can carry breaking changes.
-
-## Support matrix
-
-| | Floor | What decides it |
-|---|---|---|
-| Node | **20.19+** | Where the headless path (SSR·workers·tests) runs; CI runs that floor |
-| Browser | **Chrome 98+ · Edge 98+ · Firefox 94+ · Safari 15.4+** (2022-03) | `structuredClone`·`Object.hasOwn`·`Array.prototype.at` |
-| React (`@finchart/react`) | **18+** | Peer range. CI runs both the floor (18) and the ceiling (19) |
-
-**No polyfills ship** — bring your own if you need to support something older.
-CI runs the browser E2E suite in current Playwright Chromium, Firefox, and
-WebKit. The listed 2022 browser versions are API floors, not versions exercised
-by that suite; branded Edge and Safari are not run separately.
-And this table is **the consumer's floor**: what's needed to develop the
-repository itself (Node 24.21+ · pnpm 12) lives separately in the root
-`package.json`'s `engines`.
-
-## Getting started
+## Quick start
 
 ```bash
 pnpm add @finchart/core @finchart/dom
 ```
 
-The five packages **ship as one fixed version** (`.changeset/config.json`'s
-`fixed`) — `@finchart/dom@x.y.z` requires `@finchart/core@x.y.z` as a peer, so
-mixing versions gets rejected at install. The code below runs as-is.
-
-To work on the repo itself, use the clone steps in [Development](#development)
-below.
-
-## 60 seconds
-
 ```html
 <div id="chart" style="height: 400px"></div>
 ```
-
-The height matters: the canvas is layered over that element rather than laid
-out in it, so an empty `<div>` stays 0 px tall and what follows it is drawn
-over.
 
 ```ts
 import { candleSeries } from "@finchart/core";
@@ -131,184 +40,158 @@ const plot = PlotBuilder.create(browserDeps(), candleSeries())
   .build(document.getElementById("chart")!);
 ```
 
-That's it. Drag to pan, scroll to zoom.
+Drag to pan, scroll to zoom. Data must be in ascending x order, and the
+container needs a height: the canvas is layered over it, so an empty `<div>`
+stays 0 px tall. To add indicators or stream updates, register the series with
+`addSeries` and keep the handle it returns — the
+[getting started guide](https://finchart.fseller.dev/guide/getting-started)
+walks through it.
 
-> **Data must be in ascending x order.** Otherwise you get a `DataError` —
-> slicing is a binary search, and unsorted data would render scrambled anyway.
+### React
 
-> **To add indicators or update in real time, register the series with
-> `addSeries` instead of the builder.** The shortcut above
-> (`create(deps, series)` + `addDataPoints`) is for the 60-second "just show one
-> candle series" case, so it **doesn't hand back a handle.** An indicator's
-> `source` and `updateLast` both need that handle:
->
-> ```ts
-> const plot = PlotBuilder.create(browserDeps())
->   .setSize(800, 400)
->   .build(document.getElementById("chart")!);
->
-> const price = plot.mainPane.addSeries({ series: candleSeries(), data: bars });
-> price.updateLast(tick);                                        // real-time
-> pane.use(attachMovingAverage({ source: price, period: 20 }));  // indicator
->
-> // A loud feed — many ticks per frame — goes through a conflated feed instead:
-> const feed = conflated(price);
-> feed.push(tick);   // repeated updates to one bar are folded until the next frame, then updateLast
-> ```
->
-> Every `updateLast` copies the array, so fifty ticks between two frames pay
-> fifty copies for a picture that shows only the last. `conflated` coalesces
-> the repeated updates to the same bar until the next frame — a tick that
-> opens a new bar delivers the previous bar at once; the price is that the
-> screen follows the socket by two scheduling steps (the feed's frame, then
-> the render's), and without `requestAnimationFrame` delivery is immediate. The [live feed guide](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/live-feed.md)
-> has the whole wiring, including what to flush before a gap-fill.
-
-## React
-
-Children declare what to draw. Components don't render DOM — they just
-register in an effect. (In a Next.js app the chart lives in one client file —
-[Next.js and React apps](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/nextjs.md).)
+```bash
+pnpm add @finchart/core @finchart/dom @finchart/react
+```
 
 ```tsx
-import { candleSeries, lineSeries } from "@finchart/core";
-import type { LineDataPoint, OHLC } from "@finchart/core";
+import { candleSeries } from "@finchart/core";
+import type { OHLC } from "@finchart/core";
 import { browserDeps } from "@finchart/dom";
 import { ChartContainer, ChartPane, ChartSeries, XAxis, YAxis } from "@finchart/react";
 import { useMemo } from "react";
 
-// Build the drawn points from the full source. The first 19 have no value yet,
-// so they're null — dropping the points instead would draw a line across the gap.
-const movingAverage20 = (source: OHLC[]): LineDataPoint[] =>
-  source.map((bar, i) => ({
-    x: bar.x,
-    y: i < 19
-      ? null
-      : source.slice(i - 19, i + 1).reduce((sum, b) => sum + b.close, 0) / 20,
-  }));
-
 function Chart({ data }: { data: OHLC[] }) {
-  // The reference doesn't need to be stable — identity is the JSX slot, and
-  // deriveKey decides whether to recompute. deps is read once, at mount.
   const deps = useMemo(() => browserDeps(), []);
-  const price = candleSeries();
-  const ma = lineSeries({ line: { color: "#f59e0b" } });
-
   return (
     <ChartContainer deps={deps} data={data} width={800} height={400}>
       <XAxis />
       <ChartPane>
         <YAxis />
-        <ChartSeries series={price} />
-        {/* Overlays the price. deriveKey is what lets it know when to recompute. */}
-        <ChartSeries series={ma} derive={movingAverage20} deriveKey={[20]} />
+        <ChartSeries series={candleSeries()} />
       </ChartPane>
     </ChartContainer>
   );
 }
 ```
 
-To put an indicator in **its own pane below**, add another `<ChartPane>`. Each
-pane has its own value axis, and pan/zoom only ever touches x, so however many
-panes you have, they move together automatically.
+Child components render no DOM; they register with the chart. Add another
+`<ChartPane>` to put an indicator below the price — the
+[`@finchart/react` README](packages/react) shows one. In Next.js the chart
+lives in one client file — see
+[Next.js and React apps](https://finchart.fseller.dev/guide/nextjs).
 
-## Common recipes
+## What you get
 
-**Adding a crosshair** — wires up the decoration and its event subscriptions in
-one call. It's a plugin, so it's cleaned up automatically when the stage is
-destroyed.
+- **Series** — candles, OHLC bars, line, step line, area, baseline, and
+  volume histogram, plus a two-method contract for your own.
+- **35 indicators** (`@finchart/indicators`) — MA, MACD, Bollinger Bands, RSI,
+  Ichimoku, VWAP, SuperTrend and more, plus Heikin-Ashi, Renko, Line
+  Break, Kagi, and Point & Figure derivations and a volume profile.
+- **Drawing tools** (`@finchart/tools`) — horizontal and vertical lines,
+  trend lines, rays, Fibonacci, channels, pitchforks, measures, and shapes,
+  with magnet snapping. Drawings are plain data you can save and restore.
+- **Live data** — `updateLast` for ticks, `conflated` to fold a busy feed into
+  one update per frame, and `infiniteHistory` to load older bars as you scroll.
+  See the [live feed guide](https://finchart.fseller.dev/guide/live-feed).
+- **Interaction** — pan, zoom, pinch, axis drag, keyboard, double-click
+  reset, and kinetic scrolling, each one optional, plus synced x ranges across
+  charts.
+- **Decorations** — crosshair, tooltip, legend, price line with an axis
+  badge, markers, watermark, and range highlight.
+- **Panes and time** — stacked or overlaid panes, a bar-index x-axis with no
+  weekend gaps, and calendar-aware time ticks in any time zone, using only
+  `Intl`.
+- **Rendering** — high-DPI canvases, one render per frame, and PNG export
+  with `takeScreenshot`.
 
-```ts
-const line = plot.use(crosshair());
-```
+## Why @finchart
 
-**Swapping data** — data belongs to the **registration**. You give it at
-mount time, and to change it later you use the handle you got back. That's why
-each series can draw different data.
-
-```ts
-const btc = plot.mainPane.addSeries({ series: candleSeries(), data: btcCandles });
-const eth = plot.mainPane.addSeries({ series: lineSeries(), data: ethPrices });
-
-btc.append([tick]);       // only btc grows. the domain stays put
-```
-
-**Loading more history** — `infiniteHistory` fetches older bars as the view
-approaches the left edge and `prepend`s them; the cursor, the threshold and the
-in-flight dedup are its. `from` is the first x you already hold.
-
-```ts
-const loader = infiniteHistory(plot, btc, loadBefore, { from: btcCandles[0].x });
-
-// On a symbol switch or unmount, before btc goes:
-loader.dispose();
-```
-
-Given the handle, a loader whose page is in flight when `btc` is disposed
-stops by itself (`status()` reads `"stopped"`) instead of throwing. It looks at
-the handle only when it asks for or lands a page, so an idle or finished loader
-stays subscribed to the chart until you dispose it — do that on teardown,
-whatever the sink.
-
-**Reconciling a snapshot** — a REST snapshot of recent bars goes in through
-`upsert`, merged by x: the bars it names are corrected or added, the ones it
-does not name stay. Hand over closed bars only — the bar in progress is the
-tick's — and only from the first bar you hold: older ones are history, and
-history comes in through `prepend`. The [live feed guide](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/live-feed.md) has the
-whole wiring — trades → `barAggregator` → `conflated` → `updateLast`, and what
-to do on reconnect.
+**Test chart output without a browser.** `createPlotModel` emits draw
+commands, so a unit test can check chart geometry with no DOM and no
+screenshot:
 
 ```ts
-const first = btc.xRange?.min ?? Number.NEGATIVE_INFINITY;
-btc.upsert(snapshot.filter((bar) => bar.x >= first && bar.x + INTERVAL <= Date.now()));
+import { createPlotModel, lineSeries } from "@finchart/core/headless";
+
+// Turn showGrid off — otherwise the grid is drawLine too, so the first
+// command you get back is a grid line, not your series.
+const model = createPlotModel({
+  size,
+  series: { series: lineSeries(), data },
+  config: { showGrid: false },
+});
+const lines = model.commands().filter((c) => c.type === "drawLine");
+expect(lines[0].points).toHaveLength(data.length);
 ```
 
-**Changing colors** — just put CSS variables on the container.
+The same headless core runs on servers and in workers: `@finchart/core` has
+no dependencies and needs no DOM, at runtime or in its types.
+
+**Extend it the way the built-ins do.** Indicators and drawing tools ship as
+separate packages built only on core's public contracts — computed nodes, the
+plugin API, and the input stack. Your own indicator or tool gets the same
+doors. See
+[Building your own indicator](https://finchart.fseller.dev/guide/extensions)
+and [Architecture](https://finchart.fseller.dev/guide/architecture).
+
+**Pay only for what you wire.** `browserDeps()` sets up everything;
+`createPlotDeps` takes only the renderers and interactions you use. The
+[bundle guide](https://finchart.fseller.dev/guide/explicit-wiring) lists
+gzipped budgets that CI enforces.
+
+**Restyle with CSS.** Colors come from CSS variables on the container:
 
 ```css
 .chart {
   --chart-candle-up: #16a34a;
   --chart-candle-down: #dc2626;
-  --chart-grid: #e2e8f0;
-  --chart-crosshair: #94a3b8;
 }
 ```
 
-The full variable table and dark-mode wiring are in
-[theme.md](https://github.com/FutureSeller/finchart/blob/main/apps/docs/guide/theme.md).
+The full list and dark-mode wiring are in the
+[theming guide](https://finchart.fseller.dev/guide/theme).
 
-**Drawing your own series** — a `Series` is two methods. It doesn't know what
-the renderer is, or whether there's even a canvas.
+## Packages
 
-```ts
-const mySeries: Series<LineDataPoint> = {
-  valueExtent: (data) => ({ min: ..., max: ... }),   // how much of y it occupies
-  draw: (target, { data, x, yScale }) => { ... },    // place it with x.toPixel(...)
-};
-```
+| Package | What it is |
+|---|---|
+| [`@finchart/core`](packages/core) | Chart engine: series, panes, scales, interaction, draw commands. No DOM. |
+| [`@finchart/dom`](packages/dom) | Browser shell: canvas rendering and pointer and keyboard input. |
+| [`@finchart/react`](packages/react) | React components and hooks. |
+| [`@finchart/indicators`](packages/indicators) | Technical indicators and candle derivations. |
+| [`@finchart/tools`](packages/tools) | Interactive drawing tools. |
 
-Anything that isn't data (a crosshair, a range highlight, a watermark) is a
-**decoration**, not a `Series` — the dividing line is whether it occupies the
-value axis.
+All five ship as one fixed version, and the other four each declare a
+matching `@finchart/core` as a peer, so npm refuses a mismatched install
+and pnpm warns about it.
+
+## Support matrix
+
+| | Minimum | Why |
+|---|---|---|
+| Node | **20.19** | The headless path (SSR, workers, tests); CI runs this floor |
+| Browsers | **Chrome 98 · Edge 98 · Firefox 94 · Safari 15.4** | `structuredClone`, `Object.hasOwn`, `Array.prototype.at` |
+| React | **18** | Peer range; CI runs 18 and 19 |
+
+No polyfills ship. CI runs the browser end-to-end suite in current Chromium,
+Firefox, and WebKit; the browser versions above are API floors, not versions
+that suite runs.
 
 ## Development
-
-Start with the [developer documentation](docs/README.md) for architecture,
-data and rendering flows, extension contracts, and verification workflows.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for PR and changeset requirements, and
-[SECURITY.md](SECURITY.md) for private vulnerability reports.
 
 ```bash
 git clone https://github.com/FutureSeller/finchart.git charts && cd charts
 pnpm install
-pnpm test          # all five packages
+pnpm test          # unit tests across the workspace
 pnpm build
-pnpm dev           # the examples app
+pnpm dev           # package watch builds plus the examples, demos, and docs apps
 ```
 
-The examples app includes candles, a moving average, a momentum pane, infinite
-scroll, and a crosshair, all wired up.
+Working on the repository needs Node 24.21+ and pnpm 12. Start with the
+[developer documentation](docs/README.md); see
+[CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and changesets, and
+[SECURITY.md](SECURITY.md) for private vulnerability reports.
 
 ## License
 
-MIT
+[MIT](LICENSE)
