@@ -6,10 +6,6 @@ on:
     types: [completed]
     branches: [main]
 
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -46,6 +42,11 @@ jobs:
     needs: eligibility
     if: needs.eligibility.outputs.current == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    outputs:
+      unpublished: ${{ steps.registry.outputs.unpublished }}
     permissions:
       contents: write
       pull-requests: write
@@ -72,10 +73,12 @@ jobs:
           FINCHART_SKIP_STRESS: "1"
       - run: pnpm size
       - run: pnpm check:publish
+      - run: node scripts/release-artifact-check.mjs
 
       # main can advance while validation runs. Avoid knowingly updating a
-      # version PR from an obsolete commit; the next successful CI will retry.
-      - name: Recheck main before updating the version PR
+      # version PR or offering a publish from an obsolete commit; the next
+      # successful CI will retry.
+      - name: Recheck main before updating the version PR or offering a publish
         id: tip
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,10 +92,104 @@ jobs:
             echo "current=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # CLI 3 requires Action 2. Without publish-script this only prepares a PR.
+      # Only a merged version PR changes package versions on main, so a version
+      # missing from npm is a release still owed. Checking on every current
+      # main push, pending changesets or not, offers it again after a skipped
+      # run or a rejected approval, and offers nothing once every version is
+      # on npm. It runs before the changesets step, which leaves the version
+      # branch's bumped manifests checked out.
+      - name: Find versions not yet on npm
+        id: registry
+        if: steps.tip.outputs.current == 'true'
+        run: |
+          unpublished=false
+          for manifest in packages/*/package.json; do
+            spec=$(node -p "const p = require('./$manifest'); p.private ? '' : p.name + '@' + p.version")
+            [ -n "$spec" ] || continue
+            if found=$(npm view "$spec" version --json 2>/dev/null); then
+              continue
+            fi
+            # Anything but "no such version" is a registry failure, not a
+            # release.
+            if ! printf '%s' "$found" | grep -q '"code": "E404"'; then
+              echo "::error::npm view $spec failed: $found"
+              exit 1
+            fi
+            echo "$spec is not on npm"
+            unpublished=true
+          done
+          # A later commit is offered only while it would publish exactly the
+          # code its version was cut from; otherwise newer package changes
+          # would ship under that version's number and changelog.
+          if [ "$unpublished" = true ]; then
+            cut=$(git log -1 --format=%H -G'"version":' -- packages/core/package.json)
+            if ! git diff --quiet "$cut" HEAD -- packages package.json pnpm-lock.yaml; then
+              echo "::warning::Packages changed since $cut set this version; publish it by hand from $cut and push its tags, or let the next version PR replace it."
+              unpublished=false
+            fi
+          fi
+          echo "unpublished=$unpublished" >> "$GITHUB_OUTPUT"
+
+      # CLI 3 requires Action 2. Without publish-script this only prepares a PR;
+      # the publish job below publishes.
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         if: steps.tip.outputs.current == 'true'
         with:
           version-script: pnpm run version
           pr-base-branch: main
           github-token: ${{ github.token }}
+
+  publish:
+    needs: release
+    if: needs.release.outputs.unpublished == 'true'
+    runs-on: ubuntu-latest
+    # Its own group: a publish waiting for approval must not hold up version PR
+    # updates in the release group.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
+    # The npm environment requires a maintainer's approval, and npm trusts only
+    # this workflow in that environment, so npm issues no publish token until a
+    # maintainer approves.
+    environment: npm
+    permissions:
+      contents: write # release tags
+      id-token: write # npm trusted publishing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      # No dependency cache: what gets published is built only from the
+      # lockfile.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24.21.0
+
+      # No install scripts run where an npm publish token can be minted; the
+      # packages build without them.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # Builds the published packages only, then publishes the versions not yet
+      # on npm, so a rerun after a partial publish finishes the rest.
+      - run: pnpm release
+
+      # Tags every published version that has none, so a rerun also tags what an
+      # earlier attempt published before it failed.
+      - name: Tag released versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          for manifest in packages/*/package.json; do
+            tag=$(node -p "const p = require('./$manifest'); p.private ? '' : p.name + '@' + p.version")
+            [ -n "$tag" ] || continue
+            if ! gh api "repos/$REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
+              gh api "repos/$REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$VERIFIED_SHA" --silent
+              echo "tagged $tag"
+            fi
+          done

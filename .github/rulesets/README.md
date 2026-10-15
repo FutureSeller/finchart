@@ -43,6 +43,13 @@ CI can merge. Keep auto-merge disabled and squash as the only merge method.
   the repository public.
 - Keep `Allow GitHub Actions to create and approve pull requests` enabled for
   Changesets PR creation. It does not replace maintainer approval.
+- Keep the `npm` environment's required reviewer set to a maintainer, with
+  "Prevent self-review" off while one maintainer approves alone, "Allow
+  administrators to bypass configured protection rules" off, and its
+  deployment branches limited to `main`. The Release workflow's publish job
+  waits there. With npm trusting only that environment and refusing tokens,
+  this approval is what stands between a merged version PR and npm. See
+  [Changesets](../../.changeset/README.md#releasing).
 - Enable private vulnerability reporting, available secret scanning and push
   protection, and dependency alerts. [SECURITY.md](../../SECURITY.md) describes reports.
 - Pin Actions to reviewed commit SHAs and review source when updating them.

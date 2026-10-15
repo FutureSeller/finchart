@@ -24,7 +24,7 @@
     "size": "turbo run size",
     "changeset": "changeset",
     "version": "changeset version && pnpm install --lockfile-only",
-    "release": "pnpm build && changeset publish",
+    "release": "turbo run build --filter=./packages/* && changeset publish",
     "check:publish": "turbo run check:publish"
   },
   "devDependencies": {

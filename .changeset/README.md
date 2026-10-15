@@ -4,8 +4,8 @@ Contributors add changesets with `pnpm changeset`. Maintainers review release
 scope and bump types, then merge the bot-generated version PR after required CI.
 Changeset authors do not receive merge or publication access.
 
-The Release workflow prepares version PRs only; it does not publish to npm.
-Publishing is a separate maintainer operation described [below](#releasing).
+The Release workflow prepares version PRs and, once a maintainer approves the
+`npm` deployment, publishes a merged version to npm; see [below](#releasing).
 See [Contributing](../CONTRIBUTING.md#changesets)
 for changes that need a release and the empty-changeset convention.
 
@@ -58,11 +58,13 @@ can be anything: `--snapshot 'pr#123'`.
 Both keep the `fixed` group together: a snapshot gives all five the same
 timestamp, measured.
 
-**Whichever you use, publish with `--tag`.** `changeset publish` with no tag
+**Publish a snapshot with `--tag`.** `changeset publish` with no tag
 publishes to `latest`, so a canary would land on everyone running
 `npm i @finchart/core`. `changeset publish --tag canary` is the whole
 difference — it is what keeps vitepress's `latest` at 1.6.4 while its alphas sit
-on `next`.
+on `next`. A `pre` line released through the Release workflow needs no flag:
+`changeset publish` publishes it to the `pre` tag (`canary` above). The flag is
+for a snapshot, which is published by hand.
 
 ## When you add a package
 
@@ -73,22 +75,51 @@ independent version, and the unmet peer above recurs there.
 
 The Release workflow accepts successful CI for pushes to this repository's
 `main` only. Its context and checkout must match the CI-verified SHA. It checks
-that main is current before validation and again before updating the version PR.
-Confirm the version PR is still current before merging, since main can advance
-after the final check. Changesets Action 2 is paired with CLI 3.
+that main is current before validation and again before updating the version PR
+or offering a publish. Confirm the version PR is still current before merging,
+since main can advance after the final check. Changesets Action 2 is paired with
+CLI 3.
 
 1. Review the bot's `changeset-release/main` PR: all five versions, changelogs,
    dependency ranges, and lockfile changes. The version PR consumes existing
    changesets and is exempt from adding a new changeset.
 2. Approve the bot's workflow run when GitHub requests approval, then approve and
    squash merge the PR after all required CI checks pass.
-3. From a clean, current checkout, run `pnpm install --frozen-lockfile`, then
-   `pnpm gate`. Inspect release artifacts and publish with `pnpm release` using
-   maintainer credentials. Keep credential values out of tracked files and logs.
+3. CI on the merged commit starts the Release workflow. When that commit is
+   still current main and a package version on it is missing from npm, the
+   `publish` job waits in the `npm` environment for a maintainer to approve it
+   under "Review deployments". Approving builds the five packages, publishes
+   them with `pnpm release`, and pushes the `@finchart/*@<version>` tags.
 4. Verify all five versions and public access on npm, then check installation
-   and imports in a clean consumer project. If publishing is interrupted, inspect
-   registry state before retrying; published versions cannot be replaced.
+   and imports in a clean consumer project.
 
-The workflow does not publish or auto-merge. If automated publication is added,
-review it separately and prefer npm trusted publishing with minimal permissions
-and a protected release environment. Use an explicit non-`latest` tag for canaries.
+Approve or reject a waiting publish promptly; a later one waits behind it,
+replacing any that was already waiting.
+
+Every Release run on current main checks npm again, so a version that was not
+published — main moved on before the check, the approval was rejected, or the
+job failed — is offered again by the next push to main, as long as no package
+file has changed since the commit that set that version. Once one has, the run
+warns instead: publish that version by hand from that commit and push its
+`@finchart/*@<version>` tags, or let the next version PR replace it. To retry
+sooner, re-run the failed `publish` job while its version is still the one on
+main: versions already on npm are skipped, missing tags are added, and
+published versions cannot be replaced. A job re-run after a newer version is
+out would publish the older one as `latest`.
+
+Publishing uses npm trusted publishing, so no npm token is stored in GitHub.
+Each package's npm settings hold:
+
+- a trusted publisher for `FutureSeller/finchart`, workflow `release.yml`,
+  environment `npm`, allowed to publish directly with `npm publish` (new
+  configurations allow only `npm stage publish` until that is ticked);
+- publishing access "Require two-factor authentication and disallow tokens",
+  so a token cannot publish either.
+
+A new trusted publisher expires unless it publishes within two days, so create
+it within two days before approving the publish that first uses it; delete and
+re-create one that expired. npm configures trusted publishing only for a
+package that exists, so a new package is published once by hand with 2FA, then
+given these settings, before the workflow can release it. The `npm` environment
+requires a maintainer reviewer and allows only `main`. The workflow does not
+auto-merge.

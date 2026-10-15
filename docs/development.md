@@ -164,8 +164,10 @@ Use pnpm packing for workspace-protocol rewriting. The published packages are
 versioned together by the fixed group in
 [Changesets configuration](../.changeset/config.json). Changes to exports,
 peer ranges, or published files need artifact evidence, not only source tests.
-Root release commands are in [package.json](../package.json); publication is a
-separate operation from validating a change.
+Root release commands are in [package.json](../package.json). Publication is a
+separate operation from validating a change: a release is published through
+the Release workflow's approved `npm` deployment; see
+[Changesets](../.changeset/README.md#releasing).
 
 ## Updating documentation
 
