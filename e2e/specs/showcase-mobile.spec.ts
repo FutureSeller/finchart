@@ -135,6 +135,22 @@ test("the legend clears the symbol picker on desktop", async ({ page }) => {
   }
 });
 
+test("every tooltip row names its series with Bollinger Bands on", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:5178");
+  await expect(page.locator("#ohlc")).toContainText("O ");
+  await page.getByRole("button", { name: "BOLL", exact: true }).click();
+  await expect(page.getByRole("button", { name: "BOLL", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const cell = (await page.locator(".chart-cell").first().boundingBox())!;
+  await page.mouse.move(cell.x + cell.width / 2, cell.y + cell.height / 3);
+  const tooltip = page.locator("[data-chart-tooltip]");
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("BOLL");
+  // The first child is the time header; every row after it reads "name: value".
+  const rows = await tooltip.locator(":scope > div").allTextContents();
+  for (const row of rows.slice(1)) expect(row).toMatch(/^(● )?[A-Za-z][^:]*: /);
+});
+
 test("live updates do not replace the icon buttons' contents", async ({ page }) => {
   await page.goto("http://127.0.0.1:5178");
   await expect(page.locator("#ohlc")).toContainText("O ");

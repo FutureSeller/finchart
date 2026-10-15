@@ -405,6 +405,7 @@ export function App() {
           <ChartPane flex={1} minHeight={60}>
             <YAxis format={(v) => v.toFixed(1)} />
             <ChartLine
+              name={`MOM(${MOM_PERIOD})`}
               style={{ line: { color: MOMENTUM_COLOR, width: 1.5 }, point: { radius: 0 } }}
               derive={momentum(MOM_PERIOD)}
               deriveKey={[MOM_PERIOD]}
@@ -416,6 +417,7 @@ export function App() {
           <ChartPane flex={1} minHeight={50}>
             <YAxis format={(v) => `${(v / 1000).toFixed(1)}k`} />
             <ChartSeries
+              name="Volume"
               series={histogramSeries({ style: VOLUME_STYLE })}
               derive={volumeBars}
               deriveKey={[]}

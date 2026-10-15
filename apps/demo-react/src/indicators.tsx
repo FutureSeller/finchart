@@ -89,8 +89,13 @@ export function OverlayIndicators({
             input={nodes.boll.out.band}
             name="BOLL"
           />
-          {/* The center line shares the bands' node — sma isn't folded twice */}
-          <ChartLine input={nodes.boll.out.middle} style={{ line: { color: "#8b5cf6", width: 1 }, point: { radius: 0 } }} />
+          {/* The center line shares the bands' node — sma isn't folded twice. It is drawn for the eye only:
+              its value is the midpoint of the BOLL row's U and L. */}
+          <ChartLine
+            readout={false}
+            input={nodes.boll.out.middle}
+            style={{ line: { color: "#8b5cf6", width: 1 }, point: { radius: 0 } }}
+          />
         </>
       ) : null}
       {active.has("MA20") ? (
