@@ -63,8 +63,8 @@ publishes to `latest`, so a canary would land on everyone running
 `npm i @finchart/core`. `changeset publish --tag canary` is the whole
 difference — it is what keeps vitepress's `latest` at 1.6.4 while its alphas sit
 on `next`. A `pre` line released through the Release workflow needs no flag:
-`changeset publish` publishes it to the `pre` tag (`canary` above). The flag is
-for a snapshot, which is published by hand.
+`changeset publish` publishes it to the tag `changeset pre enter` set (`canary`
+above). The flag is for a snapshot, which is published by hand.
 
 ## When you add a package
 
@@ -87,25 +87,39 @@ CLI 3.
    squash merge the PR after all required CI checks pass.
 3. CI on the merged commit starts the Release workflow. When that commit is
    still current main and a package version on it is missing from npm, the
-   `publish` job waits in the `npm` environment for a maintainer to approve it
-   under "Review deployments". Approving builds the five packages, publishes
-   them with `pnpm release`, and pushes the `@finchart/*@<version>` tags.
-4. Verify all five versions and public access on npm, then check installation
-   and imports in a clean consumer project.
+   `publish` job waits in the `npm` environment for a maintainer to approve
+   it under "Review deployments". Approving builds and publishes those
+   versions unless main has moved since, then creates the
+   `@finchart/*@<version>` tags.
+4. Verify all five versions, public access, and provenance on npm, then check
+   installation and imports in a clean consumer project.
 
 Approve or reject a waiting publish promptly; a later one waits behind it,
 replacing any that was already waiting.
 
 Every Release run on current main checks npm again, so a version that was not
 published — main moved on before the check, the approval was rejected, or the
-job failed — is offered again by the next push to main, as long as no package
-file has changed since the commit that set that version. Once one has, the run
-warns instead: publish that version by hand from that commit and push its
-`@finchart/*@<version>` tags, or let the next version PR replace it. To retry
-sooner, re-run the failed `publish` job while its version is still the one on
-main: versions already on npm are skipped, missing tags are added, and
-published versions cannot be replaced. A job re-run after a newer version is
-out would publish the older one as `latest`.
+job failed — is offered again by the next push to main, as long as no package,
+root manifest, lockfile, or LICENSE has changed since the commit that set that
+version. Once one has, the run warns instead. Let the next version PR replace
+that version, or publish it by hand from a clean checkout of that commit:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm exec turbo run build --filter='./packages/*'
+node scripts/release-artifact-check.mjs
+pnpm release  # prompts for 2FA; the packages require it and refuse tokens
+git push origin 'refs/tags/@finchart/*:refs/tags/@finchart/*'
+```
+
+To retry sooner after `publish` failed, re-run that job: versions already on
+npm are skipped, and every released version is tagged. Published versions
+cannot be replaced. A run refuses to publish once main has moved, so an older
+version never becomes `latest` that way.
+
+If only tagging failed, no later run retries it, since nothing is left to
+publish: re-run the job before main moves, or create the missing
+`@finchart/*@<version>` tags at the published commit by hand.
 
 Publishing uses npm trusted publishing, so no npm token is stored in GitHub.
 Each package's npm settings hold:
@@ -114,7 +128,8 @@ Each package's npm settings hold:
   environment `npm`, allowed to publish directly with `npm publish` (new
   configurations allow only `npm stage publish` until that is ticked);
 - publishing access "Require two-factor authentication and disallow tokens",
-  so a token cannot publish either.
+  so a token cannot publish either; revoke any npm token with publish rights
+  that is left over.
 
 A new trusted publisher expires unless it publishes within two days, so create
 it within two days before approving the publish that first uses it; delete and

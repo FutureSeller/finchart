@@ -1,0 +1,22 @@
+{
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "refs/tags/@finchart/*"
+      ],
+      "exclude": []
+    }
+  },
+  "name": "release-tags",
+  "bypass_actors": [],
+  "rules": [
+    {
+      "type": "update"
+    },
+    {
+      "type": "deletion"
+    }
+  ]
+}
