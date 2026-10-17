@@ -1,6 +1,6 @@
 {
   "name": "@finchart/core",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Headless financial chart engine — candlestick/line/area series, panes, real-time updates, drawing commands without a DOM. Zero dependencies.",
   "license": "MIT",
   "engines": {
