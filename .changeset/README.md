@@ -90,7 +90,8 @@ CLI 3.
    `publish` job waits in the `npm` environment for a maintainer to approve
    it under "Review deployments". Approving builds and publishes those
    versions unless main has moved since, then creates the
-   `@finchart/*@<version>` tags.
+   `@finchart/*@<version>` tags and a GitHub release for each, with that
+   package's changelog entry.
 4. Verify all five versions, public access, and provenance on npm, then check
    installation and imports in a clean consumer project.
 
@@ -112,14 +113,19 @@ pnpm release  # prompts for 2FA; the packages require it and refuse tokens
 git push origin 'refs/tags/@finchart/*:refs/tags/@finchart/*'
 ```
 
-To retry sooner after `publish` failed, re-run that job: versions already on
-npm are skipped, and every released version is tagged. Published versions
-cannot be replaced. A run refuses to publish once main has moved, so an older
-version never becomes `latest` that way.
+Then give each pushed tag the release the workflow would have made: titled
+with the tag, its package's changelog entry for that version as notes, marked
+as a prerelease for a prerelease version, and Latest only for core.
 
-If only tagging failed, no later run retries it, since nothing is left to
-publish: re-run the job before main moves, or create the missing
-`@finchart/*@<version>` tags at the published commit by hand.
+To retry sooner after `publish` failed, re-run that job: versions already on
+npm are skipped, and every released version is tagged and given its release.
+Published versions cannot be replaced. A run refuses to publish once main has
+moved, so an older version never becomes `latest` that way.
+
+If only tagging or the releases failed, no later run retries them, since
+nothing is left to publish: re-run the job before main moves, or create the
+missing `@finchart/*@<version>` tags at the published commit, and their
+releases, by hand.
 
 Publishing uses npm trusted publishing, so no npm token is stored in GitHub.
 Each package's npm settings hold:

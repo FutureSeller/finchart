@@ -157,7 +157,7 @@ jobs:
     # maintainer approves.
     environment: npm
     permissions:
-      contents: write # release tags
+      contents: write # release tags and GitHub releases
       id-token: write # npm trusted publishing
     steps:
       # An approval can come late. Publishing a version after main has moved on
@@ -194,7 +194,8 @@ jobs:
       - run: node scripts/release-artifact-check.mjs
 
       # Publishes only versions not yet on npm, so a re-run continues where an
-      # earlier attempt stopped. The next step creates the release tags.
+      # earlier attempt stopped. The next steps create the release tags and
+      # the GitHub releases.
       - run: pnpm exec changeset publish --no-git-tag
 
       # Tags every released version that has none, so a re-run also tags what
@@ -223,4 +224,37 @@ jobs:
             fi
             gh api "repos/$REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$VERIFIED_SHA" --silent
             echo "tagged $tag"
+          done
+
+      # A release per released tag, holding that package's changelog entry. A
+      # tag that already has one is skipped, so a re-run creates only the
+      # missing ones. Each new release would otherwise take Latest from the
+      # one before it, so only core's claims it.
+      - name: Create GitHub releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          for manifest in packages/*/package.json; do
+            tag=$(node -p "const p = require('./$manifest'); p.private ? '' : p.name + '@' + p.version")
+            [ -n "$tag" ] || continue
+            if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
+              continue
+            fi
+            version=${tag##*@}
+            changelog="$(dirname "$manifest")/CHANGELOG.md"
+            notes=$(mktemp)
+            awk -v heading="## $version" '$0 == heading { on = 1; next } on && /^## / { exit } on' "$changelog" > "$notes"
+            if ! grep -q '[^[:space:]]' "$notes"; then
+              echo "::error::$changelog has no $version entry"
+              exit 1
+            fi
+            options=(--repo "$REPOSITORY" --verify-tag --title "$tag" --notes-file "$notes")
+            if [ "$version" != "${version%%-*}" ]; then
+              options+=(--prerelease)
+            elif [ "$tag" != "@finchart/core@$version" ]; then
+              options+=(--latest=false)
+            fi
+            gh release create "$tag" "${options[@]}"
+            echo "released $tag"
           done
