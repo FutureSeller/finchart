@@ -6,19 +6,17 @@ on:
     types: [completed]
     branches: [main]
 
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
 jobs:
   eligibility:
     # Privileged release work accepts only successful CI for this repository's
-    # main push. Fork pull requests may also name their branch main.
+    # main push. Fork pull requests may also name their branch main, and the
+    # trigger matches workflows by name, so the file is checked too.
     # Changesets resets to context.sha internally; it must equal the verified SHA.
     if: >-
+      github.event.workflow_run.path == '.github/workflows/ci.yml' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.sha == github.event.workflow_run.head_sha &&
@@ -46,22 +44,28 @@ jobs:
     needs: eligibility
     if: needs.eligibility.outputs.current == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    outputs:
+      unpublished: ${{ steps.registry.outputs.unpublished }}
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      # No dependency cache: a cache written by another main run must not run
+      # code in a job that holds a write token.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
-          cache: pnpm
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
@@ -72,10 +76,12 @@ jobs:
           FINCHART_SKIP_STRESS: "1"
       - run: pnpm size
       - run: pnpm check:publish
+      - run: node scripts/release-artifact-check.mjs
 
       # main can advance while validation runs. Avoid knowingly updating a
-      # version PR from an obsolete commit; the next successful CI will retry.
-      - name: Recheck main before updating the version PR
+      # version PR or offering a publish from an obsolete commit; the next
+      # successful CI will retry.
+      - name: Recheck main before updating the version PR or offering a publish
         id: tip
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,10 +95,132 @@ jobs:
             echo "current=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # CLI 3 requires Action 2. Without publish-script this only prepares a PR.
+      # Only a merged version PR changes package versions on main, so a version
+      # missing from npm is a release still owed. Checking on every current
+      # main push, pending changesets or not, offers it again after a skipped
+      # run or a rejected approval, and offers nothing once every version is
+      # on npm. It runs before the changesets step, which leaves the version
+      # branch's bumped manifests checked out.
+      - name: Find versions not yet on npm
+        id: registry
+        if: steps.tip.outputs.current == 'true'
+        run: |
+          unpublished=false
+          for manifest in packages/*/package.json; do
+            spec=$(node -p "const p = require('./$manifest'); p.private ? '' : p.name + '@' + p.version")
+            [ -n "$spec" ] || continue
+            if found=$(npm view "$spec" version --json 2>/dev/null); then
+              continue
+            fi
+            # Anything but "no such version" is a registry failure, not a
+            # release.
+            if ! printf '%s' "$found" | grep -q '"code": "E404"'; then
+              echo "::error::npm view $spec failed: $found"
+              exit 1
+            fi
+            echo "$spec is not on npm"
+            unpublished=true
+          done
+          # A later commit is offered only while it would publish exactly the
+          # code its version was cut from; otherwise newer package changes
+          # would ship under that version's number and changelog.
+          if [ "$unpublished" = true ]; then
+            version=$(node -p "require('./packages/core/package.json').version")
+            cut=$(git log -1 --format=%H -S"\"version\": \"$version\"" -- packages/core/package.json)
+            if ! git diff --quiet "$cut" HEAD -- packages package.json pnpm-lock.yaml LICENSE; then
+              echo "::warning::Packages changed since $cut set this version; publish it by hand from $cut and push its tags, or let the next version PR replace it."
+              unpublished=false
+            fi
+          fi
+          echo "unpublished=$unpublished" >> "$GITHUB_OUTPUT"
+
+      # CLI 3 requires Action 2. Without publish-script this only prepares a PR;
+      # the publish job below publishes.
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         if: steps.tip.outputs.current == 'true'
         with:
           version-script: pnpm run version
           pr-base-branch: main
           github-token: ${{ github.token }}
+
+  publish:
+    needs: release
+    if: needs.release.outputs.unpublished == 'true'
+    runs-on: ubuntu-latest
+    # Its own group: a publish waiting for approval must not hold up version PR
+    # updates in the release group.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
+    # The npm environment requires a maintainer's approval, and npm trusts only
+    # this workflow in that environment, so npm issues no publish token until a
+    # maintainer approves.
+    environment: npm
+    permissions:
+      contents: write # release tags
+      id-token: write # npm trusted publishing
+    steps:
+      # An approval can come late. Publishing a version after main has moved on
+      # could make an older version `latest`, so it waits for the next run.
+      - name: Check that main has not moved since the run was verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          current_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$current_sha" != "$VERIFIED_SHA" ]; then
+            echo "::error::main moved to $current_sha; the next Release run offers this version again if it is still owed."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      # No dependency cache: a cache written by another main run must not run
+      # code in the job that can mint a publish token.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+
+      # No install script runs in the job that can mint a publish token.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec turbo run build --filter='./packages/*'
+      # Checks the build that is published, not the release job's.
+      - run: node scripts/release-artifact-check.mjs
+
+      # Publishes only versions not yet on npm, so a re-run continues where an
+      # earlier attempt stopped. The next step creates the release tags.
+      - run: pnpm exec changeset publish --no-git-tag
+
+      # Tags every released version that has none, so a re-run also tags what
+      # an earlier attempt published before it failed. A tag already on another
+      # commit fails the step instead of being trusted; an annotated tag, as a
+      # hand publish makes, is compared by the commit it points at.
+      - name: Tag released versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          for manifest in packages/*/package.json; do
+            tag=$(node -p "const p = require('./$manifest'); p.private ? '' : p.name + '@' + p.version")
+            [ -n "$tag" ] || continue
+            if ref=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq '.object.type + " " + .object.sha' 2>/dev/null); then
+              tagged=${ref#* }
+              if [ "${ref%% *}" = tag ]; then
+                tagged=$(gh api "repos/$REPOSITORY/git/tags/$tagged" --jq .object.sha)
+              fi
+              if [ "$tagged" != "$VERIFIED_SHA" ]; then
+                echo "::error::$tag points at $tagged, not $VERIFIED_SHA"
+                exit 1
+              fi
+              continue
+            fi
+            gh api "repos/$REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$VERIFIED_SHA" --silent
+            echo "tagged $tag"
+          done
