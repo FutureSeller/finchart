@@ -1,5 +1,15 @@
 # @finchart/tools
 
+## 0.0.2
+
+### Patch Changes
+
+- 8f4144b: A chart with a collapsed pane no longer goes blank when fractional padding or pane gaps leave that pane's edges a hair under 1px apart. A text measurer that reports a NaN or negative height now skips the frame instead of throwing or pushing the panes past the plot. The `deriveLast` length error no longer ends with an internal design-note name. In tools, the snap ring goes away when a draft is undone back to no anchor, discarded by a cancelled pointer, or dropped by switching tools.
+- 7b02f50: Placing a drawing uses the chart pan's 5px click boundary: a press that travels exactly 5px before release is now a click and leaves the next anchor following the cursor. Only more than 5px, measured in a straight line from press to release, places the next anchor at the release point, which finishes a two-anchor drawing.
+- Updated dependencies [6344e09]
+- Updated dependencies [8f4144b]
+  - @finchart/core@0.0.2
+
 ## 0.0.1
 
 Initial public release. These notes describe development before the first publication.

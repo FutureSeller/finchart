@@ -1,5 +1,13 @@
 # @finchart/indicators
 
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [6344e09]
+- Updated dependencies [8f4144b]
+  - @finchart/core@0.0.2
+
 ## 0.0.1
 
 Initial public release. These notes describe development before the first publication.

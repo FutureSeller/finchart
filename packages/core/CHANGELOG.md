@@ -1,5 +1,14 @@
 # @finchart/core
 
+## 0.0.2
+
+### Patch Changes
+
+- 6344e09: `autoSize` measures the container when the chart is built, so a container that is already laid out gets its first frame drawn at its own size. Before, the first frame was drawn at the size the chart was built with (`setSize`, or 800×600 in `<ChartContainer>`) and fitted on the next frame, so the wrong-size frame could be shown — seen in Safari. A container that isn't displayed yet is still fitted by the first `ResizeObserver` callback. `observeElementSize` now calls back once synchronously, before it returns, with the element's current content size when the element is laid out.
+  
+  A size observer that reports a negative, NaN or infinite size is now ignored, like zero, instead of throwing.
+- 8f4144b: A chart with a collapsed pane no longer goes blank when fractional padding or pane gaps leave that pane's edges a hair under 1px apart. A text measurer that reports a NaN or negative height now skips the frame instead of throwing or pushing the panes past the plot. The `deriveLast` length error no longer ends with an internal design-note name. In tools, the snap ring goes away when a draft is undone back to no anchor, discarded by a cancelled pointer, or dropped by switching tools.
+
 ## 0.0.1
 
 Initial public release. These notes describe development before the first publication.
