@@ -177,6 +177,7 @@ export default defineConfig({
             { text: "Drawing tools", link: "/examples/drawing" },
             { text: "Bar-index coordinates", link: "/examples/bar-index" },
             { text: "Two synchronized charts", link: "/examples/sync-x" },
+            { text: "Comparing symbols", link: "/examples/compare" },
             { text: "Custom series", link: "/examples/custom-series" },
             { text: "Session shading", link: "/examples/session-shading" },
             { text: "Worker rendering", link: "/examples/worker-render" },
