@@ -1,5 +1,5 @@
 ---
-description: "Nineteen runnable examples, each one page with the source it actually runs."
+description: "Twenty runnable examples, each one page with the source it actually runs."
 ---
 
 # Examples
@@ -28,6 +28,7 @@ growth, keep that range.
 - [Drawing tools](/examples/drawing)
 - [Bar-index coordinates](/examples/bar-index)
 - [Two synchronized charts — syncX](/examples/sync-x)
+- [Comparing symbols — percent change on one pane](/examples/compare) — two symbols measured from the first bar on screen
 - [Custom series — volume dots](/examples/custom-series)
 - [Session shading — a custom draw command with a fallback](/examples/session-shading)
 - [Worker rendering](/examples/worker-render) — the chart in a Web Worker, with a main-thread fallback
