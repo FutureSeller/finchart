@@ -16,6 +16,7 @@ import * as barIndex from "./cases/bar-index";
 import * as candlesVolume from "./cases/candles-volume";
 import * as channels from "./cases/channels";
 import * as chartTypes from "./cases/chart-types";
+import * as compareCase from "./cases/compare";
 import * as customSeries from "./cases/custom-series";
 import * as drawing from "./cases/drawing";
 import * as heikinAshi from "./cases/heikin-ashi";
@@ -52,6 +53,7 @@ const CASES: readonly (readonly [string, CaseModule])[] = [
   ["drawing", drawing],
   ["bar-index", barIndex],
   ["sync-x", syncXCase],
+  ["compare", compareCase],
   ["custom-series", customSeries],
   ["orderbook-heatmap", orderbookHeatmap],
   ["worker-render", workerRender],
